@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Real-Time Web Viewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>UNIFIED NAMESPACE</h1>
+            <p>Namespaces update in real-time</p>
+        </div>
+        <div id="current-datetime" class="datetime-container"></div>
+    </header>
+
+    <nav class="tab-nav">
+        <button id="btn-tree-view" class="tab-button active">Tree View</button>
+        <button id="btn-map-view" class="tab-button">SVG View</button>
+    </nav>
+
+    <div class="view-container">
+        <main id="tree-view" class="view active">
+            <div id="mqtt-tree" class="tree-container"></div>
+            <div id="payload-display" class="payload-container">
+                <h2>Payload</h2>
+                <pre id="payload-content">Select a topic to see its payload.</pre>
+            </div>
+        </main>
+
+        <main id="map-view" class="view"></main>
+    </div>
+
+    <footer class="app-footer">
+        <p>Created by Sebastien Lalaurette | Released under the <a href="https://github.com/your-username/your-repo-name/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a></p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
