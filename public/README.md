@@ -11,6 +11,7 @@ A lightweight, real-time web application to visualize an MQTT topic tree and a S
 
 * **Real-Time Topic Tree:** Automatically builds and displays a hierarchical tree of all received MQTT topics under a wildcard subscription.
 * **SVG View:** Dynamically updates a 2D plan (SVG) based on incoming MQTT data. Maps topics to specific zones and updates text fields from the message payload.
+* **Built-in UNS Simulator:** Generates a realistic manufacturing data stream based on a predefined scenario. The simulator can be started and stopped via a REST API or the user interface.
 * **Dynamic Animations:**
     * Cascading "pulse" animation in the tree view to visualize the data flow for each new message.
     * Highlight animation on the 2D plan to show which zone was just updated.
@@ -80,6 +81,10 @@ The data flow is as follows:
     AWS_CERT_FILENAME=certificate.pem.crt
     AWS_KEY_FILENAME=private.pem.key
     AWS_CA_FILENAME=AmazonRootCA1.pem
+
+    # Enables the UNS simulator and its API endpoints. Set to "true" or "false".
+    SIMULATOR_ENABLED=true
+
     ```
 
 ---
@@ -90,10 +95,29 @@ The data flow is as follows:
     ```bash
     node server.js
     ```
-    You should see console output indicating that the server has started and successfully connected to AWS IoT Core.
+    You should see console output indicating that the server has started and successfully connected to AWS IoT Core. If the simulator is enabled, you will see a confirmation message.
 
 2.  **Open the Application:**
     * Open your web browser and navigate to **http://localhost:8080**.
+
+---
+
+## ## Simulator API
+
+If the simulator is enabled (`SIMULATOR_ENABLED=true`), the following REST API endpoints are available to control it. The UI uses these endpoints, but they can also be called from tools like `curl` or Postman.
+
+* ### Start Simulator
+    `POST /api/simulator/start`
+    Starts the simulation loop.
+
+* ### Stop Simulator
+    `POST /api/simulator/stop`
+    Stops the simulation loop.
+
+* ### Get Status
+    `GET /api/simulator/status`
+    Returns the current status of the simulator.
+    **Response:** `{"status": "running"}` or `{"status": "stopped"}`
 
 ---
 
@@ -107,14 +131,14 @@ The SVG View is designed to be easily customized by editing the SVG file.
 2.  **Link Topics to Zones:**
     * To link an MQTT topic to an area on your plan, create a group `<g>` element.
     * The `id` of the `<g>` element **must** match the MQTT topic, with all slashes (`/`) replaced by dashes (`-`).
-    * **Example:** For topic `uns/site/area/machine`, the SVG group must be `<g id="uns-site-area-machine">`.
+    * **Example:** For topic `uns/site/area/machine/data_object`, the SVG group must be `<g id="uns-site-area-machine-data_object">`.
 
 3.  **Link Payload Data to Text Fields:**
     * To display a value from a JSON payload, add a `data-key` attribute to any `<tspan>` or `<text>` element inside the corresponding group.
     * The value of `data-key` **must** match a key in your JSON payload.
     * **Example:** Given a payload `{"status": "Running", "temperature": 45.5}`, this SVG code will be updated automatically:
         ```xml
-        <g id="uns-site-area-machine">
+        <g id="uns-site-area-machine-data_object">
             <text>Status: <tspan data-key="status">N/A</tspan></text>
             <text>Temp: <tspan data-key="temperature">--</tspan> °C</text>
         </g>
