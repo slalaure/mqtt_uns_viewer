@@ -145,3 +145,71 @@ pre { background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5
 .app-footer a:hover {
     text-decoration: underline;
 }
+/* Add these styles to public/style.css */
+/* --- Simulator Controls Styles --- */
+.simulator-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.simulator-controls button {
+    background-color: #f8f9fa;
+    color: #343a40;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.simulator-controls button:hover {
+    background-color: #e2e6ea;
+}
+
+.status-indicator {
+    font-weight: bold;
+    font-size: 14px;
+    padding-left: 18px;
+    position: relative;
+}
+
+.status-indicator::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: grey;
+}
+
+.status-indicator.stopped::before {
+    background-color: #dc3545; /* Red */
+}
+
+.status-indicator.running::before {
+    background-color: #28a745; /* Green */
+    animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+    70% { box-shadow: 0 0 0 8px rgba(40, 167, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+/* --- Simulator Controls Styles --- */
+.simulator-controls {
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 5px 10px;
+    border-radius: 4px;
+}

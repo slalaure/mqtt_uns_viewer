@@ -35,6 +35,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const treeView = document.getElementById('tree-view');
     const mapView = document.getElementById('map-view');
 
+    // Simulator UI Elements
+    const btnStartSim = document.getElementById('btn-start-sim');
+    const btnStopSim = document.getElementById('btn-stop-sim');
+    const simStatusIndicator = document.getElementById('sim-status');
+
+    const simulatorControls = document.querySelector('.simulator-controls');
+
+    // --- Application Initialization ---
+    async function initializeApp() {
+        try {
+            // Fetch the public config from the server
+            const response = await fetch('/api/config');
+            const config = await response.json();
+
+            // Show simulator controls only if enabled in the config
+            if (config.isSimulatorEnabled && simulatorControls) {
+                simulatorControls.style.display = 'flex';
+                // Also fetch the initial status of the simulator
+                const statusRes = await fetch('/api/simulator/status');
+                const statusData = await statusRes.json();
+                updateSimulatorStatusUI(statusData.status);
+            }
+        } catch (error) {
+            console.error("Failed to fetch app configuration:", error);
+        }
+        
+        // Load the SVG plan
+        loadSvgPlan();
+    }
+
     // --- Dynamic SVG Plan Loading ---
     async function loadSvgPlan() {
         try {
@@ -94,10 +124,40 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- WebSocket Connection ---
-    const ws = new WebSocket(`ws://${window.location.host}`);
-    ws.onopen = () => console.log("Connected to WebSocket server.");
-    ws.onmessage = async (event) => {
+    // --- Simulator UI Logic ---
+    function updateSimulatorStatusUI(status) {
+        if (!simStatusIndicator) return;
+        if (status === 'running') {
+            simStatusIndicator.textContent = 'Running';
+            simStatusIndicator.classList.remove('stopped');
+            simStatusIndicator.classList.add('running');
+        } else {
+            simStatusIndicator.textContent = 'Stopped';
+            simStatusIndicator.classList.remove('running');
+            simStatusIndicator.classList.add('stopped');
+        }
+    }
+
+    if (btnStartSim && btnStopSim) {
+        // Use fetch to call the new API endpoint
+        btnStartSim.addEventListener('click', async () => {
+            console.log("Calling API: /api/simulator/start");
+            await fetch('/api/simulator/start', { method: 'POST' });
+        });
+        
+        // Use fetch to call the new API endpoint
+        btnStopSim.addEventListener('click', async () => {
+            console.log("Calling API: /api/simulator/stop");
+            await fetch('/api/simulator/stop', { method: 'POST' });
+        });
+    }
+// --- WebSocket Connection (Handles data and status updates) ---
+const ws = new WebSocket(`ws://${window.location.host}`);
+ws.onopen = () => {
+    console.log("Connected to WebSocket server.");
+    initializeApp(); // Initialize the app AFTER the WebSocket connection is open
+};
+ws.onmessage = async (event) => {
         let dataText;
         if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
             dataText = await (new Response(event.data)).text();
@@ -106,13 +166,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         try {
             const message = JSON.parse(dataText);
-            // Call update handlers for both views
-            updateTree(message.topic, message.payload, message.timestamp);
-            updateMap(message.topic, message.payload);
+
+            // Differentiate message types
+            if (message.type === 'simulator-status') {
+                updateSimulatorStatusUI(message.status);
+            } else if (message.topic) {
+                // This is an MQTT message
+                updateTree(message.topic, message.payload, message.timestamp);
+                updateMap(message.topic, message.payload);
+            }
         } catch (e) {
             console.error("JSON Parsing Error:", dataText, e);
         }
     };
+    
     
     // --- SVG Plan Update Logic ---
     function updateMap(topic, payload) {
