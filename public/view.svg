@@ -5,14 +5,14 @@
       .zone-data { font-size: 16px; fill: #444; }
       .highlight-svg .zone-shape { fill: #ffd966; }
   </style>
-  <g id="stark_industries-malibu-quality_control_station-qms-dimensional_check" transform="translate(50, 50)">
+  <g id="stark_industries-malibu_facility-quality_control_station-qms-dimensional_check" transform="translate(50, 50)">
       <rect class="zone-shape" fill="#d9eaff" width="300" height="200" rx="10"></rect>
       <text class="zone-label" x="150" y="30" text-anchor="middle">Quality # Dimensional check</text>
       <text class="zone-data" x="20" y="70">WorkOrder: <tspan data-key="workOrderId"></tspan></text>
       <text class="zone-data" x="20" y="100">result: <tspan data-key="result">--</tspan></text>
       <text class="zone-data" x="20" y="130">tolerance_met: <tspan data-key="tolerance_met"></tspan></text>
   </g>
-  <g id="stark_industries-malibu-assembly_line_01-palladium_core_cell-mes-operation" transform="translate(450, 50)">
+  <g id="stark_industries-malibu_facility-assembly_line_01-palladium_core_cell-mes-operation" transform="translate(450, 50)">
       <rect class="zone-shape" fill="#e2d9ff" width="300" height="200" rx="10"></rect>
       <text class="zone-label" x="150" y="30" text-anchor="middle">asm_line_1 # Paladium Core Cell</text>
       <text class="zone-data" x="20" y="70">workOrderId: <tspan data-key="workOrderId"></tspan></text>
