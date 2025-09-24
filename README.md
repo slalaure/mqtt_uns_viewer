@@ -4,6 +4,8 @@ A lightweight, real-time web application to visualize an MQTT topic tree and a S
 
 ![Application Screenshot1](./assets/screenshot1.png)
 
+http://github.com/slalaure/mqtt_uns_viewer/blob/main/assets/mqtt_uns_viewer.mp4
+
 ---
 
 ## ## Features
