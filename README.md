@@ -52,7 +52,7 @@ The data flow is as follows:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone [[https://github.com/slalaure/mqtt_uns_viewer.git](https://github.com/slalaure/mqtt_uns_viewer.git)](https://github.com/slalaure/mqtt_uns_viewer.git)
+    git clone https://github.com/slalaure/mqtt_uns_viewer.git
     cd mqtt_uns_viewer
     ```
 
