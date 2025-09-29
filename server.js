@@ -28,31 +28,38 @@ require('dotenv').config();
 const express = require('express');
 const http_server = require('http');
 const path = require('path');
+const fs = require('fs'); // Added for reading certificate files
 const { WebSocketServer } = require('ws');
-const { iot, mqtt } = require('aws-iot-device-sdk-v2');
+const mqtt = require('mqtt'); // Replaced AWS SDK with the standard MQTT library
+
 
 // --- Configuration from Environment Variables (with sanitization) ---
 // We use .trim() on each variable to remove any hidden whitespace or line breaks
-const AWS_ENDPOINT = process.env.AWS_ENDPOINT ? process.env.AWS_ENDPOINT.trim() : null;
+const MQTT_BROKER_HOST = process.env.MQTT_BROKER_HOST ? process.env.MQTT_BROKER_HOST.trim() : null;
+const MQTT_PORT = process.env.MQTT_PORT ? process.env.MQTT_PORT.trim() : null;
+const MQTT_PROTOCOL = process.env.MQTT_PROTOCOL ? process.env.MQTT_PROTOCOL.trim() : null;
+const MQTT_USERNAME = process.env.MQTT_USERNAME ? process.env.MQTT_USERNAME.trim() : null;
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD ? process.env.MQTT_PASSWORD.trim() : null;
 const CLIENT_ID = process.env.CLIENT_ID ? process.env.CLIENT_ID.trim() : null;
 const MQTT_TOPIC = process.env.MQTT_TOPIC ? process.env.MQTT_TOPIC.trim() : null;
-const AWS_CERT_FILENAME = process.env.AWS_CERT_FILENAME ? process.env.AWS_CERT_FILENAME.trim() : null;
-const AWS_KEY_FILENAME = process.env.AWS_KEY_FILENAME ? process.env.AWS_KEY_FILENAME.trim() : null;
-const AWS_CA_FILENAME = process.env.AWS_CA_FILENAME ? process.env.AWS_CA_FILENAME.trim() : null;
+const CERT_FILENAME = process.env.CERT_FILENAME ? process.env.CERT_FILENAME.trim() : null;
+const KEY_FILENAME = process.env.KEY_FILENAME ? process.env.KEY_FILENAME.trim() : null;
+const CA_FILENAME = process.env.CA_FILENAME ? process.env.CA_FILENAME.trim() : null;
 const SIMULATOR_ENABLED = process.env.SIMULATOR_ENABLED;
 const isSimulatorEnabled = SIMULATOR_ENABLED === 'true';
+const MQTT_ALPN_PROTOCOL = process.env.MQTT_ALPN_PROTOCOL ? process.env.MQTT_ALPN_PROTOCOL.trim() : null;
 const PORT = process.env.PORT || 8080;
 
 // --- Validate Configuration ---
-if (!AWS_ENDPOINT || !CLIENT_ID || !MQTT_TOPIC || !AWS_CERT_FILENAME || !AWS_KEY_FILENAME || !AWS_CA_FILENAME) {
+if (!MQTT_BROKER_HOST || !CLIENT_ID || !MQTT_TOPIC ) {
     console.error("FATAL ERROR: One or more required environment variables are not set. Please check your .env file.");
     process.exit(1);
 }
 
 // --- Certificate Paths ---
-const CERT_PATH = path.join(__dirname, 'certs/', AWS_CERT_FILENAME);
-const KEY_PATH = path.join(__dirname, 'certs/', AWS_KEY_FILENAME);
-const CA_PATH = path.join(__dirname, 'certs/', AWS_CA_FILENAME);
+const CERT_PATH = path.join(__dirname, 'certs/', CERT_FILENAME);
+const KEY_PATH = path.join(__dirname, 'certs/', KEY_FILENAME);
+const CA_PATH = path.join(__dirname, 'certs/', CA_FILENAME);
 
 // --- Simulator State & Logic (Integrated) ---
 let simulatorInterval = null; // Will hold the setInterval ID
@@ -164,8 +171,16 @@ function startSimulator(connection) {
         msg.payload.emitted_at = new Date().toISOString();
         const payloadStr = JSON.stringify(msg.payload);
 
-        connection.publish(msg.topic, payloadStr, mqtt.QoS.AtLeastOnce)
-            .catch((err) => console.error(`Error publishing simulation message: `, err));
+        const options = {
+            qos: 1, // AtLeastOnce is QoS level 1
+            retain: false
+        };
+
+        connection.publish(msg.topic, payloadStr, options, (error) => {
+            if (error) {
+                console.error('Error publishing simulation message:', error);
+            }
+        });
 
     }, SIMULATION_INTERVAL_MS);
 
@@ -183,8 +198,82 @@ function stopSimulator() {
     }
 }
 
+// --- MQTT Connection Logic (Final Version) ---
+function connectToMqttBroker() {
+    const host = MQTT_BROKER_HOST ? MQTT_BROKER_HOST.trim() : null;
+    const port = MQTT_PORT ? parseInt(MQTT_PORT.trim()) : null;
+    const protocol = (port === 443 || port === 8883) ? 'mqtts' : 'mqtt';
+
+    console.log(`Attempting to connect to MQTT broker at ${protocol}://${host}:${port}...`);
+
+    const options = {
+        host,
+        port,
+        protocol,
+        clientId: CLIENT_ID,
+        clean: true,
+        reconnectPeriod: 1000,
+        // --- Explicit TLS options for robust connection ---
+        // Option 1: SNI - Critical for multi-tenant services like AWS
+        servername: host,
+        // Option 2: Ensure we reject connections to unauthorized servers
+        rejectUnauthorized: true,
+    };
+
+    if (MQTT_USERNAME && MQTT_USERNAME.trim()) {
+        options.username = MQTT_USERNAME.trim();
+        options.password = MQTT_PASSWORD.trim();
+        console.log("Using Username/Password authentication.");
+    }
+
+    if (CERT_FILENAME && KEY_FILENAME && CA_FILENAME) {
+        try {
+            const certsDir = path.join(__dirname, 'certs');
+            options.key = fs.readFileSync(path.join(certsDir, KEY_FILENAME.trim()));
+            options.cert = fs.readFileSync(path.join(certsDir, CERT_FILENAME.trim()));
+            options.ca = fs.readFileSync(path.join(certsDir, CA_FILENAME.trim()));
+            console.log("Using certificate-based (MTLS) authentication.");
+        } catch (err) {
+            console.error("FATAL ERROR: Could not read certificate files.", err);
+            process.exit(1);
+        }
+    }
+
+    if (MQTT_ALPN_PROTOCOL && MQTT_ALPN_PROTOCOL.trim() !== '') {
+        options.ALPNProtocols = [MQTT_ALPN_PROTOCOL.trim()];
+        console.log(`Using ALPN protocol(s): ${options.ALPNProtocols}`);
+    }
+
+    mainConnection = mqtt.connect(options);
+
+    mainConnection.on('connect', () => {
+        console.log(`✅ Connected to MQTT Broker!`);
+        mainConnection.subscribe(MQTT_TOPIC, { qos: 1 }, (err) => {
+            if (err) {
+                console.error('❌ Subscription failed:', err);
+            } else {
+                console.log(`   -> Subscription to '${MQTT_TOPIC}' successful. Waiting for messages...`);
+            }
+        });
+    });
+    mainConnection.on('message', (topic, payload) => {
+        const payloadAsString = payload.toString('utf-8');
+        const message = {
+            topic,
+            payload: payloadAsString,
+            timestamp: new Date().toISOString()
+        };
+        broadcast(JSON.stringify(message));
+    });
+
+    mainConnection.on('error', (error) => console.error('❌ MQTT Client Error:', error));
+    mainConnection.on('close', () => {
+        console.log('🔌 Disconnected from MQTT Broker.');
+        stopSimulator();
+    });
+}
 // --- AWS IoT MQTT Connection Logic ---
-async function connectToAwsIot() {
+/*async function connectToAwsIot() {
     console.log("Attempting to connect to AWS IoT Core...");
 
     const config = iot.AwsIotMqttConnectionConfigBuilder.new_mtls_builder_from_path(CERT_PATH, KEY_PATH)
@@ -223,14 +312,15 @@ async function connectToAwsIot() {
     connection.on('disconnect', () => console.log('🔌 Disconnected from AWS IoT Core.'));
 
     await connection.connect();
-}
+}*/
 
 // --- Start Server ---
 server.listen(PORT, () => {
     console.log(`HTTP server started on http://localhost:${PORT}`);
-    connectToAwsIot().catch(err => {
+    /*connectToAwsIot().catch(err => {
         console.error("--- FATAL ERROR during MQTT connection startup ---");
         console.error(err);
         console.error("----------------------------------------------------");
-    });
+    });*/
+    connectToMqttBroker();
 });

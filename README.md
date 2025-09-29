@@ -1,6 +1,7 @@
 # Real-Time MQTT Unified Namespace (UNS) Web Visualizer
 
 A lightweight, real-time web application to visualize an MQTT topic tree and a SVG  graphic (possibly a 2D floor plan) based on Unified Namespace (UNS) messages. Inspired by tools like MQTT Explorer, this project provides a fully web-based interface using a Node.js backend and a pure JavaScript frontend.
+This project uses the standard `mqtt.js` library to connect to any MQTT broker, including AWS IoT Core with certificate-based authentication.
 
 ![Application Screenshot1](./assets/screenshot1.png)
 
@@ -22,17 +23,17 @@ A lightweight, real-time web application to visualize an MQTT topic tree and a S
 
 ## ## Tech Stack
 
-* **Backend:** Node.js, Express, `ws` (WebSocket), `aws-iot-device-sdk-v2`, `dotenv`
+* **Backend:** Node.js, Express, `ws` (WebSocket), `mqtt`, `dotenv`
 * **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3
 
 ---
 
 ## ## Architecture
 
-This application uses a client-server architecture to securely bridge the gap between a web browser and AWS IoT Core.
+The application uses a Node.js backend to securely connect to an MQTT broker and broadcast messages to the web frontend via WebSockets.
 
-The data flow is as follows:
-**AWS IoT Core** `--(MQTTS:443)-->` **Node.js Backend** `--(WebSocket)-->` **Frontend (Browser)**
+**Data Flow:**
+**Any MQTT Broker** `--(MQTTS/MQTT)-->` **Node.js Backend** `--(WebSocket)-->` **Frontend (Browser)**
 
 * **Node.js Backend (`server.js`):** Connects to AWS IoT, subscribes to topics, and broadcasts messages to the frontend via WebSockets.
 * **Frontend (`public/` directory):** Connects to the backend via a WebSocket and dynamically renders the two views (Tree and SVG).
@@ -66,24 +67,53 @@ The data flow is as follows:
     * Place your three credential files (e.g., `certificate.pem.crt`, `private.pem.key`, `AmazonRootCA1.pem`) inside this `certs` folder.
 
 4.  **Configure Environment Variables:**
-    * In the project root, find the `.env.example` file.
-    * Create a copy of it and name it `.env`.
-    * Open the new `.env` file and fill in the values with your specific AWS IoT details:
+    * In the project root, copy the `.env.example` file to a new file named `.env`.
+    * Open `.env` and fill in the values according to your broker's requirements.
 
-    ```bash
-    # AWS IoT Core Configuration
-    AWS_ENDPOINT=your-endpoint.iot.your-region.amazonaws.com
-    CLIENT_ID=my-unique-client-id
-    MQTT_TOPIC="stark_industries/#"
+    **Example 1: Connecting to AWS IoT Core (with certificates)**
+    ```
+    # --- General MQTT Broker Configuration ---
+    MQTT_HOST=your-endpoint.iot.aws-region.amazonaws.com
+    MQTT_PORT=443
+    CLIENT_ID=my-aws-client-id
+    MQTT_TOPIC="uns/#"
 
-    # Certificate Filenames (must be placed in the /certs folder)
-    AWS_CERT_FILENAME=certificate.pem.crt
-    AWS_KEY_FILENAME=private.pem.key
-    AWS_CA_FILENAME=AmazonRootCA1.pem
+    # --- Authentication ---
+    MQTT_USERNAME=
+    MQTT_PASSWORD=
+    CERT_FILENAME=certificate.pem.crt
+    KEY_FILENAME=private.pem.key
+    CA_FILENAME=AmazonRootCA1.pem
+
+    # --- Advanced TLS/ALPN ---
+    MQTT_ALPN_PROTOCOL=x-amzn-mqtt-ca
+    ```
+
+    **Example 2: Connecting to a Standard Broker (with username/password)**
+    ```
+    # --- General MQTT Broker Configuration ---
+    MQTT_HOST=my-broker.domain.com
+    MQTT_PORT=8883
+    CLIENT_ID=my-standard-client-id-123
+    MQTT_TOPIC="uns/#"
+
+    # --- Authentication ---
+    MQTT_USERNAME=myuser
+    MQTT_PASSWORD=mypassword
+    CERT_FILENAME=
+    KEY_FILENAME=
+    CA_FILENAME=
+
+    # --- Advanced TLS/ALPN ---
+    MQTT_ALPN_PROTOCOL=
+    ```
 
     # Enables the UNS simulator and its API endpoints. Set to "true" or "false".
     SIMULATOR_ENABLED=true
     ```
+5. **(If using certificates) Add Your Credential Files:**
+    * Create a `certs` folder in the root of the project.
+    * Place your certificate files (e.g., `certificate.pem.crt`, etc.) inside this folder.
 
 ---
 
