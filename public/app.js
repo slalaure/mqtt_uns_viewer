@@ -26,7 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Element Initialization ---
     const treeContainer = document.getElementById('mqtt-tree');
     const payloadContent = document.getElementById('payload-content');
+    const payloadTopic = document.getElementById('payload-topic'); // New topic display element
     const datetimeContainer = document.getElementById('current-datetime');
+    const livePayloadToggle = document.getElementById('live-payload-toggle');
     let selectedNodeContainer = null;
 
     // Elements for tab navigation
@@ -39,20 +41,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStartSim = document.getElementById('btn-start-sim');
     const btnStopSim = document.getElementById('btn-stop-sim');
     const simStatusIndicator = document.getElementById('sim-status');
-
     const simulatorControls = document.querySelector('.simulator-controls');
 
     // --- Application Initialization ---
     async function initializeApp() {
         try {
-            // Fetch the public config from the server
             const response = await fetch('/api/config');
             const config = await response.json();
-
-            // Show simulator controls only if enabled in the config
             if (config.isSimulatorEnabled && simulatorControls) {
                 simulatorControls.style.display = 'flex';
-                // Also fetch the initial status of the simulator
                 const statusRes = await fetch('/api/simulator/status');
                 const statusData = await statusRes.json();
                 updateSimulatorStatusUI(statusData.status);
@@ -60,54 +57,40 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to fetch app configuration:", error);
         }
-        
-        // Load the SVG plan
         loadSvgPlan();
     }
 
     // --- Dynamic SVG Plan Loading ---
     async function loadSvgPlan() {
         try {
-            const response = await fetch('./view.svg'); // Path to your SVG file
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            const response = await fetch('./view.svg');
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const svgText = await response.text();
-            if (mapView) {
-                mapView.innerHTML = svgText;
-            }
+            if (mapView) mapView.innerHTML = svgText;
         } catch (error) {
             console.error("Could not load the SVG file:", error);
-            if (mapView) {
-                mapView.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG plan file could not be loaded.</p>`;
-            }
+            if (mapView) mapView.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG plan file could not be loaded.</p>`;
         }
     }
-    loadSvgPlan(); // Load the SVG as soon as the page is ready
 
-    // --- Tab Switching Logic (with safety checks) ---
+    // --- Tab Switching Logic ---
     function switchView(viewToShow) {
-        if (!treeView || !mapView) return; // Safety check if view containers don't exist
-
+        if (!treeView || !mapView) return;
         if (viewToShow === 'map') {
             mapView.classList.add('active');
             treeView.classList.remove('active');
-            if (btnMapView) btnMapView.classList.add('active');
-            if (btnTreeView) btnTreeView.classList.remove('active');
+            btnMapView?.classList.add('active');
+            btnTreeView?.classList.remove('active');
         } else {
             treeView.classList.add('active');
             mapView.classList.remove('active');
-            if (btnTreeView) btnTreeView.classList.add('active');
-            if (btnMapView) btnMapView.classList.remove('active');
+            btnTreeView?.classList.add('active');
+            btnMapView?.classList.remove('active');
         }
     }
 
-    if (btnTreeView && btnMapView) {
-        btnTreeView.addEventListener('click', () => switchView('tree'));
-        btnMapView.addEventListener('click', () => switchView('map'));
-    } else {
-        console.error("Tab buttons not found. Check the IDs in index.html.");
-    }
+    btnTreeView?.addEventListener('click', () => switchView('tree'));
+    btnMapView?.addEventListener('click', () => switchView('map'));
 
     // --- Real-Time Clock ---
     function updateClock() {
@@ -138,40 +121,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    if (btnStartSim && btnStopSim) {
-        // Use fetch to call the new API endpoint
-        btnStartSim.addEventListener('click', async () => {
-            console.log("Calling API: /api/simulator/start");
-            await fetch('/api/simulator/start', { method: 'POST' });
-        });
-        
-        // Use fetch to call the new API endpoint
-        btnStopSim.addEventListener('click', async () => {
-            console.log("Calling API: /api/simulator/stop");
-            await fetch('/api/simulator/stop', { method: 'POST' });
-        });
-    }
-// --- WebSocket Connection (Handles data and status updates) ---
-const ws = new WebSocket(`ws://${window.location.host}`);
-ws.onopen = () => {
-    console.log("Connected to WebSocket server.");
-    initializeApp(); // Initialize the app AFTER the WebSocket connection is open
-};
-ws.onmessage = async (event) => {
-        let dataText;
-        if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
-            dataText = await (new Response(event.data)).text();
-        } else {
-            dataText = event.data;
-        }
+    btnStartSim?.addEventListener('click', () => fetch('/api/simulator/start', { method: 'POST' }));
+    btnStopSim?.addEventListener('click', () => fetch('/api/simulator/stop', { method: 'POST' }));
+
+    // --- WebSocket Connection ---
+    const ws = new WebSocket(`ws://${window.location.host}`);
+    ws.onopen = () => {
+        console.log("Connected to WebSocket server.");
+        initializeApp();
+    };
+    ws.onmessage = async (event) => {
+        const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
         try {
             const message = JSON.parse(dataText);
-
-            // Differentiate message types
             if (message.type === 'simulator-status') {
                 updateSimulatorStatusUI(message.status);
             } else if (message.topic) {
-                // This is an MQTT message
                 updateTree(message.topic, message.payload, message.timestamp);
                 updateMap(message.topic, message.payload);
             }
@@ -179,8 +144,7 @@ ws.onmessage = async (event) => {
             console.error("JSON Parsing Error:", dataText, e);
         }
     };
-    
-    
+
     // --- SVG Plan Update Logic ---
     function updateMap(topic, payload) {
         try {
@@ -191,33 +155,48 @@ ws.onmessage = async (event) => {
 
             for (const key in data) {
                 const textElement = groupElement.querySelector(`[data-key="${key}"]`);
-                if (textElement) {
-                    textElement.textContent = data[key];
-                }
+                if (textElement) textElement.textContent = data[key];
             }
 
             groupElement.classList.add('highlight-svg');
-            setTimeout(() => {
-                groupElement.classList.remove('highlight-svg');
-            }, 500);
-        } catch (e) {
-            // Payload is not JSON, ignoring for the map view.
+            setTimeout(() => groupElement.classList.remove('highlight-svg'), 500);
+        } catch (e) { /* Payload is not JSON, ignore for map */ }
+    }
+
+    // --- Payload Display & Interaction Logic ---
+    livePayloadToggle?.addEventListener('change', (event) => {
+        if (event.target.checked && selectedNodeContainer) {
+            selectedNodeContainer.classList.remove('selected');
+            selectedNodeContainer = null;
+        }
+    });
+
+    /**
+     * Helper function to display payload and its topic.
+     * @param {string} topic The topic string.
+     * @param {string} payload The payload string.
+     */
+    function displayPayload(topic, payload) {
+        if (payloadTopic) {
+            payloadTopic.textContent = topic || "No topic selected";
+        }
+        if (payloadContent) {
+            try {
+                const jsonObj = JSON.parse(payload);
+                payloadContent.textContent = JSON.stringify(jsonObj, null, 2);
+            } catch (e) {
+                payloadContent.textContent = payload || "Select a topic to see its payload.";
+            }
         }
     }
 
     // --- Tree View Functions ---
-    /**
-     * Updates the tree view, handles timestamps, and triggers animations.
-     * @param {string} topic The MQTT topic.
-     * @param {string} payload The message payload.
-     * @param {string} timestamp The ISO timestamp of the message.
-     */
     function updateTree(topic, payload, timestamp) {
         if (!treeContainer) return;
         const parts = topic.split('/');
         let currentNode = treeContainer;
         const affectedNodes = [];
-        const formattedTimestamp = new Date(timestamp).toLocaleTimeString('en-GB'); // Using English locale
+        const formattedTimestamp = new Date(timestamp).toLocaleTimeString('en-GB');
 
         parts.forEach((part, index) => {
             const isLastPart = index === parts.length - 1;
@@ -233,7 +212,7 @@ ws.onmessage = async (event) => {
                 isNewNode = true;
                 li = document.createElement('li');
                 li.id = `node-${partId}`;
-                if (isNewNode) li.classList.add('new-node');
+                li.classList.add('new-node');
                 
                 const nodeContainer = document.createElement('div');
                 nodeContainer.className = 'node-container';
@@ -250,42 +229,42 @@ ws.onmessage = async (event) => {
             }
             
             const timestampSpan = li.querySelector('.node-timestamp');
-            timestampSpan.textContent = formattedTimestamp;
-            affectedNodes.push({ element: li, isNew: isNewNode }); // Store the element and its state
+            if(timestampSpan) timestampSpan.textContent = formattedTimestamp;
+            affectedNodes.push({ element: li, isNew: isNewNode });
             
             const nodeContainer = li.querySelector('.node-container');
-            if (isLastPart) {
-                li.classList.add('is-file');
-                li.classList.remove('is-folder');
-                nodeContainer.dataset.payload = payload;
-                nodeContainer.dataset.topic = topic;
-                nodeContainer.addEventListener('click', handleNodeClick);
-            } else {
-                li.classList.add('is-folder');
+            if (nodeContainer) {
+                 if (isLastPart) {
+                    li.classList.add('is-file');
+                    li.classList.remove('is-folder');
+                    nodeContainer.dataset.payload = payload;
+                    nodeContainer.dataset.topic = topic; // Ensure topic is stored
+                    nodeContainer.addEventListener('click', handleNodeClick);
+                } else {
+                    li.classList.add('is-folder');
+                }
             }
             currentNode = li;
         });
 
-        // --- Improved cascading animation logic ---
         const animationDelay = 150;
         const animationDuration = 1200;
         affectedNodes.forEach((nodeInfo, index) => {
             setTimeout(() => {
-                if (nodeInfo.isNew) {
-                    nodeInfo.element.classList.remove('new-node');
-                }
+                if (nodeInfo.isNew) nodeInfo.element.classList.remove('new-node');
                 nodeInfo.element.classList.add('pulse');
-                setTimeout(() => {
-                    nodeInfo.element.classList.remove('pulse');
-                }, animationDuration);
+                setTimeout(() => nodeInfo.element.classList.remove('pulse'), animationDuration);
             }, index * animationDelay);
         });
+
+        if (livePayloadToggle?.checked) {
+            const totalAnimationTime = affectedNodes.length * animationDelay;
+            setTimeout(() => {
+                displayPayload(topic, payload);
+            }, totalAnimationTime);
+        }
     }
 
-    /**
-     * Handles clicks on a "file" node to display its payload.
-     * @param {MouseEvent} event The click event.
-     */
     function handleNodeClick(event) {
         const targetContainer = event.currentTarget;
         if (selectedNodeContainer) {
@@ -294,14 +273,12 @@ ws.onmessage = async (event) => {
         selectedNodeContainer = targetContainer;
         selectedNodeContainer.classList.add('selected');
         
-        const payload = targetContainer.dataset.payload;
-        try {
-            // Try to parse and pretty-print if it's JSON
-            const jsonObj = JSON.parse(payload);
-            payloadContent.textContent = JSON.stringify(jsonObj, null, 2);
-        } catch (e) {
-            // Otherwise, display as plain text
-            payloadContent.textContent = payload;
+        if (livePayloadToggle) {
+            livePayloadToggle.checked = false;
         }
+        
+        const topic = targetContainer.dataset.topic;
+        const payload = targetContainer.dataset.payload;
+        displayPayload(topic, payload);
     }
 });

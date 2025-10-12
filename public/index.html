@@ -29,7 +29,14 @@
         <main id="tree-view" class="view active">
             <div id="mqtt-tree" class="tree-container"></div>
             <div id="payload-display" class="payload-container">
-                <h2>Payload</h2>
+                <div class="payload-header">
+                    <h2>Payload</h2>
+                    <div class="payload-controls">
+                        <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle">
+                        <label for="live-payload-toggle">Live Update</label>
+                    </div>
+                </div>
+                <div id="payload-topic" class="payload-topic-display">No topic selected</div>
                 <pre id="payload-content">Select a topic to see its payload.</pre>
             </div>
         </main>

@@ -128,7 +128,52 @@ main#tree-view {
 #mqtt-tree .selected .node-name::before { filter: brightness(0) invert(1); }
 #mqtt-tree .selected .node-timestamp { color: #fff; }
 
-pre { background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+/* --- Styles for Payload Display --- */
+.payload-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.payload-header h2 {
+    margin: 0;
+}
+.payload-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+}
+.payload-controls label {
+    cursor: pointer;
+    user-select: none;
+}
+
+.payload-topic-display {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: #6c757d;
+    padding: 8px 15px;
+    background-color: #e9ecef;
+    border-radius: 4px 4px 0 0;
+    border: 1px solid #dee2e6;
+    border-bottom: none;
+    word-break: break-all;
+    margin-top: 10px;
+}
+
+pre#payload-content {
+    background-color: #f8f9fa;
+    color: #212529;
+    padding: 15px;
+    border-radius: 0 0 5px 5px; /* Adjusted radius */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 14px;
+    margin: 0;
+    border: 1px solid #dee2e6;
+}
+
 /* --- Footer Styles --- */
 .app-footer {
     background-color: #343a40;
@@ -145,10 +190,10 @@ pre { background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5
 .app-footer a:hover {
     text-decoration: underline;
 }
-/* Add these styles to public/style.css */
+
 /* --- Simulator Controls Styles --- */
 .simulator-controls {
-    display: flex;
+    display: none; /* Hidden by default */
     align-items: center;
     gap: 10px;
     background-color: rgba(0, 0, 0, 0.1);
@@ -203,13 +248,4 @@ pre { background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5
     0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
     70% { box-shadow: 0 0 0 8px rgba(40, 167, 69, 0); }
     100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
-}
-/* --- Simulator Controls Styles --- */
-.simulator-controls {
-    display: none; /* Hidden by default */
-    align-items: center;
-    gap: 10px;
-    background-color: rgba(0, 0, 0, 0.1);
-    padding: 5px 10px;
-    border-radius: 4px;
 }

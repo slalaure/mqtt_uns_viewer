@@ -272,47 +272,6 @@ function connectToMqttBroker() {
         stopSimulator();
     });
 }
-// --- AWS IoT MQTT Connection Logic ---
-/*async function connectToAwsIot() {
-    console.log("Attempting to connect to AWS IoT Core...");
-
-    const config = iot.AwsIotMqttConnectionConfigBuilder.new_mtls_builder_from_path(CERT_PATH, KEY_PATH)
-        .with_certificate_authority_from_path(undefined, CA_PATH)
-        .with_clean_session(true)
-        .with_client_id(CLIENT_ID)
-        .with_endpoint(AWS_ENDPOINT)
-        .with_port(443)
-        .build();
-
-    const client = new mqtt.MqttClient();
-    const connection = client.new_connection(config);
-
-    // Assign the created connection to the globally accessible variable.
-    mainConnection = connection;
-
-    connection.on('connect', (session_present) => {
-        console.log(`✅ Connected to AWS IoT Core! Session present: ${session_present}`);
-        console.log(`Subscribing to topic: '${MQTT_TOPIC}'`);
-        
-        
-        connection.subscribe(MQTT_TOPIC, mqtt.QoS.AtLeastOnce, (topic, payload) => {
-            const payloadAsString = Buffer.from(payload).toString('utf-8');
-            const message = {
-                topic: topic,
-                payload: payloadAsString,
-                timestamp: new Date().toISOString()
-            };
-            console.log(`Message sent to frontend client(s): Topic=${topic}`);
-            broadcast(JSON.stringify(message));
-        });
-        console.log("   -> Subscription request sent. Waiting for messages...");
-    });
-
-    connection.on('error', (error) => console.error('❌ Connection error:', error));
-    connection.on('disconnect', () => console.log('🔌 Disconnected from AWS IoT Core.'));
-
-    await connection.connect();
-}*/
 
 // --- Start Server ---
 server.listen(PORT, () => {
