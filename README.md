@@ -19,6 +19,11 @@ http://github.com/slalaure/mqtt_uns_viewer/blob/main/assets/mqtt_uns_viewer.mp4
     * Highlight animation on the 2D plan to show which zone was just updated.
 * **Live Data Display:** View the latest payload for any topic in the tree view and see live data updates on the SVG plan.
 * **Real-Time Clock & Timestamps:** The UI includes a live clock and displays the last message timestamp for every branch in the topic tree.
+* **Persistent Message History:** Stores all received MQTT messages in a local **DuckDB** database for historical analysis.
+    * Interactive History View: A dedicated "History" tab to browse and review past messages in a reverse-chronological log.
+    * Real-Time Database Stats: Live display of the total message count, database size, and configured size limit.
+    * Automatic Database Pruning: Automatically cleans up the oldest messages when the database reaches a configurable size limit to manage disk space.
+
 * **Lightweight & Secure:** Built with a minimal tech stack and connects securely to AWS IoT Core using MQTTS over port 443 with client certificates.
 
 ---
