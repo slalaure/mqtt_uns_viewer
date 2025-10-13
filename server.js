@@ -49,6 +49,7 @@ const isSimulatorEnabled = SIMULATOR_ENABLED === 'true';
 const MQTT_ALPN_PROTOCOL = process.env.MQTT_ALPN_PROTOCOL ? process.env.MQTT_ALPN_PROTOCOL.trim() : null;
 const PORT = process.env.PORT || 8080;
 const DUCKDB_MAX_SIZE_MB = process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null;
+const DUCKDB_PRUNE_CHUNK_SIZE = process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500;
 
 // --- Validate Configuration ---
 if (!MQTT_BROKER_HOST || !CLIENT_ID || !MQTT_TOPIC ) {
@@ -63,6 +64,7 @@ const CA_PATH = path.join(__dirname, 'certs/', CA_FILENAME);
 
 // --- DuckDB Setup ---
 const dbFile = path.join(__dirname, 'mqtt_events.duckdb');
+const dbWalFile = dbFile + '.wal';
 const db = new duckdb.Database(dbFile, (err) => {
     if (err) {
         console.error("❌ FATAL ERROR: Could not connect to DuckDB.", err);
@@ -83,15 +85,11 @@ db.exec(`
     }
 });
 
-// --- Simulator State & Logic (Integrated) ---
+// --- Simulator State & Logic ---
 let simulatorInterval = null;
 const SIMULATION_INTERVAL_MS = 3000;
 const randomBetween = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
-let simState = {
-    step: 0,
-    workOrders: { palladiumCore: null, vibraniumCasing: null },
-    operators: ["Pepper Potts", "Happy Hogan", "James Rhodes", "J.A.R.V.I.S.", "Peter Parker"],
-};
+let simState = { step: 0, workOrders: { palladiumCore: null, vibraniumCasing: null }, operators: ["Pepper Potts", "Happy Hogan", "James Rhodes", "J.A.R.V.I.S.", "Peter Parker"] };
 const scenario = [
     () => { simState.workOrders.palladiumCore = { id: `WO-PD${Math.floor(10000 + Math.random() * 90000)}`, facility: "malibu", itemNumber: "ARC-PD-CORE-01", status: "RELEASED" }; return { topic: `stark_industries/malibu_facility/erp/workorder`, payload: { ...simState.workOrders.palladiumCore, itemName: "Palladium Core" } }; },
     () => ({ topic: 'stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/mes/operation', payload: { workOrderId: simState.workOrders.palladiumCore.id, step: 10, stepName: "Micro-particle assembly", operator: simState.operators[0], status: "IN_PROGRESS" } }),
@@ -120,27 +118,27 @@ const server = http_server.createServer(app);
 const wss = new WebSocketServer({ server });
 
 // --- API Endpoints ---
-app.get('/api/config', (req, res) => {
-    res.json({ isSimulatorEnabled: isSimulatorEnabled });
-});
+app.get('/api/config', (req, res) => res.json({ isSimulatorEnabled }));
 if (isSimulatorEnabled) {
     console.log("✅ Simulator is ENABLED. Creating API endpoints at /api/simulator/*");
-    app.get('/api/simulator/status', (req, res) => {
-        const status = simulatorInterval ? 'running' : 'stopped';
-        res.status(200).json({ status });
-    });
-    app.post('/api/simulator/start', (req, res) => {
-        const result = startSimulator(mainConnection);
-        res.status(200).json(result);
-    });
-    app.post('/api/simulator/stop', (req, res) => {
-        const result = stopSimulator();
-        res.status(200).json(result);
-    });
+    app.get('/api/simulator/status', (req, res) => res.json({ status: simulatorInterval ? 'running' : 'stopped' }));
+    app.post('/api/simulator/start', (req, res) => res.status(200).json(startSimulator(mainConnection)));
+    app.post('/api/simulator/stop', (req, res) => res.status(200).json(stopSimulator()));
 }
 
+// --- WebSocket Logic ---
 console.log("WebSocket server started. Waiting for connections...");
-wss.on('connection', (ws) => console.log('WebSocket client connected.'));
+wss.on('connection', (ws) => {
+    console.log('➡️ WebSocket client connected.');
+
+    db.all("SELECT * FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
+        if (!err && ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ type: 'history-initial-data', data: rows }));
+        }
+    });
+
+    broadcastDbStatus(); // Send current status immediately
+});
 
 function broadcast(message) {
     wss.clients.forEach(client => {
@@ -152,28 +150,14 @@ function broadcast(message) {
 
 // --- Simulator Control Functions ---
 function startSimulator(connection) {
-    if (simulatorInterval) {
-        console.log("Simulator is already running.");
-        return;
-    }
-    if (!connection) {
-        console.error("Cannot start simulator: MQTT connection is not available.");
-        return;
-    }
+    if (simulatorInterval) return;
+    if (!connection) { console.error("Cannot start simulator: MQTT connection is not available."); return; }
     console.log(`Starting simulation loop. Publishing every ${SIMULATION_INTERVAL_MS / 1000}s.`);
     simulatorInterval = setInterval(() => {
         let msg = null;
-        do {
-            const messageGenerator = scenario[simState.step];
-            msg = messageGenerator();
-            simState.step = (simState.step + 1) % scenario.length;
-        } while (msg === null);
+        do { msg = scenario[simState.step](); simState.step = (simState.step + 1) % scenario.length; } while (msg === null);
         msg.payload.emitted_at = new Date().toISOString();
-        const payloadStr = JSON.stringify(msg.payload);
-        const options = { qos: 1, retain: false };
-        connection.publish(msg.topic, payloadStr, options, (error) => {
-            if (error) console.error('Error publishing simulation message:', error);
-        });
+        connection.publish(msg.topic, JSON.stringify(msg.payload), { qos: 1, retain: false });
     }, SIMULATION_INTERVAL_MS);
     broadcast(JSON.stringify({ type: 'simulator-status', status: 'running' }));
 }
@@ -188,196 +172,158 @@ function stopSimulator() {
 
 // --- MQTT Connection Logic ---
 function connectToMqttBroker() {
-    const host = MQTT_BROKER_HOST ? MQTT_BROKER_HOST.trim() : null;
-    const port = MQTT_PORT ? parseInt(MQTT_PORT.trim()) : null;
-    const protocol = (port === 443 || port === 8883) ? 'mqtts' : 'mqtt';
-    console.log(`Attempting to connect to MQTT broker at ${protocol}://${host}:${port}...`);
-    const options = { host, port, protocol, clientId: CLIENT_ID, clean: true, reconnectPeriod: 1000, servername: host, rejectUnauthorized: true };
-    if (MQTT_USERNAME && MQTT_USERNAME.trim()) {
-        options.username = MQTT_USERNAME.trim();
-        options.password = MQTT_PASSWORD.trim();
-        console.log("Using Username/Password authentication.");
-    }
+    const options = { host: MQTT_BROKER_HOST, port: parseInt(MQTT_PORT), protocol: (parseInt(MQTT_PORT) === 443 || parseInt(MQTT_PORT) === 8883) ? 'mqtts' : 'mqtt', clientId: CLIENT_ID, clean: true, reconnectPeriod: 1000, servername: MQTT_BROKER_HOST, rejectUnauthorized: true };
+    if (MQTT_USERNAME) options.username = MQTT_USERNAME;
+    if (MQTT_PASSWORD) options.password = MQTT_PASSWORD;
     if (CERT_FILENAME && KEY_FILENAME && CA_FILENAME) {
         try {
             const certsDir = path.join(__dirname, 'certs');
-            options.key = fs.readFileSync(path.join(certsDir, KEY_FILENAME.trim()));
-            options.cert = fs.readFileSync(path.join(certsDir, CERT_FILENAME.trim()));
-            options.ca = fs.readFileSync(path.join(certsDir, CA_FILENAME.trim()));
+            options.key = fs.readFileSync(path.join(certsDir, KEY_FILENAME));
+            options.cert = fs.readFileSync(path.join(certsDir, CERT_FILENAME));
+            options.ca = fs.readFileSync(path.join(certsDir, CA_FILENAME));
             console.log("Using certificate-based (MTLS) authentication.");
-        } catch (err) {
-            console.error("FATAL ERROR: Could not read certificate files.", err);
-            process.exit(1);
-        }
+        } catch (err) { console.error("FATAL ERROR: Could not read certificate files.", err); process.exit(1); }
     }
-    if (MQTT_ALPN_PROTOCOL && MQTT_ALPN_PROTOCOL.trim() !== '') {
-        options.ALPNProtocols = [MQTT_ALPN_PROTOCOL.trim()];
-        console.log(`Using ALPN protocol(s): ${options.ALPNProtocols}`);
-    }
+    if (MQTT_ALPN_PROTOCOL) options.ALPNProtocols = [MQTT_ALPN_PROTOCOL];
+
     mainConnection = mqtt.connect(options);
     mainConnection.on('connect', () => {
         console.log(`✅ Connected to MQTT Broker!`);
         mainConnection.subscribe(MQTT_TOPIC, { qos: 1 }, (err) => {
             if (err) console.error('❌ Subscription failed:', err);
-            else console.log(`   -> Subscription to '${MQTT_TOPIC}' successful. Waiting for messages...`);
+            else console.log(`   -> Subscription to '${MQTT_TOPIC}' successful.`);
         });
     });
 
     mainConnection.on('message', (topic, payload) => {
         const timestamp = new Date();
         const payloadAsString = payload.toString('utf-8');
-        const messageForUI = {
-            topic,
-            payload: payloadAsString,
-            timestamp: timestamp.toISOString()
-        };
-        broadcast(JSON.stringify(messageForUI));
-        try {
-            const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-            stmt.run(timestamp, topic, payloadAsString, (err) => {
-                if (err) console.error("❌ DuckDB Insert Error:", err);
-            });
-            stmt.finalize();
-        } catch(e) {
-            console.warn(`Could not parse payload for topic '${topic}' as JSON. Storing as NULL.`);
-            const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, NULL)');
-            stmt.run(timestamp, topic, (err) => {
-                 if (err) console.error("❌ DuckDB Insert Error (with NULL payload):", err);
-            });
-            stmt.finalize();
-        }
+        broadcast(JSON.stringify({ type: 'mqtt-message', topic, payload: payloadAsString, timestamp: timestamp.toISOString() }));
+        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
+        stmt.run(timestamp, topic, payloadAsString, (err) => {
+            if (err) console.error("❌ DuckDB Insert Error:", err);
+            else broadcastDbStatus(); // Real-time update
+        });
+        stmt.finalize();
     });
 
     mainConnection.on('error', (error) => console.error('❌ MQTT Client Error:', error));
-    mainConnection.on('close', () => {
-        console.log('🔌 Disconnected from MQTT Broker.');
-        stopSimulator();
-    });
+    mainConnection.on('close', () => { console.log('🔌 Disconnected from MQTT Broker.'); stopSimulator(); });
 }
 
-// --- Database Pruning Logic ---
-let pruningInterval = null;
+// --- Database Monitoring & Pruning Logic ---
 let isPruning = false;
 
 function pruneOldEvents() {
     isPruning = true;
-    const PRUNE_PERCENTAGE = 0.20; // Delete 20% of the oldest data
-    db.get("SELECT COUNT(*) as count FROM mqtt_events", (err, row) => {
-        if (err || !row) {
-            console.error("❌ Could not get event count for pruning:", err);
+    broadcast(JSON.stringify({ type: 'pruning-status', status: 'started' }));
+    console.log(`   -> Pruning ${DUCKDB_PRUNE_CHUNK_SIZE} oldest events...`);
+    const query = `DELETE FROM mqtt_events WHERE rowid IN (SELECT rowid FROM mqtt_events ORDER BY timestamp ASC LIMIT ?);`;
+    db.run(query, [DUCKDB_PRUNE_CHUNK_SIZE], (err) => {
+        if (err) console.error("❌ Error during pruning:", err.message);
+        console.log("   -> Pruning complete. Reclaiming disk space...");
+        db.exec("VACUUM; CHECKPOINT;", (err) => {
+            if (err) console.error("❌ Error during VACUUM/CHECKPOINT:", err.message);
+            else console.log("   -> Space reclaimed.");
             isPruning = false;
-            return;
-        }
-        
-        const rowsToDelete = Math.floor(row.count * PRUNE_PERCENTAGE);
-        if (rowsToDelete <= 1) {
-            isPruning = false;
-            return; // Nothing to prune
-        }
-
-        console.log(`   -> Pruning ${rowsToDelete} oldest events from the database...`);
-        const query = `DELETE FROM mqtt_events WHERE rowid IN (SELECT rowid FROM mqtt_events ORDER BY timestamp ASC LIMIT ?);`;
-        db.run(query, [rowsToDelete], (err) => {
-            if (err) {
-                console.error("❌ Error during database pruning:", err.message);
-                isPruning = false;
-                return;
-            }
-            console.log("   -> Pruning complete. Reclaiming disk space with VACUUM...");
-            db.run("VACUUM;", (err) => {
-                if (err) {
-                    console.error("❌ Error during VACUUM:", err.message);
-                } else {
-                    console.log("   -> VACUUM complete.");
-                }
-                isPruning = false; // Release the lock
-            });
+            broadcast(JSON.stringify({ type: 'pruning-status', status: 'finished' }));
+            broadcastDbStatus(); // Update UI with the new, smaller size
         });
     });
 }
 
-function checkAndPruneDatabase() {
+function getDbStatus(callback) {
+    let totalSize = 0;
+    try { totalSize += fs.statSync(dbFile).size; } catch (e) {}
+    try { totalSize += fs.statSync(dbWalFile).size; } catch (e) {}
+    const fileSizeInMB = totalSize / (1024 * 1024);
+
+    db.all("SELECT COUNT(*) as count FROM mqtt_events", (err, rows) => {
+        const totalMessages = (!err && rows && rows[0]) ? Number(rows[0].count) : 0;
+        callback({
+            type: 'db-status-update',
+            totalMessages,
+            dbSizeMB: fileSizeInMB,
+            dbLimitMB: DUCKDB_MAX_SIZE_MB || 0
+        });
+    });
+}
+
+function broadcastDbStatus() {
+    getDbStatus((statusData) => {
+        broadcast(JSON.stringify(statusData));
+    });
+}
+
+// **[MODIFICATION]** A dedicated, safe function for periodic maintenance
+function performMaintenance() {
     if (isPruning) {
-        console.log("   -> Pruning already in progress, skipping check.");
+        console.log("Maintenance skipped: pruning is already in progress.");
         return;
     }
-    try {
-        const stats = fs.statSync(dbFile);
-        const fileSizeInMB = stats.size / (1024 * 1024);
+    
+    // First, merge the WAL file to get an accurate disk size
+    db.exec("CHECKPOINT;", (err) => {
+        if (err) {
+            console.error("❌ Error during maintenance CHECKPOINT:", err.message);
+        }
+        
+        // Then, get the updated status and check if pruning is needed
+        getDbStatus((statusData) => {
+            // Broadcast the latest size (this fixes the flickering)
+            broadcast(JSON.stringify(statusData));
 
-        if (fileSizeInMB > DUCKDB_MAX_SIZE_MB) {
-            console.log(`Database size (${fileSizeInMB.toFixed(2)} MB) exceeds limit of ${DUCKDB_MAX_SIZE_MB} MB.`);
-            pruneOldEvents();
-        }
-    } catch (err) {
-        // This can happen if the file doesn't exist yet, which is fine.
-        if (err.code !== 'ENOENT') {
-            console.error("❌ Could not check database file size:", err.message);
-        }
-    }
+            if (DUCKDB_MAX_SIZE_MB && statusData.dbSizeMB > DUCKDB_MAX_SIZE_MB) {
+                console.log(`Database size (${statusData.dbSizeMB.toFixed(2)} MB) exceeds limit of ${DUCKDB_MAX_SIZE_MB} MB.`);
+                pruneOldEvents();
+            }
+        });
+    });
 }
+
 
 // --- Start Server ---
 server.listen(PORT, () => {
     console.log(`HTTP server started on http://localhost:${PORT}`);
     connectToMqttBroker();
-
-    if (DUCKDB_MAX_SIZE_MB && DUCKDB_MAX_SIZE_MB > 0) {
-        const checkInterval = 5 * 60 * 1000; // 5 minutes
-        console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB. Checking every ${checkInterval / 60000} minutes.`);
-        pruningInterval = setInterval(checkAndPruneDatabase, checkInterval);
+    if (DUCKDB_MAX_SIZE_MB) {
+        console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB.`);
     }
+    // **[MODIFICATION]** The interval now calls the safe maintenance function
+    setInterval(performMaintenance, 15000); // Run every 15 seconds
 });
 
-// --- Graceful shutdown (ROBUST VERSION) ---
+// --- Graceful shutdown ---
 process.on('SIGINT', () => {
     console.log("\nGracefully shutting down...");
-
-    // 1. Stop all intervals
     stopSimulator();
-    if(pruningInterval) clearInterval(pruningInterval);
+    wss.clients.forEach(ws => ws.terminate());
 
-    // 2. Close all WebSocket connections
-    console.log(`Terminating ${wss.clients.size} WebSocket clients...`);
-    wss.clients.forEach(ws => {
-        ws.terminate();
-    });
+    const shutdown = () => {
+        console.log("Forcing final database checkpoint...");
+        db.exec("CHECKPOINT;", (err) => {
+            if (err) console.error("❌ Error during final CHECKPOINT:", err.message);
+            else console.log("   -> Checkpoint successful.");
+            db.close((err) => {
+                if (err) console.error("Error closing DuckDB:", err.message);
+                else console.log("🦆 DuckDB connection closed.");
+                console.log("Shutdown complete.");
+                process.exit(0);
+            });
+        });
+    };
 
-    // 3. Close the WebSocket server
     wss.close(() => {
         console.log("WebSocket server closed.");
-
-        // 4. Close the HTTP server
         server.close(() => {
             console.log("HTTP server closed.");
-
-            // 5. Close the MQTT connection
-            if (mainConnection) {
+            if (mainConnection && mainConnection.connected) {
                 mainConnection.end(true, () => {
                     console.log("MQTT connection closed.");
-
-                    // 6. Close the DuckDB connection
-                    db.close((err) => {
-                        if (err) {
-                            console.error("Error closing DuckDB:", err.message);
-                        } else {
-                            console.log("🦆 DuckDB connection closed.");
-                        }
-                        console.log("Shutdown complete.");
-                        process.exit(0);
-                    });
+                    shutdown();
                 });
             } else {
-                // If no MQTT connection, just close the DB
-                db.close((err) => {
-                    if (err) {
-                        console.error("Error closing DuckDB:", err.message);
-                    } else {
-                        console.log("🦆 DuckDB connection closed.");
-                    }
-                    console.log("Shutdown complete.");
-                    process.exit(0);
-                });
+                shutdown();
             }
         });
     });

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Element Initialization ---
     const treeContainer = document.getElementById('mqtt-tree');
     const payloadContent = document.getElementById('payload-content');
-    const payloadTopic = document.getElementById('payload-topic'); // New topic display element
+    const payloadTopic = document.getElementById('payload-topic');
     const datetimeContainer = document.getElementById('current-datetime');
     const livePayloadToggle = document.getElementById('live-payload-toggle');
     let selectedNodeContainer = null;
@@ -34,8 +34,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Elements for tab navigation
     const btnTreeView = document.getElementById('btn-tree-view');
     const btnMapView = document.getElementById('btn-map-view');
+    const btnHistoryView = document.getElementById('btn-history-view');
     const treeView = document.getElementById('tree-view');
     const mapView = document.getElementById('map-view');
+    const historyView = document.getElementById('history-view');
+
+    // History View Elements
+    const historyLogContainer = document.getElementById('historical-log-container');
+    const historyTotalMessages = document.getElementById('history-total-messages');
+    const historyDbSize = document.getElementById('history-db-size');
+    const historyDbLimit = document.getElementById('history-db-limit');
+    const pruningIndicator = document.getElementById('pruning-indicator');
 
     // Simulator UI Elements
     const btnStartSim = document.getElementById('btn-start-sim');
@@ -75,22 +84,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Tab Switching Logic ---
     function switchView(viewToShow) {
-        if (!treeView || !mapView) return;
+        const views = [treeView, mapView, historyView];
+        const buttons = [btnTreeView, btnMapView, btnHistoryView];
+        
+        let targetView, targetButton;
         if (viewToShow === 'map') {
-            mapView.classList.add('active');
-            treeView.classList.remove('active');
-            btnMapView?.classList.add('active');
-            btnTreeView?.classList.remove('active');
+            targetView = mapView;
+            targetButton = btnMapView;
+        } else if (viewToShow === 'history') {
+            targetView = historyView;
+            targetButton = btnHistoryView;
         } else {
-            treeView.classList.add('active');
-            mapView.classList.remove('active');
-            btnTreeView?.classList.add('active');
-            btnMapView?.classList.remove('active');
+            targetView = treeView;
+            targetButton = btnTreeView;
         }
+
+        views.forEach(v => v?.classList.remove('active'));
+        buttons.forEach(b => b?.classList.remove('active'));
+
+        targetView?.classList.add('active');
+        targetButton?.classList.add('active');
     }
 
     btnTreeView?.addEventListener('click', () => switchView('tree'));
     btnMapView?.addEventListener('click', () => switchView('map'));
+    btnHistoryView?.addEventListener('click', () => switchView('history'));
 
     // --- Real-Time Clock ---
     function updateClock() {
@@ -120,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
             simStatusIndicator.classList.add('stopped');
         }
     }
-
     btnStartSim?.addEventListener('click', () => fetch('/api/simulator/start', { method: 'POST' }));
     btnStopSim?.addEventListener('click', () => fetch('/api/simulator/stop', { method: 'POST' }));
 
@@ -134,16 +151,71 @@ document.addEventListener('DOMContentLoaded', () => {
         const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
         try {
             const message = JSON.parse(dataText);
-            if (message.type === 'simulator-status') {
-                updateSimulatorStatusUI(message.status);
-            } else if (message.topic) {
-                updateTree(message.topic, message.payload, message.timestamp);
-                updateMap(message.topic, message.payload);
+
+            switch(message.type) {
+                case 'mqtt-message':
+                    updateTree(message.topic, message.payload, message.timestamp);
+                    updateMap(message.topic, message.payload);
+                    addHistoryEntry(message, true); // Prepend new message
+                    break;
+                case 'simulator-status':
+                    updateSimulatorStatusUI(message.status);
+                    break;
+                case 'history-initial-data':
+                    if (historyLogContainer) historyLogContainer.innerHTML = ''; // Clear previous data
+                    message.data.forEach(entry => addHistoryEntry(entry, false)); // Append initial data
+                    break;
+                case 'db-status-update':
+                    if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
+                    if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
+                    if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
+                    break;
+                case 'pruning-status':
+                    if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started');
+                    break;
             }
         } catch (e) {
             console.error("JSON Parsing Error:", dataText, e);
         }
     };
+
+    // --- History View Functions ---
+    function addHistoryEntry(entry, prepend = false) {
+        if (!historyLogContainer) return;
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+
+        const header = document.createElement('div');
+        header.className = 'log-entry-header';
+        
+        const topicSpan = document.createElement('span');
+        topicSpan.className = 'log-entry-topic';
+        topicSpan.textContent = entry.topic;
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'log-entry-timestamp';
+        timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
+
+        header.appendChild(topicSpan);
+        header.appendChild(timeSpan);
+        
+        const pre = document.createElement('pre');
+        try {
+            const jsonObj = JSON.parse(entry.payload);
+            pre.textContent = JSON.stringify(jsonObj, null, 2);
+        } catch(e) {
+            pre.textContent = entry.payload;
+        }
+
+        div.appendChild(header);
+        div.appendChild(pre);
+        
+        if (prepend) {
+            historyLogContainer.prepend(div);
+        } else {
+            historyLogContainer.appendChild(div);
+        }
+    }
 
     // --- SVG Plan Update Logic ---
     function updateMap(topic, payload) {
@@ -171,11 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    /**
-     * Helper function to display payload and its topic.
-     * @param {string} topic The topic string.
-     * @param {string} payload The payload string.
-     */
     function displayPayload(topic, payload) {
         if (payloadTopic) {
             payloadTopic.textContent = topic || "No topic selected";

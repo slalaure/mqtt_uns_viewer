@@ -23,7 +23,7 @@
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
         <button id="btn-map-view" class="tab-button">SVG View</button>
-    </nav>
+        <button id="btn-history-view" class="tab-button">History</button> </nav>
 
     <div class="view-container">
         <main id="tree-view" class="view active">
@@ -42,6 +42,18 @@
         </main>
 
         <main id="map-view" class="view"></main>
+
+        <main id="history-view" class="view">
+            <div class="history-status-bar">
+                <div>Total Messages: <span id="history-total-messages">--</span></div>
+                <div>DB Size: <span id="history-db-size">--</span> / <span id="history-db-limit">--</span> MB</div>
+            </div>
+            <div id="historical-log-container" class="historical-log-container">
+                </div>
+            <div id="pruning-indicator" class="pruning-indicator">
+                <p>Cleaning database, please wait...</p>
+            </div>
+        </main>
     </div>
 
     <footer class="app-footer">
