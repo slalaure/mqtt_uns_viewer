@@ -92,7 +92,7 @@ db.exec(`
 
 // --- Simulator State & Logic ---
 let simulatorInterval = null;
-const SIMULATION_INTERVAL_MS = 3000;
+const SIMULATION_INTERVAL_MS = 1500;
 const randomBetween = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
 let simState = { step: 0, workOrders: { palladiumCore: null, vibraniumCasing: null }, operators: ["Pepper Potts", "Happy Hogan", "James Rhodes", "J.A.R.V.I.S.", "Peter Parker"], spSeq: 0 };
 const scenario = [
@@ -295,10 +295,6 @@ function connectToMqttBroker() {
             };
             
             const messageToSend = JSON.stringify(finalMessageObject);
-            
-            // **[LOG DE DIAGNOSTIC]**
-            console.log(`[DEBUG] Broadcasting to client on topic ${topic}: ${messageToSend}`);
-            
             broadcast(messageToSend);
             
             const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
@@ -310,7 +306,6 @@ function connectToMqttBroker() {
 
         } catch (err) {
             console.error(`❌ FATAL ERROR during message processing for topic ${topic}:`, err);
-            // Ne pas continuer si une erreur se produit ici
         }
     });
 
@@ -384,10 +379,118 @@ function performMaintenance() {
     });
 }
 
+// --- MCP (Model Context Protocol) API Endpoints ---
+console.log("🤖 MCP (Model Context Protocol) is ENABLED. Creating API endpoints at /api/context/*");
+
+// Middleware to restrict access to localhost
+const localhostOnly = (req, res, next) => {
+    const allowedIps = ['127.0.0.1', '::1'];
+    const clientIp = req.ip;
+
+    if (allowedIps.includes(clientIp)) {
+        next(); // IP is allowed, proceed to the route
+    } else {
+        console.warn(`[SECURITY] Denied access to MCP API from IP: ${clientIp}`);
+        res.status(403).json({ error: 'Access denied. This API is only accessible from localhost.' });
+    }
+};
+
+// Use a router to group MCP routes and apply the middleware
+const mcpRouter = express.Router();
+mcpRouter.use(localhostOnly); // Apply middleware to all routes in this router
+
+// Endpoint to get the overall status of the application
+mcpRouter.get('/status', (req, res) => {
+    getDbStatus(statusData => {
+        res.json({
+            mqtt_connected: mainConnection ? mainConnection.connected : false,
+            simulator_status: simulatorInterval ? 'running' : 'stopped',
+            database_stats: {
+                total_messages: statusData.totalMessages,
+                size_mb: parseFloat(statusData.dbSizeMB.toFixed(2)),
+                size_limit_mb: statusData.dbLimitMB
+            }
+        });
+    });
+});
+
+// Endpoint to get a flat list of all unique topics
+mcpRouter.get('/topics', (req, res) => {
+    db.all("SELECT DISTINCT topic FROM mqtt_events ORDER BY topic ASC", (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: "Failed to query topics from database." });
+        }
+        res.json(rows.map(r => r.topic));
+    });
+});
+
+// Endpoint to get all topics structured as a hierarchical tree
+mcpRouter.get('/tree', (req, res) => {
+    db.all("SELECT DISTINCT topic FROM mqtt_events", (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: "Failed to query topics from database." });
+        }
+        const topics = rows.map(r => r.topic);
+        const tree = {};
+        topics.forEach(topic => {
+            let currentLevel = tree;
+            const parts = topic.split('/');
+            parts.forEach((part, index) => {
+                if (!currentLevel[part]) {
+                    currentLevel[part] = {};
+                }
+                currentLevel = currentLevel[part];
+            });
+        });
+        res.json(tree);
+    });
+});
+
+mcpRouter.get('/topic/:topic(.*)', (req, res) => {
+    const topic = req.params.topic;
+    if (!topic) {
+        return res.status(400).json({ error: "Topic not specified." });
+    }
+    // Utilise .all() au lieu de .get()
+    db.all("SELECT * FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT 1", [topic], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: "Database query failed." });
+        }
+        // Vérifie si le tableau de résultats a un élément
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ error: `No data found for topic: ${topic}` });
+        }
+        // Renvoie le premier élément du tableau
+        res.json(rows[0]);
+    });
+});
+
+mcpRouter.get('/history/:topic(.*)', (req, res) => {
+    const topic = req.params.topic;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    if (!topic) {
+        return res.status(400).json({ error: "Topic not specified." });
+    }
+    // Injecte la variable 'limit' directement dans la chaîne SQL
+    db.all(`SELECT * FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT ${limit}`, [topic], (err, rows) => {
+        if (err) {
+            // Ajout d'un log pour voir l'erreur exacte côté serveur
+            console.error("History query failed:", err);
+            return res.status(500).json({ error: "Database query failed." });
+        }
+        res.json(rows);
+    });
+});
+
+// Mount the secured router on the base API path
+app.use('/api/context', mcpRouter);
+
 
 // --- Start Server ---
 server.listen(PORT, () => {
     console.log(`HTTP server started on http://localhost:${PORT}`);
+    // Enable 'trust proxy' for accurate IP detection if behind a reverse proxy (e.g., Nginx)
+    app.set('trust proxy', true);
     connectToMqttBroker();
     if (DUCKDB_MAX_SIZE_MB) {
         console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB.`);
