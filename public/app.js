@@ -25,13 +25,14 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Element Initialization ---
     const treeContainer = document.getElementById('mqtt-tree');
+    const payloadContainer = document.getElementById('payload-display');
+    const payloadMainArea = document.getElementById('payload-main-area'); // [MODIFICATION]
     const payloadContent = document.getElementById('payload-content');
     const payloadTopic = document.getElementById('payload-topic');
     const datetimeContainer = document.getElementById('current-datetime');
     const livePayloadToggle = document.getElementById('live-payload-toggle');
-    const topicHistoryLog = document.getElementById('topic-history-log'); // **[MODIFICATION]** Get history container
+    const topicHistoryContainer = document.getElementById('topic-history-container');
     let selectedNodeContainer = null;
-    let currentSelectedTopic = null; // **[MODIFICATION]** State for selected topic
 
     // Elements for tab navigation
     const btnTreeView = document.getElementById('btn-tree-view');
@@ -47,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyDbSize = document.getElementById('history-db-size');
     const historyDbLimit = document.getElementById('history-db-limit');
     const pruningIndicator = document.getElementById('pruning-indicator');
+    const topicHistoryLog = document.getElementById('topic-history-log');
 
     // Simulator UI Elements
     const btnStartSim = document.getElementById('btn-start-sim');
@@ -158,18 +160,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'mqtt-message':
                     updateTree(message.topic, message.payload, message.timestamp);
                     updateMap(message.topic, message.payload);
-                    addHistoryEntry(message, true); // Prepend new message
-                    // **[MODIFICATION]** If this message is for the selected topic, refresh its history
-                    if (message.topic === currentSelectedTopic) {
-                        ws.send(JSON.stringify({ type: 'get-topic-history', topic: currentSelectedTopic }));
-                    }
+                    addHistoryEntry(message, true);
                     break;
                 case 'simulator-status':
                     updateSimulatorStatusUI(message.status);
                     break;
                 case 'history-initial-data':
-                    if (historyLogContainer) historyLogContainer.innerHTML = ''; // Clear previous data
-                    message.data.forEach(entry => addHistoryEntry(entry, false)); // Append initial data
+                    if (historyLogContainer) historyLogContainer.innerHTML = '';
+                    message.data.forEach(entry => addHistoryEntry(entry, false));
+                    break;
+                case 'topic-history-data':
+                    updateTopicHistory(message.topic, message.data);
                     break;
                 case 'db-status-update':
                     if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
@@ -179,48 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'pruning-status':
                     if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started');
                     break;
-                // **[MODIFICATION]** New case to handle incoming topic history
-                case 'topic-history-data':
-                    displayTopicHistory(message.data);
-                    break;
             }
         } catch (e) {
             console.error("JSON Parsing Error:", dataText, e);
         }
     };
-    
-    // **[MODIFICATION]** New function to display specific topic history
-    function displayTopicHistory(entries) {
-        if (!topicHistoryLog) return;
-        topicHistoryLog.innerHTML = ''; // Clear previous content
-
-        if (!entries || entries.length === 0) {
-            topicHistoryLog.innerHTML = `<p class="history-placeholder">No history found for this topic.</p>`;
-            return;
-        }
-
-        entries.forEach(entry => {
-            const div = document.createElement('div');
-            div.className = 'topic-history-entry';
-
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'topic-history-timestamp';
-            timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
-
-            const pre = document.createElement('pre');
-            pre.className = 'topic-history-payload';
-            try {
-                const jsonObj = JSON.parse(entry.payload);
-                pre.textContent = JSON.stringify(jsonObj, null, 2);
-            } catch (e) {
-                pre.textContent = entry.payload;
-            }
-            
-            div.appendChild(timeSpan);
-            div.appendChild(pre);
-            topicHistoryLog.appendChild(div);
-        });
-    }
 
     // --- History View Functions ---
     function addHistoryEntry(entry, prepend = false) {
@@ -278,15 +242,22 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* Payload is not JSON, ignore for map */ }
     }
 
+    function toggleRecentHistoryVisibility() {
+        if (!topicHistoryContainer) return;
+        const isLive = livePayloadToggle.checked;
+        topicHistoryContainer.style.display = isLive ? 'none' : 'block';
+        document.getElementById('drag-handle-horizontal').style.display = isLive ? 'none' : 'flex'; // Masque aussi la barre
+    }
+
     // --- Payload Display & Interaction Logic ---
     livePayloadToggle?.addEventListener('change', (event) => {
         if (event.target.checked && selectedNodeContainer) {
             selectedNodeContainer.classList.remove('selected');
             selectedNodeContainer = null;
-            currentSelectedTopic = null; // Clear selected topic
-            if(topicHistoryLog) topicHistoryLog.innerHTML = `<p class="history-placeholder">Select a topic to see its recent history.</p>`; // Reset history view
         }
+        toggleRecentHistoryVisibility();
     });
+    toggleRecentHistoryVisibility();
 
     function displayPayload(topic, payload) {
         if (payloadTopic) {
@@ -302,6 +273,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    function updateTopicHistory(topic, data) {
+        if (!topicHistoryLog) return;
+        topicHistoryLog.innerHTML = '';
+
+        if (!data || data.length === 0) {
+            const p = document.createElement('p');
+            p.className = 'history-placeholder';
+            p.textContent = `No recent history for ${topic}.`;
+            topicHistoryLog.appendChild(p);
+            return;
+        }
+
+        data.forEach(entry => {
+            const div = document.createElement('div');
+            div.className = 'topic-history-entry';
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'history-entry-timestamp';
+            timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
+
+            const pre = document.createElement('pre');
+            pre.className = 'history-entry-payload';
+            try {
+                const jsonObj = JSON.parse(entry.payload);
+                pre.textContent = JSON.stringify(jsonObj, null, 2);
+            } catch(e) {
+                pre.textContent = entry.payload;
+            }
+            
+            div.appendChild(timeSpan);
+            div.appendChild(pre);
+            topicHistoryLog.appendChild(div);
+        });
+    }
+
     // --- Tree View Functions ---
 
     function isTopicVisible(targetLi) {
@@ -318,9 +324,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleCheckboxClick(event) {
         event.stopPropagation(); 
+        
         const checkbox = event.target;
         const isChecked = checkbox.checked;
         const li = checkbox.closest('li');
+        
         if (li) {
             const childCheckboxes = li.querySelectorAll('.node-filter-checkbox');
             childCheckboxes.forEach(cb => cb.checked = isChecked);
@@ -329,7 +337,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateTree(topic, payload, timestamp) {
         if (!treeContainer) return;
-        const parts = topic.split('/');
+        
+        const parts = topic.split('/').map(part => part.replace(/\./g, '_'));
+
         let currentNode = treeContainer;
         const affectedNodes = [];
         const formattedTimestamp = new Date(timestamp).toLocaleTimeString('en-GB');
@@ -342,8 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 ul = document.createElement('ul');
                 currentNode.appendChild(ul);
             }
+
             let li = ul.querySelector(`:scope > li#node-${partId}`);
             let isNewNode = false;
+
             if (!li) {
                 isNewNode = true;
                 li = document.createElement('li');
@@ -361,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const nodeName = document.createElement('span');
                 nodeName.className = 'node-name';
-                nodeName.textContent = part;
+                nodeName.textContent = topic.split('/')[index];
 
                 const nodeTimestamp = document.createElement('span');
                 nodeTimestamp.className = 'node-timestamp';
@@ -420,18 +432,47 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (livePayloadToggle) {
             livePayloadToggle.checked = false;
+            livePayloadToggle.dispatchEvent(new Event('change'));
         }
         
         const topic = targetContainer.dataset.topic;
         const payload = targetContainer.dataset.payload;
-        
         displayPayload(topic, payload);
 
-        // **[MODIFICATION]** Request history for the clicked topic
-        currentSelectedTopic = topic;
-        if (topicHistoryLog) {
-            topicHistoryLog.innerHTML = '<p class="history-placeholder">Loading history...</p>';
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'get-topic-history', topic: topic }));
         }
-        ws.send(JSON.stringify({ type: 'get-topic-history', topic: topic }));
     }
+
+    // --- [MODIFICATION] Logique de redimensionnement des panneaux ---
+    const resizerVertical = document.getElementById('drag-handle-vertical');
+    const resizerHorizontal = document.getElementById('drag-handle-horizontal');
+
+    // Redimensionnement Vertical
+    const resizeVertical = (e) => {
+        const treeViewWidth = e.pageX - treeContainer.getBoundingClientRect().left;
+        treeContainer.style.flexBasis = `${treeViewWidth}px`;
+    };
+
+    resizerVertical?.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.addEventListener('mousemove', resizeVertical);
+        document.addEventListener('mouseup', () => {
+            document.removeEventListener('mousemove', resizeVertical);
+        });
+    });
+
+    // Redimensionnement Horizontal
+    const resizeHorizontal = (e) => {
+        const payloadAreaHeight = e.pageY - payloadContainer.getBoundingClientRect().top;
+        payloadMainArea.style.flexBasis = `${payloadAreaHeight}px`;
+    };
+
+    resizerHorizontal?.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.addEventListener('mousemove', resizeHorizontal);
+        document.addEventListener('mouseup', () => {
+            document.removeEventListener('mousemove', resizeHorizontal);
+        });
+    });
 });

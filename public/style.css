@@ -79,15 +79,53 @@ main#tree-view {
 }
 
 /* --- Styles de l'Arbre --- */
-.tree-container {
-    width: 50%; border-right: 1px solid #ddd; background-color: #fff;
-    padding: 20px; overflow-y: auto; box-sizing: border-box; height: 100%;
-}
-.payload-container {
-    width: 50%; display: flex; flex-direction: column; height: 100%;
-    padding: 20px; box-sizing: border-box;
+.tree-container { 
+    flex: 0 0 50%;
+    border-right: 1px solid #ddd; 
+    background-color: #fff; 
+    min-width: 200px;
+    padding: 20px; 
+    overflow-y: auto; 
+    box-sizing: border-box; 
+    height: 100%;
 }
 
+.payload-container { 
+    flex-grow: 1;
+    min-width: 300px;
+    padding: 20px; 
+    box-sizing: border-box; 
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Style pour les barres de redimensionnement --- */
+.resizer { /* Vertical */
+    flex: 0 0 5px;
+    cursor: col-resize;
+    background-color: #e9ecef;
+    border-left: 1px solid #ddd;
+    border-right: 1px solid #ddd;
+    transition: background-color 0.2s ease;
+}
+.resizer:hover {
+    background-color: #007bff;
+}
+
+.resizer-horizontal { /* Horizontal */
+    flex: 0 0 5px;
+    cursor: row-resize;
+    background-color: #e9ecef;
+    border-top: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+    width: 100%;
+    margin: 10px 0;
+    transition: background-color 0.2s ease;
+}
+.resizer-horizontal:hover {
+    background-color: #007bff;
+}
 
 #mqtt-tree ul { list-style-type: none; padding-left: 0; margin-left: 20px; }
 #mqtt-tree li {
@@ -114,7 +152,7 @@ main#tree-view {
     padding: 2px 6px;
     border-radius: 4px;
     background-color: transparent;
-    position: relative; /* Needed for checkbox positioning */
+    position: relative;
 }
 #mqtt-tree .node-name { display: inline-flex; align-items: center; }
 #mqtt-tree .node-timestamp { font-size: 0.75em; color: #888; margin-left: 15px; font-family: 'Courier New', Courier, monospace; }
@@ -153,6 +191,12 @@ main#tree-view {
 #mqtt-tree .selected .node-timestamp { color: #fff; }
 
 /* --- Styles for Payload Display --- */
+#payload-main-area {
+    flex: 0 0 60%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* **[CORRECTION]** Permet au conteneur de se rétrécir */
+}
 .payload-header {
     display: flex;
     justify-content: space-between;
@@ -196,67 +240,59 @@ pre#payload-content {
     font-size: 14px;
     margin: 0;
     border: 1px solid #dee2e6;
-    flex-shrink: 0;
-}
-
-/* --- Topic History Styles --- */
-.topic-history-container {
-    margin-top: 20px;
-    border-top: 1px solid #ddd;
-    padding-top: 15px;
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1; /* Allows this container to take up remaining space */
-    min-height: 0; /* Important for flexbox scrolling */
-}
-
-.topic-history-header {
-    margin: 0 0 10px 0;
-    font-size: 1.1em;
-    color: #343a40;
-    flex-shrink: 0;
-}
-
-.topic-history-log {
-    overflow-y: auto;
     flex-grow: 1;
+    overflow-y: auto;
+}
+
+/* --- Styles for Recent Topic History --- */
+.topic-history-container {
+    flex-grow: 1;
+    display: flex !important;
+    flex-direction: column;
+    min-height: 0; /* **[CORRECTION]** C'est la ligne clé qui résout le problème de scroll */
+}
+.topic-history-header {
+    font-size: 1.1em;
+    color: #495057;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #dee2e6;
+}
+.topic-history-log {
+    flex-grow: 1;
+    overflow-y: auto;
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 4px;
-    padding: 5px;
 }
-
 .history-placeholder {
     padding: 15px;
     color: #6c757d;
-    text-align: center;
+    font-style: italic;
+    margin: 0;
 }
-
 .topic-history-entry {
-    background-color: #fff;
-    border-bottom: 1px solid #e9ecef;
     padding: 8px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+    border-bottom: 1px solid #e9ecef;
 }
 .topic-history-entry:last-child {
     border-bottom: none;
 }
-
-.topic-history-timestamp {
+.history-entry-timestamp {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 0.8em;
+    font-size: 0.9em;
     color: #6c757d;
-    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
 }
-
-.topic-history-payload {
+.history-entry-payload {
     margin: 0;
+    padding: 8px;
+    background-color: #fff;
+    border-radius: 3px;
+    font-size: 0.95em;
     white-space: pre-wrap;
     word-wrap: break-word;
-    font-size: 0.85em;
-    color: #212529;
 }
 
 
@@ -279,7 +315,7 @@ pre#payload-content {
 
 /* --- Simulator Controls Styles --- */
 .simulator-controls {
-    display: none; /* Hidden by default */
+    display: none;
     align-items: center;
     gap: 10px;
     background-color: rgba(0, 0, 0, 0.1);
@@ -322,11 +358,11 @@ pre#payload-content {
 }
 
 .status-indicator.stopped::before {
-    background-color: #dc3545; /* Red */
+    background-color: #dc3545;
 }
 
 .status-indicator.running::before {
-    background-color: #28a745; /* Green */
+    background-color: #28a745;
     animation: pulse-green 2s infinite;
 }
 
@@ -402,7 +438,7 @@ pre#payload-content {
 }
 
 .pruning-indicator {
-    display: none; /* Hidden by default */
+    display: none;
     position: absolute;
     bottom: 20px;
     left: 50%;

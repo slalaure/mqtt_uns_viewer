@@ -29,16 +29,22 @@
     <div class="view-container">
         <main id="tree-view" class="view active">
             <div id="mqtt-tree" class="tree-container"></div>
+            
+            <div class="resizer" id="drag-handle-vertical"></div>
+
             <div id="payload-display" class="payload-container">
-                <div class="payload-header">
-                    <h2>Payload</h2>
-                    <div class="payload-controls">
-                        <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
-                        <label for="live-payload-toggle">Live Update</label>
+                <div id="payload-main-area"> <div class="payload-header">
+                        <h2>Payload</h2>
+                        <div class="payload-controls">
+                            <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
+                            <label for="live-payload-toggle">Live Update</label>
+                        </div>
                     </div>
+                    <div id="payload-topic" class="payload-topic-display">No topic selected</div>
+                    <pre id="payload-content">Select a topic to see its payload.</pre>
                 </div>
-                <div id="payload-topic" class="payload-topic-display">No topic selected</div>
-                <pre id="payload-content">Select a topic to see its payload.</pre>
+
+                <div class="resizer-horizontal" id="drag-handle-horizontal"></div>
 
                 <div id="topic-history-container" class="topic-history-container">
                     <h3 class="topic-history-header">Recent History</h3>

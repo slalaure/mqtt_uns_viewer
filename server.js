@@ -32,6 +32,7 @@ const fs = require('fs');
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const duckdb = require('duckdb');
+const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 
 // --- Configuration from Environment Variables (with sanitization) ---
 const MQTT_BROKER_HOST = process.env.MQTT_BROKER_HOST ? process.env.MQTT_BROKER_HOST.trim() : null;
@@ -46,6 +47,7 @@ const KEY_FILENAME = process.env.KEY_FILENAME ? process.env.KEY_FILENAME.trim() 
 const CA_FILENAME = process.env.CA_FILENAME ? process.env.CA_FILENAME.trim() : null;
 const SIMULATOR_ENABLED = process.env.SIMULATOR_ENABLED;
 const isSimulatorEnabled = SIMULATOR_ENABLED === 'true';
+const SPARKPLUG_ENABLED = process.env.SPARKPLUG_ENABLED === 'true'; // Sparkplug flag
 const MQTT_ALPN_PROTOCOL = process.env.MQTT_ALPN_PROTOCOL ? process.env.MQTT_ALPN_PROTOCOL.trim() : null;
 const PORT = process.env.PORT || 8080;
 const DUCKDB_MAX_SIZE_MB = process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null;
@@ -55,6 +57,9 @@ const DUCKDB_PRUNE_CHUNK_SIZE = process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(p
 if (!MQTT_BROKER_HOST || !CLIENT_ID || !MQTT_TOPIC ) {
     console.error("FATAL ERROR: One or more required environment variables are not set. Please check your .env file.");
     process.exit(1);
+}
+if (SPARKPLUG_ENABLED) {
+    console.log("🚀 Sparkplug B decoding is ENABLED.");
 }
 
 // --- Certificate Paths ---
@@ -89,7 +94,7 @@ db.exec(`
 let simulatorInterval = null;
 const SIMULATION_INTERVAL_MS = 3000;
 const randomBetween = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
-let simState = { step: 0, workOrders: { palladiumCore: null, vibraniumCasing: null }, operators: ["Pepper Potts", "Happy Hogan", "James Rhodes", "J.A.R.V.I.S.", "Peter Parker"] };
+let simState = { step: 0, workOrders: { palladiumCore: null, vibraniumCasing: null }, operators: ["Pepper Potts", "Happy Hogan", "James Rhodes", "J.A.R.V.I.S.", "Peter Parker"], spSeq: 0 };
 const scenario = [
     () => { simState.workOrders.palladiumCore = { id: `WO-PD${Math.floor(10000 + Math.random() * 90000)}`, facility: "malibu", itemNumber: "ARC-PD-CORE-01", status: "RELEASED" }; return { topic: `stark_industries/malibu_facility/erp/workorder`, payload: { ...simState.workOrders.palladiumCore, itemName: "Palladium Core" } }; },
     () => ({ topic: 'stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/mes/operation', payload: { workOrderId: simState.workOrders.palladiumCore.id, step: 10, stepName: "Micro-particle assembly", operator: simState.operators[0], status: "IN_PROGRESS" } }),
@@ -110,6 +115,30 @@ const scenario = [
     () => { simState.workOrders.vibraniumCasing.status = "COMPLETED"; return { topic: `stark_industries/malibu_facility/erp/workorder`, payload: { ...simState.workOrders.vibraniumCasing, completionDate: new Date().toISOString() } }; },
 ];
 let mainConnection = null;
+
+// Conditionally add Sparkplug B step to scenario
+if (SPARKPLUG_ENABLED) {
+    const sparkplugDeviceStep = () => {
+        const topic = 'spBv1.0/stark_industries/NDATA/robot_arm_01';
+        simState.spSeq = (simState.spSeq + 1) % 256;
+        
+        const payloadObject = {
+            timestamp: new Date().getTime(),
+            metrics: [
+                { name: "Motor/Speed", value: Math.floor(randomBetween(1500, 1800)), type: "Int32" },
+                { name: "Motor/Temp", value: randomBetween(80, 85, 1), type: "Float" }
+            ],
+            seq: simState.spSeq
+        };
+
+        const payloadBuffer = spBv10Codec.encodePayload(payloadObject);
+        return { topic: topic, payload: payloadBuffer, isBinary: true };
+    };
+
+    scenario.splice(3, 0, sparkplugDeviceStep);
+    console.log("   -> Sparkplug B demo step has been added to the simulator scenario.");
+}
+
 
 // --- Web Server Setup ---
 const app = express();
@@ -142,7 +171,6 @@ wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         try {
             const parsedMessage = JSON.parse(message);
-            // **[MODIFICATION]** Handle request for a specific topic's history
             if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
                 db.all("SELECT timestamp, payload FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT 20", [parsedMessage.topic], (err, rows) => {
                     if (err) {
@@ -176,9 +204,18 @@ function startSimulator(connection) {
     console.log(`Starting simulation loop. Publishing every ${SIMULATION_INTERVAL_MS / 1000}s.`);
     simulatorInterval = setInterval(() => {
         let msg = null;
-        do { msg = scenario[simState.step](); simState.step = (simState.step + 1) % scenario.length; } while (msg === null);
-        msg.payload.emitted_at = new Date().toISOString();
-        connection.publish(msg.topic, JSON.stringify(msg.payload), { qos: 1, retain: false });
+        do { 
+            msg = scenario[simState.step](); 
+            simState.step = (simState.step + 1) % scenario.length; 
+        } while (msg === null);
+
+        // Handle both binary and JSON payloads from the scenario
+        if (msg.isBinary) {
+            connection.publish(msg.topic, msg.payload, { qos: 1, retain: false });
+        } else {
+            msg.payload.emitted_at = new Date().toISOString();
+            connection.publish(msg.topic, JSON.stringify(msg.payload), { qos: 1, retain: false });
+        }
     }, SIMULATION_INTERVAL_MS);
     broadcast(JSON.stringify({ type: 'simulator-status', status: 'running' }));
 }
@@ -190,6 +227,19 @@ function stopSimulator() {
         broadcast(JSON.stringify({ type: 'simulator-status', status: 'stopped' }));
     }
 }
+
+// Fonction "Replacer" pour JSON.stringify qui convertit les objets Long en nombres
+function longReplacer(key, value) {
+    if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Long') {
+        return value.toNumber();
+    }
+    // Gère le cas où la valeur est dans une métrique
+    if (value && value.hasOwnProperty('value') && value.hasOwnProperty('type') && value.value && value.value.constructor && value.value.constructor.name === 'Long') {
+         value.value = value.value.toNumber();
+    }
+    return value;
+}
+
 
 // --- MQTT Connection Logic ---
 function connectToMqttBroker() {
@@ -210,22 +260,58 @@ function connectToMqttBroker() {
     mainConnection = mqtt.connect(options);
     mainConnection.on('connect', () => {
         console.log(`✅ Connected to MQTT Broker!`);
-        mainConnection.subscribe(MQTT_TOPIC, { qos: 1 }, (err) => {
-            if (err) console.error('❌ Subscription failed:', err);
-            else console.log(`   -> Subscription to '${MQTT_TOPIC}' successful.`);
+        
+        const topics = MQTT_TOPIC.split(',').map(topic => topic.trim());
+        
+        mainConnection.subscribe(topics, { qos: 1 }, (err, granted) => {
+            if (err) {
+                console.error('❌ Subscription failed:', err);
+            } else {
+                granted.forEach(grant => {
+                    console.log(`   -> Subscription to '${grant.topic}' successful (QoS ${grant.qos}).`);
+                });
+            }
         });
     });
 
     mainConnection.on('message', (topic, payload) => {
         const timestamp = new Date();
-        const payloadAsString = payload.toString('utf-8');
-        broadcast(JSON.stringify({ type: 'mqtt-message', topic, payload: payloadAsString, timestamp: timestamp.toISOString() }));
-        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-        stmt.run(timestamp, topic, payloadAsString, (err) => {
-            if (err) console.error("❌ DuckDB Insert Error:", err);
-            else broadcastDbStatus(); // Real-time update
-        });
-        stmt.finalize();
+        let payloadAsString;
+        let finalMessageObject;
+
+        try {
+            if (SPARKPLUG_ENABLED && topic.startsWith('spBv1.0/')) {
+                const decodedPayload = spBv10Codec.decodePayload(payload);
+                payloadAsString = JSON.stringify(decodedPayload, longReplacer, 2); 
+            } else {
+                payloadAsString = payload.toString('utf-8');
+            }
+            
+            finalMessageObject = { 
+                type: 'mqtt-message', 
+                topic, 
+                payload: payloadAsString, 
+                timestamp: timestamp.toISOString() 
+            };
+            
+            const messageToSend = JSON.stringify(finalMessageObject);
+            
+            // **[LOG DE DIAGNOSTIC]**
+            console.log(`[DEBUG] Broadcasting to client on topic ${topic}: ${messageToSend}`);
+            
+            broadcast(messageToSend);
+            
+            const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
+            stmt.run(timestamp, topic, payloadAsString, (err) => {
+                if (err) console.error("❌ DuckDB Insert Error:", err);
+                else broadcastDbStatus();
+            });
+            stmt.finalize();
+
+        } catch (err) {
+            console.error(`❌ FATAL ERROR during message processing for topic ${topic}:`, err);
+            // Ne pas continuer si une erreur se produit ici
+        }
     });
 
     mainConnection.on('error', (error) => console.error('❌ MQTT Client Error:', error));
@@ -306,7 +392,7 @@ server.listen(PORT, () => {
     if (DUCKDB_MAX_SIZE_MB) {
         console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB.`);
     }
-    setInterval(performMaintenance, 15000);
+    setInterval(performMaintenance, 15000); // Run every 15 seconds
 });
 
 // --- Graceful shutdown ---

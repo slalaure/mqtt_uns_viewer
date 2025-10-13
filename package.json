@@ -17,6 +17,7 @@
     "duckdb": "^1.4.1",
     "express": "^5.1.0",
     "mqtt": "^5.14.1",
+    "sparkplug-payload": "^1.0.3",
     "ws": "^8.18.3"
   }
 }
