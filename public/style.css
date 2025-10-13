@@ -79,9 +79,15 @@ main#tree-view {
 }
 
 /* --- Styles de l'Arbre --- */
-.tree-container, .payload-container { padding: 20px; overflow-y: auto; box-sizing: border-box; height: 100%; }
-.tree-container { width: 50%; border-right: 1px solid #ddd; background-color: #fff; }
-.payload-container { width: 50%; }
+.tree-container {
+    width: 50%; border-right: 1px solid #ddd; background-color: #fff;
+    padding: 20px; overflow-y: auto; box-sizing: border-box; height: 100%;
+}
+.payload-container {
+    width: 50%; display: flex; flex-direction: column; height: 100%;
+    padding: 20px; box-sizing: border-box;
+}
+
 
 #mqtt-tree ul { list-style-type: none; padding-left: 0; margin-left: 20px; }
 #mqtt-tree li {
@@ -113,15 +119,14 @@ main#tree-view {
 #mqtt-tree .node-name { display: inline-flex; align-items: center; }
 #mqtt-tree .node-timestamp { font-size: 0.75em; color: #888; margin-left: 15px; font-family: 'Courier New', Courier, monospace; }
 
-/* --- [CORRECTION FINALE] Style for checkbox positioning --- */
 .node-filter-checkbox {
     position: absolute;
-    left: -18px; /* Decalage parfait pour eviter la superposition */
+    left: -18px;
     top: 50%;
     transform: translateY(-50%);
     margin: 0;
     cursor: pointer;
-    z-index: 2; /* S'assure que la checkbox est au-dessus des lignes */
+    z-index: 2;
 }
 
 /* --- Logique d'animation --- */
@@ -185,13 +190,75 @@ pre#payload-content {
     background-color: #f8f9fa;
     color: #212529;
     padding: 15px;
-    border-radius: 0 0 5px 5px; /* Adjusted radius */
+    border-radius: 0 0 5px 5px;
     white-space: pre-wrap;
     word-wrap: break-word;
     font-size: 14px;
     margin: 0;
     border: 1px solid #dee2e6;
+    flex-shrink: 0;
 }
+
+/* --- Topic History Styles --- */
+.topic-history-container {
+    margin-top: 20px;
+    border-top: 1px solid #ddd;
+    padding-top: 15px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allows this container to take up remaining space */
+    min-height: 0; /* Important for flexbox scrolling */
+}
+
+.topic-history-header {
+    margin: 0 0 10px 0;
+    font-size: 1.1em;
+    color: #343a40;
+    flex-shrink: 0;
+}
+
+.topic-history-log {
+    overflow-y: auto;
+    flex-grow: 1;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+.history-placeholder {
+    padding: 15px;
+    color: #6c757d;
+    text-align: center;
+}
+
+.topic-history-entry {
+    background-color: #fff;
+    border-bottom: 1px solid #e9ecef;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.topic-history-entry:last-child {
+    border-bottom: none;
+}
+
+.topic-history-timestamp {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8em;
+    color: #6c757d;
+    font-weight: bold;
+}
+
+.topic-history-payload {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 0.85em;
+    color: #212529;
+}
+
 
 /* --- Footer Styles --- */
 .app-footer {

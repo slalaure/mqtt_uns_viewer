@@ -23,7 +23,8 @@
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
         <button id="btn-map-view" class="tab-button">SVG View</button>
-        <button id="btn-history-view" class="tab-button">History</button> </nav>
+        <button id="btn-history-view" class="tab-button">History</button>
+    </nav>
 
     <div class="view-container">
         <main id="tree-view" class="view active">
@@ -38,6 +39,13 @@
                 </div>
                 <div id="payload-topic" class="payload-topic-display">No topic selected</div>
                 <pre id="payload-content">Select a topic to see its payload.</pre>
+
+                <div id="topic-history-container" class="topic-history-container">
+                    <h3 class="topic-history-header">Recent History</h3>
+                    <div id="topic-history-log" class="topic-history-log">
+                        <p class="history-placeholder">Select a topic to see its recent history.</p>
+                    </div>
+                </div>
             </div>
         </main>
 

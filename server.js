@@ -131,14 +131,35 @@ console.log("WebSocket server started. Waiting for connections...");
 wss.on('connection', (ws) => {
     console.log('➡️ WebSocket client connected.');
 
+    // Send initial batch of historical data for the main history view
     db.all("SELECT * FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
         if (!err && ws.readyState === ws.OPEN) {
             ws.send(JSON.stringify({ type: 'history-initial-data', data: rows }));
         }
     });
 
+    // Handle messages from the client (e.g., request for specific topic history)
+    ws.on('message', (message) => {
+        try {
+            const parsedMessage = JSON.parse(message);
+            // **[MODIFICATION]** Handle request for a specific topic's history
+            if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
+                db.all("SELECT timestamp, payload FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT 20", [parsedMessage.topic], (err, rows) => {
+                    if (err) {
+                        console.error(`❌ DuckDB Error fetching history for topic ${parsedMessage.topic}:`, err);
+                    } else if (ws.readyState === ws.OPEN) {
+                        ws.send(JSON.stringify({ type: 'topic-history-data', topic: parsedMessage.topic, data: rows }));
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("❌ Error processing WebSocket message from client:", e);
+        }
+    });
+
     broadcastDbStatus(); // Send current status immediately
 });
+
 
 function broadcast(message) {
     wss.clients.forEach(client => {
@@ -255,22 +276,18 @@ function broadcastDbStatus() {
     });
 }
 
-// **[MODIFICATION]** A dedicated, safe function for periodic maintenance
 function performMaintenance() {
     if (isPruning) {
         console.log("Maintenance skipped: pruning is already in progress.");
         return;
     }
     
-    // First, merge the WAL file to get an accurate disk size
     db.exec("CHECKPOINT;", (err) => {
         if (err) {
             console.error("❌ Error during maintenance CHECKPOINT:", err.message);
         }
         
-        // Then, get the updated status and check if pruning is needed
         getDbStatus((statusData) => {
-            // Broadcast the latest size (this fixes the flickering)
             broadcast(JSON.stringify(statusData));
 
             if (DUCKDB_MAX_SIZE_MB && statusData.dbSizeMB > DUCKDB_MAX_SIZE_MB) {
@@ -289,8 +306,7 @@ server.listen(PORT, () => {
     if (DUCKDB_MAX_SIZE_MB) {
         console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB.`);
     }
-    // **[MODIFICATION]** The interval now calls the safe maintenance function
-    setInterval(performMaintenance, 15000); // Run every 15 seconds
+    setInterval(performMaintenance, 15000);
 });
 
 // --- Graceful shutdown ---

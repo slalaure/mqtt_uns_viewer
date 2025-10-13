@@ -29,7 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const payloadTopic = document.getElementById('payload-topic');
     const datetimeContainer = document.getElementById('current-datetime');
     const livePayloadToggle = document.getElementById('live-payload-toggle');
+    const topicHistoryLog = document.getElementById('topic-history-log'); // **[MODIFICATION]** Get history container
     let selectedNodeContainer = null;
+    let currentSelectedTopic = null; // **[MODIFICATION]** State for selected topic
 
     // Elements for tab navigation
     const btnTreeView = document.getElementById('btn-tree-view');
@@ -157,6 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateTree(message.topic, message.payload, message.timestamp);
                     updateMap(message.topic, message.payload);
                     addHistoryEntry(message, true); // Prepend new message
+                    // **[MODIFICATION]** If this message is for the selected topic, refresh its history
+                    if (message.topic === currentSelectedTopic) {
+                        ws.send(JSON.stringify({ type: 'get-topic-history', topic: currentSelectedTopic }));
+                    }
                     break;
                 case 'simulator-status':
                     updateSimulatorStatusUI(message.status);
@@ -173,11 +179,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'pruning-status':
                     if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started');
                     break;
+                // **[MODIFICATION]** New case to handle incoming topic history
+                case 'topic-history-data':
+                    displayTopicHistory(message.data);
+                    break;
             }
         } catch (e) {
             console.error("JSON Parsing Error:", dataText, e);
         }
     };
+    
+    // **[MODIFICATION]** New function to display specific topic history
+    function displayTopicHistory(entries) {
+        if (!topicHistoryLog) return;
+        topicHistoryLog.innerHTML = ''; // Clear previous content
+
+        if (!entries || entries.length === 0) {
+            topicHistoryLog.innerHTML = `<p class="history-placeholder">No history found for this topic.</p>`;
+            return;
+        }
+
+        entries.forEach(entry => {
+            const div = document.createElement('div');
+            div.className = 'topic-history-entry';
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'topic-history-timestamp';
+            timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
+
+            const pre = document.createElement('pre');
+            pre.className = 'topic-history-payload';
+            try {
+                const jsonObj = JSON.parse(entry.payload);
+                pre.textContent = JSON.stringify(jsonObj, null, 2);
+            } catch (e) {
+                pre.textContent = entry.payload;
+            }
+            
+            div.appendChild(timeSpan);
+            div.appendChild(pre);
+            topicHistoryLog.appendChild(div);
+        });
+    }
 
     // --- History View Functions ---
     function addHistoryEntry(entry, prepend = false) {
@@ -240,6 +283,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target.checked && selectedNodeContainer) {
             selectedNodeContainer.classList.remove('selected');
             selectedNodeContainer = null;
+            currentSelectedTopic = null; // Clear selected topic
+            if(topicHistoryLog) topicHistoryLog.innerHTML = `<p class="history-placeholder">Select a topic to see its recent history.</p>`; // Reset history view
         }
     });
 
@@ -259,11 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Tree View Functions ---
 
-    /**
-     * Checks if a topic's branch is visible by checking its own checkbox and all parent checkboxes.
-     * @param {HTMLElement} targetLi The final <li> element for the topic.
-     * @returns {boolean} True if the entire branch is checked.
-     */
     function isTopicVisible(targetLi) {
         let currentNode = targetLi;
         while (currentNode) {
@@ -271,24 +311,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!checkbox || !checkbox.checked) {
                 return false;
             }
-            // Move up to the parent li
             currentNode = currentNode.parentElement.closest('li');
         }
         return true;
     }
 
-    /**
-     * Handles clicks on a node's checkbox, propagating the state to all children.
-     * @param {Event} event The click event.
-     */
     function handleCheckboxClick(event) {
-        // Prevent the click from bubbling up to the node-container's click listener
         event.stopPropagation(); 
-        
         const checkbox = event.target;
         const isChecked = checkbox.checked;
         const li = checkbox.closest('li');
-        
         if (li) {
             const childCheckboxes = li.querySelectorAll('.node-filter-checkbox');
             childCheckboxes.forEach(cb => cb.checked = isChecked);
@@ -324,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'node-filter-checkbox';
-                checkbox.checked = true; // Checked by default
+                checkbox.checked = true;
                 checkbox.addEventListener('click', handleCheckboxClick);
 
                 const nodeName = document.createElement('span');
@@ -351,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     li.classList.add('is-file');
                     li.classList.remove('is-folder');
                     nodeContainer.dataset.payload = payload;
-                    nodeContainer.dataset.topic = topic; // Ensure topic is stored
+                    nodeContainer.dataset.topic = topic;
                     nodeContainer.addEventListener('click', handleNodeClick);
                 } else {
                     li.classList.add('is-folder');
@@ -370,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, index * animationDelay);
         });
 
-        // The final 'currentNode' is the <li> of the received topic
         if (livePayloadToggle?.checked && isTopicVisible(currentNode)) {
             const totalAnimationTime = affectedNodes.length * animationDelay;
             setTimeout(() => {
@@ -380,8 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNodeClick(event) {
-        // Clicks on the checkbox are handled separately and stopped from propagating.
-        // This function will only be triggered by clicks on the node container itself.
         const targetContainer = event.currentTarget;
         if (selectedNodeContainer) {
             selectedNodeContainer.classList.remove('selected');
@@ -395,6 +424,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const topic = targetContainer.dataset.topic;
         const payload = targetContainer.dataset.payload;
+        
         displayPayload(topic, payload);
+
+        // **[MODIFICATION]** Request history for the clicked topic
+        currentSelectedTopic = topic;
+        if (topicHistoryLog) {
+            topicHistoryLog.innerHTML = '<p class="history-placeholder">Loading history...</p>';
+        }
+        ws.send(JSON.stringify({ type: 'get-topic-history', topic: topic }));
     }
 });
