@@ -1,63 +1,63 @@
-# Real-Time MQTT Unified Namespace (UNS) Web Visualizer
+# Real-Time MQTT & Unified Namespace Web Visualizer
 
-A lightweight, real-time web application to visualize an MQTT topic tree and a SVG  graphic (possibly a 2D floor plan) based on Unified Namespace (UNS) messages. Inspired by tools like MQTT Explorer, this project provides a fully web-based interface using a Node.js backend and a pure JavaScript frontend.
-This project uses the standard `mqtt.js` library to connect to any MQTT broker, including AWS IoT Core with certificate-based authentication.
+A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages. This project includes a powerful data simulator and a dedicated **Model Context Protocol (MCP) Server** for seamless integration with AI agents.
 
-![Application Screenshot1](./assets/screenshot1.png)
-
-http://github.com/slalaure/mqtt_uns_viewer/blob/main/assets/mqtt_uns_viewer.mp4
+![Application Screenshot](./assets/screenshot1.png)
 
 ---
 
-## ## Features
+## Core Features
 
-* **Real-Time Topic Tree:** Automatically builds and displays a hierarchical tree of all received MQTT topics under a wildcard subscription.
-* **SVG View:** Dynamically updates a 2D plan (SVG) based on incoming MQTT data. Maps topics to specific zones and updates text fields from the message payload.
-* **Sparkplug B Support:** Optionally decodes binary Sparkplug B Protobuf payloads into JSON for visualization.
-* **Built-in UNS Simulator:** Generates a realistic manufacturing data stream based on a predefined scenario. The simulator can be started and stopped via a REST API or the user interface.
-* **Dynamic Animations:**
-    * Cascading "pulse" animation in the tree view to visualize the data flow for each new message.
-    * Highlight animation on the 2D plan to show which zone was just updated.
-* **Live Data Display:** View the latest payload for any topic in the tree view and see live data updates on the SVG plan.
-* **Real-Time Clock & Timestamps:** The UI includes a live clock and displays the last message timestamp for every branch in the topic tree.
-* **Persistent Message History:** Stores all received MQTT messages in a local **DuckDB** database for historical analysis.
-    * Interactive History View: A dedicated "History" tab to browse and review past messages in a reverse-chronological log.
-    * Real-Time Database Stats: Live display of the total message count, database size, and configured size limit.
-    * Automatic Database Pruning: Automatically cleans up the oldest messages when the database reaches a configurable size limit to manage disk space.
-
-* **Lightweight & Secure:** Built with a minimal tech stack and connects securely to AWS IoT Core using MQTTS over port 443 with client certificates.
+* [cite_start]**Real-Time Topic Tree:** Automatically builds and displays a hierarchical tree of all received MQTT topics. [cite: 5]
+* [cite_start]**Dynamic SVG View:** Updates a custom 2D plan (SVG) in real-time based on incoming MQTT data, mapping topics and payloads to visual elements. [cite: 5]
+* **AI Agent Integration:** A dedicated **MCP Server** exposes application controls and data as structured tools for Large Language Model (LLM) agents.
+* [cite_start]**Built-in UNS Simulator:** Generates a realistic manufacturing data stream that can be controlled via the UI or API. [cite: 5]
+* [cite_start]**Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database for historical analysis and querying. [cite: 5]
+* [cite_start]**Live Data & History Views:** Browse the latest payload for any topic, or review chronological message history in a dedicated view. [cite: 5]
+* [cite_start]**Secure & Broker-Agnostic:** Connects to any standard MQTT broker and supports secure connections (MQTTS, MTLS) for brokers like AWS IoT Core. [cite: 5]
+* [cite_start]**Sparkplug B Support:** Optionally decodes binary Sparkplug B Protobuf payloads into JSON for visualization. [cite: 5]
 
 ---
 
-## ## Tech Stack
+## Architecture
 
-* **Backend:** Node.js, Express, `ws` (WebSocket), `mqtt`, `dotenv`, `duckdb`, `sparkplug-payload`
+The application now runs as a two-process system for maximum flexibility and security.
+
+**1. Web Server (`server.js`):** The core application.
+    * Connects to the MQTT broker.
+    * Serves the frontend web application (HTML, CSS, JS).
+    * Broadcasts MQTT messages to the UI via WebSockets.
+    * Stores data in a DuckDB database.
+    * Exposes a secure, **localhost-only REST API** for internal control.
+
+**2. MCP Server (`mcp_server.js`):** The AI Agent interface.
+    * Uses the `@modelcontextprotocol/sdk` to define structured tools for an LLM.
+    * Communicates with the Web Server via its internal REST API.
+    * Provides a safe and controlled environment for AI agents to interact with the application's data and simulator.
+
+**Data Flow:**
+`AI Agent -> MCP Server -> Web Server REST API -> MQTT Broker / Database`
+`MQTT Broker -> Web Server -> WebSocket -> Web UI`
+
+---
+
+## Tech Stack
+
+* **Backend:** Node.js, Express, `ws` (WebSockets), `mqtt`, DuckDB
+* **AI Interface:** `@modelcontextprotocol/sdk`, `zod`, `axios`
 * **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3
 
 ---
 
-## ## Architecture
+## Getting Started
 
-The application uses a Node.js backend to securely connect to an MQTT broker and broadcast messages to the web frontend via WebSockets.
+### Prerequisites
 
-**Data Flow:**
-**Any MQTT Broker** `--(MQTTS/MQTT)-->` **Node.js Backend** `--(WebSocket)-->` **Frontend (Browser)**
+* Node.js (v16 or higher recommended).
+* An MQTT broker (or use the built-in simulator).
+* For secure brokers (e.g., AWS IoT), you will need your client certificate, private key, and a Root CA certificate.
 
-* **Node.js Backend (`server.js`):** Connects to AWS IoT, subscribes to topics, and broadcasts messages to the frontend via WebSockets.
-* **Frontend (`public/` directory):** Connects to the backend via a WebSocket and dynamically renders the two views (Tree and SVG).
-
----
-
-## ## Setup and Installation
-
-### ### Prerequisites
-
-* **Node.js and npm:** [Download & Install Node.js](https://nodejs.org/) (v16 or higher recommended).
-* **AWS IoT Core Account:** A configured "Thing" in AWS IoT Core.
-* **Security Credentials:** Your client certificate, private key, and a Root CA certificate from AWS.
-* **AWS IoT Endpoint:** Your unique endpoint URL.
-
-### ### Installation Steps
+### Installation
 
 1.  **Clone the Repository:**
     ```bash
@@ -70,133 +70,189 @@ The application uses a Node.js backend to securely connect to an MQTT broker and
     npm install
     ```
 
-3.  **Add Your Credentials:**
-    * Create a `certs` folder in the root of the project.
-    * Place your three credential files (e.g., `certificate.pem.crt`, `private.pem.key`, `AmazonRootCA1.pem`) inside this `certs` folder.
+3.  **Configure Environment Variables:**
+    * Copy `.env.example` to a new file named `.env`.
+    * Open `.env` and fill in your MQTT broker details. For local testing with the simulator, the default values are often sufficient.
 
-4.  **Configure Environment Variables:**
-    * In the project root, copy the `.env.example` file to a new file named `.env`.
-    * Open `.env` and fill in the values according to your broker's requirements.
-
-    **Example 1: Connecting to AWS IoT Core (with certificates)**
-    ```
-    # --- General MQTT Broker Configuration ---
-    MQTT_HOST=your-endpoint.iot.aws-region.amazonaws.com
-    MQTT_PORT=443
-    CLIENT_ID=my-aws-client-id
-    MQTT_TOPIC="uns/#"
-
-    # --- Authentication ---
-    MQTT_USERNAME=
-    MQTT_PASSWORD=
-    CERT_FILENAME=certificate.pem.crt
-    KEY_FILENAME=private.pem.key
-    CA_FILENAME=AmazonRootCA1.pem
-
-    # --- Advanced TLS/ALPN ---
-    MQTT_ALPN_PROTOCOL=x-amzn-mqtt-ca
-    ```
-
-    **Example 2: Connecting to a Standard Broker (with username/password)**
-    ```
-    # --- General MQTT Broker Configuration ---
-    MQTT_HOST=my-broker.domain.com
-    MQTT_PORT=8883
-    CLIENT_ID=my-standard-client-id-123
-    # For multiple topics, separate them with a comma
-    MQTT_TOPIC="stark_industries/#,spBv1.0/#"
-
-    # --- Authentication ---
-    MQTT_USERNAME=myuser
-    MQTT_PASSWORD=mypassword
-    CERT_FILENAME=
-    KEY_FILENAME=
-    CA_FILENAME=
-
-    # --- Advanced TLS/ALPN ---
-    MQTT_ALPN_PROTOCOL=
-    ```
-
-    # Enables the UNS simulator and its API endpoints. Set to "true" or "false".
-    SIMULATOR_ENABLED=true
-
-    # --- Sparkplug B Support ---
-    # Set to 'true' to enable decoding of Sparkplug B Protobuf payloads.
-    SPARKPLUG_ENABLED=true
-    ```
-
-    # --- Database Configuration ---
-    # Maximum database size in Megabytes. If exceeded, the oldest 20% of data will be pruned.
-    # Leave empty to disable the size limit.
-    DUCKDB_MAX_SIZE_MB=100
-    ```
-5.  **Note on Data File:** Upon the first run, the server will create a **`mqtt_events.duckdb`** file. It is recommended to add `*.duckdb` and `*.duckdb.wal` to your `.gitignore` file.
-
-
-6. **(If using certificates) Add Your Credential Files:**
-    * Create a `certs` folder in the root of the project.
-    * Place your certificate files (e.g., `certificate.pem.crt`, etc.) inside this folder.
+4.  **(Optional) Add Certificates:**
+    * If connecting to a broker requiring MTLS, create a `certs` folder in the root of the project.
+    * Place your credential files (e.g., `certificate.pem.crt`, `private.pem.key`, etc.) inside this `certs` folder and update their names in `.env`.
 
 ---
 
-## ## Running the Application
+## How to Run
 
-1.  **Start the Server:**
+You need to run two separate processes in two different terminals.
+
+### 1. Start the Main Web Server
+
+This server handles the MQTT connection and the user interface.
+
+```bash
+# In your first terminal:
+node server.js
+
+mqtt uns veiwer codinging partner
+Custom Gem
+
+Show thinking
+Absolument. Voici un message de commit et une version entièrement réécrite et professionnalisée du fichier README.md pour refléter la nouvelle architecture et les capacités du projet.
+
+1. Message de Commit (Git Commit Message)
+feat: Add MCP server for AI agent integration
+
+Introduces a dedicated Model Context Protocol (MCP) server to expose application functionalities as structured tools for Large Language Model (LLM) agents.
+
+This change decouples the AI agent interface from the main web application, creating a robust, two-process architecture. The primary Node.js server continues to handle MQTT connections, database operations, and the web UI, while the new MCP server acts as a secure gateway for programmatic control.
+
+Key Changes:
+- Adds `mcp_server.js`, a standalone server using `@modelcontextprotocol/sdk`.
+- Implements a comprehensive set of tools for an agent to control the simulator (`start_simulator`, `stop_simulator`) and query application data (`get_application_status`, `list_all_topics`, `get_latest_message`, `get_topic_history`).
+- The MCP server communicates with the main application via the secure, localhost-only REST API.
+- Adds new dependencies: `@modelcontextprotocol/sdk`, `zod`, and `axios`.
+- Updates `package.json` to use the stable version of Express (`^4.18.2`) to resolve routing issues.
+- Corrects REST API endpoints to use named parameters (e.g., `/:topic(.*)`) for compatibility.
+2. Fichier README.md réécrit
+Voici une version complète, claire et bien structurée de votre README.md.
+
+Markdown
+
+# Real-Time MQTT & Unified Namespace Web Visualizer
+
+A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages. This project includes a powerful data simulator and a dedicated **Model Context Protocol (MCP) Server** for seamless integration with AI agents.
+
+![Application Screenshot](./assets/screenshot1.png)
+
+---
+
+## Core Features
+
+* [cite_start]**Real-Time Topic Tree:** Automatically builds and displays a hierarchical tree of all received MQTT topics. [cite: 5]
+* [cite_start]**Dynamic SVG View:** Updates a custom 2D plan (SVG) in real-time based on incoming MQTT data, mapping topics and payloads to visual elements. [cite: 5]
+* **AI Agent Integration:** A dedicated **MCP Server** exposes application controls and data as structured tools for Large Language Model (LLM) agents.
+* [cite_start]**Built-in UNS Simulator:** Generates a realistic manufacturing data stream that can be controlled via the UI or API. [cite: 5]
+* [cite_start]**Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database for historical analysis and querying. [cite: 5]
+* [cite_start]**Live Data & History Views:** Browse the latest payload for any topic, or review chronological message history in a dedicated view. [cite: 5]
+* [cite_start]**Secure & Broker-Agnostic:** Connects to any standard MQTT broker and supports secure connections (MQTTS, MTLS) for brokers like AWS IoT Core. [cite: 5]
+* [cite_start]**Sparkplug B Support:** Optionally decodes binary Sparkplug B Protobuf payloads into JSON for visualization. [cite: 5]
+
+---
+
+## Architecture
+
+The application now runs as a two-process system for maximum flexibility and security.
+
+**1. Web Server (`server.js`):** The core application.
+    * Connects to the MQTT broker.
+    * Serves the frontend web application (HTML, CSS, JS).
+    * Broadcasts MQTT messages to the UI via WebSockets.
+    * Stores data in a DuckDB database.
+    * Exposes a secure, **localhost-only REST API** for internal control.
+
+**2. MCP Server (`mcp_server.js`):** The AI Agent interface.
+    * Uses the `@modelcontextprotocol/sdk` to define structured tools for an LLM.
+    * Communicates with the Web Server via its internal REST API.
+    * Provides a safe and controlled environment for AI agents to interact with the application's data and simulator.
+
+**Data Flow:**
+`AI Agent -> MCP Server -> Web Server REST API -> MQTT Broker / Database`
+`MQTT Broker -> Web Server -> WebSocket -> Web UI`
+
+---
+
+## Tech Stack
+
+* **Backend:** Node.js, Express, `ws` (WebSockets), `mqtt`, DuckDB
+* **AI Interface:** `@modelcontextprotocol/sdk`, `zod`, `axios`
+* **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+* Node.js (v16 or higher recommended).
+* An MQTT broker (or use the built-in simulator).
+* For secure brokers (e.g., AWS IoT), you will need your client certificate, private key, and a Root CA certificate.
+
+### Installation
+
+1.  **Clone the Repository:**
     ```bash
-    node server.js
+    git clone [https://github.com/slalaure/mqtt_uns_viewer.git](https://github.com/slalaure/mqtt_uns_viewer.git)
+    cd mqtt_uns_viewer
     ```
-    You should see console output indicating that the server has started and successfully connected to AWS IoT Core.
-    If the simulator is enabled, you will see a confirmation message.
 
-2.  **Open the Application:**
-    * Open your web browser and navigate to **http://localhost:8080**.
+2.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
 
----
+3.  **Configure Environment Variables:**
+    * Copy `.env.example` to a new file named `.env`.
+    * Open `.env` and fill in your MQTT broker details. For local testing with the simulator, the default values are often sufficient.
 
-## ## Simulator API
-
-If the simulator is enabled (`SIMULATOR_ENABLED=true`), the following REST API endpoints are available to control it. The UI uses these endpoints, but they can also be called from tools like `curl` or Postman.
-
-* ### Start Simulator
-    `POST /api/simulator/start`
-    Starts the simulation loop.
-
-* ### Stop Simulator
-    `POST /api/simulator/stop`
-    Stops the simulation loop.
-
-* ### Get Status
-    `GET /api/simulator/status`
-    Returns the current status of the simulator.
-    **Response:** `{"status": "running"}` or `{"status": "stopped"}`
+4.  **(Optional) Add Certificates:**
+    * If connecting to a broker requiring MTLS, create a `certs` folder in the root of the project.
+    * Place your credential files (e.g., `certificate.pem.crt`, `private.pem.key`, etc.) inside this `certs` folder and update their names in `.env`.
 
 ---
 
-## ## Customization: The SVG Plan
+## How to Run
 
-The SVG View is designed to be easily customized by editing the SVG file.
+You need to run two separate processes in two different terminals.
 
-1.  **Edit the SVG File:**
-    * The plan is located at **`public/view.svg`**. You can edit this file in any vector graphics editor (like Inkscape) or a text editor.
+### 1. Start the Main Web Server
 
-2.  **Link Topics to Zones:**
-    * To link an MQTT topic to an area on your plan, create a group `<g>` element.
-    * The `id` of the `<g>` element **must** match the MQTT topic, with all slashes (`/`) replaced by dashes (`-`).
-    * **Example:** For topic `uns/site/area/machine/data_object`, the SVG group must be `<g id="uns-site-area-machine-data_object">`.
+This server handles the MQTT connection and the user interface.
 
-3.  **Link Payload Data to Text Fields:**
-    * To display a value from a JSON payload, add a `data-key` attribute to any `<tspan>` or `<text>` element inside the corresponding group.
-    * The value of `data-key` **must** match a key in your JSON payload.
-    * **Example:** Given a payload `{"status": "Running", "temperature": 45.5}`, this SVG code will be updated automatically:
-        ```xml
-        <g id="uns-site-area-machine-data_object">
-            <text>Status: <tspan data-key="status">N/A</tspan></text>
-            <text>Temp: <tspan data-key="temperature">--</tspan> °C</text>
-        </g>
-        ```
+```bash
+# In your first terminal:
+node server.js
+```
+The application will be available at http://localhost:8080.
+
+2. Start the MCP Server for AI Agents
+This server exposes the tools for your LLM agent.
+
+# In your second terminal:
+
+```bash
+node mcp_server.js
+```
+
+This server will connect to the main application and listen for instructions from your agent framework.
 
 ---
 
-## ## License
+## API & Integration
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+### Model Context Protocol (MCP) Server
+
+Connect your AI agent framework to the `mcp_server.js` process. The following tools are available:
+
+| Tool Name                  | Description                                                                                          | Parameters                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `start_simulator`          | Starts the MQTT data simulator.                                                                      | _None_                                                                                                 |
+| `stop_simulator`           | Stops the MQTT data simulator.                                                                       | _None_                                                                                                 |
+| `get_simulator_status`     | Gets the current status of the simulator (`running` or `stopped`).                                    | _None_                                                                                                 |
+| `get_application_status`   | Provides a high-level overview of the application's status (MQTT connection, DB stats).              | _None_                                                                                                 |
+| `list_all_topics`          | Returns a flat list of all unique MQTT topics known to the application.                               | _None_                                                                                                 |
+| `get_latest_message`       | Retrieves the most recent message for a single, specified MQTT topic.                                  | `topic` (string): The full MQTT topic name.                                                            |
+| `get_topic_history`        | Retrieves recent historical messages for a specified topic.                                           | `topic` (string): The full MQTT topic name.<br>`limit` (number, optional): Max messages to return.     |
+
+### Internal REST API (Localhost-Only)
+
+The MCP server communicates with the main server via this REST API. It is secured to only accept requests from `localhost`.
+
+- `POST /api/simulator/start`
+- `POST /api/simulator/stop`
+- `GET /api/simulator/status`
+- `GET /api/context/status`
+- `GET /api/context/topics`
+- `GET /api/context/tree`
+- `GET /api/context/topic/:topic(.*)`
+- `GET /api/context/history/:topic(.*)`
+
+---
