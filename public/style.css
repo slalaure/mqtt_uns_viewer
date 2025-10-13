@@ -195,7 +195,7 @@ main#tree-view {
     flex: 0 0 60%;
     display: flex;
     flex-direction: column;
-    min-height: 0; /* **[CORRECTION]** Permet au conteneur de se rétrécir */
+    min-height: 0;
 }
 .payload-header {
     display: flex;
@@ -247,9 +247,9 @@ pre#payload-content {
 /* --- Styles for Recent Topic History --- */
 .topic-history-container {
     flex-grow: 1;
-    display: flex !important;
+    display: flex; /* **[CORRECTION]** Retrait du !important */
     flex-direction: column;
-    min-height: 0; /* **[CORRECTION]** C'est la ligne clé qui résout le problème de scroll */
+    min-height: 0; 
 }
 .topic-history-header {
     font-size: 1.1em;

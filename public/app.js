@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Element Initialization ---
     const treeContainer = document.getElementById('mqtt-tree');
     const payloadContainer = document.getElementById('payload-display');
-    const payloadMainArea = document.getElementById('payload-main-area'); // [MODIFICATION]
+    const payloadMainArea = document.getElementById('payload-main-area');
     const payloadContent = document.getElementById('payload-content');
     const payloadTopic = document.getElementById('payload-topic');
     const datetimeContainer = document.getElementById('current-datetime');
@@ -242,11 +242,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* Payload is not JSON, ignore for map */ }
     }
 
+    // --- [MODIFICATION] Logique pour afficher/masquer l'historique récent ---
     function toggleRecentHistoryVisibility() {
         if (!topicHistoryContainer) return;
         const isLive = livePayloadToggle.checked;
-        topicHistoryContainer.style.display = isLive ? 'none' : 'block';
-        document.getElementById('drag-handle-horizontal').style.display = isLive ? 'none' : 'flex'; // Masque aussi la barre
+        // Utilise 'flex' pour ré-afficher, afin de préserver la mise en page
+        topicHistoryContainer.style.display = isLive ? 'none' : 'flex'; 
+        document.getElementById('drag-handle-horizontal').style.display = isLive ? 'none' : 'flex';
     }
 
     // --- Payload Display & Interaction Logic ---
@@ -444,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- [MODIFICATION] Logique de redimensionnement des panneaux ---
+    // --- Logique de redimensionnement des panneaux ---
     const resizerVertical = document.getElementById('drag-handle-vertical');
     const resizerHorizontal = document.getElementById('drag-handle-horizontal');
 
