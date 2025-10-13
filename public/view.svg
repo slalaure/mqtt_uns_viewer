@@ -1,23 +1,101 @@
-<svg id="factory-plan" width="100%" height="100%" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
-  <style>
-      .zone-shape { stroke: #333; stroke-width: 2; transition: fill 0.5s ease; }
-      .zone-label { font-size: 20px; font-weight: bold; fill: #000; }
-      .zone-data { font-size: 16px; fill: #444; }
-      .highlight-svg .zone-shape { fill: #ffd966; }
-  </style>
-  <g id="stark_industries-malibu_facility-quality_control_station-qms-dimensional_check" transform="translate(50, 50)">
-      <rect class="zone-shape" fill="#d9eaff" width="300" height="200" rx="10"></rect>
-      <text class="zone-label" x="150" y="30" text-anchor="middle">Quality # Dimensional check</text>
-      <text class="zone-data" x="20" y="70">WorkOrder: <tspan data-key="workOrderId"></tspan></text>
-      <text class="zone-data" x="20" y="100">result: <tspan data-key="result">--</tspan></text>
-      <text class="zone-data" x="20" y="130">tolerance_met: <tspan data-key="tolerance_met"></tspan></text>
-  </g>
-  <g id="stark_industries-malibu_facility-assembly_line_01-palladium_core_cell-mes-operation" transform="translate(450, 50)">
-      <rect class="zone-shape" fill="#e2d9ff" width="300" height="200" rx="10"></rect>
-      <text class="zone-label" x="150" y="30" text-anchor="middle">asm_line_1 # Paladium Core Cell</text>
-      <text class="zone-data" x="20" y="70">workOrderId: <tspan data-key="workOrderId"></tspan></text>
-      <text class="zone-data" x="20" y="100">stepName: <tspan data-key="stepName"></tspan></text>
-      <text class="zone-data" x="20" y="130">status: <tspan data-key="status">--</tspan></text>
-      <text class="zone-data" x="20" y="160">operator: <tspan data-key="operator">--</tspan></text>
-  </g>
+<svg width="100%" height="100%" viewBox="0 0 1200 750" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <defs>
+        <style>
+            /* --- General Styles --- */
+            .bg { fill: #0d1b2a; }
+            .room { fill: #1b263b; stroke: #415a77; stroke-width: 2; }
+            .equipment { fill: #2a3a52; stroke: #778da9; stroke-width: 1.5; }
+
+            /* --- Text Styles --- */
+            .title-text { font-family: 'Segoe UI', Arial, sans-serif; font-weight: bold; fill: #e0e1dd; font-size: 20px; }
+            .label-text { font-family: monospace, 'Courier New'; font-size: 15px; fill: #b0c4de; }
+            .data-text { font-family: monospace, 'Courier New'; font-size: 16px; font-weight: bold; fill: #ffffff; }
+            .data-text-good { fill: #84dcc6; }
+            .data-text-warn { fill: #ffc857; }
+            .data-text-alert { fill: #e56b6f; animation: pulse-alert 1.5s infinite; }
+            
+            @keyframes pulse-alert {
+                0% { fill: #e56b6f; }
+                50% { fill: #ff9b9e; }
+                100% { fill: #e56b6f; }
+            }
+        </style>
+    </defs>
+    
+    <rect width="1200" height="750" class="bg"/>
+    
+    <rect x="20" y="20" width="860" height="710" class="room"/>
+    <text x="35" y="50" class="title-text">Assembly Line 01</text>
+    
+    <rect x="40" y="80" width="400" height="310" class="room"/>
+    <text x="55" y="110" class="title-text">Palladium Core Cell</text>
+    <g id="stark_industries-malibu_facility-assembly_line_01-palladium_core_cell-mes-operation">
+        <text x="65" y="145" class="label-text">Operation Status: <tspan class="data-text" data-key="status">N/A</tspan></text>
+        <text x="65" y="170" class="label-text">Operator: <tspan class="data-text" data-key="operator">N/A</tspan></text>
+        <text x="65" y="195" class="label-text">Current Step: <tspan class="data-text" data-key="stepName">N/A</tspan></text>
+    </g>
+    <rect x="65" y="230" width="350" height="140" class="equipment"/>
+    <text x="80" y="255" class="label-text">Robotic Arm 01</text>
+    <g id="stark_industries-malibu_facility-assembly_line_01-palladium_core_cell-robotic_arm_01-torque">
+        <text x="90" y="290" class="label-text">Torque:</text>
+        <text x="200" y="300" class="data-text data-text-good" font-size="28"><tspan data-key="value">0.00</tspan> <tspan font-size="20" data-key="unit">Nm</tspan></text>
+    </g>
+
+    <rect x="460" y="80" width="400" height="450" class="room"/>
+    <text x="475" y="110" class="title-text">Vibranium Casing Cell</text>
+    <g id="stark_industries-malibu_facility-assembly_line_01-vibranium_casing_cell-mes-operation">
+        <text x="485" y="145" class="label-text">Operation Status: <tspan class="data-text" data-key="status">N/A</tspan></text>
+        <text x="485" y="170" class="label-text">Operator: <tspan class="data-text" data-key="operator">N/A</tspan></text>
+    </g>
+    <rect x="485" y="200" width="350" height="140" class="equipment"/>
+    <text x="500" y="225" class="label-text">Laser Welder 01</text>
+    <g id="stark_industries-malibu_facility-assembly_line_01-vibranium_casing_cell-laser_welder_01-temperature">
+        <text x="510" y="260" class="label-text">Temperature:</text>
+        <text x="600" y="270" class="data-text data-text-warn" font-size="28"><tspan data-key="value">0</tspan><tspan font-size="20" data-key="unit">°C</tspan></text>
+    </g>
+    <rect x="485" y="360" width="350" height="150" class="equipment"/>
+    <text x="500" y="385" class="label-text">CNC Mill 05</text>
+    <g id="stark_industries-malibu_facility-assembly_line_01-vibranium_casing_cell-cnc_mill_05-vibration">
+        <text x="510" y="420" class="label-text">Vibration:</text>
+        <text x="600" y="430" class="data-text data-text-alert" font-size="28"><tspan data-key="value">0.0</tspan> <tspan font-size="20" data-key="unit">g</tspan></text>
+    </g>
+    
+    <rect x="40" y="410" width="400" height="150" class="room"/>
+    <text x="55" y="440" class="title-text">Clean Room 01</text>
+    <g id="stark_industries-malibu_facility-assembly_line_01-clean_room_01-humidity">
+        <text x="65" y="480" class="label-text">Humidity:</text>
+        <text x="170" y="495" class="data-text data-text-good" font-size="32"><tspan data-key="value">0.0</tspan><tspan font-size="22" data-key="unit">%RH</tspan></text>
+    </g>
+
+    <rect x="40" y="580" width="820" height="130" class="room"/>
+    <text x="55" y="610" class="title-text">Quality Control Station</text>
+    <g id="stark_industries-malibu_facility-quality_control_station-qms-energy_output_test">
+        <text x="65" y="645" class="label-text">Test Result: <tspan class="data-text" font-size="20" data-key="result">PENDING</tspan></text>
+        <text x="400" y="645" class="label-text">Energy Output:</text>
+        <text x="580" y="655" class="data-text data-text-good" font-size="28"><tspan data-key="value">0.0</tspan> <tspan font-size="20" data-key="unit">GJ/s</tspan></text>
+        <text x="65" y="685" class="label-text">WO ID: <tspan class="data-text" data-key="workOrderId">N/A</tspan></text>
+    </g>
+    
+    <rect x="900" y="20" width="280" height="710" class="room"/>
+    <text x="915" y="50" class="title-text">Operations Center</text>
+
+    <g id="stark_industries-malibu_facility-erp-workorder">
+        <text x="915" y="90" class="title-text" font-size="18">ERP - Work Orders</text>
+        <text x="925" y="120" class="label-text">Item: <tspan class="data-text" data-key="itemName">N/A</tspan></text>
+        <text x="925" y="145" class="label-text">Status: <tspan class="data-text" data-key="status">N/A</tspan></text>
+        <text x="925" y="170" class="label-text">ID: <tspan class="data-text" data-key="id">N/A</tspan></text>
+    </g>
+    
+    <g id="stark_industries-malibu_facility-assembly_line_01-mes-oee">
+        <text x="915" y="230" class="title-text" font-size="18">Line 01 OEE</text>
+        <text x="980" y="300" class="data-text data-text-good" font-size="48"><tspan data-key="oee">0.00</tspan>%</text>
+    </g>
+    
+    <g id="stark_industries-malibu_facility-cmms-maintenance_request">
+        <text x="915" y="380" class="title-text" font-size="18">CMMS - Maintenance</text>
+        <text x="925" y="410" class="label-text">Priority: <tspan class="data-text data-text-alert" data-key="priority">N/A</tspan></text>
+        <text x="925" y="435" class="label-text">Equipment: <tspan class="data-text" data-key="equipmentId">N/A</tspan></text>
+        <text x="925" y="460" class="label-text" >Desc: <tspan class="data-text" data-key="description">No active requests.</tspan></text>
+    </g>
+
 </svg>
