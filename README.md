@@ -138,6 +138,17 @@ The MCP server communicates with the main server via this REST API. It is secure
 - `GET /api/context/topic/:topic(.*)`
 - `GET /api/context/history/:topic(.*)`
 
+
+ex:
+```bash
+curl -X POST http://localhost:8080/api/simulator/start
+curl "http://localhost:8080/api/context/history/stark_industries/malibu_facility/assembly_line_01/mes/oee?limit=5"
+curl http://localhost:8080/api/simulator/status
+curl "http://localhost:8080/api/context/topic/stark_industries/malibu_facility/erp/workorder" 
+curl http://localhost:8080/api/context/tree
+
+```
+
 ---
 
 ### License
