@@ -101,9 +101,28 @@ main#tree-view {
 #mqtt-tree li::after { top: 12px; left: 0; border-top: 1px solid; width: 15px; height: 1px; }
 #mqtt-tree li:last-child::before { height: 12px; }
 
-#mqtt-tree .node-container { display: flex; justify-content: space-between; align-items: center; padding: 2px 6px; border-radius: 4px; background-color: transparent; }
+#mqtt-tree .node-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: transparent;
+    position: relative; /* Needed for checkbox positioning */
+}
 #mqtt-tree .node-name { display: inline-flex; align-items: center; }
 #mqtt-tree .node-timestamp { font-size: 0.75em; color: #888; margin-left: 15px; font-family: 'Courier New', Courier, monospace; }
+
+/* --- [CORRECTION FINALE] Style for checkbox positioning --- */
+.node-filter-checkbox {
+    position: absolute;
+    left: -18px; /* Decalage parfait pour eviter la superposition */
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+    cursor: pointer;
+    z-index: 2; /* S'assure que la checkbox est au-dessus des lignes */
+}
 
 /* --- Logique d'animation --- */
 .new-node { opacity: 0; transform: translateY(-10px); }

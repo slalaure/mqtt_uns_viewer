@@ -256,8 +256,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-
+    
     // --- Tree View Functions ---
+
+    /**
+     * Checks if a topic's branch is visible by checking its own checkbox and all parent checkboxes.
+     * @param {HTMLElement} targetLi The final <li> element for the topic.
+     * @returns {boolean} True if the entire branch is checked.
+     */
+    function isTopicVisible(targetLi) {
+        let currentNode = targetLi;
+        while (currentNode) {
+            const checkbox = currentNode.querySelector(':scope > .node-container > .node-filter-checkbox');
+            if (!checkbox || !checkbox.checked) {
+                return false;
+            }
+            // Move up to the parent li
+            currentNode = currentNode.parentElement.closest('li');
+        }
+        return true;
+    }
+
+    /**
+     * Handles clicks on a node's checkbox, propagating the state to all children.
+     * @param {Event} event The click event.
+     */
+    function handleCheckboxClick(event) {
+        // Prevent the click from bubbling up to the node-container's click listener
+        event.stopPropagation(); 
+        
+        const checkbox = event.target;
+        const isChecked = checkbox.checked;
+        const li = checkbox.closest('li');
+        
+        if (li) {
+            const childCheckboxes = li.querySelectorAll('.node-filter-checkbox');
+            childCheckboxes.forEach(cb => cb.checked = isChecked);
+        }
+    }
+
     function updateTree(topic, payload, timestamp) {
         if (!treeContainer) return;
         const parts = topic.split('/');
@@ -283,12 +320,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const nodeContainer = document.createElement('div');
                 nodeContainer.className = 'node-container';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'node-filter-checkbox';
+                checkbox.checked = true; // Checked by default
+                checkbox.addEventListener('click', handleCheckboxClick);
+
                 const nodeName = document.createElement('span');
                 nodeName.className = 'node-name';
                 nodeName.textContent = part;
+
                 const nodeTimestamp = document.createElement('span');
                 nodeTimestamp.className = 'node-timestamp';
                 
+                nodeContainer.appendChild(checkbox);
                 nodeContainer.appendChild(nodeName);
                 nodeContainer.appendChild(nodeTimestamp);
                 li.appendChild(nodeContainer);
@@ -324,7 +370,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }, index * animationDelay);
         });
 
-        if (livePayloadToggle?.checked) {
+        // The final 'currentNode' is the <li> of the received topic
+        if (livePayloadToggle?.checked && isTopicVisible(currentNode)) {
             const totalAnimationTime = affectedNodes.length * animationDelay;
             setTimeout(() => {
                 displayPayload(topic, payload);
@@ -333,6 +380,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNodeClick(event) {
+        // Clicks on the checkbox are handled separately and stopped from propagating.
+        // This function will only be triggered by clicks on the node container itself.
         const targetContainer = event.currentTarget;
         if (selectedNodeContainer) {
             selectedNodeContainer.classList.remove('selected');
