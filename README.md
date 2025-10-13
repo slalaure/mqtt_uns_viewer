@@ -113,7 +113,16 @@ The application uses a Node.js backend to securely connect to an MQTT broker and
     # Enables the UNS simulator and its API endpoints. Set to "true" or "false".
     SIMULATOR_ENABLED=true
     ```
-5. **(If using certificates) Add Your Credential Files:**
+
+    # --- Database Configuration ---
+    # Maximum database size in Megabytes. If exceeded, the oldest 20% of data will be pruned.
+    # Leave empty to disable the size limit.
+    DUCKDB_MAX_SIZE_MB=100
+    ```
+5.  **Note on Data File:** Upon the first run, the server will create a **`mqtt_events.duckdb`** file. It is recommended to add `*.duckdb` and `*.duckdb.wal` to your `.gitignore` file.
+
+
+6. **(If using certificates) Add Your Credential Files:**
     * Create a `certs` folder in the root of the project.
     * Place your certificate files (e.g., `certificate.pem.crt`, etc.) inside this folder.
 

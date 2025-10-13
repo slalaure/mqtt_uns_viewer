@@ -48,6 +48,7 @@ const SIMULATOR_ENABLED = process.env.SIMULATOR_ENABLED;
 const isSimulatorEnabled = SIMULATOR_ENABLED === 'true';
 const MQTT_ALPN_PROTOCOL = process.env.MQTT_ALPN_PROTOCOL ? process.env.MQTT_ALPN_PROTOCOL.trim() : null;
 const PORT = process.env.PORT || 8080;
+const DUCKDB_MAX_SIZE_MB = process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null;
 
 // --- Validate Configuration ---
 if (!MQTT_BROKER_HOST || !CLIENT_ID || !MQTT_TOPIC ) {
@@ -254,18 +255,87 @@ function connectToMqttBroker() {
     });
 }
 
+// --- Database Pruning Logic ---
+let pruningInterval = null;
+let isPruning = false;
+
+function pruneOldEvents() {
+    isPruning = true;
+    const PRUNE_PERCENTAGE = 0.20; // Delete 20% of the oldest data
+    db.get("SELECT COUNT(*) as count FROM mqtt_events", (err, row) => {
+        if (err || !row) {
+            console.error("❌ Could not get event count for pruning:", err);
+            isPruning = false;
+            return;
+        }
+        
+        const rowsToDelete = Math.floor(row.count * PRUNE_PERCENTAGE);
+        if (rowsToDelete <= 1) {
+            isPruning = false;
+            return; // Nothing to prune
+        }
+
+        console.log(`   -> Pruning ${rowsToDelete} oldest events from the database...`);
+        const query = `DELETE FROM mqtt_events WHERE rowid IN (SELECT rowid FROM mqtt_events ORDER BY timestamp ASC LIMIT ?);`;
+        db.run(query, [rowsToDelete], (err) => {
+            if (err) {
+                console.error("❌ Error during database pruning:", err.message);
+                isPruning = false;
+                return;
+            }
+            console.log("   -> Pruning complete. Reclaiming disk space with VACUUM...");
+            db.run("VACUUM;", (err) => {
+                if (err) {
+                    console.error("❌ Error during VACUUM:", err.message);
+                } else {
+                    console.log("   -> VACUUM complete.");
+                }
+                isPruning = false; // Release the lock
+            });
+        });
+    });
+}
+
+function checkAndPruneDatabase() {
+    if (isPruning) {
+        console.log("   -> Pruning already in progress, skipping check.");
+        return;
+    }
+    try {
+        const stats = fs.statSync(dbFile);
+        const fileSizeInMB = stats.size / (1024 * 1024);
+
+        if (fileSizeInMB > DUCKDB_MAX_SIZE_MB) {
+            console.log(`Database size (${fileSizeInMB.toFixed(2)} MB) exceeds limit of ${DUCKDB_MAX_SIZE_MB} MB.`);
+            pruneOldEvents();
+        }
+    } catch (err) {
+        // This can happen if the file doesn't exist yet, which is fine.
+        if (err.code !== 'ENOENT') {
+            console.error("❌ Could not check database file size:", err.message);
+        }
+    }
+}
+
 // --- Start Server ---
 server.listen(PORT, () => {
     console.log(`HTTP server started on http://localhost:${PORT}`);
     connectToMqttBroker();
+
+    if (DUCKDB_MAX_SIZE_MB && DUCKDB_MAX_SIZE_MB > 0) {
+        const checkInterval = 5 * 60 * 1000; // 5 minutes
+        console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB. Checking every ${checkInterval / 60000} minutes.`);
+        pruningInterval = setInterval(checkAndPruneDatabase, checkInterval);
+    }
 });
 
 // --- Graceful shutdown (ROBUST VERSION) ---
 process.on('SIGINT', () => {
     console.log("\nGracefully shutting down...");
 
-    // 1. Stop the simulator to prevent new messages
+    // 1. Stop all intervals
     stopSimulator();
+    if(pruningInterval) clearInterval(pruningInterval);
 
     // 2. Close all WebSocket connections
     console.log(`Terminating ${wss.clients.size} WebSocket clients...`);
