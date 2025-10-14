@@ -35,6 +35,20 @@ const duckdb = require('duckdb');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const { spawn } = require('child_process'); // [NOUVEAU] Import du module pour les processus enfants
 
+const envPath = path.join(__dirname, '.env');
+const envExamplePath = path.join(__dirname, '.env.example');
+
+// Si .env n'existe pas, le créer à partir de .env.example
+if (!fs.existsSync(envPath)) {
+    console.log("No .env file found. Creating one from .env.example...");
+    try {
+        fs.copyFileSync(envExamplePath, envPath);
+        console.log(".env file created successfully.");
+    } catch (err) {
+        console.error("FATAL ERROR: Could not create .env file.", err);
+        process.exit(1);
+    }
+}
 // --- Global Variables ---
 let mcpProcess = null; // [NOUVEAU] Variable pour stocker le processus enfant MCP
 
@@ -147,6 +161,7 @@ if (SPARKPLUG_ENABLED) {
 // --- Web Server Setup ---
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 const server = http_server.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -503,6 +518,70 @@ function startMcpServer() {
         console.error('❌ Failed to start MCP Server process:', err);
     });
 }
+
+const configRouter = express.Router();
+configRouter.use(localhostOnly); // Sécurise l'accès à localhost
+
+// GET: Lit et parse le fichier .env
+configRouter.get('/', (req, res) => {
+    try {
+        const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
+        const config = {};
+        envFileContent.split('\n').forEach(line => {
+            if (line && !line.startsWith('#')) {
+                const firstEqual = line.indexOf('=');
+                if (firstEqual !== -1) {
+                    const key = line.substring(0, firstEqual);
+                    const value = line.substring(firstEqual + 1);
+                    config[key] = value;
+                }
+            }
+        });
+        res.json(config);
+    } catch (err) {
+        res.status(500).json({ error: 'Could not read .env file.' });
+    }
+});
+
+configRouter.post('/', (req, res) => {
+    const newConfig = req.body;
+    const tempPath = path.join(__dirname, '.env.tmp'); // Define a temporary file path
+    let envFileContent = "";
+
+    try {
+        // Rebuild the file content from the example, preserving comments and order
+        const exampleContent = fs.readFileSync(envExamplePath, { encoding: 'utf8' });
+        exampleContent.split('\n').forEach(line => {
+            if (line.startsWith('#') || !line.trim()) {
+                envFileContent += line + '\n';
+            } else {
+                const firstEqual = line.indexOf('=');
+                if (firstEqual !== -1) {
+                    const key = line.substring(0, firstEqual);
+                    if (newConfig.hasOwnProperty(key)) {
+                        envFileContent += `${key}=${newConfig[key]}\n`;
+                    } else {
+                        envFileContent += line + '\n';
+                    }
+                }
+            }
+        });
+
+        // Step 1: Write to the temporary file first
+        fs.writeFileSync(tempPath, envFileContent);
+
+        // Step 2: If the write is successful, rename the temp file to .env
+        fs.renameSync(tempPath, envPath);
+
+        res.json({ message: 'Configuration saved successfully.' });
+    } catch (err) {
+        // [MODIFIED] Add detailed logging to the console to see the real error
+        console.error("Error writing to .env file:", err);
+        res.status(500).json({ error: 'Could not write to .env file. Check server logs for details.' });
+    }
+});
+
+app.use('/api/env', configRouter);
 
 // --- Start Server ---
 server.listen(PORT, () => {

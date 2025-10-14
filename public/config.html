@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - MQTT Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="scrollable-page">
+    <header>
+        <div class="header-content">
+            <h1>UNIFIED NAMESPACE</h1>
+            <p>Application Configuration</p>
+        </div>
+        <a href="/" class="nav-button">Back to Viewer</a>
+    </header>
+
+    <main class="config-page-container">
+        <h1>Configuration</h1>
+        <p>Modify the application settings below. The server will require a restart after saving.</p>
+        
+        <form id="config-form">
+            </form>
+
+        <div class="form-actions">
+            <button id="save-config-button" type="submit" form="config-form">Save Configuration</button>
+            <div id="status-message" class="status-message"></div>
+        </div>
+    </main>
+
+    <script src="config.js"></script>
+</body>
+</html>
