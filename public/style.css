@@ -247,7 +247,7 @@ pre#payload-content {
 /* --- Styles for Recent Topic History --- */
 .topic-history-container {
     flex-grow: 1;
-    display: flex; /* **[CORRECTION]** Retrait du !important */
+    display: flex; 
     flex-direction: column;
     min-height: 0; 
 }
@@ -393,6 +393,95 @@ pre#payload-content {
 .history-status-bar span {
     font-weight: bold;
     font-family: 'Courier New', Courier, monospace;
+}
+
+/* [NOUVEAU] Styles pour les contrôles de filtre */
+.history-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 10px 20px;
+    background-color: #fff;
+    border-bottom: 1px solid #ddd;
+    flex-shrink: 0;
+}
+#history-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+#history-search-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+mark.highlight {
+    background-color: #fdff85;
+    color: #333;
+    padding: 1px 0;
+    border-radius: 2px;
+}
+
+/* [NOUVEAU] Styles pour le curseur à double poignée */
+#time-range-slider-container {
+    position: relative;
+    width: 100%;
+    height: 20px;
+    padding: 8px 0;
+    box-sizing: content-box;
+}
+.slider-track, .slider-range {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+.slider-track {
+    background-color: #e9ecef;
+}
+.slider-range {
+    background-color: #007bff;
+}
+.slider-handle {
+    position: absolute;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    background-color: #fff;
+    border: 2px solid #007bff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    z-index: 2;
+}
+.slider-handle:active {
+    cursor: grabbing;
+    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.25);
+}
+.slider-label {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #343a40;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    white-space: nowrap;
+    font-family: 'Courier New', Courier, monospace;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+.slider-handle:hover .slider-label, .slider-handle:active .slider-label {
+    opacity: 1;
 }
 
 .historical-log-container {

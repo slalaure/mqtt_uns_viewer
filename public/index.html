@@ -62,6 +62,21 @@
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
                 <div>DB Size: <span id="history-db-size">--</span> / <span id="history-db-limit">--</span> MB</div>
             </div>
+            
+            <div class="history-controls">
+                <input type="text" id="history-search-input" placeholder="Filter by keyword in topic or payload...">
+                <div id="time-range-slider-container">
+                    <div class="slider-track"></div>
+                    <div class="slider-range" id="slider-range"></div>
+                    <div class="slider-handle" id="handle-min">
+                        <div class="slider-label" id="label-min"></div>
+                    </div>
+                    <div class="slider-handle" id="handle-max">
+                        <div class="slider-label" id="label-max"></div>
+                    </div>
+                </div>
+            </div>
+
             <div id="historical-log-container" class="historical-log-container">
                 </div>
             <div id="pruning-indicator" class="pruning-indicator">

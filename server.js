@@ -33,6 +33,10 @@ const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const duckdb = require('duckdb');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
+const { spawn } = require('child_process'); // [NOUVEAU] Import du module pour les processus enfants
+
+// --- Global Variables ---
+let mcpProcess = null; // [NOUVEAU] Variable pour stocker le processus enfant MCP
 
 // --- Configuration from Environment Variables (with sanitization) ---
 const MQTT_BROKER_HOST = process.env.MQTT_BROKER_HOST ? process.env.MQTT_BROKER_HOST.trim() : null;
@@ -451,16 +455,13 @@ mcpRouter.get('/topic/:topic(.*)', (req, res) => {
     if (!topic) {
         return res.status(400).json({ error: "Topic not specified." });
     }
-    // Utilise .all() au lieu de .get()
     db.all("SELECT * FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT 1", [topic], (err, rows) => {
         if (err) {
             return res.status(500).json({ error: "Database query failed." });
         }
-        // Vérifie si le tableau de résultats a un élément
         if (!rows || rows.length === 0) {
             return res.status(404).json({ error: `No data found for topic: ${topic}` });
         }
-        // Renvoie le premier élément du tableau
         res.json(rows[0]);
     });
 });
@@ -471,10 +472,8 @@ mcpRouter.get('/history/:topic(.*)', (req, res) => {
     if (!topic) {
         return res.status(400).json({ error: "Topic not specified." });
     }
-    // Injecte la variable 'limit' directement dans la chaîne SQL
     db.all(`SELECT * FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT ${limit}`, [topic], (err, rows) => {
         if (err) {
-            // Ajout d'un log pour voir l'erreur exacte côté serveur
             console.error("History query failed:", err);
             return res.status(500).json({ error: "Database query failed." });
         }
@@ -485,22 +484,50 @@ mcpRouter.get('/history/:topic(.*)', (req, res) => {
 // Mount the secured router on the base API path
 app.use('/api/context', mcpRouter);
 
+// [NOUVEAU] Fonction pour démarrer le serveur MCP comme processus enfant
+function startMcpServer() {
+    console.log('---');
+    console.log("🚀 Starting MCP Server as a child process...");
+    
+    // Démarre 'node mcp_server.js'
+    mcpProcess = spawn('node', ['mcp_server.js'], {
+        // 'inherit' redirige la sortie (stdout, stderr) du processus enfant vers la console du parent
+        stdio: 'inherit' 
+    });
+
+    mcpProcess.on('close', (code) => {
+        console.log(`MCP Server process exited with code ${code}`);
+    });
+
+    mcpProcess.on('error', (err) => {
+        console.error('❌ Failed to start MCP Server process:', err);
+    });
+}
 
 // --- Start Server ---
 server.listen(PORT, () => {
     console.log(`HTTP server started on http://localhost:${PORT}`);
-    // Enable 'trust proxy' for accurate IP detection if behind a reverse proxy (e.g., Nginx)
     app.set('trust proxy', true);
     connectToMqttBroker();
     if (DUCKDB_MAX_SIZE_MB) {
         console.log(`Database auto-pruning enabled. Max size: ${DUCKDB_MAX_SIZE_MB} MB.`);
     }
     setInterval(performMaintenance, 15000); // Run every 15 seconds
+
+    // [NOUVEAU] Démarrer le serveur MCP une fois que le serveur principal est prêt
+    startMcpServer();
 });
 
 // --- Graceful shutdown ---
 process.on('SIGINT', () => {
     console.log("\nGracefully shutting down...");
+    
+    // [NOUVEAU] Arrêter le processus enfant MCP s'il est en cours
+    if (mcpProcess) {
+        console.log("   -> Stopping MCP Server process...");
+        mcpProcess.kill('SIGINT');
+    }
+
     stopSimulator();
     wss.clients.forEach(ws => ws.terminate());
 

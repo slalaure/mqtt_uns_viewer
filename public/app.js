@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -49,6 +49,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyDbLimit = document.getElementById('history-db-limit');
     const pruningIndicator = document.getElementById('pruning-indicator');
     const topicHistoryLog = document.getElementById('topic-history-log');
+    
+    // History filter elements
+    const historySearchInput = document.getElementById('history-search-input');
+    const timeRangeSliderContainer = document.getElementById('time-range-slider-container');
+    const handleMin = document.getElementById('handle-min');
+    const handleMax = document.getElementById('handle-max');
+    const sliderRange = document.getElementById('slider-range');
+    const labelMin = document.getElementById('label-min');
+    const labelMax = document.getElementById('label-max');
+
+    // State for history filtering
+    let allHistoryEntries = [];
+    let minTimestamp = 0;
+    let maxTimestamp = 0;
+    let currentMinTimestamp = 0;
+    let currentMaxTimestamp = 0;
 
     // Simulator UI Elements
     const btnStartSim = document.getElementById('btn-start-sim');
@@ -157,17 +173,38 @@ document.addEventListener('DOMContentLoaded', () => {
             const message = JSON.parse(dataText);
 
             switch(message.type) {
-                case 'mqtt-message':
+                case 'mqtt-message': {
                     updateTree(message.topic, message.payload, message.timestamp);
                     updateMap(message.topic, message.payload);
-                    addHistoryEntry(message, true);
+                    
+                    const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
+
+                    // [CORRECTION] Vérifie si le curseur était en mode "live" avant l'arrivée du message
+                    const wasLive = currentMaxTimestamp === maxTimestamp;
+
+                    allHistoryEntries.unshift(newEntry);
+
+                    if (newEntry.timestampMs > maxTimestamp) {
+                        maxTimestamp = newEntry.timestampMs;
+                    }
+                    
+                    // [CORRECTION] Seule la vue est mise à jour si le curseur était à la fin
+                    if (wasLive) {
+                        currentMaxTimestamp = maxTimestamp; // Garde le curseur à la fin
+                        applyAndRenderFilters();
+                    }
+                    
+                    // Met à jour la position du curseur dans tous les cas pour refléter la nouvelle plage de temps totale
+                    updateSliderUI();
                     break;
+                }
                 case 'simulator-status':
                     updateSimulatorStatusUI(message.status);
                     break;
                 case 'history-initial-data':
-                    if (historyLogContainer) historyLogContainer.innerHTML = '';
-                    message.data.forEach(entry => addHistoryEntry(entry, false));
+                    allHistoryEntries = message.data.map(entry => ({ ...entry, timestampMs: new Date(entry.timestamp).getTime() }));
+                    initializeHistoryFilters();
+                    applyAndRenderFilters();
                     break;
                 case 'topic-history-data':
                     updateTopicHistory(message.topic, message.data);
@@ -185,9 +222,119 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("JSON Parsing Error:", dataText, e);
         }
     };
+    
+    // --- History View Filtering Logic ---
+    
+    function initializeHistoryFilters() {
+        if (allHistoryEntries.length === 0) {
+            timeRangeSliderContainer.style.display = 'none';
+            return;
+        }
+        timeRangeSliderContainer.style.display = 'block';
 
+        minTimestamp = allHistoryEntries[allHistoryEntries.length - 1].timestampMs;
+        maxTimestamp = allHistoryEntries[0].timestampMs;
+        currentMinTimestamp = minTimestamp;
+        currentMaxTimestamp = maxTimestamp;
+
+        updateSliderUI();
+    }
+    
+    function applyAndRenderFilters() {
+        if (!historyLogContainer) return;
+
+        const searchTerm = historySearchInput.value.trim().toLowerCase();
+        const searchActive = searchTerm.length >= 3;
+
+        const filteredEntries = allHistoryEntries.filter(entry => {
+            const inTimeRange = entry.timestampMs >= currentMinTimestamp && entry.timestampMs <= currentMaxTimestamp;
+            if (!inTimeRange) return false;
+
+            if (searchActive) {
+                const topicMatch = entry.topic.toLowerCase().includes(searchTerm);
+                const payloadMatch = entry.payload.toLowerCase().includes(searchTerm);
+                return topicMatch || payloadMatch;
+            }
+            return true;
+        });
+
+        historyLogContainer.innerHTML = '';
+        filteredEntries.forEach(entry => addHistoryEntry(entry, searchActive ? searchTerm : null));
+    }
+
+    function highlightText(text, term) {
+        if (!term) return text;
+        const regex = new RegExp(term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
+        return text.replace(regex, `<mark class="highlight">$&</mark>`);
+    }
+    
+    historySearchInput?.addEventListener('input', applyAndRenderFilters);
+
+    // --- Time Range Slider Logic ---
+
+    function formatTimestampForLabel(timestamp) {
+        const date = new Date(timestamp);
+        const timePart = date.toLocaleTimeString('en-GB');
+        const datePart = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        return `${timePart} ${datePart}`;
+    }
+
+    function updateSliderUI() {
+        const timeRange = maxTimestamp - minTimestamp;
+        if (timeRange <= 0) return;
+
+        const minPercent = ((currentMinTimestamp - minTimestamp) / timeRange) * 100;
+        const maxPercent = ((currentMaxTimestamp - minTimestamp) / timeRange) * 100;
+
+        handleMin.style.left = `${minPercent}%`;
+        handleMax.style.left = `${maxPercent}%`;
+        sliderRange.style.left = `${minPercent}%`;
+        sliderRange.style.width = `${maxPercent - minPercent}%`;
+
+        labelMin.textContent = formatTimestampForLabel(currentMinTimestamp);
+        labelMax.textContent = formatTimestampForLabel(currentMaxTimestamp);
+    }
+
+    function makeDraggable(handle, isMin) {
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const sliderRect = timeRangeSliderContainer.getBoundingClientRect();
+            
+            const onMouseMove = (moveEvent) => {
+                let x = moveEvent.clientX - sliderRect.left;
+                let percent = (x / sliderRect.width) * 100;
+                percent = Math.max(0, Math.min(100, percent));
+
+                const timeRange = maxTimestamp - minTimestamp;
+                const newTimestamp = minTimestamp + (timeRange * percent / 100);
+
+                if (isMin) {
+                    currentMinTimestamp = Math.min(newTimestamp, currentMaxTimestamp);
+                } else {
+                    currentMaxTimestamp = Math.max(newTimestamp, currentMinTimestamp);
+                }
+                
+                updateSliderUI();
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                applyAndRenderFilters();
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    if (handleMin && handleMax) {
+        makeDraggable(handleMin, true);
+        makeDraggable(handleMax, false);
+    }
+    
     // --- History View Functions ---
-    function addHistoryEntry(entry, prepend = false) {
+    function addHistoryEntry(entry, searchTerm = null) {
         if (!historyLogContainer) return;
         const div = document.createElement('div');
         div.className = 'log-entry';
@@ -197,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const topicSpan = document.createElement('span');
         topicSpan.className = 'log-entry-topic';
-        topicSpan.textContent = entry.topic;
+        topicSpan.innerHTML = highlightText(entry.topic, searchTerm);
 
         const timeSpan = document.createElement('span');
         timeSpan.className = 'log-entry-timestamp';
@@ -209,19 +356,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const pre = document.createElement('pre');
         try {
             const jsonObj = JSON.parse(entry.payload);
-            pre.textContent = JSON.stringify(jsonObj, null, 2);
+            const prettyPayload = JSON.stringify(jsonObj, null, 2);
+            pre.innerHTML = highlightText(prettyPayload, searchTerm);
         } catch(e) {
-            pre.textContent = entry.payload;
+            pre.innerHTML = highlightText(entry.payload, searchTerm);
         }
 
         div.appendChild(header);
         div.appendChild(pre);
         
-        if (prepend) {
-            historyLogContainer.prepend(div);
-        } else {
-            historyLogContainer.appendChild(div);
-        }
+        historyLogContainer.appendChild(div);
     }
 
     // --- SVG Plan Update Logic ---
@@ -242,11 +386,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* Payload is not JSON, ignore for map */ }
     }
 
-    // --- [MODIFICATION] Logique pour afficher/masquer l'historique récent ---
+    // --- Logique pour afficher/masquer l'historique récent ---
     function toggleRecentHistoryVisibility() {
         if (!topicHistoryContainer) return;
         const isLive = livePayloadToggle.checked;
-        // Utilise 'flex' pour ré-afficher, afin de préserver la mise en page
         topicHistoryContainer.style.display = isLive ? 'none' : 'flex'; 
         document.getElementById('drag-handle-horizontal').style.display = isLive ? 'none' : 'flex';
     }
