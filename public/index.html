@@ -56,7 +56,23 @@
             </div>
         </main>
 
-        <main id="map-view" class="view"></main>
+        <main id="map-view" class="view">
+            <div class="map-view-container">
+                <div class="map-view-controls">
+                    <div class="history-toggle-container">
+                        <input type="checkbox" id="svg-history-toggle" name="svg-history-toggle">
+                        <label for="svg-history-toggle">History Mode</label>
+                    </div>
+                    <div id="svg-timeline-slider-container" class="time-slider-container">
+                        <div class="slider-track"></div>
+                        <div class="slider-handle" id="svg-handle">
+                            <div class="slider-label" id="svg-label"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="svg-content" class="svg-content"></div>
+            </div>
+        </main>
 
         <main id="history-view" class="view">
             <div class="history-status-bar">
@@ -66,7 +82,7 @@
             
             <div class="history-controls">
                 <input type="text" id="history-search-input" placeholder="Filter by keyword in topic or payload...">
-                <div id="time-range-slider-container">
+                <div id="time-range-slider-container" class="time-slider-container">
                     <div class="slider-track"></div>
                     <div class="slider-range" id="slider-range"></div>
                     <div class="slider-handle" id="handle-min">

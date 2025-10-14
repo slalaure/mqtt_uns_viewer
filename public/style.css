@@ -73,9 +73,41 @@ main#tree-view {
     flex-direction: row;
 }
 
+/* [MODIFIÉ] Styles pour la vue SVG et ses contrôles */
 #map-view {
-    padding: 10px;
+    padding: 0;
     box-sizing: border-box;
+    flex-direction: column;
+}
+.map-view-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+.map-view-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 8px 20px;
+    background-color: #fff;
+    border-bottom: 1px solid #ddd;
+    flex-shrink: 0;
+}
+.history-toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.history-toggle-container label {
+    cursor: pointer;
+    user-select: none;
+}
+.svg-content {
+    flex-grow: 1;
+    padding: 10px;
+    overflow: auto; /* Permet le zoom/pan si le SVG est grand */
+    background-color: #f8f9fa;
 }
 
 /* --- Styles de l'Arbre --- */
@@ -395,7 +427,7 @@ pre#payload-content {
     font-family: 'Courier New', Courier, monospace;
 }
 
-/* [NOUVEAU] Styles pour les contrôles de filtre */
+/* Styles pour les contrôles de filtre */
 .history-controls {
     display: flex;
     flex-direction: column;
@@ -425,24 +457,25 @@ mark.highlight {
     border-radius: 2px;
 }
 
-/* [NOUVEAU] Styles pour le curseur à double poignée */
-#time-range-slider-container {
+/* [MODIFIÉ] Styles génériques pour les curseurs de temps */
+.time-slider-container {
     position: relative;
     width: 100%;
     height: 20px;
     padding: 8px 0;
     box-sizing: content-box;
+    flex-grow: 1; /* Permet au curseur de prendre l'espace restant */
 }
 .slider-track, .slider-range {
     position: absolute;
     left: 0;
-    width: 100%;
     height: 4px;
     border-radius: 2px;
     top: 50%;
     transform: translateY(-50%);
 }
 .slider-track {
+    width: 100%;
     background-color: #e9ecef;
 }
 .slider-range {
@@ -482,6 +515,9 @@ mark.highlight {
 }
 .slider-handle:hover .slider-label, .slider-handle:active .slider-label {
     opacity: 1;
+}
+#svg-timeline-slider-container {
+    display: none; /* Masqué par défaut */
 }
 
 .historical-log-container {
