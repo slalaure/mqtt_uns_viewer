@@ -101,8 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Dynamic SVG Plan Loading ---
     async function loadSvgPlan() {
         try {
-            const response = await fetch('./view.svg');
+            const response = await fetch('/view.svg'); 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
             const svgText = await response.text();
             if (svgContent) {
                 svgContent.innerHTML = svgText;

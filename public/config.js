@@ -91,6 +91,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             statusMessage.textContent = 'Configuration saved! Please restart the server for changes to take effect.';
             statusMessage.className = 'status-message success';
+            
+            const restart = confirm("Configuration saved!\nA server restart is required for changes to take effect.\n\nRestart now?");
+            
+            if (restart) {
+                statusMessage.textContent = 'Restarting server...';
+                statusMessage.className = 'status-message success';
+                // Appelle la nouvelle API de redémarrage
+                fetch('/api/env/restart', { method: 'POST' });
+            } else {
+                statusMessage.textContent = 'Configuration saved! Restart the server later to apply changes.';
+                statusMessage.className = 'status-message success';
+            }
 
         } catch (error) {
             statusMessage.textContent = error.message;

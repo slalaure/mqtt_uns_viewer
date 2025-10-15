@@ -1,65 +1,51 @@
-# Real-Time MQTT & Unified Namespace Web Visualizer
+# MQTT UNS Viewer
 
-A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages. This project includes a powerful data simulator and a dedicated **Model Context Protocol (MCP) Server** for seamless integration with AI agents.
+A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages. This project is fully containerized with Docker and includes a powerful data simulator and a dedicated **Model Context Protocol (MCP) Server** for seamless integration with AI agents.
 
-![Application screenshot showing the topic tree and SVG view](./assets/screenshot1.png)
+![Application Screenshot](./assets/screenshot1.png)
 
 ---
 
 ## Core Features
 
--   **Real-Time Topic Tree:** Automatically builds and displays a hierarchical tree of all received MQTT topics.
--   **Dynamic SVG View:** Updates a custom 2D plan (SVG) in real-time based on incoming MQTT data, mapping topics and payloads to visual elements.
--   **AI Agent Integration:** A dedicated **MCP Server** exposes application controls and data as structured tools for Large Language Model (LLM) agents.
--   **Built-in UNS Simulator:** Generates a realistic manufacturing data stream that can be controlled via the UI or API.
--   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database for historical analysis and querying.
--   **Live Data & History Views:** Browse the latest payload for any topic, or review chronological message history in a dedicated view.
--   **Secure & Broker-Agnostic:** Connects to any standard MQTT broker and supports secure connections (MQTTS, MTLS) for brokers like AWS IoT Core.
--   **Sparkplug B Support:** Optionally decodes binary Sparkplug B Protobuf payloads into JSON for visualization.
+-   **Real-Time Topic Tree:** Automatically builds a hierarchical tree of all received MQTT topics.
+-   **Dynamic SVG View:** Updates a custom 2D plan in real-time. Includes a "History Mode" to replay the visual state of the system at any point in time.
+-   **AI Agent Integration:** A dedicated MCP Server exposes application controls and data as structured tools for Large Language Model (LLM) agents.
+-   **Web-Based Configuration:** A built-in configuration page allows for easy updates to all server settings.
+-   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database that persists across restarts.
+-   **Advanced History Filtering:** The history view features keyword search (with highlighting) and a dual-handle time-range slider.
+-   **Containerized:** Runs in a Docker container for simple, one-command deployment.
 
 ---
 
 ## Architecture
 
-The application runs as a two-process system for maximum flexibility and security.
+The application runs as a single Docker container that internally manages two Node.js processes:
 
-**1. Web Server (`server.js`):** The core application.
+1.  **Web Server (`server.js`):** The core application.
     -   Connects to the MQTT broker.
-    -   Serves the frontend web application (HTML, CSS, JS).
+    -   Serves the frontend web application and the configuration API.
     -   Broadcasts MQTT messages to the UI via WebSockets.
-    -   Stores data in a DuckDB database.
-    -   Exposes a secure, **localhost-only REST API** for internal control.
+    -   Manages the DuckDB database.
+    -   Launches and manages the MCP Server as a child process.
 
-**2. MCP Server (`mcp_server.js`):** The AI Agent interface.
-    -   Uses the `@modelcontextprotocol/sdk` to define structured tools for an LLM.
+2.  **MCP Server (`mcp_server.js`):** The AI Agent interface.
+    -   Defines structured tools for an LLM to interact with the application.
     -   Communicates with the Web Server via its internal REST API.
-    -   Provides a safe and controlled environment for AI agents to interact with the application's data and simulator.
 
-**Data Flow:**
-
-`AI Agent -> MCP Server -> Web Server REST API -> MQTT Broker / Database`
-
-`MQTT Broker -> Web Server -> WebSocket -> Web UI`
+**Data Persistence** is achieved by mounting a local `data` directory as a Docker volume. This ensures that your configuration, SVG plan, and database are saved on your host machine.
 
 ---
 
-## Tech Stack
+## Getting Started with Docker
 
--   **Backend:** Node.js, Express, `ws` (WebSockets), `mqtt`, DuckDB
--   **AI Interface:** `@modelcontextprotocol/sdk`, `zod`, `axios`
--   **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3
-
----
-
-## Getting Started
+This is the recommended way to run the application.
 
 ### Prerequisites
 
--   Node.js (v16 or higher recommended).
--   An MQTT broker (or use the built-in simulator).
--   For secure brokers (e.g., AWS IoT), you will need your client certificate, private key, and a Root CA certificate.
+-   [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/install/) must be installed.
 
-### Installation
+### First-Time Setup
 
 1.  **Clone the Repository:**
     ```bash
@@ -67,89 +53,165 @@ The application runs as a two-process system for maximum flexibility and securit
     cd mqtt_uns_viewer
     ```
 
-2.  **Install Dependencies:**
+2.  **Prepare the Data Directory:**
+    The application reads all user-specific files from a `data` directory.
+    -   **Configuration:** Copy the example config file into the `data` directory: `cp .env.example data/.env`.
+    -   **SVG Plan:** Place your custom `view.svg` file inside the `data` directory. An example is already there.
+    -   **(Optional) Certificates:** If using MTLS, place your `certs` folder inside the `data` directory.
+
+3.  **Edit Your Configuration:**
+    Open `data/.env` with a text editor and fill in your MQTT broker details.
+
+### Running the Application
+
+Build and run the container with a single command:
+
+```bash
+docker-compose up --build
+mqtt uns veiwer codinging partner
+Custom Gem
+
+Show thinking
+Of course. Here is the Git commit message and a completely revised README.md that focuses on the new, simpler Docker workflow.
+
+Git Commit Message
+Here is a comprehensive commit message in English for all the containerization work.
+
+feat(docker): Containerize application for simplified deployment
+
+This commit introduces a complete Docker-based workflow, making the application easy to install, run, and manage. It also includes several fixes and improvements to support the containerized environment.
+
+- **Dockerization:**
+    - Adds a multi-stage `Dockerfile` using a compatible `node:20-bookworm-slim` image with necessary build tools for native dependencies like `duckdb`.
+    - Adds a `docker-compose.yml` file to manage the container, port mapping, and data persistence with a single command.
+    - Implements a `.dockerignore` file to prevent local `node_modules` and other artifacts from being copied into the image, resolving architecture mismatch errors (`invalid ELF header`).
+
+- **Project Restructuring:**
+    - Creates a `data` directory to hold all user-configurable and persistent files (`.env`, `view.svg`, `certs/`, and the DuckDB database). This directory is mounted as a volume in Docker, ensuring user data is preserved.
+    - All file paths in `server.js` have been updated to point to the new `data` directory.
+
+- **Container-Aware Features & Fixes:**
+    - Adds a `/api/env/restart` endpoint, allowing the web UI to gracefully restart the container after a configuration change (works with `restart: always` policy).
+    - Implements a confirmation dialog on the config page to ask the user if they want to restart immediately or later.
+    - Replaces the overly restrictive IP security middleware with a more flexible filter that works within Docker networks.
+    - Fixes a cross-device link error (`EXDEV`) when saving the `.env` file by ensuring the temporary file is created within the same volume.
+    - Corrects a bug where the MCP server process would exit prematurely (`exited with code 0`).
+New README.md File
+Here is a new, clean, and comprehensive README.md in raw Markdown format. It focuses on Docker as the primary method for running the application.
+
+Markdown
+
+# MQTT UNS Viewer
+
+A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages. This project is fully containerized with Docker and includes a powerful data simulator and a dedicated **Model Context Protocol (MCP) Server** for seamless integration with AI agents.
+
+![Application Screenshot](./assets/screenshot1.png)
+
+---
+
+## Core Features
+
+-   **Real-Time Topic Tree:** Automatically builds a hierarchical tree of all received MQTT topics.
+-   **Dynamic SVG View:** Updates a custom 2D plan in real-time. Includes a "History Mode" to replay the visual state of the system at any point in time.
+-   **AI Agent Integration:** A dedicated MCP Server exposes application controls and data as structured tools for Large Language Model (LLM) agents.
+-   **Web-Based Configuration:** A built-in configuration page allows for easy updates to all server settings.
+-   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database that persists across restarts.
+-   **Advanced History Filtering:** The history view features keyword search (with highlighting) and a dual-handle time-range slider.
+-   **Containerized:** Runs in a Docker container for simple, one-command deployment.
+
+---
+
+## Architecture
+
+The application runs as a single Docker container that internally manages two Node.js processes:
+
+1.  **Web Server (`server.js`):** The core application.
+    -   Connects to the MQTT broker.
+    -   Serves the frontend web application and the configuration API.
+    -   Broadcasts MQTT messages to the UI via WebSockets.
+    -   Manages the DuckDB database.
+    -   Launches and manages the MCP Server as a child process.
+
+2.  **MCP Server (`mcp_server.js`):** The AI Agent interface.
+    -   Defines structured tools for an LLM to interact with the application.
+    -   Communicates with the Web Server via its internal REST API.
+
+**Data Persistence** is achieved by mounting a local `data` directory as a Docker volume. This ensures that your configuration, SVG plan, and database are saved on your host machine.
+
+---
+
+## Getting Started with Docker
+
+This is the recommended way to run the application.
+
+### Prerequisites
+
+-   [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/install/) must be installed.
+
+### First-Time Setup
+
+1.  **Clone the Repository:**
     ```bash
-    npm install
+    git clone [https://github.com/slalaure/mqtt_uns_viewer.git](https://github.com/slalaure/mqtt_uns_viewer.git)
+    cd mqtt_uns_viewer
     ```
 
-3.  **Configure Environment Variables:**
-    -   Copy `.env.example` to a new file named `.env`.
-    -   Open `.env` and fill in your MQTT broker details. For local testing with the simulator, the default values are often sufficient.
+2.  **Prepare the Data Directory:**
+    The application reads all user-specific files from a `data` directory.
+    -   **Configuration:** Copy the example config file into the `data` directory: `cp .env.example data/.env`.
+    -   **SVG Plan:** Place your custom `view.svg` file inside the `data` directory. An example is already there.
+    -   **(Optional) Certificates:** If using MTLS, place your `certs` folder inside the `data` directory.
 
-4.  **(Optional) Add Certificates:**
-    -   If connecting to a broker requiring MTLS, create a `certs` folder in the root of the project.
-    -   Place your credential files (e.g., `certificate.pem.crt`, `private.pem.key`, etc.) inside this `certs` folder and update their names in `.env`.
+3.  **Edit Your Configuration:**
+    Open `data/.env` with a text editor and fill in your MQTT broker details.
+
+### Running the Application
+
+Build and run the container with a single command:
+
+```bash
+docker-compose up --build
+```
+
+The application will now be available at http://localhost:8080.
+
+To run in the background, use 
+```bash
+docker-compose up --build -d
+```
+
+Of course. Here is the last part of the README.md file formatted as a raw Markdown block that you can copy and paste directly.
+
+Markdown
 
 ---
 
-## How to Run
+## Configuration & Customization
 
-You need to run two separate processes in two different terminals.
+### Web Configuration
 
-### 1. Start the Main Web Server
+Navigate to **http://localhost:8080/config.html** to access the web-based configuration editor.
 
-This server handles the MQTT connection and the user interface.
+-   All settings from your `data/.env` file are displayed here.
+-   After saving, you will be prompted to restart the server. If you confirm, the Docker container will gracefully restart to apply the new settings.
 
-```bash
-# In your first terminal:
-node server.js
-```
-The application will be available at http://localhost:8080.
+### Customizing the SVG Plan
 
-2. Start the MCP Server for AI Agents
-This server exposes the tools for your LLM agent.
-
-# In your second terminal:
-
-```bash
-node mcp_server.js
-```
-
-This server will connect to the main application and listen for instructions from your agent framework.
-
----
-
-## API & Integration
-
-### Model Context Protocol (MCP) Server
-
-Connect your AI agent framework to the `mcp_server.js` process. The following tools are available:
-
-| Tool Name                  | Description                                                                                          | Parameters                                                                                             |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `start_simulator`          | Starts the MQTT data simulator.                                                                      | _None_                                                                                                 |
-| `stop_simulator`           | Stops the MQTT data simulator.                                                                       | _None_                                                                                                 |
-| `get_simulator_status`     | Gets the current status of the simulator (`running` or `stopped`).                                    | _None_                                                                                                 |
-| `get_application_status`   | Provides a high-level overview of the application's status (MQTT connection, DB stats).              | _None_                                                                                                 |
-| `list_all_topics`          | Returns a flat list of all unique MQTT topics known to the application.                               | _None_                                                                                                 |
-| `get_latest_message`       | Retrieves the most recent message for a single, specified MQTT topic.                                  | `topic` (string): The full MQTT topic name.                                                            |
-| `get_topic_history`        | Retrieves recent historical messages for a specified topic.                                           | `topic` (string): The full MQTT topic name.<br>`limit` (number, optional): Max messages to return.     |
-
-### Internal REST API (Localhost-Only)
-
-The MCP server communicates with the main server via this REST API. It is secured to only accept requests from `localhost`.
-
-- `POST /api/simulator/start`
-- `POST /api/simulator/stop`
-- `GET /api/simulator/status`
-- `GET /api/context/status`
-- `GET /api/context/topics`
-- `GET /api/context/tree`
-- `GET /api/context/topic/:topic(.*)`
-- `GET /api/context/history/:topic(.*)`
-
-
-ex:
-```bash
-curl -X POST http://localhost:8080/api/simulator/start
-curl "http://localhost:8080/api/context/history/stark_industries/malibu_facility/assembly_line_01/mes/oee?limit=5"
-curl http://localhost:8080/api/simulator/status
-curl "http://localhost:8080/api/context/topic/stark_industries/malibu_facility/erp/workorder" 
-curl http://localhost:8080/api/context/tree
-
-```
+1.  **Edit the SVG File:** Modify the `data/view.svg` file in a vector editor (like Inkscape) or a text editor.
+2.  **Link Topics to Zones:** To link an MQTT topic to an area, create a group `<g>` element. The `id` of the group **must** match the MQTT topic, with slashes (`/`) replaced by dashes (`-`).
+    -   **Topic:** `stark_industries/malibu_facility/lab/zone-a`
+    -   **SVG Group ID:** `<g id="stark_industries-malibu_facility-lab-zone-a">`
+3.  **Link Payload to Text:** To display a value from a JSON payload, add a `data-key` attribute to any `<tspan>` or `<text>` element inside the corresponding group.
+    -   **Payload:** `{"temperature": 21.5, "status": "Nominal"}`
+    -   **SVG Code:**
+        ```xml
+        <g id="stark_industries-malibu_facility-lab-zone-a">
+            <text>Temp: <tspan data-key="temperature">--</tspan> °C</text>
+        </g>
+        ```
 
 ---
 
-### License
-This project is licensed under the MIT License. See the LICENSE file for details.
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.

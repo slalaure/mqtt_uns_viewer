@@ -135,5 +135,6 @@ async function main() {
   await server.connect(transport);
   console.log("✅ MCP server connected and listening via StdioTransport.");
 }
-
+// Maintient le processus en vie pour qu'il ne se termine pas
+setInterval(() => {}, 1 << 30);
 main();

@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mqtt-viewer:
+    build:
+      context: .
+    container_name: mqtt_uns_viewer
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      # Monte le dossier local 'data' dans le conteneur
+      # Vos modifications sur .env, view.svg et les certificats seront persistantes
+      - ./data:/usr/src/app/data
+    environment:
+      # Assure que Node.js gère correctement les signaux d'arrêt
+      - NODE_ENV=production

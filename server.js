@@ -22,7 +22,10 @@
  * SOFTWARE.
  */
 
-require('dotenv').config();
+
+// Liste des adresses IP autorisées à accéder aux API (séparées par des virgules).
+// Inclut localhost (IPv4, IPv6) et les passerelles Docker courantes.
+const ALLOWED_IPS=["127.0.0.1","::1","172.17.0.1","172.18.0.1","::ffff:172.18.0.1"];
 
 // --- Imports ---
 const express = require('express');
@@ -35,20 +38,24 @@ const duckdb = require('duckdb');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const { spawn } = require('child_process'); // [NOUVEAU] Import du module pour les processus enfants
 
-const envPath = path.join(__dirname, '.env');
-const envExamplePath = path.join(__dirname, '.env.example');
-
+const dataPath = path.join(__dirname, 'data');
+const envPath = path.join(dataPath, '.env');
+const envExamplePath = path.join(dataPath, '.env.example');
+const certsPath = path.join(dataPath, 'certs');
+const dbPath = path.join(dataPath, 'mqtt_events.duckdb');
+const svgPath = path.join(dataPath, 'view.svg');
 // Si .env n'existe pas, le créer à partir de .env.example
 if (!fs.existsSync(envPath)) {
-    console.log("No .env file found. Creating one from .env.example...");
+    console.log("No .env file found in 'data' directory. Creating one from .env.example...");
     try {
         fs.copyFileSync(envExamplePath, envPath);
-        console.log(".env file created successfully.");
+        console.log(".env file created successfully in ./data/");
     } catch (err) {
-        console.error("FATAL ERROR: Could not create .env file.", err);
+        console.error("FATAL ERROR: Could not create .env file. Make sure 'data/.env.example' exists.", err);
         process.exit(1);
     }
 }
+require('dotenv').config({ path: envPath });
 // --- Global Variables ---
 let mcpProcess = null; // [NOUVEAU] Variable pour stocker le processus enfant MCP
 
@@ -81,12 +88,12 @@ if (SPARKPLUG_ENABLED) {
 }
 
 // --- Certificate Paths ---
-const CERT_PATH = path.join(__dirname, 'certs/', CERT_FILENAME);
-const KEY_PATH = path.join(__dirname, 'certs/', KEY_FILENAME);
-const CA_PATH = path.join(__dirname, 'certs/', CA_FILENAME);
+const CERT_PATH = path.join(certsPath, CERT_FILENAME);
+const KEY_PATH = path.join(certsPath, KEY_FILENAME);
+const CA_PATH = path.join(certsPath, CA_FILENAME);
 
 // --- DuckDB Setup ---
-const dbFile = path.join(__dirname, 'mqtt_events.duckdb');
+const dbFile = dbPath;
 const dbWalFile = dbFile + '.wal';
 const db = new duckdb.Database(dbFile, (err) => {
     if (err) {
@@ -165,6 +172,14 @@ app.use(express.json());
 const server = http_server.createServer(app);
 const wss = new WebSocketServer({ server });
 
+app.get('/view.svg', (req, res) => {
+    if (fs.existsSync(svgPath)) {
+        res.sendFile(svgPath);
+    } else {
+        res.status(404).send('SVG file not found in data directory.');
+    }
+});
+
 // --- API Endpoints ---
 app.get('/api/config', (req, res) => res.json({ isSimulatorEnabled }));
 if (isSimulatorEnabled) {
@@ -173,6 +188,8 @@ if (isSimulatorEnabled) {
     app.post('/api/simulator/start', (req, res) => res.status(200).json(startSimulator(mainConnection)));
     app.post('/api/simulator/stop', (req, res) => res.status(200).json(stopSimulator()));
 }
+
+
 
 // --- WebSocket Logic ---
 console.log("WebSocket server started. Waiting for connections...");
@@ -267,10 +284,10 @@ function connectToMqttBroker() {
     if (MQTT_PASSWORD) options.password = MQTT_PASSWORD;
     if (CERT_FILENAME && KEY_FILENAME && CA_FILENAME) {
         try {
-            const certsDir = path.join(__dirname, 'certs');
-            options.key = fs.readFileSync(path.join(certsDir, KEY_FILENAME));
-            options.cert = fs.readFileSync(path.join(certsDir, CERT_FILENAME));
-            options.ca = fs.readFileSync(path.join(certsDir, CA_FILENAME));
+            // [MODIFIÉ] Use the 'certsPath' variable defined at the top of the file
+            options.key = fs.readFileSync(path.join(certsPath, KEY_FILENAME));
+            options.cert = fs.readFileSync(path.join(certsPath, CERT_FILENAME));
+            options.ca = fs.readFileSync(path.join(certsPath, CA_FILENAME));
             console.log("Using certificate-based (MTLS) authentication.");
         } catch (err) { console.error("FATAL ERROR: Could not read certificate files.", err); process.exit(1); }
     }
@@ -401,22 +418,27 @@ function performMaintenance() {
 // --- MCP (Model Context Protocol) API Endpoints ---
 console.log("🤖 MCP (Model Context Protocol) is ENABLED. Creating API endpoints at /api/context/*");
 
-// Middleware to restrict access to localhost
-const localhostOnly = (req, res, next) => {
-    const allowedIps = ['127.0.0.1', '::1'];
+// Middleware de sécurité basé sur une liste blanche configurable
+const ipFilterMiddleware = (req, res, next) => {
+    // Si la liste est vide, on ne bloque rien pour la facilité d'utilisation hors-Docker
+    if (ALLOWED_IPS.length === 0) {
+        return next();
+    }
+    
+    // Récupère l'IP du client, en tenant compte des proxies (important pour Docker)
     const clientIp = req.ip;
 
-    if (allowedIps.includes(clientIp)) {
-        next(); // IP is allowed, proceed to the route
+    if (ALLOWED_IPS.includes(clientIp)) {
+        next(); // L'IP est autorisée
     } else {
-        console.warn(`[SECURITY] Denied access to MCP API from IP: ${clientIp}`);
-        res.status(403).json({ error: 'Access denied. This API is only accessible from localhost.' });
+        console.warn(`[SECURITY] Denied access to API from IP: ${clientIp}`);
+        res.status(403).json({ error: `Access denied. Your IP (${clientIp}) is not allowed.` });
     }
 };
 
 // Use a router to group MCP routes and apply the middleware
 const mcpRouter = express.Router();
-mcpRouter.use(localhostOnly); // Apply middleware to all routes in this router
+mcpRouter.use(ipFilterMiddleware); // Apply middleware to all routes in this router
 
 // Endpoint to get the overall status of the application
 mcpRouter.get('/status', (req, res) => {
@@ -520,7 +542,7 @@ function startMcpServer() {
 }
 
 const configRouter = express.Router();
-configRouter.use(localhostOnly); // Sécurise l'accès à localhost
+configRouter.use(ipFilterMiddleware); // Sécurise l'accès à localhost
 
 // GET: Lit et parse le fichier .env
 configRouter.get('/', (req, res) => {
@@ -545,7 +567,7 @@ configRouter.get('/', (req, res) => {
 
 configRouter.post('/', (req, res) => {
     const newConfig = req.body;
-    const tempPath = path.join(__dirname, '.env.tmp'); // Define a temporary file path
+    const tempPath = path.join(dataPath, '.env.tmp'); // Creates temp file inside the 'data' volume
     let envFileContent = "";
 
     try {
@@ -579,6 +601,13 @@ configRouter.post('/', (req, res) => {
         console.error("Error writing to .env file:", err);
         res.status(500).json({ error: 'Could not write to .env file. Check server logs for details.' });
     }
+});
+
+configRouter.post('/restart', (req, res) => {
+    res.json({ message: 'Server is restarting...' });
+    console.log("Restart requested via API. Shutting down...");
+    // Arrête le processus. Docker (avec restart:always) le redémarrera.
+    process.exit(0); 
 });
 
 app.use('/api/env', configRouter);

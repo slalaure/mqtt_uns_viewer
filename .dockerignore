@@ -1,0 +1,15 @@
+# Ignore Node.js dependencies
+node_modules
+
+# Ignore local environment file (it will be provided by the volume)
+.env
+
+# Ignore the data directory (it's mounted as a volume)
+data
+
+# Ignore npm logs
+npm-debug.log
+
+# Ignore DuckDB database files
+*.duckdb
+*.duckdb.wal
