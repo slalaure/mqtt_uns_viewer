@@ -23,6 +23,36 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- [NOUVEAU] Logique du thème sombre ---
+    const darkModeToggle = document.getElementById('dark-mode-toggle');
+
+    const enableDarkMode = () => {
+        document.body.classList.add('dark-mode');
+        localStorage.setItem('theme', 'dark');
+        if (darkModeToggle) darkModeToggle.checked = true;
+    };
+
+    const disableDarkMode = () => {
+        document.body.classList.remove('dark-mode');
+        localStorage.setItem('theme', 'light');
+        if (darkModeToggle) darkModeToggle.checked = false;
+    };
+
+    // Applique le thème sauvegardé au chargement
+    if (localStorage.getItem('theme') === 'dark') {
+        enableDarkMode();
+    }
+
+    // Ajoute l'écouteur d'événement pour le bouton
+    darkModeToggle?.addEventListener('change', () => {
+        if (darkModeToggle.checked) {
+            enableDarkMode();
+        } else {
+            disableDarkMode();
+        }
+    });
+
+
     // --- DOM Element Initialization ---
     const treeContainer = document.getElementById('mqtt-tree');
     const payloadContainer = document.getElementById('payload-display');
@@ -59,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const labelMin = document.getElementById('label-min');
     const labelMax = document.getElementById('label-max');
 
-    // [NOUVEAU] SVG View History Elements
+    // SVG View History Elements
     const svgContent = document.getElementById('svg-content');
     const svgHistoryToggle = document.getElementById('svg-history-toggle');
     const svgTimelineSlider = document.getElementById('svg-timeline-slider-container');
@@ -107,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const svgText = await response.text();
             if (svgContent) {
                 svgContent.innerHTML = svgText;
-                // [NOUVEAU] Sauvegarde des valeurs initiales du SVG pour pouvoir le réinitialiser
                 const textElements = svgContent.querySelectorAll('[data-key]');
                 textElements.forEach(el => {
                     svgInitialTextValues.set(el, el.textContent);
@@ -192,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
             switch(message.type) {
                 case 'mqtt-message': {
                     updateTree(message.topic, message.payload, message.timestamp);
-                    // [MODIFIÉ] La mise à jour du SVG ne se fait que si le mode historique est désactivé
                     if (!isSvgHistoryMode) {
                         updateMap(message.topic, message.payload);
                     }
@@ -211,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     updateSliderUI();
-                    updateSvgTimelineUI(); // [NOUVEAU] Met à jour aussi la timeline SVG
+                    updateSvgTimelineUI(); 
                     break;
                 }
                 case 'simulator-status':
@@ -243,10 +271,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function initializeHistoryFilters() {
         if (allHistoryEntries.length === 0) {
-            timeRangeSliderContainer.style.display = 'none';
+            if(timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'none';
             return;
         }
-        timeRangeSliderContainer.style.display = 'block';
+        if(timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'block';
 
         minTimestamp = allHistoryEntries[allHistoryEntries.length - 1].timestampMs;
         maxTimestamp = allHistoryEntries[0].timestampMs;
@@ -254,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMaxTimestamp = maxTimestamp;
 
         updateSliderUI();
-        updateSvgTimelineUI(); // Initialise aussi la timeline SVG
+        updateSvgTimelineUI();
     }
     
     function applyAndRenderFilters() {
@@ -314,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function makeDraggable(handle, isMin) {
+        if (!handle) return;
         handle.addEventListener('mousedown', (e) => {
             e.preventDefault();
             const sliderRect = timeRangeSliderContainer.getBoundingClientRect();
@@ -386,13 +415,12 @@ document.addEventListener('DOMContentLoaded', () => {
         historyLogContainer.appendChild(div);
     }
 
-    // --- [NOUVEAU] SVG Replay Logic ---
+    // --- SVG Replay Logic ---
 
     svgHistoryToggle?.addEventListener('change', (e) => {
         isSvgHistoryMode = e.target.checked;
-        svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
+        if(svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
         
-        // Au changement, on rejoue l'état jusqu'à la fin pour être synchronisé
         replaySvgHistory(maxTimestamp);
     });
 
@@ -402,31 +430,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const timeRange = maxTimestamp - minTimestamp;
         if (timeRange <= 0) return;
 
-        const currentPercent = ((svgHandle.dataset.timestamp || maxTimestamp) - minTimestamp) / timeRange * 100;
+        const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || maxTimestamp);
+        const currentPercent = ((currentTimestamp - minTimestamp) / timeRange) * 100;
         svgHandle.style.left = `${currentPercent}%`;
-        svgLabel.textContent = formatTimestampForLabel(parseFloat(svgHandle.dataset.timestamp || maxTimestamp));
+        svgLabel.textContent = formatTimestampForLabel(currentTimestamp);
     }
 
     function replaySvgHistory(replayUntilTimestamp) {
         if (!svgContent) return;
 
-        // 1. Réinitialiser le SVG à son état initial
         svgInitialTextValues.forEach((text, element) => {
             element.textContent = text;
         });
 
-        // 2. Filtrer les messages jusqu'au timestamp de rejeu
         const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
         
-        // 3. Déterminer l'état final de chaque topic à cet instant T
         const finalState = new Map();
-        // Itérer à l'envers (du plus ancien au plus récent) pour que la dernière valeur écrase les précédentes
         for (let i = entriesToReplay.length - 1; i >= 0; i--) {
             const entry = entriesToReplay[i];
-            finalState.set(entry.topic, entry.payload);
+            if (!finalState.has(entry.topic)) {
+                 finalState.set(entry.topic, entry.payload);
+            }
         }
 
-        // 4. Appliquer l'état final à la vue SVG
         finalState.forEach((payload, topic) => {
             updateMap(topic, payload);
         });
@@ -449,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 handle.dataset.timestamp = newTimestamp;
                 svgLabel.textContent = formatTimestampForLabel(newTimestamp);
 
-                replaySvgHistory(newTimestamp); // Rejoue l'historique pendant le déplacement
+                replaySvgHistory(newTimestamp);
             };
             
             const onMouseUp = () => {
@@ -693,6 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Redimensionnement Vertical
     const resizeVertical = (e) => {
+        if (!treeContainer) return;
         const treeViewWidth = e.pageX - treeContainer.getBoundingClientRect().left;
         treeContainer.style.flexBasis = `${treeViewWidth}px`;
     };
@@ -707,6 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Redimensionnement Horizontal
     const resizeHorizontal = (e) => {
+        if (!payloadContainer || !payloadMainArea) return;
         const payloadAreaHeight = e.pageY - payloadContainer.getBoundingClientRect().top;
         payloadMainArea.style.flexBasis = `${payloadAreaHeight}px`;
     };
