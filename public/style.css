@@ -1,4 +1,4 @@
-/* [MODIFIÉ] Définition des variables de couleur pour les thèmes */
+/* style.css */
 :root {
     --color-bg: #f4f7f9;
     --color-bg-secondary: #fff;
@@ -88,7 +88,7 @@ header p { margin: 4px 0 0; font-size: 0.9em; opacity: 0.9; text-align: left; }
     border-radius: 4px;
 }
 
-/* --- [NOUVEAU] Styles pour l'interrupteur de thème --- */
+/* --- Styles pour l'interrupteur de thème --- */
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
@@ -223,16 +223,59 @@ main#tree-view {
     background-color: var(--color-bg-tertiary);
 }
 
-/* --- Styles de l'Arbre --- */
-.tree-container { 
+/* --- [MODIFIÉ] Styles de l'Arbre --- */
+.tree-view-wrapper {
     flex: 0 0 50%;
-    border-right: 1px solid var(--color-border); 
-    background-color: var(--color-bg-secondary); 
-    min-width: 200px;
-    padding: 20px; 
+    min-width: 250px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    background-color: var(--color-bg-secondary);
+}
+
+.tree-controls {
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+#tree-filter-input {
+    flex-grow: 1;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-size: 14px;
+}
+#tree-filter-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.tree-controls button {
+    padding: 6px 12px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 1.2em;
+    line-height: 1;
+}
+.tree-controls button:hover {
+    background-color: var(--color-bg-accent);
+}
+
+.tree-container { 
+    padding: 10px 20px; 
     overflow-y: auto; 
     box-sizing: border-box; 
-    height: 100%;
+    flex-grow: 1;
 }
 
 .payload-container { 
@@ -326,9 +369,13 @@ main#tree-view {
 .pulse { --line-color: var(--color-primary); transition: --line-color 1.2s ease-out; opacity: 1; transform: translateY(0); }
 
 .node-name::before { content: ''; display: inline-block; width: 16px; height: 16px; margin-right: 6px; background-size: contain; background-repeat: no-repeat; background-position: center; }
-.is-folder > .node-container { font-weight: 500; cursor: default; }
-.is-folder .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M.5 1a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h15a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H8.5a.5.5 0 0 1-.408-.182L6.818 1.09A.5.5 0 0 0 6.409 1H.5z'/%3E%3C/svg%3E"); }
+
+/* [MODIFIÉ] Styles pour les dossiers et l'état déplié/replié */
+.is-folder > .node-container { font-weight: 500; cursor: pointer; }
+.is-folder:not(.collapsed) .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M1 2.5A1.5 1.5 0 0 1 2.5 1h3.793a1.5 1.5 0 0 1 1.06.44L8.854 2.94a.5.5 0 0 1 .146.353V4.5h6.5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5H1a.5.5 0 0 1-.5-.5V2.5zM2.5 2a.5.5 0 0 0-.5.5V12h12V5H8.5a.5.5 0 0 1-.5-.5V3.354a.5.5 0 0 1 .146-.353L9.146 2H2.5z'/%3E%3C/svg%3E"); }
+.is-folder.collapsed .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M.5 1a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h15a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H8.5a.5.5 0 0 1-.408-.182L6.818 1.09A.5.5 0 0 0 6.409 1H.5z'/%3E%3C/svg%3E"); }
 body.dark-mode .is-folder .node-name::before { filter: brightness(0) invert(0.8); }
+
 .is-file > .node-container { color: var(--color-primary-hover); cursor: pointer; }
 .is-file > .node-container:hover { background-color: var(--color-bg-accent); }
 .is-file .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23007bff'%3E%3Cpath d='M4 0h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H4z'/%3E%3Cpath d='M4.5 3h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1zM4.5 5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z'/%3E%3C/svg%3E"); }
@@ -338,6 +385,14 @@ body.dark-mode .is-file .node-name::before { filter: brightness(0) invert(0.6) s
 #mqtt-tree .selected .node-name::before { filter: brightness(0) invert(1); }
 #mqtt-tree.dark-mode .selected .node-name::before, body.dark-mode #mqtt-tree .selected .node-name::before { filter: brightness(0) invert(0.2); }
 #mqtt-tree .selected .node-timestamp { color: var(--selected-text); opacity: 0.8; }
+
+/* [NOUVEAU] Logique pour replier et filtrer */
+#mqtt-tree .is-folder.collapsed > ul {
+    display: none;
+}
+#mqtt-tree .filtered-out {
+    display: none;
+}
 
 /* --- Styles for Payload Display --- */
 #payload-main-area {

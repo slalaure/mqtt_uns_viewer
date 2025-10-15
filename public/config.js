@@ -27,19 +27,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-button');
     const statusMessage = document.getElementById('status-message');
 
-    // Charge la configuration actuelle depuis le serveur
+    // Load current configuration from the server
     async function loadConfig() {
         try {
             const response = await fetch('/api/env');
             if (!response.ok) {
+                // Handle auth error gracefully
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please check your credentials.');
+                }
                 throw new Error('Failed to load configuration.');
             }
             const config = await response.json();
 
-            // Vide le formulaire avant de le remplir
+            // Clear form before populating
             form.innerHTML = '';
 
-            // Crée dynamiquement les champs du formulaire
+            // Dynamically create form fields
             for (const key in config) {
                 const group = document.createElement('div');
                 group.className = 'form-group';
@@ -64,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Gère la sauvegarde de la configuration
+    // Handle saving the configuration
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         saveButton.disabled = true;
@@ -97,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (restart) {
                 statusMessage.textContent = 'Restarting server...';
                 statusMessage.className = 'status-message success';
-                // Appelle la nouvelle API de redémarrage
+                // Call the restart API endpoint
                 fetch('/api/env/restart', { method: 'POST' });
             } else {
                 statusMessage.textContent = 'Configuration saved! Restart the server later to apply changes.';
@@ -113,6 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Charge la configuration au démarrage de la page
+    // Load config when the page starts
     loadConfig();
 });

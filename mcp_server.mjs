@@ -1,3 +1,27 @@
+/**
+ * @license MIT
+ * @author Sebastien Lalaurette
+ * @copyright (c) 2025 Sebastien Lalaurette
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -12,7 +36,7 @@ const server = new McpServer({
   description: "A server to control and query the MQTT Unified Namespace web visualizer application.",
 });
 
-// --- Outils de contrôle du simulateur ---
+// --- Simulator Control Tools ---
 
 server.tool(
   "start_simulator",
@@ -57,7 +81,7 @@ server.tool(
 );
 
 
-// --- Outils de lecture des données ---
+// --- Data Query Tools ---
 
 server.tool(
   "get_application_status",
@@ -128,13 +152,14 @@ server.tool(
 );
 
 
-// --- Lancement du serveur MCP ---
+// --- MCP Server Start ---
 async function main() {
   console.log("🤖 Starting MCP server...");
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.log("✅ MCP server connected and listening via StdioTransport.");
 }
-// Maintient le processus en vie pour qu'il ne se termine pas
+
+// Keep the process alive so it doesn't terminate immediately
 setInterval(() => {}, 1 << 30);
 main();

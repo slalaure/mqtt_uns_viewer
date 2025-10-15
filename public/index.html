@@ -39,7 +39,14 @@
 
     <div class="view-container">
         <main id="tree-view" class="view active">
-            <div id="mqtt-tree" class="tree-container"></div>
+            <div class="tree-view-wrapper">
+                <div class="tree-controls">
+                    <input type="text" id="tree-filter-input" placeholder="Filter topics...">
+                    <button id="btn-expand-all" title="Expand All">▲</button>
+                    <button id="btn-collapse-all" title="Collapse All">▼</button>
+                </div>
+                <div id="mqtt-tree" class="tree-container"></div>
+            </div>
             
             <div class="resizer" id="drag-handle-vertical"></div>
 

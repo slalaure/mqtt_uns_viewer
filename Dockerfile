@@ -1,24 +1,24 @@
-# [MODIFICATION] Utilise une image Node.js v20 basée sur Debian (Bookworm)
+# Use a Node.js v20 image based on Debian (Bookworm)
 FROM node:20-bookworm-slim
 
-# Définit le répertoire de travail dans le conteneur
+# Set the working directory inside the container
 WORKDIR /usr/src/app
 
-# Installe les outils de compilation pour Debian (au cas où)
+# Install build tools for Debian (just in case)
 RUN apt-get update && apt-get install -y python3 g++ make --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
-# Copie les fichiers de dépendances et les installe
+# Copy dependency files and install them
 COPY package*.json ./
 RUN npm install
 
-# Copie le reste du code de l'application
+# Copy the rest of the application code
 COPY . .
 
-# Crée un répertoire pour les données persistantes de l'utilisateur
+# Create a directory for persistent user data
 RUN mkdir -p /usr/src/app/data/certs
 
-# Expose le port sur lequel l'application s'exécute
+# Expose the port on which the application runs
 EXPOSE 8080
 
-# La commande pour démarrer l'application
+# The command to start the application
 CMD [ "node", "server.js" ]

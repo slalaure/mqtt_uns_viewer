@@ -23,7 +23,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- [NOUVEAU] Logique du thème sombre ---
+    // --- Dark Theme Logic ---
     const darkModeToggle = document.getElementById('dark-mode-toggle');
 
     const enableDarkMode = () => {
@@ -38,12 +38,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (darkModeToggle) darkModeToggle.checked = false;
     };
 
-    // Applique le thème sauvegardé au chargement
+    // Apply saved theme on load
     if (localStorage.getItem('theme') === 'dark') {
         enableDarkMode();
     }
 
-    // Ajoute l'écouteur d'événement pour le bouton
+    // Add event listener for the toggle
     darkModeToggle?.addEventListener('change', () => {
         if (darkModeToggle.checked) {
             enableDarkMode();
@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- DOM Element Initialization ---
+    const treeViewWrapper = document.querySelector('.tree-view-wrapper');
     const treeContainer = document.getElementById('mqtt-tree');
     const payloadContainer = document.getElementById('payload-display');
     const payloadMainArea = document.getElementById('payload-main-area');
@@ -63,6 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const livePayloadToggle = document.getElementById('live-payload-toggle');
     const topicHistoryContainer = document.getElementById('topic-history-container');
     let selectedNodeContainer = null;
+
+    // Tree control elements
+    const treeFilterInput = document.getElementById('tree-filter-input');
+    const btnExpandAll = document.getElementById('btn-expand-all');
+    const btnCollapseAll = document.getElementById('btn-collapse-all');
 
     // Elements for tab navigation
     const btnTreeView = document.getElementById('btn-tree-view');
@@ -137,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const svgText = await response.text();
             if (svgContent) {
                 svgContent.innerHTML = svgText;
+                // Save initial SVG values to be able to reset it
                 const textElements = svgContent.querySelectorAll('[data-key]');
                 textElements.forEach(el => {
                     svgInitialTextValues.set(el, el.textContent);
@@ -221,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
             switch(message.type) {
                 case 'mqtt-message': {
                     updateTree(message.topic, message.payload, message.timestamp);
+                    // Update SVG only if history mode is off
                     if (!isSvgHistoryMode) {
                         updateMap(message.topic, message.payload);
                     }
@@ -239,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     updateSliderUI();
-                    updateSvgTimelineUI(); 
+                    updateSvgTimelineUI(); // Also update SVG timeline
                     break;
                 }
                 case 'simulator-status':
@@ -282,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMaxTimestamp = maxTimestamp;
 
         updateSliderUI();
-        updateSvgTimelineUI();
+        updateSvgTimelineUI(); // Also init SVG timeline
     }
     
     function applyAndRenderFilters() {
@@ -421,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isSvgHistoryMode = e.target.checked;
         if(svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
         
+        // When toggling, replay state up to the end to get in sync
         replaySvgHistory(maxTimestamp);
     });
 
@@ -439,13 +448,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function replaySvgHistory(replayUntilTimestamp) {
         if (!svgContent) return;
 
+        // 1. Reset SVG to its initial state
         svgInitialTextValues.forEach((text, element) => {
             element.textContent = text;
         });
 
+        // 2. Filter messages up to the replay timestamp
         const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
         
+        // 3. Determine the final state of each topic at that point in time
         const finalState = new Map();
+        // Iterate backwards (from oldest to newest) so the last value overwrites previous ones
         for (let i = entriesToReplay.length - 1; i >= 0; i--) {
             const entry = entriesToReplay[i];
             if (!finalState.has(entry.topic)) {
@@ -453,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // 4. Apply the final state to the SVG view
         finalState.forEach((payload, topic) => {
             updateMap(topic, payload);
         });
@@ -475,7 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 handle.dataset.timestamp = newTimestamp;
                 svgLabel.textContent = formatTimestampForLabel(newTimestamp);
 
-                replaySvgHistory(newTimestamp);
+                replaySvgHistory(newTimestamp); // Replay history while dragging
             };
             
             const onMouseUp = () => {
@@ -510,7 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* Payload is not JSON, ignore for map */ }
     }
 
-    // --- Logique pour afficher/masquer l'historique récent ---
+    // --- Logic for showing/hiding recent history ---
     function toggleRecentHistoryVisibility() {
         if (!topicHistoryContainer) return;
         const isLive = livePayloadToggle.checked;
@@ -662,12 +676,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (nodeContainer) {
                  if (isLastPart) {
                     li.classList.add('is-file');
-                    li.classList.remove('is-folder');
+                    li.classList.remove('is-folder', 'collapsed');
                     nodeContainer.dataset.payload = payload;
                     nodeContainer.dataset.topic = topic;
                     nodeContainer.addEventListener('click', handleNodeClick);
                 } else {
                     li.classList.add('is-folder');
+                    // Add listener for expanding/collapsing only once
+                    if (!nodeContainer.dataset.folderListener) {
+                        nodeContainer.addEventListener('click', (e) => {
+                             // Ensure we don't interfere with text selection or checkbox clicks
+                            if (e.target.closest('.node-name')) {
+                                li.classList.toggle('collapsed');
+                            }
+                        });
+                        nodeContainer.dataset.folderListener = 'true';
+                    }
                 }
             }
             currentNode = li;
@@ -693,6 +717,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleNodeClick(event) {
         const targetContainer = event.currentTarget;
+        // Do nothing if the clicked node is a folder
+        if(targetContainer.parentElement.classList.contains('is-folder')) return;
+
         if (selectedNodeContainer) {
             selectedNodeContainer.classList.remove('selected');
         }
@@ -713,15 +740,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Logique de redimensionnement des panneaux ---
+    // --- Tree Controls Logic ---
+    btnExpandAll?.addEventListener('click', () => {
+        treeContainer?.querySelectorAll('.is-folder').forEach(folderLi => {
+            folderLi.classList.remove('collapsed');
+        });
+    });
+
+    btnCollapseAll?.addEventListener('click', () => {
+        treeContainer?.querySelectorAll('.is-folder').forEach(folderLi => {
+            folderLi.classList.add('collapsed');
+        });
+    });
+
+    treeFilterInput?.addEventListener('input', () => {
+        const filterText = treeFilterInput.value.toLowerCase();
+        const allNodes = treeContainer?.querySelectorAll('#mqtt-tree > ul > li'); // Start at the root
+        if (!allNodes) return;
+
+        allNodes.forEach(node => filterNode(node, filterText));
+    });
+
+    function filterNode(node, filterText) {
+        const nodeName = node.querySelector(':scope > .node-container > .node-name').textContent.toLowerCase();
+        const isMatch = nodeName.includes(filterText);
+        let hasVisibleChild = false;
+
+        const children = node.querySelectorAll(':scope > ul > li');
+        children.forEach(child => {
+            if (filterNode(child, filterText)) {
+                hasVisibleChild = true;
+            }
+        });
+
+        if (isMatch || hasVisibleChild) {
+            node.classList.remove('filtered-out');
+            // When filtering, expand parent nodes to show matching children
+            if (hasVisibleChild && filterText) {
+                node.classList.remove('collapsed');
+            }
+            return true;
+        } else {
+            node.classList.add('filtered-out');
+            return false;
+        }
+    }
+
+    // --- Panel Resizing Logic ---
     const resizerVertical = document.getElementById('drag-handle-vertical');
     const resizerHorizontal = document.getElementById('drag-handle-horizontal');
 
-    // Redimensionnement Vertical
+    // Vertical Resizing
     const resizeVertical = (e) => {
-        if (!treeContainer) return;
-        const treeViewWidth = e.pageX - treeContainer.getBoundingClientRect().left;
-        treeContainer.style.flexBasis = `${treeViewWidth}px`;
+        if (!treeViewWrapper) return;
+        const treeViewWidth = e.pageX - treeViewWrapper.getBoundingClientRect().left;
+        treeViewWrapper.style.flexBasis = `${treeViewWidth}px`;
     };
 
     resizerVertical?.addEventListener('mousedown', (e) => {
@@ -732,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Redimensionnement Horizontal
+    // Horizontal Resizing
     const resizeHorizontal = (e) => {
         if (!payloadContainer || !payloadMainArea) return;
         const payloadAreaHeight = e.pageY - payloadContainer.getBoundingClientRect().top;
