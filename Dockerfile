@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y python3 g++ make --no-install-recommend
 COPY package*.json ./
 RUN npm install
 
+# Explicitly copy the .env.example file from the project root
+COPY .env.example .
+
 # Copy the rest of the application code
 COPY . .
 

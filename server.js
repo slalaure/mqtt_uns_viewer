@@ -262,6 +262,16 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
                 payloadAsString = JSON.stringify(decodedPayload, longReplacer, 2);
             } else {
                 payloadAsString = payload.toString('utf-8');
+                try {
+                    // Test if the payload is valid JSON. If it is, we store it as is.
+                    JSON.parse(payloadAsString);
+                    payloadForDb = payloadAsString;
+                } catch (e) {
+                    // If parsing fails, it's not JSON. We wrap the plain string in JSON quotes
+                    // so it can be inserted into the JSON column correctly.
+                    logger.warn({ topic }, "Received non-JSON payload. Storing as a string.");
+                    payloadForDb = JSON.stringify(payloadAsString);
+                }
             }
             broadcast(JSON.stringify({ type: 'mqtt-message', topic, payload: payloadAsString, timestamp: timestamp.toISOString() }));
             const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
