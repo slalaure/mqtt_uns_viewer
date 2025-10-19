@@ -88,7 +88,7 @@ header p { margin: 4px 0 0; font-size: 0.9em; opacity: 0.9; text-align: left; }
     border-radius: 4px;
 }
 
-/* --- Styles pour l'interrupteur de thème --- */
+/* --- Styles for theme switcher --- */
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
@@ -144,7 +144,7 @@ input:checked + .slider:before {
 }
 
 
-/* --- Styles pour la navigation par onglets --- */
+/* --- Styles for tab nav --- */
 .tab-nav {
     background-color: var(--color-bg-accent);
     padding: 0 20px;
@@ -167,7 +167,7 @@ input:checked + .slider:before {
 .tab-button:hover { color: var(--color-primary); }
 .tab-button.active { color: var(--color-primary); border-bottom: 3px solid var(--color-primary); }
 
-/* Logique d'affichage des vues */
+/* view logic */
 .view-container {
     flex-grow: 1;
     overflow: hidden;
@@ -186,7 +186,7 @@ main#tree-view {
     flex-direction: row;
 }
 
-/* Styles pour la vue SVG et ses contrôles */
+/* Styles for svg */
 #map-view {
     padding: 0;
     box-sizing: border-box;
@@ -223,7 +223,7 @@ main#tree-view {
     background-color: var(--color-bg-tertiary);
 }
 
-/* --- [MODIFIÉ] Styles de l'Arbre --- */
+/* --- Styles for tree view --- */
 .tree-view-wrapper {
     flex: 0 0 50%;
     min-width: 250px;
@@ -289,7 +289,7 @@ main#tree-view {
     background-color: var(--color-bg-secondary);
 }
 
-/* --- Style pour les barres de redimensionnement --- */
+/* ---Styles for resizing --- */
 .resizer { /* Vertical */
     flex: 0 0 5px;
     cursor: col-resize;
@@ -356,7 +356,7 @@ main#tree-view {
     z-index: 2;
 }
 
-/* --- Logique d'animation --- */
+/* ---animation logic --- */
 .new-node { opacity: 0; transform: translateY(-10px); }
 
 @keyframes reveal-and-pulse {
@@ -370,7 +370,6 @@ main#tree-view {
 
 .node-name::before { content: ''; display: inline-block; width: 16px; height: 16px; margin-right: 6px; background-size: contain; background-repeat: no-repeat; background-position: center; }
 
-/* [MODIFIÉ] Styles pour les dossiers et l'état déplié/replié */
 .is-folder > .node-container { font-weight: 500; cursor: pointer; }
 .is-folder:not(.collapsed) .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M1 2.5A1.5 1.5 0 0 1 2.5 1h3.793a1.5 1.5 0 0 1 1.06.44L8.854 2.94a.5.5 0 0 1 .146.353V4.5h6.5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5H1a.5.5 0 0 1-.5-.5V2.5zM2.5 2a.5.5 0 0 0-.5.5V12h12V5H8.5a.5.5 0 0 1-.5-.5V3.354a.5.5 0 0 1 .146-.353L9.146 2H2.5z'/%3E%3C/svg%3E"); }
 .is-folder.collapsed .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M.5 1a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h15a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H8.5a.5.5 0 0 1-.408-.182L6.818 1.09A.5.5 0 0 0 6.409 1H.5z'/%3E%3C/svg%3E"); }
@@ -386,7 +385,6 @@ body.dark-mode .is-file .node-name::before { filter: brightness(0) invert(0.6) s
 #mqtt-tree.dark-mode .selected .node-name::before, body.dark-mode #mqtt-tree .selected .node-name::before { filter: brightness(0) invert(0.2); }
 #mqtt-tree .selected .node-timestamp { color: var(--selected-text); opacity: 0.8; }
 
-/* [NOUVEAU] Logique pour replier et filtrer */
 #mqtt-tree .is-folder.collapsed > ul {
     display: none;
 }
@@ -600,7 +598,7 @@ pre#payload-content {
     font-family: 'Courier New', Courier, monospace;
 }
 
-/* Styles pour les contrôles de filtre */
+/* Styles for filters */
 .history-controls {
     display: flex;
     flex-direction: column;

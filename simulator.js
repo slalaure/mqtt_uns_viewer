@@ -106,9 +106,9 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         return { status: 'already stopped' };
     };
 
-    // [NOUVEAU] Exposer une fonction pour obtenir le statut actuel
+    // Expose a function to get the current status
     const getStatus = () => (simulatorInterval ? 'running' : 'stopped');
 
-    // [MODIFIÉ] Ajouter getStatus à l'objet exporté
+    // Add getStatus to the exported object
     return { startSimulator, stopSimulator, getStatus };
 };

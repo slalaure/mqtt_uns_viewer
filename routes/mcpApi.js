@@ -75,6 +75,44 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
         });
     });
 
+    // --- fulltext search ---
+    router.get('/search', (req, res) => {
+        const query = req.query.q;
+        if (!query || query.length < 3) {
+            return res.status(400).json({ error: "Search query must be at least 3 characters long." });
+        }
+        
+        // 1. Simple sanitization to prevent SQL injection (double up single quotes)
+        const safeQuery = query.replace(/'/g, "''");
+        const searchTerm = `%${safeQuery}%`;
+        
+        // 2. Direct injection of the term into the query.
+        // We are no longer using $1, $2 which caused the error.
+        const sqlQuery = `
+            SELECT topic, payload, timestamp
+            FROM mqtt_events
+            WHERE 
+                topic ILIKE '${searchTerm}' OR 
+                CAST(payload AS VARCHAR) ILIKE '${searchTerm}'
+            ORDER BY timestamp DESC
+            LIMIT 25;
+        `;
+        
+        // --- [DEBUG] Add logs to see the exact query ---
+        console.log(`[DEBUG] Search Term: ${searchTerm}`);
+        console.log(`[DEBUG] Executed SQL Query: ${sqlQuery}`);
+        // --- [END DEBUG] ---
+
+        // 3. Execute the query without a parameter array
+        db.all(sqlQuery, (err, rows) => {
+            if (err) {
+                console.error("❌ DuckDB search query error:", err);
+                return res.status(500).json({ error: "Database search query failed." });
+            }
+            res.json(rows);
+        });
+    });
+
     // Endpoint to get the latest message for a specific topic
     router.get('/topic/:topic(.*)', (req, res) => {
         const topic = req.params.topic;

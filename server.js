@@ -36,7 +36,7 @@ const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
 
 // --- Constants & Paths ---
-const ALLOWED_IPS = ["127.0.0.1", "::1", "172.17.0.1", "172.18.0.1", "::ffff:172.18.0.1"];
+const ALLOWED_IPS = ["127.0.0.1", "::1", "172.17.0.1", "172.18.0.1", "::ffff:172.18.0.1","::ffff:172.21.0.1"];
 const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
 const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
@@ -91,6 +91,7 @@ const config = {
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null
 };
+
 
 // --- Configuration Validation ---
 if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
@@ -254,41 +255,126 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
     // MQTT Message Handler
     mainConnection.on('message', (topic, payload) => {
         const timestamp = new Date();
-        let payloadAsString;
+        let payloadAsString = null; // Initialize
+        let payloadToInsert = null; // Initialize to null
+        let processingError = null; // To store potential errors
+    
         try {
+            // --- 1. Initial Decoding ---
             if (config.IS_SPARKPLUG_ENABLED && topic.startsWith('spBv1.0/')) {
-                const decodedPayload = spBv10Codec.decodePayload(payload);
-                const longReplacer = (key, value) => (value?.constructor?.name === 'Long' ? value.toNumber() : value);
-                payloadAsString = JSON.stringify(decodedPayload, longReplacer, 2);
-            } else {
-                payloadAsString = payload.toString('utf-8');
                 try {
-                    // Test if the payload is valid JSON. If it is, we store it as is.
-                    JSON.parse(payloadAsString);
-                    payloadForDb = payloadAsString;
-                } catch (e) {
-                    // If parsing fails, it's not JSON. We wrap the plain string in JSON quotes
-                    // so it can be inserted into the JSON column correctly.
-                    logger.warn({ topic }, "Received non-JSON payload. Storing as a string.");
-                    payloadForDb = JSON.stringify(payloadAsString);
+                    const decodedPayload = spBv10Codec.decodePayload(payload);
+                    payloadAsString = JSON.stringify(decodedPayload, longReplacer, 2);
+                     // Assume Sparkplug is valid JSON structure for insertion
+                    payloadToInsert = payloadAsString;
+                } catch (decodeErr) {
+                    processingError = decodeErr; // Store error
+                    logger.error({ 
+                        msg: "❌ Error decoding Sparkplug payload", 
+                        topic: topic, 
+                        error_message: decodeErr.message 
+                    });
+                    // Assign a fallback value for insertion
+                     payloadAsString = payload.toString('hex'); // Use hex as fallback string
+                     payloadToInsert = JSON.stringify({ raw_payload_hex: payloadAsString, decode_error: decodeErr.message });
+                }
+            } else {
+                // Attempt to decode as UTF-8
+                try {
+                    payloadAsString = payload.toString('utf-8');
+                } catch (utf8Err) {
+                    processingError = utf8Err; // Store error
+                    logger.error({ 
+                        msg: "❌ Error converting payload to UTF-8", 
+                        topic: topic, 
+                        error_message: utf8Err.message 
+                    });
+                    // Assign a fallback value for insertion
+                    payloadAsString = payload.toString('hex'); // Use hex as fallback string
+                    payloadToInsert = JSON.stringify({ raw_payload_hex: payloadAsString, decode_error: utf8Err.message });
                 }
             }
-            broadcast(JSON.stringify({ type: 'mqtt-message', topic, payload: payloadAsString, timestamp: timestamp.toISOString() }));
-            const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-            stmt.run(timestamp, topic, payloadAsString, (err) => {
-                if (err) logger.error({ err }, "❌ DuckDB Insert Error:");
-                else broadcastDbStatus();
+    
+            // --- 2. JSON Validation (only if not already handled by Sparkplug and no previous error) ---
+            // And if payloadToInsert wasn't already set by error handling
+            if (!processingError && !(config.IS_SPARKPLUG_ENABLED && topic.startsWith('spBv1.0/'))) {
+                 try {
+                    JSON.parse(payloadAsString);
+                    // It's valid JSON
+                    payloadToInsert = payloadAsString;
+                } catch (parseError) {
+                    // It's NOT valid JSON
+                    logger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
+                    payloadToInsert = JSON.stringify({ raw_payload: payloadAsString });
+                }
+            }
+    
+            // --- Safety Net: Ensure payloadToInsert is never null for DB ---
+            if (payloadToInsert === null && !processingError) {
+                 // This case should ideally not happen with the logic above, but as a fallback
+                 logger.warn(`PayloadToInsert was unexpectedly null for topic ${topic}. Storing raw hex.`);
+                 payloadAsString = payload.toString('hex'); // Ensure payloadAsString has a value too
+                 payloadToInsert = JSON.stringify({ raw_payload_hex: payloadAsString, error: "Unexpected null payload state"});
+            } else if (payloadToInsert === null && processingError) {
+                 // Already handled by error blocks, payloadToInsert contains error info
+                 logger.info(`Insertion skipped due to processing error for topic ${topic}. Error info stored.`);
+            }
+    
+    
+            // --- 3. WebSocket Broadcast ---
+            // Broadcast payloadAsString (which contains either the successful decoding or the hex fallback)
+             if (payloadAsString !== null) {
+                const finalMessageObject = {
+                    type: 'mqtt-message',
+                    topic,
+                    payload: payloadAsString,
+                    timestamp: timestamp.toISOString()
+                };
+                broadcast(JSON.stringify(finalMessageObject));
+             } else {
+                 // If even fallback failed, log it, shouldn't happen
+                 logger.error(`payloadAsString remained null for topic ${topic}. Cannot broadcast.`);
+             }
+    
+            // --- 4. DuckDB Insertion ---
+             // payloadToInsert is now GUARANTEED to have a value (either valid JSON, or {raw...}, or {error...})
+             if (payloadToInsert !== null) {
+                const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
+                stmt.run(timestamp, topic, payloadToInsert, (err) => {
+                    if (err) {
+                        logger.error({
+                            msg: "❌ DuckDB Insert Error",
+                            error: err,
+                            topic: topic,
+                            // Log truncated payload to avoid overly long logs
+                            payloadAttempted: (payloadToInsert || '').substring(0, 200) + '...'
+                        });
+                    } else {
+                        broadcastDbStatus();
+                    }
+                     stmt.finalize(); // Finalize inside callback or use db.run which finalizes automatically
+                });
+               // stmt.finalize(); // Moved inside callback
+            } else {
+                 logger.error(`Insertion skipped for topic ${topic} because payloadToInsert remained null after all checks.`);
+            }
+    
+    
+        } catch (err) { // This catch traps unexpected errors IN this block's logic
+            logger.error({
+                msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`,
+                topic: topic,
+                error_message: err.message,
+                error_stack: err.stack,
+                rawPayloadStartHex: payload.slice(0, 30).toString('hex')
             });
-            stmt.finalize();
-        } catch (err) {
-            logger.error({ err, topic }, `❌ Error processing message for topic`);
         }
     });
     
     // Disconnect handler
     mainConnection.on('close', () => { 
         logger.info('✅ Disconnected from MQTT Broker.'); 
-        const result = stopSimulator(); 
+        const result = stopSimulator();
         broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
     });
 });
