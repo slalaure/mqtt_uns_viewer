@@ -28,24 +28,130 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { z } from "zod";
 import axios from "axios";
+// --- [NEW] Imports for model loading ---
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // --- Configuration ---
 const API_BASE_URL = "http://localhost:8080/api";
 const HTTP_PORT = process.env.MCP_PORT || 3000;
-const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' or 'http'
+const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http'
+
+// --- [NEW] Load UNS Model Manifest ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const MODEL_MANIFEST_PATH = path.join(__dirname, 'data/uns_model.json');
+let unsModel = [];
+
+try {
+  const modelData = fs.readFileSync(MODEL_MANIFEST_PATH, 'utf8');
+  unsModel = JSON.parse(modelData);
+  console.error("✅ Successfully loaded UNS Model Manifest from data/uns_model.json");
+} catch (err) {
+  console.error("❌ WARNING: Could not load 'data/uns_model.json'. Model-querying tools will not work.", err.message);
+}
 
 /**
- * Creates and configures the MCP server instance.
+ * Crée et configure l'instance du serveur MCP.
  */
 async function createMcpServer() {
   const server = new McpServer({
     name: "MQTT UNS Viewer Controller",
-    version: "1.3.0",
-    description: "A server to control and query the MQTT Unified Namespace web visualizer application.",
+    version: "1.4.0", // Incremented version
+    description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search capabilities.",
   });
 
-  // --- Tools (Actions & Queries) ---
-  // EVERYTHING is defined as a "Tool" to be visible to LM Studio.
+  // --- [NEW] Model-Querying Tools ---
+
+  server.registerTool(
+    "get_model_definition",
+    {
+      title: "Get UNS Model Definition",
+      description: "Searches the factory's Unified Namespace (UNS) Model Manifest for a specific concept or keyword (e.g., 'maintenance', 'workorder', 'temperature'). Returns the data schema, topic templates, and description for that concept.",
+      inputSchema: {
+        concept: z.string().describe("The concept or keyword to search for (e.g., 'maintenance', 'erp', 'vibration').")
+      },
+      outputSchema: { definitions: z.array(z.any()) }
+    },
+    async ({ concept }) => {
+      if (unsModel.length === 0) {
+        return { content: [{ type: "text", text: "Error: The UNS Model Manifest (uns_model.json) is not loaded." }], isError: true };
+      }
+      const lowerConcept = concept.toLowerCase();
+      const results = unsModel.filter(model => 
+        model.concept.toLowerCase().includes(lowerConcept) ||
+        model.keywords.some(k => k.toLowerCase().includes(lowerConcept))
+      );
+      
+      const output = { definitions: results };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  );
+
+  server.registerTool(
+    "search_by_model",
+    {
+      title: "Search by Model (Structured Search)",
+      description: "Performs a precise, structured search for MQTT messages. Use this AFTER `get_model_definition` to search for data matching a known model.",
+      inputSchema: { 
+        topic_template: z.string().describe("The topic template to search for. Use SQL LIKE syntax (e.g., '%/erp/workorder', 'stark_industries/%/torque')."),
+        json_filter_key: z.string().optional().describe("The specific JSON key to filter inside the payload (e.g., 'status', 'priority')."),
+        json_filter_value: z.string().optional().describe("The exact value the `json_filter_key` must match (e.g., 'RELEASED', 'HIGH').")
+      },
+      outputSchema: { results: z.array(z.any()) }
+    },
+    async ({ topic_template, json_filter_key, json_filter_value }) => {
+      try {
+        const body = {
+          topic_template,
+          json_filter_key,
+          json_filter_value
+        };
+        const response = await axios.post(`${API_BASE_URL}/context/search/model`, body);
+        const output = { results: response.data };
+        return {
+          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+          structuredContent: output
+        };
+      } catch (error) {
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+      }
+    }
+  );
+
+
+  // --- Existing Data-Retrieval Tools ---
+
+  server.registerTool(
+    "search_data",
+    {
+      title: "Search Topics and Payloads (Full-Text)",
+      description: "Performs a simple full-text search for a keyword across all topic names and payload contents. This is a 'dumb' search. For precise, model-aware searches (e.g., find priority='HIGH'), use `get_model_definition` and `search_by_model` instead.",
+      inputSchema: { 
+        keyword: z.string().describe("The keyword to search for (e.g., 'maintenance', 'temperature', 'error').")
+      },
+      outputSchema: { results: z.array(z.any()) }
+    },
+    async ({ keyword }) => {
+      try {
+        const encodedKeyword = encodeURIComponent(keyword);
+        const response = await axios.get(`${API_BASE_URL}/context/search?q=${encodedKeyword}`);
+        const output = { results: response.data };
+        return {
+          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+          structuredContent: output
+        };
+      } catch (error) {
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+      }
+    }
+  );
 
   server.registerTool(
     "start_simulator",
@@ -237,32 +343,7 @@ async function createMcpServer() {
     }
   );
 
-  // --- full text search ---
-  server.registerTool(
-    "search_data",
-    {
-      title: "Search Topics and Payloads",
-      description: "Searches for a keyword across all topic names and payload contents. Returns the latest message from matching topics.",
-      inputSchema: { 
-        keyword: z.string().describe("The keyword to search for (e.g., 'maintenance', 'temperature', 'error').")
-      },
-      outputSchema: { results: z.array(z.any()) }
-    },
-    async ({ keyword }) => {
-      try {
-        const encodedKeyword = encodeURIComponent(keyword);
-        const response = await axios.get(`${API_BASE_URL}/context/search?q=${encodedKeyword}`);
-        const output = { results: response.data };
-        return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
+
 
   return server;
 }

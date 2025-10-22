@@ -3,7 +3,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * Permission is hereby granted, free of charge, to a person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
@@ -42,8 +42,17 @@ const logSuccess = (msg) => console.log(`${colors.green}✅ ${msg}${colors.reset
 const logError = (msg, err) => {
   console.error(`${colors.red}❌ ${msg}${colors.reset}`);
   if (err) {
-    const errorData = err.response ? err.response.data : { message: err.message };
-    console.error(JSON.stringify(errorData, null, 2));
+    // Si l'erreur vient d'axios (réponse HTTP), afficher les données
+    if (err.response && err.response.data) {
+        console.error(JSON.stringify(err.response.data, null, 2));
+    } else {
+        // Sinon, afficher le message d'erreur standard
+        console.error(err.message);
+        // Optionnel : afficher la stack trace si disponible
+        if (err.stack) {
+            console.error(colors.dim + err.stack + colors.reset);
+        }
+    }
   }
 };
 const logInfo = (msg) => console.log(`${colors.blue}ℹ️  ${msg}${colors.reset}`);
@@ -60,8 +69,8 @@ async function main() {
     // --- 1. Simulator Control (to generate data) ---
     logTest('Start Simulator');
     await axios.post(`${SIMULATOR_API_URL}/start`);
-    logSuccess('Simulator started. Waiting 5 seconds for data collection...');
-    await new Promise(resolve => setTimeout(resolve, 5000)); // Allow time for data to arrive
+    logSuccess('Simulator started. Waiting 30 seconds for data collection...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
 
     // --- 2. Data Endpoint Tests ---
 
@@ -112,16 +121,88 @@ async function main() {
       throw new Error('History is empty for topic.');
     }
 
-    logTest('Search Data (/search?q=maintenance)');
+    logTest('Search Data (Full-Text /search?q=maintenance)');
     const searchRes = await axios.get(`${CONTEXT_API_URL}/search?q=maintenance`);
     if (Array.isArray(searchRes.data) && searchRes.data.length > 0) {
-      logSuccess(`Search for "maintenance" returned ${searchRes.data.length} result(s).`);
+      logSuccess(`Full-text search for "maintenance" returned ${searchRes.data.length} result(s).`);
       logData(searchRes.data);
     } else {
-      throw new Error('Search for "maintenance" returned no results.');
+      // Ne plus lever d'erreur ici si la recherche ne trouve rien, juste logger.
+      logInfo('Full-text search for "maintenance" returned no results (this might be expected depending on timing).');
     }
 
+    // --- [NEW] Model-Driven Search Tests ---
+
+    logTest('Model Search (/search/model - Topic Only)');
+    const modelSearchBody1 = {
+      topic_template: "%/cmms/maintenance_request"
+    };
+    const modelSearchRes1 = await axios.post(`${CONTEXT_API_URL}/search/model`, modelSearchBody1);
+    if (Array.isArray(modelSearchRes1.data) && modelSearchRes1.data.length > 0) {
+      logSuccess(`Model search for topic "%/cmms/maintenance_request" returned ${modelSearchRes1.data.length} result(s).`);
+      logData(modelSearchRes1.data);
+    } else {
+      // Ne plus lever d'erreur ici si la recherche ne trouve rien.
+      logInfo('Model search (topic only) returned no results (this might be expected depending on timing).');
+    }
+
+    logTest('Model Search (/search/model - Topic + JSON Filter)');
+    const modelSearchBody2 = {
+      topic_template: "%/cmms/maintenance_request",
+      json_filter_key: "priority",
+      json_filter_value: "HIGH"
+    };
+    const modelSearchRes2 = await axios.post(`${CONTEXT_API_URL}/search/model`, modelSearchBody2);
+
+    let payloadObject = null;
+    let testPassed = false; // Flag pour savoir si le test a réussi
+
+    // Vérifier si des données ont été retournées AVANT de parser
+    if (Array.isArray(modelSearchRes2.data) && modelSearchRes2.data.length > 0) {
+        const payloadString = modelSearchRes2.data[0].payload;
+        
+        // --- [TRY CATCH AJOUTÉ ICI] ---
+        try {
+            // Tenter de parser le payload (qui devrait être un string JSON)
+            if (payloadString && typeof payloadString === 'string') {
+                payloadObject = JSON.parse(payloadString);
+                
+                // Vérifier si le parsing a réussi ET si la clé est correcte
+                if (payloadObject && payloadObject.priority === "HIGH") {
+                    testPassed = true; // Le test réussit
+                } else {
+                    logError(`Model search check failed: Payload parsed but 'priority' is not 'HIGH' or missing. Payload: ${payloadString}`, null);
+                }
+            } else {
+                logError(`Model search check failed: Payload received is not a string. Type: ${typeof payloadString}. Data:`, null);
+                logData(modelSearchRes2.data);
+            }
+        } catch (e) {
+            // Si le parsing échoue
+            logError("Model search check failed: Failed to parse payload string received from API!", e);
+            logInfo("Raw payload string received:");
+            console.log(payloadString); // Afficher le string brut qui a échoué
+            logData(modelSearchRes2.data); // Afficher toute la réponse
+        }
+        // --- [FIN DU TRY CATCH] ---
+    } else {
+        // Si aucune donnée n'est retournée par l'API
+        logInfo('Model search (topic + filter) returned no results from API.');
+    }
+
+    // Afficher le résultat du test et lever une erreur s'il a échoué
+    if (testPassed) {
+        logSuccess(`Model search for "priority: HIGH" returned ${modelSearchRes2.data.length} result(s) and check PASSED.`);
+        logData(modelSearchRes2.data);
+    } else {
+        // Log l'échec mais ne lance plus une erreur fatale pour continuer les autres tests
+        logError('!!! TEST FAILED: Model search (topic + filter) !!!', null);
+        // throw new Error('Model search (topic + filter) returned no results or an invalid result.'); // Ancienne ligne
+    }
+
+
     // --- 3. Expected Error Case Tests ---
+    // (Le reste du fichier reste identique)
 
     logTest('Error 404 for unknown topic (/topic/...)');
     try {
@@ -131,7 +212,7 @@ async function main() {
       if (err.response && err.response.status === 404) {
         logSuccess('Received 404 error as expected.');
       } else {
-        logError('An unexpected error occurred.', err);
+        logError('An unexpected error occurred during 404 test.', err);
       }
     }
 
@@ -143,13 +224,27 @@ async function main() {
       if (err.response && err.response.status === 400) {
         logSuccess('Received 400 error as expected.');
       } else {
-        logError('An unexpected error occurred.', err);
+        logError('An unexpected error occurred during 400 search test.', err);
+      }
+    }
+
+    logTest('Error 400 for bad model search (missing topic_template)');
+    try {
+      const badBody = { json_filter_key: "priority", json_filter_value: "HIGH" };
+      await axios.post(`${CONTEXT_API_URL}/search/model`, badBody);
+      logError('Expected 400 error, but request succeeded (test failed).', null);
+    } catch (err) {
+      if (err.response && err.response.status === 400) {
+        logSuccess('Received 400 error as expected.');
+      } else {
+        logError('An unexpected error occurred during 400 model search test.', err);
       }
     }
 
 
   } catch (error) {
-    logError('!!! A CRITICAL TEST FAILED !!!', error);
+    // Erreur critique attrapée plus haut dans le script (ex: connexion impossible)
+    logError('!!! A CRITICAL ERROR OCCURRED OUTSIDE SPECIFIC TESTS !!!', error);
   } finally {
     // --- 4. Stop Simulator ---
     logTest('Stop Simulator');

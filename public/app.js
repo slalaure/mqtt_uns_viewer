@@ -120,11 +120,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Application Initialization ---
     async function initializeApp() {
         try {
-            const response = await fetch('/api/config');
+            const response = await fetch('api/config');
             const config = await response.json();
             if (config.isSimulatorEnabled && simulatorControls) {
                 simulatorControls.style.display = 'flex';
-                const statusRes = await fetch('/api/simulator/status');
+                // Removed leading slash
+                const statusRes = await fetch('api/simulator/status');
                 const statusData = await statusRes.json();
                 updateSimulatorStatusUI(statusData.status);
             }
@@ -137,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Dynamic SVG Plan Loading ---
     async function loadSvgPlan() {
         try {
-            const response = await fetch('/view.svg'); 
+            const response = await fetch('view.svg'); 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const svgText = await response.text();
@@ -211,11 +212,17 @@ document.addEventListener('DOMContentLoaded', () => {
             simStatusIndicator.classList.add('stopped');
         }
     }
-    btnStartSim?.addEventListener('click', () => fetch('/api/simulator/start', { method: 'POST' }));
-    btnStopSim?.addEventListener('click', () => fetch('/api/simulator/stop', { method: 'POST' }));
+    // Removed leading slash
+    btnStartSim?.addEventListener('click', () => fetch('api/simulator/start', { method: 'POST' }));
+    btnStopSim?.addEventListener('click', () => fetch('api/simulator/stop', { method: 'POST' }));
 
     // --- WebSocket Connection ---
-    const ws = new WebSocket(`ws://${window.location.host}`);
+    // Build the WebSocket URL dynamically to respect the BASE_PATH.
+    const basePath = document.querySelector('base')?.getAttribute('href') || '/';
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}${basePath}`;
+
+    const ws = new WebSocket(wsUrl);
     ws.onopen = () => {
         console.log("Connected to WebSocket server.");
         initializeApp();

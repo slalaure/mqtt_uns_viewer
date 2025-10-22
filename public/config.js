@@ -30,7 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load current configuration from the server
     async function loadConfig() {
         try {
-            const response = await fetch('/api/env');
+            // Removed leading slash to make the URL relative
+            const response = await fetch('api/env');
             if (!response.ok) {
                 // Handle auth error gracefully
                 if (response.status === 401) {
@@ -80,7 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const configData = Object.fromEntries(formData.entries());
 
         try {
-            const response = await fetch('/api/env', {
+            //  Removed leading slash
+            const response = await fetch('api/env', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -101,8 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (restart) {
                 statusMessage.textContent = 'Restarting server...';
                 statusMessage.className = 'status-message success';
-                // Call the restart API endpoint
-                fetch('/api/env/restart', { method: 'POST' });
+                // Removed leading slash
+                fetch('api/env/restart', { method: 'POST' });
             } else {
                 statusMessage.textContent = 'Configuration saved! Restart the server later to apply changes.';
                 statusMessage.className = 'status-message success';

@@ -1,0 +1,168 @@
+[
+  {
+    "concept": "Work Order",
+    "keywords": ["workorder", "wo", "erp", "job", "production order"],
+    "topic_template": "%/erp/workorder",
+    "description": "Represents a work order from the ERP system. It defines what item to produce.",
+    "payload_schema": {
+      "id": "string (e.g., WO-PD12345)",
+      "facility": "string",
+      "itemNumber": "string",
+      "status": "string ('RELEASED' | 'IN_PROGRESS' | 'COMPLETED')",
+      "itemName": "string (optional)"
+    }
+  },
+  {
+    "concept": "Machine Operation",
+    "keywords": ["operation", "mes", "step", "status"],
+    "topic_template": "%/mes/operation",
+    "description": "A message from the MES system indicating the status of a production step.",
+    "payload_schema": {
+      "workOrderId": "string",
+      "step": "number",
+      "stepName": "string",
+      "operator": "string",
+      "status": "string ('IN_PROGRESS' | 'COMPLETED')"
+    }
+  },
+  {
+    "concept": "Stock Movement (WMS)",
+    "keywords": ["wms", "stock", "warehouse", "inventory", "pick", "receipt", "putaway"],
+    "topic_template": "%/wms/stock_movement",
+    "description": "Represents a physical stock movement in the warehouse, managed by the WMS.",
+    "payload_schema": {
+      "type": "string ('PICK' | 'RECEIPT' | 'PUTAWAY' | 'ADJUSTMENT')",
+      "itemNumber": "string",
+      "quantity": "number",
+      "unit": "string (optional)",
+      "location": "string (e.g., RACK-07B)",
+      "workOrderId": "string (optional, for picks)",
+      "manifest_id": "string (optional, for receipts)"
+    }
+  },
+  {
+    "concept": "Maintenance Request (CMMS)",
+    "keywords": ["maintenance", "cmms", "repair", "downtime", "anomaly", "vibration"],
+    "topic_template": "%/cmms/maintenance_request",
+    "description": "A request for maintenance, often triggered by an anomaly or high vibration.",
+    "payload_schema": {
+      "equipmentId": "string",
+      "equipmentPath": "string",
+      "description": "string",
+      "priority": "string ('LOW' | 'MEDIUM' | 'HIGH')"
+    }
+  },
+  {
+    "concept": "Quality Test Result (QMS)",
+    "keywords": ["qms", "quality", "test", "pass", "fail", "rework"],
+    "topic_template": "%/quality_control_station/qms/%",
+    "description": "The result of a quality control test, published by the QMS.",
+    "payload_schema": {
+      "workOrderId": "string",
+      "result": "string ('PASS' | 'FAIL')",
+      "value": "number (the measured value)",
+      "unit": "string"
+    }
+  },
+  {
+    "concept": "Facility Power (BMS)",
+    "keywords": ["bms", "power", "energy", "consumption", "building"],
+    "topic_template": "%/bms/main_power_feed",
+    "description": "High-level power consumption for a facility or major area, from the Building Management System (BMS).",
+    "payload_schema": {
+      "value": "number",
+      "unit": "string (e.g., 'MW')",
+      "source": "string (optional)"
+    }
+  },
+  {
+    "concept": "Access Control Event (Security)",
+    "keywords": ["security", "access", "granted", "denied", "vault", "door"],
+    "topic_template": "%/security/access_control/%",
+    "description": "An event from the building security system for access control.",
+    "payload_schema": {
+      "user": "string",
+      "access": "string ('GRANTED' | 'DENIED')",
+      "reason": "string (optional, e.g., 'Unauthorized')"
+    }
+  },
+  {
+    "concept": "Logistics Alert",
+    "keywords": ["logistics", "shipping", "receiving", "alert", "inbound", "manifest"],
+    "topic_template": "%/logistics/receiving_bay_01/alert",
+    "description": "An alert from the logistics system about an inbound shipment.",
+    "payload_schema": {
+      "type": "string ('INBOUND' | 'OUTBOUND')",
+      "carrier": "string",
+      "manifest_id": "string",
+      "status": "string ('AWAITING_INSPECTION' | ...)"
+    }
+  },
+  {
+    "concept": "Fire Alarm (FMS)",
+    "keywords": ["fire", "fms", "alarm", "smoke", "detector"],
+    "topic_template": "%/fms/fire_alarm",
+    "description": "An active fire alarm from the Fire Management System (FMS).",
+    "payload_schema": {
+      "zone": "string (e.g., 'Assembly Line 01')",
+      "detector_id": "string",
+      "status": "string ('ALARM', 'CLEAR')"
+    }
+  },
+  {
+    "concept": "Industrial Gas Level",
+    "keywords": ["gas", "level", "storage", "nitrogen", "argon", "oxygen"],
+    "topic_template": "%/gas_storage/[gas_name]/level",
+    "description": "Real-time level of an industrial gas storage tank (JSON format).",
+    "payload_schema": {
+      "value": "number (percentage)",
+      "unit": "%",
+      "pressure": "number",
+      "pressure_unit": "string (e.g., 'bar')"
+    }
+  },
+  {
+    "concept": "Atmosphere Alert (Safety)",
+    "keywords": ["safety", "atmosphere", "anoxia", "atex", "explosive", "oxygen", "o2"],
+    "topic_template": "%/safety/atmosphere_alert",
+    "description": "A critical safety alert regarding the ambient atmosphere.",
+    "payload_schema": {
+      "zone": "string",
+      "type": "string ('ANOXIA_RISK' | 'ATEX_RISK')",
+      "details": "string (e.g., 'O2 level at 18.5%' or 'N2 leak detected')",
+      "level": "string ('WARNING' | 'CRITICAL')"
+    }
+  },
+  {
+    "concept": "Power Meter Telemetry (UNS)",
+    "keywords": ["power", "meter", "kwh", "voltage", "current", "power_factor"],
+    "topic_template": "%/power_meter_01/telemetry",
+    "description": "Detailed electrical telemetry from a sub-meter (JSON format), often twinned from a Sparkplug device.",
+    "payload_schema": {
+      "voltage": "number",
+      "current": "number",
+      "power": "number",
+      "power_unit": "string (e.g., 'kW')",
+      "power_factor": "number (0-1)"
+    }
+  },
+  {
+    "concept": "Machine Telemetry (UNS)",
+    "keywords": ["telemetry", "sensor", "data", "temperature", "torque", "vibration", "humidity", "load", "output", "speed", "json"],
+    "topic_template": "%/[sensor_name]",
+    "description": "Represents a single, structured sensor reading published to the UNS (JSON format). The payload must contain a 'value' and 'unit', but can be extended with other keys (e.g., 'stability').",
+    "payload_schema": {
+      "value": "number",
+      "unit": "string",
+      "emitted_at": "string (ISO 8601 Timestamp)",
+      "[other_keys]": "any (e.g., 'stability': 0.998)"
+    }
+  },
+  {
+    "concept": "Sparkplug B Telemetry (OT)",
+    "keywords": ["sparkplug", "spbv1.0", "protobuf", "nbirth", "ddata", "ncmd", "ot"],
+    "topic_template": "spBv1.0/[group_id]/[message_type]/[edge_node_id]",
+    "description": "Raw equipment telemetry published using the Sparkplug B specification (OT layer). This is a binary Protobuf payload, not JSON. 'NBIRTH' defines the device, 'DDATA' contains data changes.",
+    "payload_schema": "binary (Google Protobuf)"
+  }
+]
