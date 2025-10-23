@@ -1,4 +1,3 @@
-console.log("!!!!!!!!!! CHARGEMENT DE LA VERSION 17 (CTE + ->>) DE mcpApi.js !!!!!!!!!!");
 /**
  * @license MIT
  * @author Sebastien Lalaurette
@@ -29,6 +28,39 @@ const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/'/g, "''");
 }
+
+// Helper pour convertir le pattern MQTT en SQL LIKE
+const mqttToSqlLike = (topicPattern) => {
+    // 1. Échapper les caractères SQL LIKE
+    let escaped = escapeSQL(topicPattern)
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_');
+    
+    // 2. Convertir les wildcards MQTT en wildcards SQL LIKE
+    // Remplace '+' (un seul niveau) par '%' (tout sauf '/')
+    // C'est une simplification, le vrai '%' de SQL matcherait '/'.
+    // Une meilleure approche utilise REGEXP mais LIKE est plus simple.
+    // Pour DuckDB, LIKE est suffisant.
+    
+    // Remplace '#' (multi-niveau) par '%'
+    // 'a/#' -> 'a/%'
+    escaped = escaped.replace(/#/g, '%');
+    
+    // Remplace '+' (un-niveau) par '%'
+    // 'a/+/c' -> 'a/%/c'
+    // C'est une approximation. Un vrai '+' ne matche pas '/'.
+    // DuckDB supporte regexp_matches(topic, pattern) mais c'est plus lent.
+    // Pour cette app, LIKE est suffisant.
+    escaped = escaped.replace(/\+/g, '%');
+
+    // S'il finit par '/%', on enlève le '/' pour matcher 'a/#' -> 'a'
+    if (escaped.endsWith('/%')) {
+        escaped = escaped.substring(0, escaped.length - 2) + '%';
+    }
+    
+    return escaped;
+}
+
 
 module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
     const router = express.Router();
@@ -206,7 +238,43 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
         });
     });
 
-    // --- [VERSION 17 - Correction JSON.stringify] ---
+    // --- Endpoint to purger a topic from DB ---
+    router.post('/prune-topic', (req, res) => {
+        const { topicPattern } = req.body;
+        if (!topicPattern) {
+            return res.status(400).json({ error: "Missing 'topicPattern'." });
+        }
+
+        const sqlPattern = mqttToSqlLike(topicPattern);
+        console.log(`[INFO] Pruning topics from DB matching pattern: ${topicPattern} (SQL: ${sqlPattern})`);
+
+        const query = `DELETE FROM mqtt_events WHERE topic LIKE '${sqlPattern}';`;
+        
+        // how many lines affected
+        db.run(query, function(err) { // Ne pas utiliser de fonction fléchée ici pour garder 'this'
+            if (err) {
+                console.error("❌ Erreur de la requête de purge (prune-topic):", err);
+                return res.status(500).json({ error: "Database prune query failed." });
+            }
+            
+            const changes = this.changes;
+            console.log(`[INFO] Prune successful. Deleted ${changes} entries.`);
+
+            // launch  checkpoint/vacuum in background
+            db.exec("CHECKPOINT; VACUUM;", (vacErr) => {
+                if (vacErr) {
+                    console.error("❌ Erreur durant le CHECKPOINT/VACUUM post-purge:", vacErr);
+                } else {
+                    console.log("[INFO] CHECKPOINT/VACUUM post-purge terminé.");
+                }
+            });
+
+            res.json({ success: true, count: changes });
+        });
+    });
+
+
+   
     router.get('/topic/:topic(.*)', (req, res) => {
         const topic = req.params.topic;
         if (!topic) {
@@ -220,7 +288,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
             if (!rows || rows.length === 0) {
                 return res.status(404).json({ error: `No data found for topic: ${topic}` });
             }
-             // [V17 Fix] Le payload est un OBJET, mais le client s'attend à un STRING
+
             const result = rows[0];
              if (typeof result.payload === 'object' && result.payload !== null) {
                  try {
@@ -248,7 +316,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
                 console.error("History query failed:", err);
                 return res.status(500).json({ error: "Database query failed." });
             }
-            // [V17 Fix] Le payload est un OBJET, mais le client s'attend à un STRING
+
             const results = rows.map(row => {
                  if (typeof row.payload === 'object' && row.payload !== null) {
                      try {

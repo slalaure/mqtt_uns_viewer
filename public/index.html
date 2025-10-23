@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>MQTT Real-Time Web Viewer</title>
-        <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-        <link rel="stylesheet" href="style.css">
-    </head>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Real-Time Web Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="stylesheet" href="style.css">
+</head>
+
 <body>
     <header>
         <div class="header-content">
@@ -15,7 +17,7 @@
         </div>
         <div id="current-datetime" class="datetime-container"></div>
         <a href="/config.html" class="nav-button icon-button" title="Configuration">&#9881;</a>
-        
+
         <div class="theme-switch-wrapper">
             <label class="theme-switch" for="dark-mode-toggle">
                 <input type="checkbox" id="dark-mode-toggle" />
@@ -35,6 +37,7 @@
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
         <button id="btn-map-view" class="tab-button">SVG View</button>
         <button id="btn-history-view" class="tab-button">History</button>
+        <button id="btn-mapper-view" class="tab-button">Mapper</button>
     </nav>
 
     <div class="view-container">
@@ -47,11 +50,12 @@
                 </div>
                 <div id="mqtt-tree" class="tree-container"></div>
             </div>
-            
+
             <div class="resizer" id="drag-handle-vertical"></div>
 
             <div id="payload-display" class="payload-container">
-                <div id="payload-main-area"> <div class="payload-header">
+                <div id="payload-main-area">
+                    <div class="payload-header">
                         <h2>Payload</h2>
                         <div class="payload-controls">
                             <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
@@ -96,7 +100,7 @@
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
                 <div>DB Size: <span id="history-db-size">--</span> / <span id="history-db-limit">--</span> MB</div>
             </div>
-            
+
             <div class="history-controls">
                 <input type="text" id="history-search-input" placeholder="Filter by keyword in topic or payload...">
                 <div id="time-range-slider-container" class="time-slider-container">
@@ -112,17 +116,121 @@
             </div>
 
             <div id="historical-log-container" class="historical-log-container">
-                </div>
+            </div>
             <div id="pruning-indicator" class="pruning-indicator">
                 <p>Cleaning database, please wait...</p>
             </div>
         </main>
-    </div>
 
+        <main id="mapper-view" class="view">
+            <div class="mapper-tree-wrapper">
+                <div class="mapper-controls">
+                    <div class="form-group">
+                        <label for="mapper-version-select">Active Version:</label>
+                        <select id="mapper-version-select"></select>
+                    </div>
+                    <button id="mapper-save-button" class="mapper-button">Save</button>
+                    <button id="mapper-save-as-new-button" class="mapper-button">Save as New...</button>
+                    <span id="mapper-save-status"></span>
+                </div>
+                <div id="mapper-tree" class="tree-container">
+                    </div>
+            </div>
+
+            <div class="resizer" id="drag-handle-vertical-mapper"></div>
+
+            <div id="mapper-payload-container" class="payload-container">
+                <div id="mapper-payload-area" class="payload-main-area">
+                    <div class="payload-header">
+                        <h2>Payload (Source)</h2>
+                    </div>
+                    <div id="mapper-payload-topic" class="payload-topic-display">Select a topic from the Mapper tree.</div>
+                    <pre id="mapper-payload-content"></pre>
+                </div>
+
+                <div class="resizer-horizontal" id="drag-handle-horizontal-mapper"></div>
+
+                <div id="mapper-transform-area" class="topic-history-container">
+                    <div id="mapper-transform-placeholder" class="history-placeholder">
+                        <p>Select a topic in the Mapper tree to create or edit its transformation rules.</p>
+                    </div>
+
+                    <form id="mapper-transform-form" style="display: none;">
+                        <div class="mapper-transform-header">
+                            <div class="form-group">
+                                <label for="mapper-source-topic">Source Topic (Pattern):</label>
+                                <input type="text" id="mapper-source-topic" readonly>
+                            </div>
+                            <button type="button" id="mapper-add-target-button">Add Target</button>
+                        </div>
+
+                        <div id="mapper-targets-list">
+                            </div>
+
+                        <div id="mapper-targets-placeholder" class="history-placeholder" style="display: none;">
+                            <p>No targets defined for this rule. Click "Add Target" to create one.</p>
+                        </div>
+
+                        <template id="mapper-target-template">
+                            <div class="mapper-target-editor">
+                                <div class="target-editor-header">
+                                    <h4 class="target-editor-title">Target</h4>
+                                    <div class="target-editor-controls">
+                                        <input type="checkbox" class="target-enabled-toggle">
+                                        <label class="checkbox-label">Enabled</label>
+                                        <button type="button" class="target-delete-button danger-button">Delete</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Target Topic</label>
+                                    <input type="text" class="target-output-topic" placeholder="e.g., my_uns/facility/{{id}}">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="target-code-label">Transform (JavaScript)</label>
+                                    <textarea class="target-code-editor" rows="10" spellcheck="false"></textarea>
+                                </div>
+                                <div class="target-metrics">
+                                    <h5 class="target-metrics-title">Metrics</h5>
+                                    <div class="target-metrics-counter">Count: <span class="metric-count">0</span></div>
+                                    <div class="target-metrics-logs">
+                                        <h6 class="target-logs-title">Recent Executions:</h6>
+                                        <div class="target-logs-list">
+                                            <p class="history-placeholder">No executions yet.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div> <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
+        <div class="modal-content">
+            <h3 id="delete-modal-title">Confirmer la suppression</h3>
+            <p id="delete-modal-text">Que souhaitez-vous faire avec la règle pour le topic cible :</p>
+            <p id="delete-modal-topic" class="modal-topic-display"></p>
+
+            <div class="form-group">
+                <label for="delete-modal-pattern">Topic à purger (utilise <code>+</code> et <code>#</code>)</label>
+                <input type="text" id="delete-modal-pattern" class="modal-input">
+            </div>
+
+            <div class="modal-actions">
+                <button id="modal-btn-cancel" class="modal-button">Annuler</button>
+                <button id="modal-btn-delete-rule" class="modal-button button-primary">Supprimer la règle seulement</button>
+                <button id="modal-btn-delete-prune" class="modal-button button-danger">Supprimer ET Purger l'historique</button>
+            </div>
+        </div>
+    </div>
     <footer class="app-footer">
-        <p>Connect with us on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank" rel="noopener noreferrer">github</a></p>
+        <p>Connect with us on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
+                rel="noopener noreferrer">github</a></p>
     </footer>
 
     <script src="app.js"></script>
 </body>
+
 </html>

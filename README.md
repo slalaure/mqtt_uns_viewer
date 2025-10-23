@@ -14,10 +14,21 @@ A lightweight, real-time web application to visualize MQTT topic trees and dynam
     -   **OT Layer (Sparkplug B):** Publishes `NBIRTH` and `DDATA` messages (Protobuf) for a fleet of industrial assets (robots, CNCs, power meters, gas tanks).
     -   **IT/UNS Layer (JSON):** Publishes structured JSON events from simulated IT systems (ERP, MES, WMS, CMMS, FMS, Safety) that are temporally correlated with the OT data.
 -   **Realistic Scenarios:** The simulator models complex, event-driven scenarios like machine faults (triggering CMMS alerts and abnormal sensor data), fire alarms (triggering FMS events and machine stops), and gas leaks (triggering safety alerts and rapid pressure drops).
--   **Real-Time Topic Tree:** Automatically builds a hierarchical tree of all received MQTT topics. Includes live filtering and expand/collapse controls.
--   **Dynamic SVG View:** Updates a custom 2D plan in real-time. Includes a "History Mode" to replay the visual state of the system at any point in time.
+-   **Real-Time Topic Tree (Tree View):** Automatically builds and updates a hierarchical tree of all received MQTT topics with live animations. Includes live filtering and expand/collapse controls. Displays payload and recent history upon selection.
+-   **Dynamic SVG View:** Updates a custom 2D plan in real-time based on message payloads. Includes a "History Mode" to replay the visual state of the system using a timeline slider.
+-   **Advanced Visual Mapper (Mapper Tab):**
+    * Dedicated tab featuring a static topic tree of all received topics for configuration.
+    * Select specific topics/objects (file nodes) to define real-time transformation rules.
+    * Define multiple output targets per source topic.
+    * Use **JavaScript functions** (`(msg) => { ... return msg; }`) to modify the message payload before republication.
+    * Specify target topics using **Mustache templating** (e.g., `my/uns/{{payload.deviceId}}`) based on the *transformed* payload.
+    * Includes **Rule Versioning** allowing users to "Save" changes or "Save as New Version" and switch between configurations.
+    * Tracks **Execution Metrics** (count) and **Logs** for each transformation rule target, displayed in the UI.
+    * Provides **Visual Feedback** in the mapper tree: highlights mapped source topics (purple) and locally generated target topics (green).
+    * Offers **Deletion with Purge**: Option to remove associated historical data from the database when deleting a mapping rule target.
+    * Handles **Sparkplug B** correctly: Re-encodes to Protobuf for SPB->SPB mappings, stringifies to JSON (with BigInt handling) for SPB->UNS mappings, and prevents invalid JSON->SPB mappings.
 -   **AI Agent Integration:** A dedicated MCP Server exposes application controls and data as structured tools for Large Language Model (LLM) agents.
--   **Web-Based Configuration:** A built-in configuration page allows for easy updates to all server settings.
+-   **Web-Based Configuration:** A built-in configuration page allows for easy updates to all server settings (`.env` file).
 -   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database that persists across restarts.
 -   **Advanced History Filtering:** The history view features keyword search (with highlighting) and a dual-handle time-range slider.
 -   **Secure Access:** Optional HTTP Basic Authentication to protect the entire application.
