@@ -111,58 +111,58 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
     });
 
 
-    // --- [VERSION 17 - CTE + ->>] ---
+    
     router.get('/search', (req, res) => {
         const query = req.query.q;
         if (!query || query.length < 3) {
             return res.status(400).json({ error: "Search query must be at least 3 characters long." });
         }
-        
+
         const safeSearchTerm = `%${escapeSQL(query)}%`;
         const limit = 5000;
 
-        // Requête complexe pour gérer les types mixtes
+        // Simplified Query + Explicit CAST to VARCHAR for all ->> operations
         const sqlQuery = `
-            WITH RelevantPayloads AS (
-                 SELECT 
-                    topic, 
-                    payload, 
-                    timestamp
-                FROM mqtt_events
-                WHERE
-                    topic ILIKE '${safeSearchTerm}' OR
-                    -- Pré-filtre simple sur le cast en string (rapide)
-                    CAST(payload AS VARCHAR) ILIKE '${safeSearchTerm}'
-            )
             SELECT topic, payload, timestamp
-            FROM RelevantPayloads
+            FROM mqtt_events
             WHERE
-                topic ILIKE '${safeSearchTerm}' OR
-                (json_type(payload) = 'OBJECT' AND payload->>'description' ILIKE '${safeSearchTerm}') OR
-                (json_type(payload) = 'OBJECT' AND payload->>'raw_payload' ILIKE '${safeSearchTerm}')
+                topic ILIKE '${safeSearchTerm}' -- Search in topic name
+                OR (json_valid(payload) AND ( -- Only check JSON fields if payload is valid JSON
+                    -- Explicitly CAST results of ->> to VARCHAR before ILIKE
+                    CAST(payload->>'description' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                    OR CAST(payload->>'raw_payload' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                    OR CAST(payload->>'value' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                    OR CAST(payload->>'status' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                    OR CAST(payload->>'name' AS VARCHAR) ILIKE '${safeSearchTerm}' -- Error occurred here previously
+                   ))
             ORDER BY timestamp DESC
             LIMIT ${limit};
         `;
 
-        // Appel de la DB avec 2 arguments (sql, callback)
+        // Log the query for debugging
+        console.log(`[DEBUG] Full-Text Search Query: ${sqlQuery.replace(/\s+/g, ' ')}`);
+
+        // Execute the query
         db.all(sqlQuery, (err, rows) => {
             if (err) {
-                console.error("❌ Erreur de la requête de recherche DuckDB (Version 17):", err);
+                console.error("❌ Error search request DuckDB (Full-Text):", err);
+                console.error("   Failed Query:", sqlQuery); // Log the failed query
                 return res.status(500).json({ error: "Database search query failed." });
             }
-            // [V17 Fix] Le payload est un OBJET, mais le client s'attend à un STRING
+
+            // Convert payload objects back to strings for the client
             const results = rows.map(row => {
                 if (typeof row.payload === 'object' && row.payload !== null) {
                     try {
+                        // Using standard stringify here as longReplacer isn't available in this scope
                         row.payload = JSON.stringify(row.payload);
                     } catch (e) {
                          console.error("Error stringifying payload in /search:", e, row.payload);
                          row.payload = JSON.stringify({"error": "Failed to stringify payload"});
                     }
                 } else if (row.payload === null) {
-                    row.payload = 'null'; // Ou '{}' selon ce que le client préfère
+                    row.payload = 'null';
                 }
-                // Si ce n'est ni objet ni null, on suppose que c'est déjà un string (ou autre type primitif JSON)
                 return row;
             });
             res.json(results);
