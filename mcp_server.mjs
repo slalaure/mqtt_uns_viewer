@@ -33,10 +33,27 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// --- Configuration ---
-const API_BASE_URL = "http://localhost:8080/api";
+// --- [MODIFIED] Configuration ---
+// Read main server port and base path from environment variables
+// These are inherited from the parent process (server.js)
+const MAIN_SERVER_PORT = process.env.PORT || 8080;
+let BASE_PATH = process.env.BASE_PATH || '/';
+
+// Normalize BASE_PATH (ensure leading slash, remove trailing slash)
+if (!BASE_PATH.startsWith('/')) {
+  BASE_PATH = '/' + BASE_PATH;
+}
+if (BASE_PATH.endsWith('/') && BASE_PATH.length > 1) {
+  BASE_PATH = BASE_PATH.slice(0, -1);
+}
+
+// Construct the API URL dynamically
+const API_BASE_URL = `http://localhost:${MAIN_SERVER_PORT}${BASE_PATH}/api`;
+
 const HTTP_PORT = process.env.MCP_PORT || 3000;
 const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http'
+// --- [END MODIFIED] ---
+
 
 // --- Load UNS Model Manifest ---
 const __filename = fileURLToPath(import.meta.url);
@@ -354,7 +371,9 @@ async function createMcpServer() {
 async function main() {
   // 1. Ensure the main web server (server.js) is running
   try {
+    // [MODIFIED] Test the new dynamic URL
     await axios.get(`${API_BASE_URL}/config`); // Quick connection test
+    console.log(`✅ MCP Server connected to main API at: ${API_BASE_URL}/config`);
   } catch (error) {
     console.error("-------------------------------------------------------------------");
     console.error("❌ FATAL ERROR: Could not contact the main server API.");

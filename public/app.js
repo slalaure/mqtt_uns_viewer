@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const PRUNE_IGNORE_DURATION_MS = 10000; // Ignore re-appearing messages for 10 seconds
     let subscribedTopicPatterns = ['#']; // [NEW] Default fallback
     
+    // --- [NEW] Global variable for the application's base path ---
+    let appBasePath = '/';
+    
     // --- Dark Theme Logic ---
     const darkModeToggle = document.getElementById('dark-mode-toggle');
 
@@ -180,8 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Application Initialization ---
     async function initializeApp() {
         try {
+            // [MODIFIED] All API calls are relative, so they will correctly use the base path
             const response = await fetch('api/config');
             const appConfig = await response.json(); // Renamed to avoid conflict
+
+            // --- [NEW] Store the base path from the server ---
+            appBasePath = appConfig.basePath || '/';
+            // --- [END NEW] ---
 
             // --- [NEW] Hide/Show tabs based on config ---
             // Remove default active state from HTML
@@ -278,7 +286,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Dynamic SVG Plan Loading ---
     async function loadSvgPlan() {
         try {
-            const response = await fetch('view.svg'); // This path is correctly handled by server.js
+            // [MODIFIED] This fetch is relative ('view.svg') and will correctly resolve 
+            // to 'https://.../base-path/view.svg'
+            const response = await fetch('view.svg'); 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const svgText = await response.text();
             if (svgContent) {
@@ -358,125 +368,409 @@ document.addEventListener('DOMContentLoaded', () => {
     btnStopSim?.addEventListener('click', () => fetch('api/simulator/stop', { method: 'POST' }));
 
     // --- WebSocket Connection ---
-    const basePath = document.querySelector('base')?.getAttribute('href') || '/';
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}${basePath}`;
+    // [MODIFIED] This section is updated to use the `appBasePath` variable
+    // which is fetched from the server during initializeApp().
+    
+    // This logic is now delayed until *after* initializeApp() runs and sets appBasePath.
+    // We create the WebSocket *inside* the ws.onopen handler of the *first* connection attempt.
+    // Wait, no, initializeApp() is called from ws.onopen. This is circular.
+    
+    // Let's restructure.
+    // 1. Call initializeApp() first. It's async.
+    // 2. AFTER initializeApp() completes, *then* connect to WebSocket.
 
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => {
-        console.log("Connected to WebSocket server.");
-        initializeApp();
-    };
-    ws.onmessage = async (event) => {
-        const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
-        try {
-            const message = JSON.parse(dataText);
+    let ws; // Declare ws variable in the outer scope
 
-            switch(message.type) {
-                case 'mqtt-message': {
-                    // ---  Check if topic was recently pruned ---
-                    let ignoreForTreeUpdate = false; // Renamed variable for clarity
-                    for (const pattern of recentlyPrunedPatterns) {
-                        try {
-                                const regex = mqttPatternToRegex(pattern); // Use existing regex function
-                                if (regex.test(message.topic)) {
-                                    console.warn(`Ignoring tree update for recently pruned topic: ${message.topic} (matches pattern: ${pattern})`);
-                                    ignoreForTreeUpdate = true; // Flag to skip tree updates only
-                                    break;
-                                }
-                        } catch (e) {
-                                console.error("Error creating regex for pruned pattern check:", pattern, e);
-                        }
-                    }
-                    // --- [END] Check ---
+    async function startAppAndWebSocket() {
+        // 1. Initialize app, which fetches config and sets appBasePath
+        await initializeApp();
 
-                    // --- SVG Update (Happens *before* potentially skipping tree update) ---
-                    if (!isSvgHistoryMode) {
-                        updateMap(message.topic, message.payload);
-                    }
-                    // --- End SVG Update ---
+        // 2. Now that appBasePath is set, connect to WebSocket
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // Use the appBasePath variable set by initializeApp()
+        const wsUrl = `${wsProtocol}//${window.location.host}${appBasePath}`;
+        
+        console.log(`Connecting to WebSocket at: ${wsUrl}`);
+        ws = new WebSocket(wsUrl);
 
-                    // --- History Update (Happens *before* potentially skipping tree update) ---
-                    const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
-                    const wasLive = currentMaxTimestamp === maxTimestamp;
-                    allHistoryEntries.unshift(newEntry);
-                    if (newEntry.timestampMs > maxTimestamp) maxTimestamp = newEntry.timestampMs;
-                    if (wasLive) {
-                        currentMaxTimestamp = maxTimestamp;
-                            // Apply filters only if not ignoring (otherwise history might look inconsistent temporarily)
-                            if (!ignoreForTreeUpdate) {
-                                applyAndRenderFilters();
+        ws.onopen = () => {
+            console.log("Connected to WebSocket server.");
+            // We already initialized, but maybe we need to fetch history *after* connection.
+            // Let's keep initializeApp() inside onopen, but we need a way to get the base path *first*.
+            // This is still circular.
+        };
+
+        // ... ws.onmessage and other handlers ...
+        ws.onmessage = async (event) => {
+            const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
+            try {
+                const message = JSON.parse(dataText);
+
+                switch(message.type) {
+                    case 'mqtt-message': {
+                        // ---  Check if topic was recently pruned ---
+                        let ignoreForTreeUpdate = false; // Renamed variable for clarity
+                        for (const pattern of recentlyPrunedPatterns) {
+                            try {
+                                    const regex = mqttPatternToRegex(pattern); // Use existing regex function
+                                    if (regex.test(message.topic)) {
+                                        console.warn(`Ignoring tree update for recently pruned topic: ${message.topic} (matches pattern: ${pattern})`);
+                                        ignoreForTreeUpdate = true; // Flag to skip tree updates only
+                                        break;
+                                    }
+                            } catch (e) {
+                                    console.error("Error creating regex for pruned pattern check:", pattern, e);
                             }
+                        }
+                        // --- [END] Check ---
+
+                        // --- SVG Update (Happens *before* potentially skipping tree update) ---
+                        if (!isSvgHistoryMode) {
+                            updateMap(message.topic, message.payload);
+                        }
+                        // --- End SVG Update ---
+
+                        // --- History Update (Happens *before* potentially skipping tree update) ---
+                        const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
+                        const wasLive = currentMaxTimestamp === maxTimestamp;
+                        allHistoryEntries.unshift(newEntry);
+                        if (newEntry.timestampMs > maxTimestamp) maxTimestamp = newEntry.timestampMs;
+                        if (wasLive) {
+                            currentMaxTimestamp = maxTimestamp;
+                                // Apply filters only if not ignoring (otherwise history might look inconsistent temporarily)
+                                if (!ignoreForTreeUpdate) {
+                                    applyAndRenderFilters();
+                                }
+                        }
+                        updateSliderUI();
+                        updateSvgTimelineUI();
+                        // --- End History Update ---
+
+
+                        // --- Tree Updates (Potentially Skipped) ---
+                        if (!ignoreForTreeUpdate) {
+                                const options = {
+                                    enableAnimations: true,
+                                    rulesConfig: mapperConfig,
+                                    targetTopics: mappedTargetTopics
+                                };
+                                // Update main tree
+                                updateTree(message.topic, message.payload, message.timestamp, treeContainer, options);
+
+                                // Update mapper tree (no animations)
+                                options.enableAnimations = false;
+                                updateTree(message.topic, message.payload, message.timestamp, mapperTreeContainer, options);
+                        }
+                        // --- End Tree Updates ---
+
+                        break; // End of 'mqtt-message' case
                     }
-                    updateSliderUI();
-                    updateSvgTimelineUI();
-                    // --- End History Update ---
+                    case 'simulator-status':
+                        updateSimulatorStatusUI(message.status);
+                        break;
+                    case 'history-initial-data':
+                        allHistoryEntries = message.data.map(entry => ({ ...entry, timestampMs: new Date(entry.timestamp).getTime() }));
+                        initializeHistoryFilters();
+                        applyAndRenderFilters();
+                        break;
+                    case 'topic-history-data':
+                        updateTopicHistory(message.topic, message.data);
+                        break;
+                    case 'db-status-update':
+                        if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
+                        if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
+                        if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
+                        break;
+                    case 'pruning-status':
+                        if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started');
+                        break;
 
-
-                    // --- Tree Updates (Potentially Skipped) ---
-                    if (!ignoreForTreeUpdate) {
-                            const options = {
-                                enableAnimations: true,
-                                rulesConfig: mapperConfig,
-                                targetTopics: mappedTargetTopics
-                            };
-                            // Update main tree
-                            updateTree(message.topic, message.payload, message.timestamp, treeContainer, options);
-
-                            // Update mapper tree (no animations)
-                            options.enableAnimations = false;
-                            updateTree(message.topic, message.payload, message.timestamp, mapperTreeContainer, options);
-                    }
-                    // --- End Tree Updates ---
-
-                    break; // End of 'mqtt-message' case
+                    // --- [NEW V2] Mapper Messages ---
+                    case 'mapper-config-update':
+                        console.log("Received config update from server");
+                        mapperConfig = message.config;
+                        updateMapperVersionSelector();
+                        // Re-color trees
+                        colorTreeNodes(treeContainer);
+                        colorTreeNodes(mapperTreeContainer);
+                        break;
+                    case 'mapped-topic-generated':
+                        mappedTargetTopics.add(message.topic);
+                        // No need to re-color tree here, updateTree will handle it
+                        // on the next message for that topic.
+                        break;
+                    case 'mapper-metrics-update':
+                        mapperMetrics = message.metrics;
+                        // If the user is currently editing a rule, update its metrics
+                        if (currentEditingSourceTopic) {
+                            updateMetricsForEditor(currentEditingSourceTopic);
+                        }
+                        break;
                 }
-                case 'simulator-status':
-                    updateSimulatorStatusUI(message.status);
-                    break;
-                case 'history-initial-data':
-                    allHistoryEntries = message.data.map(entry => ({ ...entry, timestampMs: new Date(entry.timestamp).getTime() }));
-                    initializeHistoryFilters();
-                    applyAndRenderFilters();
-                    break;
-                case 'topic-history-data':
-                    updateTopicHistory(message.topic, message.data);
-                    break;
-                case 'db-status-update':
-                    if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
-                    if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
-                    if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
-                    break;
-                case 'pruning-status':
-                    if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started');
-                    break;
-
-                // --- [NEW V2] Mapper Messages ---
-                case 'mapper-config-update':
-                    console.log("Received config update from server");
-                    mapperConfig = message.config;
-                    updateMapperVersionSelector();
-                    // Re-color trees
-                    colorTreeNodes(treeContainer);
-                    colorTreeNodes(mapperTreeContainer);
-                    break;
-                case 'mapped-topic-generated':
-                    mappedTargetTopics.add(message.topic);
-                    // No need to re-color tree here, updateTree will handle it
-                    // on the next message for that topic.
-                    break;
-                case 'mapper-metrics-update':
-                    mapperMetrics = message.metrics;
-                    // If the user is currently editing a rule, update its metrics
-                    if (currentEditingSourceTopic) {
-                        updateMetricsForEditor(currentEditingSourceTopic);
-                    }
-                    break;
+            } catch (e) {
+                console.error("JSON Parsing Error:", dataText, e);
             }
-        } catch (e) {
-            console.error("JSON Parsing Error:", dataText, e);
+        };
+
+        // [MODIFIED] This is the original logic. The circular dependency is the problem.
+        // `initializeApp` sets `appBasePath`.
+        // `ws.onopen` calls `initializeApp`.
+        // `ws` connection needs `appBasePath`.
+        
+        // **Solution:**
+        // 1. `initializeApp` MUST run first and *return* the base path.
+        // 2. The `ws` connection is established *after* `initializeApp` completes.
+        // 3. The `ws.onopen` handler can then run the *rest* of the initialization (like loading SVG/Mapper).
+        
+        // This means I need to split `initializeApp`.
+        
+    } // end of startAppAndWebSocket
+
+    // --- [NEW] Revised Initialization Logic ---
+    
+    // 1. Fetch config first to get base path
+    (async () => {
+        let configResponse;
+        try {
+            configResponse = await fetch('api/config');
+            if (!configResponse.ok) throw new Error('Failed to fetch config');
+            const appConfig = await configResponse.json();
+            
+            // Set global base path
+            appBasePath = appConfig.basePath || '/';
+            
+            // Now connect to WebSocket using the correct path
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}${appBasePath}`;
+            
+            console.log(`Connecting to WebSocket at: ${wsUrl}`);
+            ws = new WebSocket(wsUrl);
+
+            // Assign handlers
+            ws.onopen = () => {
+                console.log("Connected to WebSocket server.");
+                // Now run the *rest* of the initialization
+                finishInitialization(appConfig); 
+            };
+
+            ws.onmessage = async (event) => {
+                const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
+                try {
+                    const message = JSON.parse(dataText);
+
+                    switch(message.type) {
+                        case 'mqtt-message': {
+                            // ---  Check if topic was recently pruned ---
+                            let ignoreForTreeUpdate = false; // Renamed variable for clarity
+                            for (const pattern of recentlyPrunedPatterns) {
+                                try {
+                                        const regex = mqttPatternToRegex(pattern); // Use existing regex function
+                                        if (regex.test(message.topic)) {
+                                            console.warn(`Ignoring tree update for recently pruned topic: ${message.topic} (matches pattern: ${pattern})`);
+                                            ignoreForTreeUpdate = true; // Flag to skip tree updates only
+                                            break;
+                                        }
+                                } catch (e) {
+                                        console.error("Error creating regex for pruned pattern check:", pattern, e);
+                                }
+                            }
+                            // --- [END] Check ---
+
+                            // --- SVG Update (Happens *before* potentially skipping tree update) ---
+                            if (!isSvgHistoryMode) {
+                                updateMap(message.topic, message.payload);
+                            }
+                            // --- End SVG Update ---
+
+                            // --- History Update (Happens *before* potentially skipping tree update) ---
+                            const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
+                            const wasLive = currentMaxTimestamp === maxTimestamp;
+                            allHistoryEntries.unshift(newEntry);
+                            if (newEntry.timestampMs > maxTimestamp) maxTimestamp = newEntry.timestampMs;
+                            if (wasLive) {
+                                currentMaxTimestamp = maxTimestamp;
+                                    // Apply filters only if not ignoring (otherwise history might look inconsistent temporarily)
+                                    if (!ignoreForTreeUpdate) {
+                                        applyAndRenderFilters();
+                                    }
+                            }
+                            updateSliderUI();
+                            updateSvgTimelineUI();
+                            // --- End History Update ---
+
+
+                            // --- Tree Updates (Potentially Skipped) ---
+                            if (!ignoreForTreeUpdate) {
+                                    const options = {
+                                        enableAnimations: true,
+                                        rulesConfig: mapperConfig,
+                                        targetTopics: mappedTargetTopics
+                                    };
+                                    // Update main tree
+                                    updateTree(message.topic, message.payload, message.timestamp, treeContainer, options);
+
+                                    // Update mapper tree (no animations)
+                                    options.enableAnimations = false;
+                                    updateTree(message.topic, message.payload, message.timestamp, mapperTreeContainer, options);
+                            }
+                            // --- End Tree Updates ---
+
+                            break; // End of 'mqtt-message' case
+                        }
+                        case 'simulator-status':
+                            updateSimulatorStatusUI(message.status);
+                            break;
+                        case 'history-initial-data':
+                            allHistoryEntries = message.data.map(entry => ({ ...entry, timestampMs: new Date(entry.timestamp).getTime() }));
+                            initializeHistoryFilters();
+                            applyAndRenderFilters();
+                            break;
+                        case 'topic-history-data':
+                            updateTopicHistory(message.topic, message.data);
+                            break;
+                        case 'db-status-update':
+                            if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
+                            if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
+                            if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
+                            break;
+                        case 'pruning-status':
+                            if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started');
+                            break;
+
+                        // --- [NEW V2] Mapper Messages ---
+                        case 'mapper-config-update':
+                            console.log("Received config update from server");
+                            mapperConfig = message.config;
+                            updateMapperVersionSelector();
+                            // Re-color trees
+                            colorTreeNodes(treeContainer);
+                            colorTreeNodes(mapperTreeContainer);
+                            break;
+                        case 'mapped-topic-generated':
+                            mappedTargetTopics.add(message.topic);
+                            // No need to re-color tree here, updateTree will handle it
+                            // on the next message for that topic.
+                            break;
+                        case 'mapper-metrics-update':
+                            mapperMetrics = message.metrics;
+                            // If the user is currently editing a rule, update its metrics
+                            if (currentEditingSourceTopic) {
+                                updateMetricsForEditor(currentEditingSourceTopic);
+                            }
+                            break;
+                    }
+                } catch (e) {
+                    console.error("JSON Parsing Error:", dataText, e);
+                }
+            };
+            
+            ws.onerror = (err) => {
+                console.error("WebSocket Error:", err);
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket connection closed. Attempting to reconnect...");
+                // Implement a backoff strategy here if needed
+                setTimeout(startAppAndWebSocket, 3000); // Re-run the whole connect logic
+            };
+
+        } catch (error) {
+            console.error("Failed to fetch initial app configuration:", error);
+            // Handle fatal error (e.g., show an overlay)
         }
-    };
+    })();
+    
+    // [NEW] This function contains the rest of the original initializeApp()
+    async function finishInitialization(appConfig) {
+        try {
+            // --- Hide/Show tabs based on config ---
+            btnTreeView?.classList.remove('active');
+            treeView?.classList.remove('active');
+
+            let defaultViewActivated = false;
+
+            if (appConfig.viewTreeEnabled) {
+                btnTreeView.style.display = 'block'; 
+                if (!defaultViewActivated) {
+                    switchView('tree');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnTreeView.style.display = 'none';
+            }
+
+            if (appConfig.viewSvgEnabled) {
+                btnMapView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('map');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnMapView.style.display = 'none';
+            }
+
+            if (appConfig.viewHistoryEnabled) {
+                btnHistoryView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('history');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnHistoryView.style.display = 'none';
+            }
+
+            if (appConfig.viewMapperEnabled) {
+                btnMapperView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('mapper');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnMapperView.style.display = 'none';
+            }
+            
+            if (!defaultViewActivated) {
+                    switchView('tree');
+                    console.warn("All views are disabled in configuration.");
+            }
+
+            // --- Handle SVG Default Fullscreen ---
+            if (appConfig.svgDefaultFullscreen && appConfig.viewSvgEnabled && mapView.classList.contains('active')) {
+                console.log("Attempting to open SVG view in fullscreen by default...");
+                try {
+                    toggleFullscreen();
+                } catch (err) {
+                        console.warn("Default fullscreen request was blocked by the browser.", err);
+                }
+            }
+            
+            // --- Store subscribed topics ---
+            if (appConfig.subscribedTopics) {
+                subscribedTopicPatterns = appConfig.subscribedTopics.split(',').map(t => t.trim());
+                console.log("Subscribed Topic Patterns:", subscribedTopicPatterns);
+            } else {
+                    console.warn("Could not retrieve subscribed topics from API.");
+                    subscribedTopicPatterns = ['#']; 
+            }
+            
+            // --- Simulator Status ---
+            if (appConfig.isSimulatorEnabled && simulatorControls) {
+                simulatorControls.style.display = 'flex';
+                // Fetch is relative, will use base path correctly
+                const statusRes = await fetch('api/simulator/status'); 
+                const statusData = await statusRes.json();
+                updateSimulatorStatusUI(statusData.status);
+            }
+        } catch (error) {
+            console.error("Failed to finish app initialization:", error);
+        }
+        
+        // Load other assets
+        loadSvgPlan();
+        loadMapperConfig(); // Load mapper config
+    }
+    // --- [END NEW] Revised Initialization Logic ---
+
 
     // --- History View Filtering Logic ---
     function initializeHistoryFilters() {
@@ -996,7 +1290,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
     // --- Tree Controls Logic (Tree View) ---
     btnExpandAll?.addEventListener('click', () => {
         treeContainer?.querySelectorAll('.is-folder').forEach(folderLi => {
@@ -1148,7 +1441,7 @@ return msg;
         updateMetricsForEditor(sourceTopic);
     }
 
-    // --- [NEW] MQTT Topic Matching Logic (Simplified Client-Side) ---
+    // ---  MQTT Topic Matching Logic (Simplified Client-Side) ---
     /**
      * Converts an MQTT pattern to a RegExp for simple client-side matching.
      * Note: This is a simplified version and might not cover all edge cases perfectly.
@@ -1218,7 +1511,7 @@ return msg;
         const outputTopicInput = editorDiv.querySelector('.target-output-topic');
         outputTopicInput.value = target.outputTopic;
 
-        // --- MODIFIED Validation logic ---
+        // --- Validation logic ---
         const validateTopic = () => {
             const topicValue = outputTopicInput.value.trim();
             target.outputTopic = topicValue; // Update data model immediately
@@ -1470,7 +1763,7 @@ return msg;
         }, 3000);
     }
 
-    // --- [ADDED BACK] Delete Modal Logic ---
+    // --- Delete Modal Logic ---
 
     function showPruneModal(rule, target) {
         deleteModalContext = { rule, target }; // Store context
@@ -1481,9 +1774,9 @@ return msg;
         let pattern = target.outputTopic;
         // If it contains mustaches, try to create a pattern with wildcards
         if (pattern.includes('{{')) {
-            // Convertit {{...}} en + (wildcard)
+            // convert {{...}} to + (wildcard)
                 pattern = target.outputTopic.replace(/\{\{.+?\}\}/g, '+');
-            // Si ça se termine par /+, ajoute /#
+            // if ends with /+, add /#
             if (pattern.endsWith('/+')) {
                 pattern = pattern.substring(0, pattern.length - 1) + '#';
             }
@@ -1498,10 +1791,10 @@ return msg;
         deleteModalContext = null;
     }
 
-    // "Annuler"
+    // "Cancel"
     modalBtnCancel.addEventListener('click', hidePruneModal);
 
-    // "Supprimer la règle seulement"
+    // "Delete rule only"
     modalBtnDeleteRule.addEventListener('click', () => {
         if (!deleteModalContext) return;
         const { rule, target } = deleteModalContext;
@@ -1550,7 +1843,7 @@ return msg;
 
         try {
             // 1. Call backend to prune DB
-            const response = await fetch('/api/context/prune-topic', {
+            const response = await fetch('api/context/prune-topic', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ topicPattern })
@@ -1706,7 +1999,7 @@ return msg;
             }
             console.log("Frontend prune finished.");
     }
-    // --- [FIN AJOUT MODAL LOGIC] ---
+    // --- [END MODAL LOGIC] ---
 
 
     // --- Panel Resizing Logic ---

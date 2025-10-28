@@ -104,7 +104,8 @@ const config = {
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
-    SVG_DEFAULT_FULLSCREEN: process.env.SVG_DEFAULT_FULLSCREEN === 'true'
+    SVG_DEFAULT_FULLSCREEN: process.env.SVG_DEFAULT_FULLSCREEN === 'true',
+    BASE_PATH: process.env.BASE_PATH?.trim() || '/' // [NEW] Added BASE_PATH
 };
 
 
@@ -117,6 +118,17 @@ if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is E
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
 logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] Fullscreen[${config.SVG_DEFAULT_FULLSCREEN}]`);
+
+// --- [NEW] Normalize Base Path ---
+let basePath = config.BASE_PATH;
+if (!basePath.startsWith('/')) {
+    basePath = '/' + basePath;
+}
+if (basePath.endsWith('/') && basePath.length > 1) {
+    basePath = basePath.slice(0, -1);
+}
+logger.info(`✅ Application base path set to: ${basePath}`);
+// --- [END NEW] ---
 
 
 // --- Helper Function for Sparkplug (handles BigInt) ---
@@ -163,7 +175,9 @@ db.exec(`
 // --- Express App & WebSocket Server Setup ---
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+// [MODIFIED] WebSocket server is attached to the HTTP server, 
+// it will handle upgrade requests regardless of the base path.
+const wss = new WebSocketServer({ server }); 
 
 // --- WebSocket Logic ---
 function broadcast(message) {
@@ -193,6 +207,8 @@ const mapperEngine = require('./mapper_engine')(
 
 // --- Middleware ---
 const authMiddleware = (req, res, next) => {
+    // [MODIFIED] Auth middleware is applied *before* the base path router,
+    // so it protects everything.
     if (!config.HTTP_USER || !config.HTTP_PASSWORD) {
         return next();
     }
@@ -216,9 +232,12 @@ const ipFilterMiddleware = (req, res, next) => {
     }
 };
 
-app.use(authMiddleware);
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
+// --- [NEW] Main Router for Base Path ---
+// Create a main router that will hold all application routes
+const mainRouter = express.Router();
+
+// Apply global middleware to the main router
+mainRouter.use(express.json());
 app.set('trust proxy', true);
 
 // --- Simulator Logic ---
@@ -229,12 +248,12 @@ const { startSimulator, stopSimulator, getStatus } = require('./simulator')(logg
 }, config.IS_SIMULATOR_ENABLED);
 
 
-// --- API Routes ---
+// --- API Routes (Mounted on mainRouter) ---
 
 // This endpoint now serves the SVG file specified in the .env config
 // The frontend will still request '/view.svg', but this route intercepts it
 // and sends back the contents of the *configured* file.
-app.get('/view.svg', (req, res) => {
+mainRouter.get('/view.svg', (req, res) => {
     const configuredSvgPath = path.join(DATA_PATH, config.SVG_FILE_PATH);
     if (fs.existsSync(configuredSvgPath)) {
         res.sendFile(configuredSvgPath);
@@ -245,7 +264,7 @@ app.get('/view.svg', (req, res) => {
 });
 
 //  Pass all new config flags to the frontend
-app.get('/api/config', (req, res) => {
+mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
         subscribedTopics: config.MQTT_TOPIC,
@@ -254,21 +273,22 @@ app.get('/api/config', (req, res) => {
         viewSvgEnabled: config.VIEW_SVG_ENABLED,
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
-        svgDefaultFullscreen: config.SVG_DEFAULT_FULLSCREEN
+        svgDefaultFullscreen: config.SVG_DEFAULT_FULLSCREEN,
+        basePath: basePath // [NEW] Send the normalized base path to the client
     });
 });
 
 if (config.IS_SIMULATOR_ENABLED) {
     logger.info("✅ Simulator is ENABLED. Creating API endpoints at /api/simulator/*");
-    app.get('/api/simulator/status', (req, res) => {
+    mainRouter.get('/api/simulator/status', (req, res) => {
         res.json({ status: getStatus() });
     });
-    app.post('/api/simulator/start', (req, res) => {
+    mainRouter.post('/api/simulator/start', (req, res) => {
         const result = startSimulator();
         broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
         res.status(200).json(result);
     });
-    app.post('/api/simulator/stop', (req, res) => {
+    mainRouter.post('/api/simulator/stop', (req, res) => {
         const result = stopSimulator();
         broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
         res.status(200).json(result);
@@ -277,19 +297,46 @@ if (config.IS_SIMULATOR_ENABLED) {
 
 // MCP Context API Router
 const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, getStatus, getDbStatus);
-app.use('/api/context', ipFilterMiddleware, mcpRouter);
+mainRouter.use('/api/context', ipFilterMiddleware, mcpRouter);
 
 // Configuration API Router
 const configRouter = require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger);
-app.use('/api/env', ipFilterMiddleware, configRouter);
+mainRouter.use('/api/env', ipFilterMiddleware, configRouter);
 
 // Mapper API Router
 const mapperRouter = require('./routes/mapperApi')(mapperEngine);
-app.use('/api/mapper', ipFilterMiddleware, mapperRouter);
+mainRouter.use('/api/mapper', ipFilterMiddleware, mapperRouter);
+
+// --- [MODIFIED] Static Assets ---
+// Serve static files (HTML, CSS, JS) from the public directory
+mainRouter.use(express.static(path.join(__dirname, 'public')));
+
+// --- [MODIFIED] Mount Everything ---
+// Apply auth middleware to the whole app
+app.use(authMiddleware);
+// Mount the main router under the normalized base path
+app.use(basePath, mainRouter);
+
+// --- [NEW] Root Redirect ---
+// Add a redirect from the server root to the base path
+if (basePath !== '/') {
+    app.get('/', (req, res) => {
+        res.redirect(basePath);
+    });
+}
 
 
 // --- WebSocket Connection Handling ---
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+    // [MODIFIED] Check if the connection path matches the base path
+    // This provides an extra layer of security if WSS is exposed directly
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (!url.pathname.startsWith(basePath)) {
+        logger.warn(`WebSocket connection rejected: Path ${url.pathname} does not match base path ${basePath}`);
+        ws.terminate();
+        return;
+    }
+    
     logger.info('✅ ➡️ WebSocket client connected.');
 
     // Send initial batch of historical data
