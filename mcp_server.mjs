@@ -28,7 +28,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { z } from "zod";
 import axios from "axios";
-// --- [NEW] Imports for model loading ---
+// --- Imports for model loading ---
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -38,7 +38,7 @@ const API_BASE_URL = "http://localhost:8080/api";
 const HTTP_PORT = process.env.MCP_PORT || 3000;
 const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http'
 
-// --- [NEW] Load UNS Model Manifest ---
+// --- Load UNS Model Manifest ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODEL_MANIFEST_PATH = path.join(__dirname, 'data/uns_model.json');
@@ -53,7 +53,7 @@ try {
 }
 
 /**
- * Crée et configure l'instance du serveur MCP.
+ * Creates and configures the MCP server instance.
  */
 async function createMcpServer() {
   const server = new McpServer({
@@ -62,7 +62,7 @@ async function createMcpServer() {
     description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search capabilities.",
   });
 
-  // --- [NEW] Model-Querying Tools ---
+  // --- Model-Querying Tools ---
 
   server.registerTool(
     "get_model_definition",
@@ -253,7 +253,7 @@ async function createMcpServer() {
     }
   );
 
-  // --- [MODIFIED] Resources are now Tools ---
+  // --- Resources are now Tools ---
   
   server.registerTool(
     "get_application_status",

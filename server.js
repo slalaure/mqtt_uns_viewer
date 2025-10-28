@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -42,7 +42,7 @@ const ENV_PATH = path.join(DATA_PATH, '.env');
 const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
 const CERTS_PATH = path.join(DATA_PATH, 'certs');
 const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
-const SVG_PATH = path.join(DATA_PATH, 'view.svg');
+// SVG_PATH is now dynamically determined from config
 
 // --- Logger Setup ---
 const logger = pino({
@@ -97,7 +97,14 @@ const config = {
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
-    HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null
+    HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
+    // UI and View configuration
+    VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false', // Default to true
+    VIEW_SVG_ENABLED: process.env.VIEW_SVG_ENABLED !== 'false', // Default to true
+    VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
+    VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
+    SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
+    SVG_DEFAULT_FULLSCREEN: process.env.SVG_DEFAULT_FULLSCREEN === 'true'
 };
 
 
@@ -108,6 +115,9 @@ if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
 }
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
+logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}]`);
+logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] Fullscreen[${config.SVG_DEFAULT_FULLSCREEN}]`);
+
 
 // --- Helper Function for Sparkplug (handles BigInt) ---
 function longReplacer(key, value) {
@@ -116,7 +126,7 @@ function longReplacer(key, value) {
     }
     return value;
 }
-// --- [NEW] Helper to safely parse potentially non-JSON ---
+// --- Helper to safely parse potentially non-JSON ---
 function safeJsonParse(str) {
     try {
         return JSON.parse(str);
@@ -216,23 +226,35 @@ const { startSimulator, stopSimulator, getStatus } = require('./simulator')(logg
     if (mainConnection) {
         mainConnection.publish(topic, payload, { qos: 1, retain: false });
     }
-}, config.IS_SPARKPLUG_ENABLED);
+}, config.IS_SIMULATOR_ENABLED);
 
 
 // --- API Routes ---
+
+// This endpoint now serves the SVG file specified in the .env config
+// The frontend will still request '/view.svg', but this route intercepts it
+// and sends back the contents of the *configured* file.
 app.get('/view.svg', (req, res) => {
-    if (fs.existsSync(SVG_PATH)) {
-        res.sendFile(SVG_PATH);
+    const configuredSvgPath = path.join(DATA_PATH, config.SVG_FILE_PATH);
+    if (fs.existsSync(configuredSvgPath)) {
+        res.sendFile(configuredSvgPath);
     } else {
-        res.status(404).send('SVG file not found in data directory.');
+        logger.error(`Configured SVG file not found at: ${configuredSvgPath}`);
+        res.status(404).send(`SVG file not found. Checked path: ${configuredSvgPath}`);
     }
 });
 
+//  Pass all new config flags to the frontend
 app.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
-        // ADDED: Send subscription topics to frontend
-        subscribedTopics: config.MQTT_TOPIC
+        subscribedTopics: config.MQTT_TOPIC,
+        // Pass UI configuration flags
+        viewTreeEnabled: config.VIEW_TREE_ENABLED,
+        viewSvgEnabled: config.VIEW_SVG_ENABLED,
+        viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
+        viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
+        svgDefaultFullscreen: config.SVG_DEFAULT_FULLSCREEN
     });
 });
 
@@ -261,7 +283,7 @@ app.use('/api/context', ipFilterMiddleware, mcpRouter);
 const configRouter = require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger);
 app.use('/api/env', ipFilterMiddleware, configRouter);
 
-// [NEW V2] Mapper API Router
+// Mapper API Router
 const mapperRouter = require('./routes/mapperApi')(mapperEngine);
 app.use('/api/mapper', ipFilterMiddleware, mapperRouter);
 
@@ -386,7 +408,7 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
                  stmt.finalize();
             });
 
-            // --- [MODIFIED V2] 5. Process Message through Mapper Engine ---
+            // --- 5. Process Message through Mapper Engine ---
             // Pass the original topic, the decoded/parsed object, and the flag
             mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
 

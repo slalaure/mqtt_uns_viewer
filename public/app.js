@@ -25,6 +25,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     let recentlyPrunedPatterns = new Set();
     const PRUNE_IGNORE_DURATION_MS = 10000; // Ignore re-appearing messages for 10 seconds
+    let subscribedTopicPatterns = ['#']; // [NEW] Default fallback
     
     // --- Dark Theme Logic ---
     const darkModeToggle = document.getElementById('dark-mode-toggle');
@@ -104,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const svgTimelineSlider = document.getElementById('svg-timeline-slider-container');
     const svgHandle = document.getElementById('svg-handle');
     const svgLabel = document.getElementById('svg-label');
+    const btnSvgFullscreen = document.getElementById('btn-svg-fullscreen'); // [MODIFIED]
     let svgInitialTextValues = new Map();
 
     // --- History State ---
@@ -158,19 +160,104 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalBtnDeletePrune = document.getElementById('modal-btn-delete-prune');
     let deleteModalContext = null; // Will store { rule, target }
 
+    // --- [NEW] Fullscreen Logic ---
+    function toggleFullscreen() {
+        if (!mapView) return; // Make sure the view element exists
+        
+        if (!document.fullscreenElement) {
+            mapView.requestFullscreen().catch(err => {
+                // Don't use alert, just log it.
+                console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+    btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
+
     // --- Application Initialization ---
     async function initializeApp() {
         try {
             const response = await fetch('api/config');
             const appConfig = await response.json(); // Renamed to avoid conflict
 
+            // --- [NEW] Hide/Show tabs based on config ---
+            // Remove default active state from HTML
+            btnTreeView?.classList.remove('active');
+            treeView?.classList.remove('active');
+
+            let defaultViewActivated = false;
+
+            if (appConfig.viewTreeEnabled) {
+                btnTreeView.style.display = 'block'; // 'block' is default for buttons
+                if (!defaultViewActivated) {
+                    switchView('tree'); // Use existing function
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnTreeView.style.display = 'none';
+            }
+
+            if (appConfig.viewSvgEnabled) {
+                btnMapView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('map');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnMapView.style.display = 'none';
+            }
+
+            if (appConfig.viewHistoryEnabled) {
+                btnHistoryView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('history');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnHistoryView.style.display = 'none';
+            }
+
+            if (appConfig.viewMapperEnabled) {
+                btnMapperView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('mapper');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnMapperView.style.display = 'none';
+            }
+            
+            // If no views are enabled, just show a blank state (or tree-view placeholder)
+            if (!defaultViewActivated) {
+                    // Failsafe: if all are disabled, show tree view's container (it will be empty)
+                    switchView('tree');
+                    console.warn("All views are disabled in configuration.");
+            }
+
+            // --- [NEW] Handle SVG Default Fullscreen ---
+            if (appConfig.svgDefaultFullscreen && appConfig.viewSvgEnabled && mapView.classList.contains('active')) {
+                console.log("Attempting to open SVG view in fullscreen by default...");
+                // This will likely be blocked by the browser without user interaction,
+                // but we make the attempt as requested by the config description.
+                try {
+                    toggleFullscreen();
+                } catch (err) {
+                        console.warn("Default fullscreen request was blocked by the browser.", err);
+                }
+            }
+            // --- [END NEW] ---
+
+
             // --- [MODIFIED] Store subscribed topics ---
             if (appConfig.subscribedTopics) {
                 subscribedTopicPatterns = appConfig.subscribedTopics.split(',').map(t => t.trim());
                 console.log("Subscribed Topic Patterns:", subscribedTopicPatterns);
             } else {
-                 console.warn("Could not retrieve subscribed topics from API.");
-                 subscribedTopicPatterns = ['#']; // Default fallback: subscribe to everything
+                    console.warn("Could not retrieve subscribed topics from API.");
+                    subscribedTopicPatterns = ['#']; // Default fallback: subscribe to everything
             }
             // --- END MODIFICATION ---
 
@@ -191,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Dynamic SVG Plan Loading ---
     async function loadSvgPlan() {
         try {
-            const response = await fetch('view.svg');
+            const response = await fetch('view.svg'); // This path is correctly handled by server.js
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const svgText = await response.text();
             if (svgContent) {
@@ -291,14 +378,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     let ignoreForTreeUpdate = false; // Renamed variable for clarity
                     for (const pattern of recentlyPrunedPatterns) {
                         try {
-                             const regex = mqttPatternToRegex(pattern); // Use existing regex function
-                             if (regex.test(message.topic)) {
-                                 console.warn(`Ignoring tree update for recently pruned topic: ${message.topic} (matches pattern: ${pattern})`);
-                                 ignoreForTreeUpdate = true; // Flag to skip tree updates only
-                                 break;
-                             }
+                                const regex = mqttPatternToRegex(pattern); // Use existing regex function
+                                if (regex.test(message.topic)) {
+                                    console.warn(`Ignoring tree update for recently pruned topic: ${message.topic} (matches pattern: ${pattern})`);
+                                    ignoreForTreeUpdate = true; // Flag to skip tree updates only
+                                    break;
+                                }
                         } catch (e) {
-                             console.error("Error creating regex for pruned pattern check:", pattern, e);
+                                console.error("Error creating regex for pruned pattern check:", pattern, e);
                         }
                     }
                     // --- [END] Check ---
@@ -316,10 +403,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (newEntry.timestampMs > maxTimestamp) maxTimestamp = newEntry.timestampMs;
                     if (wasLive) {
                         currentMaxTimestamp = maxTimestamp;
-                         // Apply filters only if not ignoring (otherwise history might look inconsistent temporarily)
-                         if (!ignoreForTreeUpdate) {
-                              applyAndRenderFilters();
-                         }
+                            // Apply filters only if not ignoring (otherwise history might look inconsistent temporarily)
+                            if (!ignoreForTreeUpdate) {
+                                applyAndRenderFilters();
+                            }
                     }
                     updateSliderUI();
                     updateSvgTimelineUI();
@@ -328,17 +415,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // --- Tree Updates (Potentially Skipped) ---
                     if (!ignoreForTreeUpdate) {
-                         const options = {
-                             enableAnimations: true,
-                             rulesConfig: mapperConfig,
-                             targetTopics: mappedTargetTopics
-                         };
-                         // Update main tree
-                         updateTree(message.topic, message.payload, message.timestamp, treeContainer, options);
+                            const options = {
+                                enableAnimations: true,
+                                rulesConfig: mapperConfig,
+                                targetTopics: mappedTargetTopics
+                            };
+                            // Update main tree
+                            updateTree(message.topic, message.payload, message.timestamp, treeContainer, options);
 
-                         // Update mapper tree (no animations)
-                         options.enableAnimations = false;
-                         updateTree(message.topic, message.payload, message.timestamp, mapperTreeContainer, options);
+                            // Update mapper tree (no animations)
+                            options.enableAnimations = false;
+                            updateTree(message.topic, message.payload, message.timestamp, mapperTreeContainer, options);
                     }
                     // --- End Tree Updates ---
 
@@ -551,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = entriesToReplay.length - 1; i >= 0; i--) {
             const entry = entriesToReplay[i];
             if (!finalState.has(entry.topic)) {
-                 finalState.set(entry.topic, entry.payload);
+                    finalState.set(entry.topic, entry.payload);
             }
         }
 
@@ -696,8 +783,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Check if it's a parent of a rule
             const pattern = rule.sourceTopic.replace(/(\/\+.*|\/\#.*)/g, '');
-             if (topic === pattern && topic !== rule.sourceTopic) {
-                 return 'source'; // Mark parent folder as source too
+                if (topic === pattern && topic !== rule.sourceTopic) {
+                    return 'source'; // Mark parent folder as source too
             }
         }
         return null;
@@ -818,12 +905,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (treeRoot === treeContainer) { // Only main tree supports collapse click
                     // Add listener for expanding/collapsing only once
                     if (!nodeContainer.dataset.folderListener) {
-                         // Attach listener for collapse/expand
-                         nodeContainer.addEventListener('click', handleNodeClick);
-                         nodeContainer.dataset.folderListener = 'true';
+                            // Attach listener for collapse/expand
+                            nodeContainer.addEventListener('click', handleNodeClick);
+                            nodeContainer.dataset.folderListener = 'true';
                     }
                 } else { // Mapper tree folders are just for navigation
-                     nodeContainer.addEventListener('click', handleMapperNodeClick);
+                        nodeContainer.addEventListener('click', handleMapperNodeClick);
                 }
             }
             currentNode = li;
@@ -881,9 +968,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Folder click in Tree View (Collapse/Expand)
         if (li.classList.contains('is-folder') && event.target.closest('.node-name')) {
-             if (li.id.startsWith('node-mqtt-tree')) { // Only collapse/expand main tree
-                 li.classList.toggle('collapsed');
-             }
+                if (li.id.startsWith('node-mqtt-tree')) { // Only collapse/expand main tree
+                    li.classList.toggle('collapsed');
+                }
             return; // Don't process further for folder clicks in main tree
         }
 
@@ -950,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- [NEW V2] Mapper View Logic ---
+    // --- Mapper View Logic ---
 
     // Load initial config from server
     async function loadMapperConfig() {
@@ -1083,24 +1170,24 @@ return msg;
         }
         // Special case: If subscribed to '#', any topic is valid
         if (subscriptionPatterns.includes('#')) {
-             return true;
+                return true;
         }
 
         for (const pattern of subscriptionPatterns) {
-             // Handle simple prefix matching for '#' ending patterns
-             if (pattern.endsWith('/#')) {
-                 const prefix = pattern.substring(0, pattern.length - 1); // Get 'a/b/' from 'a/b/#'
-                 if (outputTopic.startsWith(prefix)) {
-                     return true;
-                 }
-             }
-             // Handle exact match or '+' matching using Regex (simplified)
-             else {
-                  const regex = mqttPatternToClientRegex(pattern);
-                  if (regex.test(outputTopic)) {
-                      return true;
-                  }
-             }
+                // Handle simple prefix matching for '#' ending patterns
+                if (pattern.endsWith('/#')) {
+                    const prefix = pattern.substring(0, pattern.length - 1); // Get 'a/b/' from 'a/b/#'
+                    if (outputTopic.startsWith(prefix)) {
+                        return true;
+                    }
+                }
+                // Handle exact match or '+' matching using Regex (simplified)
+                else {
+                        const regex = mqttPatternToClientRegex(pattern);
+                        if (regex.test(outputTopic)) {
+                            return true;
+                        }
+                }
         }
         return false; // No pattern matched
     }
@@ -1276,12 +1363,12 @@ return msg;
                         console.error(`Invalid Mapping Found: Rule for "${rule.sourceTopic}" targets Sparkplug namespace "${target.outputTopic}" but source is not Sparkplug.`);
                         // Optionally highlight the invalid input field if the editor is currently showing it
                         if (currentEditingSourceTopic === rule.sourceTopic) {
-                             const editorDiv = mapperTargetsList.querySelector(`.mapper-target-editor[data-target-id="${target.id}"]`);
-                             if(editorDiv) {
-                                 const outputTopicInput = editorDiv.querySelector('.target-output-topic');
-                                 outputTopicInput?.classList.add('input-error');
-                                 outputTopicInput?.focus();
-                             }
+                                const editorDiv = mapperTargetsList.querySelector(`.mapper-target-editor[data-target-id="${target.id}"]`);
+                                if(editorDiv) {
+                                    const outputTopicInput = editorDiv.querySelector('.target-output-topic');
+                                    outputTopicInput?.classList.add('input-error');
+                                    outputTopicInput?.focus();
+                                }
                         }
                         // break; // Uncomment to stop checking after first error
                     }
@@ -1359,8 +1446,8 @@ return msg;
             renderTransformEditor(currentEditingSourceTopic);
         } else {
             // If no topic was selected, hide the editor
-             mapperTransformPlaceholder.style.display = 'block';
-             mapperTransformForm.style.display = 'none';
+                mapperTransformPlaceholder.style.display = 'block';
+                mapperTransformForm.style.display = 'none';
         }
 
         // Re-color trees
@@ -1395,7 +1482,7 @@ return msg;
         // If it contains mustaches, try to create a pattern with wildcards
         if (pattern.includes('{{')) {
             // Convertit {{...}} en + (wildcard)
-             pattern = target.outputTopic.replace(/\{\{.+?\}\}/g, '+');
+                pattern = target.outputTopic.replace(/\{\{.+?\}\}/g, '+');
             // Si ça se termine par /+, ajoute /#
             if (pattern.endsWith('/+')) {
                 pattern = pattern.substring(0, pattern.length - 1) + '#';
@@ -1428,10 +1515,10 @@ return msg;
             if(activeVersion) {
                 activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic !== rule.sourceTopic);
             }
-             // Hide editor as the rule is gone
-             currentEditingSourceTopic = null;
-             mapperTransformPlaceholder.style.display = 'block';
-             mapperTransformForm.style.display = 'none';
+                // Hide editor as the rule is gone
+                currentEditingSourceTopic = null;
+                mapperTransformPlaceholder.style.display = 'block';
+                mapperTransformForm.style.display = 'none';
         } else {
             // 2. Re-render editor (only if rule still exists)
             renderTransformEditor(rule.sourceTopic);
@@ -1453,8 +1540,8 @@ return msg;
         recentlyPrunedPatterns.add(topicPattern);
         console.log(`Added pattern to ignore list: ${topicPattern}`);
         setTimeout(() => {
-             recentlyPrunedPatterns.delete(topicPattern);
-             console.log(`Removed pattern from ignore list: ${topicPattern}`);
+                recentlyPrunedPatterns.delete(topicPattern);
+                console.log(`Removed pattern from ignore list: ${topicPattern}`);
         }, PRUNE_IGNORE_DURATION_MS);
 
         // Disable button to prevent double click
@@ -1469,8 +1556,8 @@ return msg;
                 body: JSON.stringify({ topicPattern })
             });
             if (!response.ok) {
-                 const errData = await response.json();
-                 throw new Error(errData.error || 'Failed to prune database.');
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Failed to prune database.');
             }
             const result = await response.json();
             console.log(`Pruned ${result.count} entries from DB.`);
@@ -1478,14 +1565,14 @@ return msg;
             // 2. Remove rule from local config
             rule.targets = rule.targets.filter(t => t.id !== target.id);
 
-             // If the rule has no more targets, remove the rule itself
+                // If the rule has no more targets, remove the rule itself
             let ruleWasRemoved = false;
             if (rule.targets.length === 0) {
                 const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
                 if(activeVersion) {
                     activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic !== rule.sourceTopic);
                 }
-                 ruleWasRemoved = true;
+                    ruleWasRemoved = true;
             }
 
             // 3. Save config to backend BEFORE pruning frontend
@@ -1496,13 +1583,13 @@ return msg;
 
             // 5. Update editor view
             if(ruleWasRemoved) {
-                 // Hide editor as the rule is gone
-                 currentEditingSourceTopic = null;
-                 mapperTransformPlaceholder.style.display = 'block';
-                 mapperTransformForm.style.display = 'none';
+                    // Hide editor as the rule is gone
+                    currentEditingSourceTopic = null;
+                    mapperTransformPlaceholder.style.display = 'block';
+                    mapperTransformForm.style.display = 'none';
             } else {
-                 // Re-render editor if the rule still exists (other targets remain)
-                 renderTransformEditor(rule.sourceTopic);
+                    // Re-render editor if the rule still exists (other targets remain)
+                    renderTransformEditor(rule.sourceTopic);
             }
 
 
@@ -1514,7 +1601,7 @@ return msg;
             showMapperSaveStatus(`Prune failed: ${err.message}`, 'error');
             hidePruneModal();
         } finally {
-             modalBtnDeletePrune.disabled = false; // Re-enable button
+                modalBtnDeletePrune.disabled = false; // Re-enable button
         }
     });
 
@@ -1547,9 +1634,9 @@ return msg;
         // Iterate chronologically to get the latest
         for (let i = allHistoryEntries.length - 1; i >= 0; i--) {
             const entry = allHistoryEntries[i];
-             if (!uniqueTopics.has(entry.topic)) {
-                 uniqueTopics.set(entry.topic, entry);
-             }
+                if (!uniqueTopics.has(entry.topic)) {
+                    uniqueTopics.set(entry.topic, entry);
+                }
         }
 
 
@@ -1565,10 +1652,10 @@ return msg;
         const sortedTopics = Array.from(uniqueTopics.keys()).sort();
 
         for (const topic of sortedTopics) {
-             const entry = uniqueTopics.get(topic);
-             updateTree(topic, entry.payload, entry.timestamp, treeContainer, options);
-             updateTree(topic, entry.payload, entry.timestamp, mapperTreeContainer, options);
-         }
+                const entry = uniqueTopics.get(topic);
+                updateTree(topic, entry.payload, entry.timestamp, treeContainer, options);
+                updateTree(topic, entry.payload, entry.timestamp, mapperTreeContainer, options);
+            }
     }
 
     /**
@@ -1599,25 +1686,25 @@ return msg;
         populateTreesFromHistory();
 
         // 5. If the currently selected node in mapper was pruned, clear selection/editor
-         if (selectedMapperNode && regex.test(selectedMapperNode.dataset.topic)) {
-             console.log("Clearing selected mapper node.");
-             selectedMapperNode.classList.remove('selected');
-             selectedMapperNode = null;
-             currentEditingSourceTopic = null;
-             mapperTransformPlaceholder.style.display = 'block';
-             mapperTransformForm.style.display = 'none';
-             displayPayload(null, null, mapperPayloadTopic, mapperPayloadContent); // Clear payload display
-         }
+            if (selectedMapperNode && regex.test(selectedMapperNode.dataset.topic)) {
+                console.log("Clearing selected mapper node.");
+                selectedMapperNode.classList.remove('selected');
+                selectedMapperNode = null;
+                currentEditingSourceTopic = null;
+                mapperTransformPlaceholder.style.display = 'block';
+                mapperTransformForm.style.display = 'none';
+                displayPayload(null, null, mapperPayloadTopic, mapperPayloadContent); // Clear payload display
+            }
 
-         // 6. If the currently selected node in treeview was pruned, clear selection
-         if (selectedNodeContainer && regex.test(selectedNodeContainer.dataset.topic)) {
-              console.log("Clearing selected treeview node.");
-              selectedNodeContainer.classList.remove('selected');
-              selectedNodeContainer = null;
-              displayPayload(null, null, payloadTopic, payloadContent); // Clear payload display
-              topicHistoryLog.innerHTML = '<p class="history-placeholder">Select a topic to see its recent history.</p>'; // Clear history log
-         }
-         console.log("Frontend prune finished.");
+            // 6. If the currently selected node in treeview was pruned, clear selection
+            if (selectedNodeContainer && regex.test(selectedNodeContainer.dataset.topic)) {
+                console.log("Clearing selected treeview node.");
+                selectedNodeContainer.classList.remove('selected');
+                selectedNodeContainer = null;
+                displayPayload(null, null, payloadTopic, payloadContent); // Clear payload display
+                topicHistoryLog.innerHTML = '<p class="history-placeholder">Select a topic to see its recent history.</p>'; // Clear history log
+            }
+            console.log("Frontend prune finished.");
     }
     // --- [FIN AJOUT MODAL LOGIC] ---
 
@@ -1640,7 +1727,7 @@ return msg;
         if (panelWidth < minWidth) panelWidth = minWidth;
         // Ensure right panel also has min width
         if (containerRect.width - panelWidth < minWidth) {
-             panelWidth = containerRect.width - minWidth;
+                panelWidth = containerRect.width - minWidth;
         }
 
         panel.style.flexBasis = `${panelWidth}px`;
@@ -1648,18 +1735,18 @@ return msg;
 
     // Horizontal Resizing (generic function)
     const resizeHorizontalPanel = (e, topPanel, container) => {
-         if (!topPanel || !container) return;
-         const minHeight = 100; // Example minimum height
-         const containerRect = container.getBoundingClientRect();
-         let panelHeight = e.pageY - containerRect.top;
+            if (!topPanel || !container) return;
+            const minHeight = 100; // Example minimum height
+            const containerRect = container.getBoundingClientRect();
+            let panelHeight = e.pageY - containerRect.top;
 
-         if (panelHeight < minHeight) panelHeight = minHeight;
-         // Ensure bottom panel also has min height
-         if (containerRect.height - panelHeight < minHeight) {
-              panelHeight = containerRect.height - minHeight;
-         }
+            if (panelHeight < minHeight) panelHeight = minHeight;
+            // Ensure bottom panel also has min height
+            if (containerRect.height - panelHeight < minHeight) {
+                panelHeight = containerRect.height - minHeight;
+            }
 
-         topPanel.style.flexBasis = `${panelHeight}px`;
+            topPanel.style.flexBasis = `${panelHeight}px`;
     };
 
 
@@ -1684,7 +1771,7 @@ return msg;
         resizerVerticalMapper.addEventListener('mousedown', (e) => {
             e.preventDefault();
             const mouseMoveHandler = (ev) => resizePanel(ev, mapperTreeWrapper);
-             const mouseUpHandler = () => {
+                const mouseUpHandler = () => {
                 document.removeEventListener('mousemove', mouseMoveHandler);
             };
             document.addEventListener('mousemove', mouseMoveHandler);
@@ -1699,7 +1786,7 @@ return msg;
         resizerHorizontal.addEventListener('mousedown', (e) => {
             e.preventDefault();
             const mouseMoveHandler = (ev) => resizeHorizontalPanel(ev, payloadMainArea, payloadContainer);
-             const mouseUpHandler = () => {
+                const mouseUpHandler = () => {
                 document.removeEventListener('mousemove', mouseMoveHandler);
             };
             document.addEventListener('mousemove', mouseMoveHandler);

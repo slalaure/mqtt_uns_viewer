@@ -27,8 +27,8 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     
     let narrativeInterval = null;
     let sensorInterval = null;
-    const NARRATIVE_INTERVAL_MS = 40000; // Boucle lente pour les événements "métier" (MES, ERP...)
-    const SENSOR_INTERVAL_MS = 5000;    // Boucle rapide pour tous les capteurs IoT (comme demandé)
+    const NARRATIVE_INTERVAL_MS = 40000; // Slow loop for "business" events (MES, ERP...)
+    const SENSOR_INTERVAL_MS = 5000;    // Fast loop for all IoT sensors (as requested)
     
     const randomBetween = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
     
@@ -37,35 +37,35 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         workOrders: { palladiumCore: null, vibraniumCasing: null, repulsorLift: null }, 
         operators: ["Pepper Potts", "Happy Hogan", "James Rhodes", "J.A.R.V.I.S.", "Peter Parker", "Tony Stark"],
         
-        // spSeq est pour DDATA (0-255), bdSeq est pour NBIRTH (0-255)
+        // spSeq is for DDATA (0-255), bdSeq is for NBIRTH (0-255)
         equipmentStatus: {
-            // Machines de production
+            // Production Machines
             robot_arm_01:     { status: 'idle', temp: 40.0, speed: 0, spSeq: 0, bdSeq: 0 },
             laser_welder_01:  { status: 'idle', temp: 30.0, spSeq: 0, bdSeq: 0 },
             cnc_mill_05:      { status: 'idle', vibration: 0.1, load: 0, spSeq: 0, bdSeq: 0 },
             power_modulator_01:{ status: 'idle', output: 0.0, stability: 1.0, spSeq: 0, bdSeq: 0 },
             
-            // [NEW] Infrastructure (Centrales de mesure et Gaz)
+            // Infrastructure (Power Meters and Gas)
             power_meter_01:   { status: 'online', voltage: 230.0, current: 10.0, power: 2.3, pf: 0.95, spSeq: 0, bdSeq: 0 },
             gas_tank_argon:   { status: 'online', level: 85.0, pressure: 150, spSeq: 0, bdSeq: 0 },
-            gas_tank_nitrogen:{ status: 'online', level: 90.0, pressure: 160, spSeq: 0, bdSeq: 0 }, // status 'leaking' sera injecté
+            gas_tank_nitrogen:{ status: 'online', level: 90.0, pressure: 160, spSeq: 0, bdSeq: 0 }, // 'leaking' status will be injected
             gas_tank_oxygen:  { status: 'online', level: 75.0, pressure: 130, spSeq: 0, bdSeq: 0 },
 
-            // Systèmes de bâtiment (JSON UNS uniquement)
+            // Building Systems (JSON UNS only)
             clean_room_01:    { humidity: 26.5 },
             bms:              { power: 80.0 }
         }
     };
 
     /**
-     * [MODIFIED] Publie les messages NBIRTH pour TOUS les appareils Sparkplug B.
+     * Publishes NBIRTH messages for ALL Sparkplug B devices.
      */
     function publishBirthMessages() {
         if (!isSparkplugEnabled) return;
 
         logger.info("✅ Publishing Sparkplug NBIRTH messages for all devices...");
         const now_ts = Date.now();
-        const sessionSeqNum = 0; // NBIRTH 'seq' DOIT être 0
+        const sessionSeqNum = 0; // NBIRTH 'seq' MUST be 0
 
         // --- 1. Robot Arm NBIRTH ---
         let stateRobot = simState.equipmentStatus.robot_arm_01;
@@ -110,7 +110,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         let payloadPowerMod = spBv10Codec.encodePayload({ timestamp: now_ts, metrics: powerModMetrics, seq: sessionSeqNum, bdSeq: statePowerMod.bdSeq });
         publish('spBv1.0/stark_industries/NBIRTH/power_modulator_01', payloadPowerMod, true);
         
-        // --- 5. [NEW] Power Meter 01 NBIRTH ---
+        // --- 5. Power Meter 01 NBIRTH ---
         let statePowerMeter = simState.equipmentStatus.power_meter_01;
         statePowerMeter.bdSeq = (statePowerMeter.bdSeq + 1) % 256;
         let powerMeterMetrics = [
@@ -123,7 +123,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         let payloadPowerMeter = spBv10Codec.encodePayload({ timestamp: now_ts, metrics: powerMeterMetrics, seq: sessionSeqNum, bdSeq: statePowerMeter.bdSeq });
         publish('spBv1.0/stark_industries/NBIRTH/power_meter_01', payloadPowerMeter, true);
 
-        // --- 6. [NEW] Gas Tanks NBIRTH ---
+        // --- 6. Gas Tanks NBIRTH ---
         ['gas_tank_argon', 'gas_tank_nitrogen', 'gas_tank_oxygen'].forEach(tankId => {
             let stateGas = simState.equipmentStatus[tankId];
             stateGas.bdSeq = (stateGas.bdSeq + 1) % 256;
@@ -140,7 +140,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     }
 
     /**
-     * [MODIFIED] Publie les DDATA et JSON pour tous les capteurs, y compris les nouveaux.
+     * Publishes DDATA and JSON for all sensors, including new ones.
      */
     function publishSensorData() {
         const { equipmentStatus } = simState;
@@ -150,8 +150,8 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         // --- 1. Publish BMS Power (UNS JSON Only) ---
         const runningMachines = ['robot_arm_01', 'laser_welder_01', 'cnc_mill_05', 'power_modulator_01']
             .filter(m => equipmentStatus[m].status === 'running').length;
-        let totalPowerkW = (runningMachines * 8000) + randomBetween(1000, 1500); // en kW
-        let targetPowerMW = (totalPowerkW / 1000) + randomBetween(0.5, 1.0); // en MW
+        let totalPowerkW = (runningMachines * 8000) + randomBetween(1000, 1500); // in kW
+        let targetPowerMW = (totalPowerkW / 1000) + randomBetween(0.5, 1.0); // in MW
         equipmentStatus.bms.power = (equipmentStatus.bms.power * 0.8) + (targetPowerMW * 0.2);
         publish('stark_industries/malibu_facility/bms/main_power_feed', JSON.stringify({
             value: parseFloat(equipmentStatus.bms.power.toFixed(2)), unit: "MW", source: "Arc Reactor Mk V", emitted_at: now_iso
@@ -250,13 +250,13 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             publish('stark_industries/malibu_facility/assembly_line_02/repulsor_cell/power_modulator_01/output', JSON.stringify({ value: parseFloat(statePowerMod.output.toFixed(2)), unit: "GW", stability: parseFloat(statePowerMod.stability.toFixed(4)), emitted_at: now_iso }), false);
         }
 
-        // --- 7. [NEW] Publish Power Meter 01 (SPARKPLUG B + JSON UNS) ---
+        // --- 7. Publish Power Meter 01 (SPARKPLUG B + JSON UNS) ---
         if (isSparkplugEnabled) {
             let statePowerMeter = equipmentStatus.power_meter_01;
             let targetV = 230 + randomBetween(-1.5, 1.5);
             let targetPF = 0.95 + randomBetween(-0.03, 0.03);
-            // Corréler la puissance avec le total des machines
-            let targetPower_kW = (equipmentStatus.bms.power * 1000 * 0.15) + randomBetween(-10, 10); // PM01 prend 15% du total
+            // Correlate power with total machine power
+            let targetPower_kW = (equipmentStatus.bms.power * 1000 * 0.15) + randomBetween(-10, 10); // PM01 takes 15% of total
             let targetCurrent = (targetPower_kW * 1000) / (targetV * targetPF);
 
             statePowerMeter.voltage = (statePowerMeter.voltage * 0.8) + (targetV * 0.2);
@@ -268,7 +268,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             const metrics = [
                 { name: "Voltage", value: parseFloat(statePowerMeter.voltage.toFixed(1)), type: "Float" },
                 { name: "Current", value: parseFloat(statePowerMeter.current.toFixed(2)), type: "Float" },
-                { name: "ActivePower", value: parseFloat(statePowerMeter.power.toFixed(2)), type: "Float" }, // en kW
+                { name: "ActivePower", value: parseFloat(statePowerMeter.power.toFixed(2)), type: "Float" }, // in kW
                 { name: "PowerFactor", value: parseFloat(statePowerMeter.pf.toFixed(3)), type: "Float" },
                 { name: "Status", value: statePowerMeter.status, type: "String" }
             ];
@@ -287,21 +287,21 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             publish('stark_industries/malibu_facility/infrastructure/power_meter_01/telemetry', JSON.stringify(jsonPayload), false);
         }
 
-        // --- 8. [NEW] Publish Gas Tanks (SPARKPLUG B + JSON UNS) ---
+        // --- 8. Publish Gas Tanks (SPARKPLUG B + JSON UNS) ---
         if (isSparkplugEnabled) {
-            // Argon (pour soudure)
+            // Argon (for welding)
             let stateArgon = equipmentStatus.gas_tank_argon;
             let argonUsage = (equipmentStatus.laser_welder_01.status === 'running') ? 0.05 : 0.001;
             stateArgon.level = Math.max(0, stateArgon.level - argonUsage);
-            stateArgon.pressure = stateArgon.level * 2.0; // Pression proportionnelle au niveau
+            stateArgon.pressure = stateArgon.level * 2.0; // Pressure proportional to level
             stateArgon.spSeq = (stateArgon.spSeq + 1) % 256;
             publishGasDevice('gas_tank_argon', stateArgon, now_ts, now_iso);
             
-            // Nitrogen (pour CNC et fuite)
+            // Nitrogen (for CNC and leak)
             let stateNitro = equipmentStatus.gas_tank_nitrogen;
             let nitroUsage = (equipmentStatus.cnc_mill_05.status === 'running') ? 0.03 : 0.001;
             if (stateNitro.status === 'leaking') {
-                nitroUsage = 1.5; // Fuite rapide !
+                nitroUsage = 1.5; // Fast leak!
             }
             stateNitro.level = Math.max(0, stateNitro.level - nitroUsage);
             stateNitro.pressure = stateNitro.level * 2.2;
@@ -317,7 +317,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         }
     }
     
-    /** [NEW] Helper function to publish gas device data (SPB + JSON) */
+    /** Helper function to publish gas device data (SPB + JSON) */
     function publishGasDevice(deviceId, state, timestamp_ms, timestamp_iso) {
         const metrics = [
             { name: "Level", value: parseFloat(state.level.toFixed(2)), type: "Float" },
@@ -343,7 +343,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
 
 
     /**
-     * [MODIFIED] Le scénario narratif (LF) inclut désormais les alertes Incendie et Gaz.
+     * The narrative (LF) scenario now includes Fire and Gas alerts.
      */
     const scenario = [
         // 1. Start Palladium Core WO
@@ -359,16 +359,16 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         // 6. WMS PICK
         () => ({ topic: 'stark_industries/malibu_facility/wms/stock_movement', payload: { type: "PICK", itemNumber: "ARC-VB-CASE-03", quantity: 1, workOrderId: simState.workOrders.vibraniumCasing.id, location: "RACK-12C" } }),
         
-        // --- [NEW] Scénario d'alarme incendie ---
-        // 7. Déclenchement de l'alarme
+        // --- Fire alarm scenario ---
+        // 7. Trigger alarm
         () => { logger.warn("SIMULATOR: Injecting FIRE ALARM near Laser Welder."); return { topic: 'stark_industries/malibu_facility/fms/fire_alarm', payload: { zone: "Assembly Line 01 - Casing Cell", detector_id: "SMOKE-DET-1138", status: "ALARM" } }; },
-        // 8. L'opérateur arrête la machine à cause de l'alarme
+        // 8. Operator stops machine due to alarm
         () => { simState.equipmentStatus.laser_welder_01.status = 'idle'; return { topic: 'stark_industries/malibu_facility/assembly_line_01/vibranium_casing_cell/mes/operation', payload: { workOrderId: simState.workOrders.vibraniumCasing.id, step: 15, stepName: "EMERGENCY STOP (Fire Alarm)", operator: simState.operators[1], status: "PAUSED" } }; },
-        // 9. Alarme levée (fausse alerte)
+        // 9. Alarm cleared (false alarm)
         () => { logger.info("SIMULATOR: Clearing Fire Alarm."); return { topic: 'stark_industries/malibu_facility/fms/fire_alarm', payload: { zone: "Assembly Line 01 - Casing Cell", detector_id: "SMOKE-DET-1138", status: "CLEAR" } }; },
-        // 10. Reprise du travail
+        // 10. Resume work
         () => { simState.equipmentStatus.laser_welder_01.status = 'running'; return { topic: 'stark_industries/malibu_facility/assembly_line_01/vibranium_casing_cell/mes/operation', payload: { workOrderId: simState.workOrders.vibraniumCasing.id, step: 10, stepName: "Laser welding", operator: simState.operators[1], status: "IN_PROGRESS" } }; },
-        // --- Fin du scénario incendie ---
+        // --- End fire scenario ---
 
         // 11. R&D Lab data
         () => ({ topic: 'stark_industries/malibu_facility/rd_lab_03/experiment_a_01/status', payload: { name: "New Element Synthesis", status: "STABLE", plasma_temp: randomBetween(4500.0, 4550.0), unit: "K" } }),
@@ -381,26 +381,26 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         // 15. MES step 20 for Casing -> Set laser 'idle', cnc 'running'
         () => { simState.equipmentStatus.laser_welder_01.status = 'idle'; simState.equipmentStatus.cnc_mill_05.status = 'running'; return { topic: 'stark_industries/malibu_facility/assembly_line_01/vibranium_casing_cell/mes/operation', payload: { workOrderId: simState.workOrders.vibraniumCasing.id, step: 20, stepName: "5-axis CNC milling", operator: simState.operators[3], status: "IN_PROGRESS" } }; },
         
-        // --- Séquence de corrélation d'incident (Vibration) ---
-        // 16. Injecte la panne
+        // --- Incident correlation sequence (Vibration) ---
+        // 16. Inject fault
         () => { logger.warn("SIMULATOR: Injecting fault into CNC Mill 05. High vibration data will start."); simState.equipmentStatus.cnc_mill_05.status = 'error'; return null; },
-        // 17. Publie l'alerte CMMS
+        // 17. Publish CMMS alert
         () => ({ topic: 'stark_industries/malibu_facility/cmms/maintenance_request', payload: { equipmentId: "cnc_mill_05", equipmentPath: "malibu_facility/assembly_line_01/vibranium_casing_cell/cnc_mill_05", description: "Abnormal vibration detected by J.A.R.V.I.S.", priority: "HIGH" } }),
-        // 18. Simule la "réparation"
+        // 18. Simulate "repair"
         () => { logger.info("SIMULATOR: Fault on CNC Mill 05 is 'resolved'. Data will return to normal."); simState.equipmentStatus.cnc_mill_05.status = 'running'; return null; },
-        // --- Fin de l'incident ---
+        // --- End incident ---
 
         // 19. Security access event
         () => ({ topic: 'stark_industries/malibu_facility/security/access_control/lab_03_main', payload: { user: "Dr. Maya Hansen", access: "GRANTED", timestamp: new Date().toISOString() } }),
         
-        // --- [NEW] Scénario de fuite de gaz (Anoxie) ---
-        // 20. Injecte la fuite (silencieux)
+        // --- Gas leak scenario (Anoxia) ---
+        // 20. Inject leak (silent)
         () => { logger.warn("SIMULATOR: Injecting NITROGEN LEAK. Pressure will drop rapidly."); simState.equipmentStatus.gas_tank_nitrogen.status = 'leaking'; return null; },
-        // 21. Publie l'alerte de sécurité (Anoxie)
+        // 21. Publish safety alert (Anoxia)
         () => ({ topic: 'stark_industries/malibu_facility/safety/atmosphere_alert', payload: { zone: "Infrastructure - Gas Storage", type: "ANOXIA_RISK", details: "Nitrogen (N2) leak detected, O2 displacement risk.", level: "CRITICAL" } }),
-        // 22. Simule la "réparation" de la fuite (silencieux)
+        // 22. Simulate leak "repair" (silent)
         () => { logger.info("SIMULATOR: Nitrogen leak 'repaired'."); simState.equipmentStatus.gas_tank_nitrogen.status = 'online'; return null; },
-        // --- Fin de la fuite ---
+        // --- End leak ---
 
         // 23. Start Repulsor Unit WO
         () => { simState.workOrders.repulsorLift = { id: `WO-REP${Math.floor(10000 + Math.random() * 90000)}`, facility: "malibu", itemNumber: "MARK-42-RLU-01", status: "RELEASED" }; return { topic: `stark_industries/malibu_facility/erp/workorder`, payload: { ...simState.workOrders.repulsorLift, itemName: "Repulsor Lift Unit" } }; },
@@ -413,7 +413,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         // 27. Rework re-test
         () => { if (simState.workOrders.palladiumCore.quality_check === "FAIL") { simState.workOrders.palladiumCore.quality_check = "PASS"; return { topic: 'stark_industries/malibu_facility/quality_control_station/qms/energy_output_test', payload: { workOrderId: simState.workOrders.palladiumCore.id, result: "PASS", value: randomBetween(3.0, 3.2), unit: "GJ/s", details: "Retest post-recalibration OK" } }; } return null; },
         
-        // --- Étapes de complétion ---
+        // --- Completion steps ---
         // 28. Complete Core WO
         () => { simState.equipmentStatus.robot_arm_01.status = 'idle'; simState.workOrders.palladiumCore.status = "COMPLETED"; return { topic: `stark_industries/malibu_facility/erp/workorder`, payload: { ...simState.workOrders.palladiumCore, completionDate: new Date().toISOString() } }; },
         // 29. WMS PUTAWAY
@@ -438,7 +438,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         // --- PUBLISH NBIRTH MESSAGES ON START ---
         publishBirthMessages();
 
-        // Démarrer la boucle NARRATIVE (lente)
+        // Start NARRATIVE loop (slow)
         logger.info(`✅ Starting NARRATIVE loop. Publishing every ${NARRATIVE_INTERVAL_MS / 1000}s.`);
         narrativeInterval = setInterval(() => {
             let msg = null;
@@ -452,11 +452,11 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
 
         }, NARRATIVE_INTERVAL_MS);
 
-        // Démarrer la boucle CAPTEURS (rapide)
+        // Start SENSOR loop (fast)
         if (sensorInterval) clearInterval(sensorInterval);
         logger.info(`✅ Starting SENSOR loop. Publishing every ${SENSOR_INTERVAL_MS / 1000}s.`);
         sensorInterval = setInterval(publishSensorData, SENSOR_INTERVAL_MS);
-        publishSensorData(); // Publier une fois immédiatement
+        publishSensorData(); // Publish once immediately
 
         return { status: 'running' };
     };
@@ -478,7 +478,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
 
         Object.keys(simState.equipmentStatus).forEach(key => {
             if (simState.equipmentStatus[key].status) {
-                // Remettre à 'online' pour l'infrastructure, 'idle' pour les machines
+                // Reset to 'online' for infrastructure, 'idle' for machines
                 if (key.includes('power') || key.includes('gas')) {
                     simState.equipmentStatus[key].status = 'online';
                 } else {

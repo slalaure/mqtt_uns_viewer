@@ -32,7 +32,8 @@ A lightweight, real-time web application to visualize MQTT topic trees and dynam
 -   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database that persists across restarts.
 -   **Advanced History Filtering:** The history view features keyword search (with highlighting) and a dual-handle time-range slider.
 -   **Secure Access:** Optional HTTP Basic Authentication to protect the entire application.
--   **Customizable UI**: Includes a user-selectable dark mode for visual comfort.
+-   **Customizable UI**: Includes a user-selectable dark mode for visual comfort, enable or disable specific view tabs (Tree, SVG, History, Mapper).
+    *
 -   **Containerized:** Runs in a Docker container for simple, one-command deployment.
 
 ---
@@ -207,6 +208,11 @@ The following variables can be set in your `data/.env` file:
 | `DUCKDB_PRUNE_CHUNK_SIZE`| Number of old records to delete when pruning. | `500` |
 | `HTTP_USER` | **[Security]** Username for HTTP Basic Auth. Leave empty to disable. | `admin` |
 | `HTTP_PASSWORD` | **[Security]** Password for HTTP Basic Auth. Leave empty to disable. | `super-secure-password` |
+| `VIEW_TREE_ENABLED` | [cite_start]**[UI]** Enable or disable the 'Tree View' tab. [cite: 17] | `true` |
+| `VIEW_SVG_ENABLED` | **[UI]** Enable or disable the 'SVG View' tab. | `true` |
+| `VIEW_HISTORY_ENABLED` | **[UI]** Enable or disable the 'History' tab. | `true` |
+| `VIEW_MAPPER_ENABLED` | **[UI]** Enable or disable the 'Mapper' tab. | `true` |
+| `SVG_FILE_PATH` | **[UI]** The path to the SVG file to load, relative to the 'data' directory. | `view.svg` |
 
 ### Customizing the SVG Plan
 

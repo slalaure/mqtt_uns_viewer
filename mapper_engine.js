@@ -3,7 +3,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * [V2] Mapper Engine for real-time topic and payload transformation.
+ * Mapper Engine for real-time topic and payload transformation.
  * Supports versioning, multi-target rules, JS/Mustache modes, and metrics.
  */
 const fs = require('fs');
