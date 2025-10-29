@@ -132,12 +132,8 @@ logger.info(`✅ Application base path set to: ${basePath}`);
 
 
 // --- Helper Function for Sparkplug (handles BigInt) ---
-function longReplacer(key, value) {
-    if (typeof value === 'bigint') {
-        return value.toString(); // Convert BigInt to string for JSON
-    }
-    return value;
-}
+// (This function is already defined globally, no need to redefine)
+
 // --- Helper to safely parse potentially non-JSON ---
 function safeJsonParse(str) {
     try {
@@ -342,9 +338,57 @@ wss.on('connection', (ws, req) => {
     // Send initial batch of historical data
     db.all("SELECT * FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
         if (!err && ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({ type: 'history-initial-data', data: rows }));
+            // [MODIFIED] Stringify payloads before sending
+            const processedRows = rows.map(row => {
+                if (typeof row.payload === 'object' && row.payload !== null) {
+                    try {
+                        row.payload = JSON.stringify(row.payload, longReplacer);
+                    } catch (e) {
+                        logger.warn({ err: e, topic: row.topic }, "Failed to stringify history payload");
+                        row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
+                    }
+                } else if (row.payload === null) {
+                    row.payload = 'null';
+                }
+                return row;
+            });
+            ws.send(JSON.stringify({ type: 'history-initial-data', data: processedRows }));
         }
     });
+
+    // [NEW] Send initial tree state (latest message for EVERY topic)
+    const treeStateQuery = `
+        WITH RankedEvents AS (
+            SELECT *, ROW_NUMBER() OVER(PARTITION BY topic ORDER BY timestamp DESC) as rn
+            FROM mqtt_events
+        )
+        SELECT topic, payload, timestamp
+        FROM RankedEvents
+        WHERE rn = 1
+        ORDER BY topic ASC;
+    `;
+    db.all(treeStateQuery, (err, rows) => {
+        if (err) {
+            logger.error({ err }, "❌ DuckDB Error fetching initial tree state");
+        } else if (ws.readyState === ws.OPEN) {
+            // [NEW] Stringify payloads before sending
+            const processedRows = rows.map(row => {
+                if (typeof row.payload === 'object' && row.payload !== null) {
+                    try {
+                        row.payload = JSON.stringify(row.payload, longReplacer);
+                    } catch (e) {
+                        logger.warn({ err: e, topic: row.topic }, "Failed to stringify tree-state payload");
+                        row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
+                    }
+                } else if (row.payload === null) {
+                    row.payload = 'null';
+                }
+                return row;
+            });
+            ws.send(JSON.stringify({ type: 'tree-initial-state', data: processedRows }));
+        }
+    });
+
 
     // Handle messages from client (e.g., request for specific topic history)
     ws.on('message', (message) => {
@@ -355,7 +399,21 @@ wss.on('connection', (ws, req) => {
                     if (err) {
                         logger.error({ err, topic: parsedMessage.topic }, `❌ DuckDB Error fetching history for topic`);
                     } else if (ws.readyState === ws.OPEN) {
-                        ws.send(JSON.stringify({ type: 'topic-history-data', topic: parsedMessage.topic, data: rows }));
+                        // [MODIFIED] Stringify payloads before sending
+                        const processedRows = rows.map(row => {
+                            if (typeof row.payload === 'object' && row.payload !== null) {
+                                try {
+                                    row.payload = JSON.stringify(row.payload, longReplacer);
+                                } catch (e) {
+                                    logger.warn({ err: e, topic: row.topic }, "Failed to stringify topic-history payload");
+                                    row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
+                                }
+                            } else if (row.payload === null) {
+                                row.payload = 'null';
+                            }
+                            return row;
+                        });
+                        ws.send(JSON.stringify({ type: 'topic-history-data', topic: parsedMessage.topic, data: processedRows }));
                     }
                 });
             }

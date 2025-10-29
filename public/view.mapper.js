@@ -1,0 +1,710 @@
+/**
+ * @license MIT
+ * @author Sebastien Lalaurette
+ * @copyright (c) 2025 Sebastien Lalaurette
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+// Import shared utilities
+import { mqttPatternToClientRegex } from './utils.js';
+
+// --- DOM Element Querying ---
+const mapperTreeContainer = document.getElementById('mapper-tree');
+const mapperPayloadTopic = document.getElementById('mapper-payload-topic');
+const mapperPayloadContent = document.getElementById('mapper-payload-content');
+const mapperTransformPlaceholder = document.getElementById('mapper-transform-placeholder');
+const mapperTransformForm = document.getElementById('mapper-transform-form');
+const mapperVersionSelect = document.getElementById('mapper-version-select');
+const mapperSaveButton = document.getElementById('mapper-save-button');
+const mapperSaveAsNewButton = document.getElementById('mapper-save-as-new-button');
+const mapperSaveStatus = document.getElementById('mapper-save-status');
+const mapperSourceTopicInput = document.getElementById('mapper-source-topic');
+const mapperAddTargetButton = document.getElementById('mapper-add-target-button');
+const mapperTargetsList = document.getElementById('mapper-targets-list');
+const mapperTargetsPlaceholder = document.getElementById('mapper-targets-placeholder');
+const mapperTargetTemplate = document.getElementById('mapper-target-template');
+const deleteModalBackdrop = document.getElementById('delete-rule-modal-backdrop');
+const deleteModalTopic = document.getElementById('delete-modal-topic');
+const deleteModalPattern = document.getElementById('delete-modal-pattern');
+const modalBtnCancel = document.getElementById('modal-btn-cancel');
+const modalBtnDeleteRule = document.getElementById('modal-btn-delete-rule');
+const modalBtnDeletePrune = document.getElementById('modal-btn-delete-prune');
+
+// --- Module-level State ---
+let mapperConfig = { versions: [], activeVersionId: null };
+let mapperMetrics = {};
+let mappedTargetTopics = new Set();
+let mapperSaveTimer = null;
+let currentEditingSourceTopic = null;
+let defaultJSCode = '';
+let selectedMapperNode = null;
+let deleteModalContext = null;
+
+// --- Callbacks from main app.js ---
+// These will be populated by initMapperView()
+let appCallbacks = {
+    pruneTopicFromFrontend: () => console.error("pruneTopicFromFrontend callback not set"),
+    getSubscribedTopics: () => ['#'], // Default fallback
+    colorAllTrees: () => console.error("colorAllTrees callback not set"),
+    displayPayload: () => console.error("displayPayload callback not set"),
+};
+
+/**
+ * Initializes the Mapper View functionality.
+ * This is called once by app.js when the app loads.
+ * @param {object} callbacks - An object containing callback functions from app.js
+ */
+export function initMapperView(callbacks) {
+    appCallbacks = { ...appCallbacks, ...callbacks };
+    
+    loadMapperConfig(); // Load initial config
+    
+    // Add event listeners
+    mapperSaveButton?.addEventListener('click', onSave);
+    mapperSaveAsNewButton?.addEventListener('click', onSaveAsNew);
+    mapperVersionSelect?.addEventListener('change', onVersionChange);
+    mapperAddTargetButton?.addEventListener('click', onAddTarget);
+    
+    // Modal listeners
+    modalBtnCancel?.addEventListener('click', hidePruneModal);
+    modalBtnDeleteRule?.addEventListener('click', onDeleteRule);
+    modalBtnDeletePrune?.addEventListener('click', onDeleteAndPrune);
+}
+
+/**
+ * Updates the mapper's internal state with new metrics from the server.
+ * @param {object} newMetrics - The metrics object from the WebSocket.
+ */
+export function updateMapperMetrics(newMetrics) {
+    mapperMetrics = newMetrics;
+    // If the user is currently editing a rule, update its metrics
+    if (currentEditingSourceTopic) {
+        updateMetricsForEditor(currentEditingSourceTopic);
+    }
+}
+
+/**
+ * Updates the mapper's internal state with a new config from the server.
+ * @param {object} newConfig - The config object from the WebSocket.
+ */
+export function updateMapperConfig(newConfig) {
+    console.log("Received config update from server");
+    mapperConfig = newConfig;
+    updateMapperVersionSelector();
+    appCallbacks.colorAllTrees(); // Trigger a re-color
+}
+
+/**
+ * Handles a click event on a node in the Mapper tree.
+ * This function is exported and attached by app.js.
+ * @param {Event} event - The click event.
+ */
+export function handleMapperNodeClick(event) {
+    const targetContainer = event.currentTarget;
+    const li = targetContainer.closest('li');
+
+    // Remove selection from old node
+    if (selectedMapperNode) {
+        selectedMapperNode.classList.remove('selected');
+    }
+    // Add selection to new node
+    selectedMapperNode = targetContainer;
+    selectedMapperNode.classList.add('selected');
+
+    const topic = targetContainer.dataset.topic;
+    const payload = targetContainer.dataset.payload; // Payload is stored on all nodes
+
+    // --- Check if it's a file or folder ---
+    if (li.classList.contains('is-file')) {
+        // It's a file node (object) - show payload and editor
+        currentEditingSourceTopic = topic; // Store this
+        appCallbacks.displayPayload(topic, payload, mapperPayloadTopic, mapperPayloadContent);
+        renderTransformEditor(topic);
+    } else {
+        // It's a folder node - show placeholder, hide editor
+        currentEditingSourceTopic = null; // Clear editing topic
+        appCallbacks.displayPayload(topic, "N/A (Folder selected)", mapperPayloadTopic, mapperPayloadContent); // Show folder info
+        mapperTransformPlaceholder.style.display = 'block'; // Show placeholder
+        mapperTransformForm.style.display = 'none'; // Hide form
+    }
+}
+
+/**
+ * Gets the current mapper config state.
+ * @returns {object} The mapper config.
+ */
+export function getMapperConfig() {
+    return mapperConfig;
+}
+
+/**
+ * Gets the current set of mapped target topics.
+ * @returns {Set<string>} The set of topics.
+ */
+export function getMappedTargetTopics() {
+    return mappedTargetTopics;
+}
+
+/**
+ * Adds a topic to the set of locally generated target topics.
+ * @param {string} topic - The topic to add.
+ */
+export function addMappedTargetTopic(topic) {
+    mappedTargetTopics.add(topic);
+}
+
+/**
+ * Finds the active rule configuration for a given topic.
+ * @param {string} topic The topic string.
+ * @returns {string|null} 'source' or 'target' if a rule applies, or null.
+ */
+export function getTopicMappingStatus(topic) {
+    if (!mapperConfig || !mapperConfig.versions) return null;
+
+    // Check if it's a target topic (fast check)
+    if (mappedTargetTopics.has(topic)) return 'target';
+
+    const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+    if (!activeVersion) return null;
+
+    // Check if it's a source topic
+    for (const rule of activeVersion.rules) {
+        if (rule.sourceTopic === topic) {
+            return 'source';
+        }
+        // Check if it's a parent of a rule
+        const pattern = rule.sourceTopic.replace(/(\/\+.*|\/\#.*)/g, '');
+            if (topic === pattern && topic !== rule.sourceTopic) {
+                return 'source'; // Mark parent folder as source too
+        }
+    }
+    return null;
+}
+
+// --- Internal Logic ---
+
+/**
+ * Loads the initial mapper configuration from the server.
+ */
+async function loadMapperConfig() {
+    try {
+        const response = await fetch('api/mapper/config');
+        if (!response.ok) throw new Error('Failed to fetch mapper config');
+        mapperConfig = await response.json();
+
+        // For now, use a hardcoded default.
+        defaultJSCode = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
+// Return the modified 'msg' object to publish.
+// Return null or undefined to skip publishing.
+
+return msg;
+`;
+
+        updateMapperVersionSelector();
+        appCallbacks.colorAllTrees();
+    } catch (error) {
+        console.error('Error loading mapper config:', error);
+        showMapperSaveStatus('Error loading config', 'error');
+    }
+}
+
+/**
+ * Populates the version <select> dropdown.
+ */
+function updateMapperVersionSelector() {
+    if (!mapperVersionSelect) return;
+    mapperVersionSelect.innerHTML = '';
+    mapperConfig.versions.forEach(version => {
+        const option = document.createElement('option');
+        option.value = version.id;
+        option.textContent = version.name;
+        if (version.id === mapperConfig.activeVersionId) {
+            option.selected = true;
+        }
+        mapperVersionSelect.appendChild(option);
+    });
+}
+
+/**
+ * Finds or creates a rule object in the active version.
+ * @param {string} sourceTopic - The topic to find a rule for.
+ * @param {boolean} createIfMissing - Whether to create a new rule if not found.
+ * @returns {object|null} The rule object.
+ */
+function getRuleForTopic(sourceTopic, createIfMissing = false) {
+    const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+    if (!activeVersion) return null;
+
+    let rule = activeVersion.rules.find(r => r.sourceTopic === sourceTopic);
+    if (!rule && createIfMissing) {
+        rule = {
+            sourceTopic: sourceTopic,
+            targets: []
+        };
+        activeVersion.rules.push(rule);
+    }
+    return rule;
+}
+
+/**
+ * Renders the bottom-right editor panel for a given topic.
+ * @param {string} sourceTopic - The topic to render the editor for.
+ */
+function renderTransformEditor(sourceTopic) {
+    mapperTransformPlaceholder.style.display = 'none';
+    mapperTransformForm.style.display = 'flex';
+    mapperSourceTopicInput.value = sourceTopic;
+    mapperTargetsList.innerHTML = '';
+
+    const rule = getRuleForTopic(sourceTopic, false); // Don't create yet
+
+    if (!rule || rule.targets.length === 0) {
+        mapperTargetsPlaceholder.style.display = 'block';
+    } else {
+        mapperTargetsPlaceholder.style.display = 'none';
+        rule.targets.forEach(target => {
+            const targetEditor = createTargetEditor(rule, target);
+            mapperTargetsList.appendChild(targetEditor);
+        });
+    }
+    // Ensure metrics are updated when editor is shown
+    updateMetricsForEditor(sourceTopic);
+}
+
+/**
+ * Checks if a given topic matches any of the app's subscription patterns.
+ * @param {string} outputTopic - The topic to check.
+ * @returns {boolean} True if the topic is subscribed.
+ */
+function isTopicSubscribed(outputTopic) {
+    const subscriptionPatterns = appCallbacks.getSubscribedTopics();
+    if (!subscriptionPatterns || subscriptionPatterns.length === 0) {
+        return false;
+    }
+    // Special case: If subscribed to '#', any topic is valid
+    if (subscriptionPatterns.includes('#')) {
+            return true;
+    }
+
+    for (const pattern of subscriptionPatterns) {
+            // Handle simple prefix matching for '#' ending patterns
+            if (pattern.endsWith('/#')) {
+                const prefix = pattern.substring(0, pattern.length - 1); // Get 'a/b/' from 'a/b/#'
+                if (outputTopic.startsWith(prefix)) {
+                    return true;
+                }
+            }
+            // Handle exact match or '+' matching using Regex (simplified)
+            else {
+                    const regex = mqttPatternToClientRegex(pattern);
+                    if (regex.test(outputTopic)) {
+                        return true;
+                    }
+            }
+    }
+    return false; // No pattern matched
+}
+
+/**
+ * Creates the DOM for a single target editor.
+ * @param {object} rule - The parent rule object.
+ * @param {object} target - The target object to create an editor for.
+ * @returns {HTMLElement} The populated editor element.
+ */
+function createTargetEditor(rule, target) {
+    const template = mapperTargetTemplate.content.cloneNode(true);
+    const editorDiv = template.querySelector('.mapper-target-editor');
+    editorDiv.dataset.targetId = target.id;
+
+    const isSourceSparkplug = rule.sourceTopic.startsWith('spBv1.0/');
+
+    const title = editorDiv.querySelector('.target-editor-title');
+    title.textContent = `Target: ${target.id.substring(0, 8)}`;
+
+    const enabledToggle = editorDiv.querySelector('.target-enabled-toggle');
+    enabledToggle.checked = target.enabled;
+    enabledToggle.addEventListener('change', () => {
+        target.enabled = enabledToggle.checked;
+    });
+
+    const deleteButton = editorDiv.querySelector('.target-delete-button');
+    deleteButton.addEventListener('click', () => {
+        showPruneModal(rule, target);
+    });
+
+    const outputTopicInput = editorDiv.querySelector('.target-output-topic');
+    outputTopicInput.value = target.outputTopic;
+
+    // --- Validation logic ---
+    const validateTopic = () => {
+        const topicValue = outputTopicInput.value.trim();
+        target.outputTopic = topicValue; // Update data model immediately
+
+        let warningMessage = '';
+        let isError = false;
+
+        if (topicValue) {
+            if (!isTopicSubscribed(topicValue)) {
+                warningMessage = 'Warning: This topic might not be covered by current subscriptions.';
+            }
+            if (isSourceSparkplug && topicValue.startsWith('spBv1.0/')) {
+                warningMessage += (warningMessage ? '\n' : '') + 'Warning: Republishing Sparkplug data to spBv1.0/ namespace can cause decoding loops. Consider using your UNS namespace.';
+            }
+            if (!isSourceSparkplug && topicValue.startsWith('spBv1.0/')) {
+                warningMessage = 'ERROR: Cannot map a non-Sparkplug source to the spBv1.0/ namespace. Target topic is invalid.';
+                isError = true;
+            }
+        }
+
+        outputTopicInput.classList.remove('input-warning', 'input-error');
+        if (isError) {
+            outputTopicInput.classList.add('input-error');
+            outputTopicInput.title = warningMessage;
+        } else if (warningMessage) {
+            outputTopicInput.classList.add('input-warning');
+            outputTopicInput.title = warningMessage;
+        } else {
+            outputTopicInput.title = '';
+        }
+    };
+    outputTopicInput.addEventListener('input', validateTopic);
+    validateTopic();
+    // --- END Validation ---
+
+    const codeLabel = editorDiv.querySelector('.target-code-label');
+    codeLabel.textContent = 'Transform (JavaScript)';
+
+    const codeEditor = editorDiv.querySelector('.target-code-editor');
+    target.code = (target.code && target.code.includes('return msg;')) ? target.code : defaultJSCode;
+    codeEditor.value = target.code;
+
+    codeEditor.addEventListener('input', () => {
+        target.code = codeEditor.value;
+    });
+
+    updateMetricsForTarget(editorDiv, rule.sourceTopic, target.id);
+
+    return editorDiv;
+}
+
+/**
+ * Event handler for the "Add Target" button.
+ */
+function onAddTarget() {
+    if (!currentEditingSourceTopic) return;
+
+    const rule = getRuleForTopic(currentEditingSourceTopic, true); // Create rule if needed
+
+    const defaultOutputTopic = currentEditingSourceTopic + Math.floor(Math.random() * 100);
+
+    const newTarget = {
+        id: `tgt_${Date.now()}`,
+        enabled: true,
+        outputTopic: defaultOutputTopic,
+        mode: "js",
+        code: defaultJSCode
+    };
+
+    rule.targets.push(newTarget);
+    renderTransformEditor(currentEditingSourceTopic); // Re-render
+}
+
+/**
+ * Updates the metrics display for all targets in the editor.
+ * @param {string} sourceTopic - The source topic being edited.
+ */
+function updateMetricsForEditor(sourceTopic) {
+    if (!sourceTopic || sourceTopic !== currentEditingSourceTopic) return;
+
+    const rule = getRuleForTopic(sourceTopic, false);
+    if (!rule) return;
+
+    rule.targets.forEach(target => {
+        const editorDiv = mapperTargetsList.querySelector(`.mapper-target-editor[data-target-id="${target.id}"]`);
+        if (editorDiv) {
+            updateMetricsForTarget(editorDiv, sourceTopic, target.id);
+        }
+    });
+}
+
+/**
+ * Updates the metrics for a single target editor.
+ * @param {HTMLElement} editorDiv - The DOM element for the target editor.
+ * @param {string} sourceTopic - The source topic.
+ * @param {string} targetId - The target ID.
+ */
+function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
+    const ruleId = `${sourceTopic}::${targetId}`;
+    const ruleMetrics = mapperMetrics[ruleId];
+
+    const countSpan = editorDiv.querySelector('.metric-count');
+    const logsList = editorDiv.querySelector('.target-logs-list');
+
+    if (ruleMetrics) {
+        countSpan.textContent = ruleMetrics.count;
+        if (ruleMetrics.logs && ruleMetrics.logs.length > 0) {
+            logsList.innerHTML = '';
+            ruleMetrics.logs.forEach(log => {
+                const logDiv = document.createElement('div');
+                logDiv.className = 'target-log-entry';
+                logDiv.innerHTML = `
+                    <span class="log-entry-ts">${new Date(log.ts).toLocaleTimeString()}</span>
+                    <span class="log-entry-topic">${log.outTopic}</span>
+                `;
+                logDiv.title = `Payload: ${log.outPayload}`;
+                logsList.appendChild(logDiv);
+            });
+        } else {
+            logsList.innerHTML = '<p class="history-placeholder">No executions yet.</p>';
+        }
+    } else {
+        countSpan.textContent = '0';
+        logsList.innerHTML = '<p class="history-placeholder">No executions yet.</p>';
+    }
+}
+
+/**
+ * Event handler for the "Save" button.
+ */
+async function onSave() {
+    let hasInvalidMapping = false;
+    const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+    if (activeVersion && activeVersion.rules) {
+        for (const rule of activeVersion.rules) {
+            const isSourceSparkplug = rule.sourceTopic.startsWith('spBv1.0/');
+            for (const target of rule.targets) {
+                if (!isSourceSparkplug && target.outputTopic.startsWith('spBv1.0/')) {
+                    hasInvalidMapping = true;
+                    if (currentEditingSourceTopic === rule.sourceTopic) {
+                            const editorDiv = mapperTargetsList.querySelector(`.mapper-target-editor[data-target-id="${target.id}"]`);
+                            if(editorDiv) {
+                                const outputTopicInput = editorDiv.querySelector('.target-output-topic');
+                                outputTopicInput?.classList.add('input-error');
+                                outputTopicInput?.focus();
+                            }
+                    }
+                }
+            }
+        }
+    }
+
+    if (hasInvalidMapping) {
+        showMapperSaveStatus('ERROR: Invalid mapping(s) found (JSON Source -> spBv1.0/ Target). Cannot save.', 'error');
+        return;
+    }
+
+    showMapperSaveStatus('Saving...');
+    try {
+        if(activeVersion) {
+            activeVersion.rules = activeVersion.rules.filter(r => r.targets && r.targets.length > 0);
+        }
+
+        const response = await fetch('api/mapper/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mapperConfig)
+        });
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to save');
+        }
+        showMapperSaveStatus('Saved!', 'success');
+        appCallbacks.colorAllTrees();
+    } catch (error) {
+        console.error('Error saving mapper config:', error);
+        showMapperSaveStatus(error.message, 'error');
+    }
+}
+
+/**
+ * Event handler for the "Save as New..." button.
+ */
+function onSaveAsNew() {
+    const activeVersionName = mapperVersionSelect.options[mapperVersionSelect.selectedIndex]?.text || 'current';
+    const newVersionName = prompt("Enter a name for the new version:", `Copy of ${activeVersionName}`);
+    if (!newVersionName) return;
+
+    const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+    if (!activeVersion) return;
+
+    const newVersion = JSON.parse(JSON.stringify(activeVersion));
+    newVersion.id = `v_${Date.now()}`;
+    newVersion.name = newVersionName;
+    newVersion.createdAt = new Date().toISOString();
+    newVersion.rules = newVersion.rules.filter(r => r.targets && r.targets.length > 0);
+
+    mapperConfig.versions.push(newVersion);
+    mapperConfig.activeVersionId = newVersion.id;
+
+    updateMapperVersionSelector();
+    onSave(); // Trigger a save
+}
+
+/**
+ * Event handler for changing the active version.
+ */
+function onVersionChange() {
+    mapperConfig.activeVersionId = mapperVersionSelect.value;
+
+    if (currentEditingSourceTopic) {
+        renderTransformEditor(currentEditingSourceTopic);
+    } else {
+        mapperTransformPlaceholder.style.display = 'block';
+        mapperTransformForm.style.display = 'none';
+    }
+    
+    appCallbacks.colorAllTrees();
+}
+
+/**
+ * Shows a status message (e.g., "Saved!") in the mapper UI.
+ * @param {string} message - The text to display.
+ * @param {string} type - 'success' or 'error'.
+ */
+function showMapperSaveStatus(message, type = 'success') {
+    if (!mapperSaveStatus) return;
+    mapperSaveStatus.textContent = message;
+    mapperSaveStatus.className = type;
+    clearTimeout(mapperSaveTimer);
+    mapperSaveTimer = setTimeout(() => {
+        mapperSaveStatus.textContent = '';
+        mapperSaveStatus.className = '';
+    }, 3000);
+}
+
+// --- Delete Modal Logic ---
+
+/**
+ * Shows the "Delete/Prune" modal.
+ * @param {object} rule - The parent rule.
+ * @param {object} target - The target being deleted.
+ */
+function showPruneModal(rule, target) {
+    deleteModalContext = { rule, target };
+
+    deleteModalTopic.textContent = target.outputTopic;
+
+    let pattern = target.outputTopic;
+    if (pattern.includes('{{')) {
+        pattern = target.outputTopic.replace(/\{\{.+?\}\}/g, '+');
+        if (pattern.endsWith('/+')) {
+            pattern = pattern.substring(0, pattern.length - 1) + '#';
+        }
+    }
+    deleteModalPattern.value = pattern;
+
+    deleteModalBackdrop.style.display = 'flex';
+}
+
+/**
+ * Hides the "Delete/Prune" modal.
+ */
+function hidePruneModal() {
+    deleteModalBackdrop.style.display = 'none';
+    deleteModalContext = null;
+}
+
+/**
+ * Event handler for "Delete rule only" button.
+ */
+function onDeleteRule() {
+    if (!deleteModalContext) return;
+    const { rule, target } = deleteModalContext;
+
+    rule.targets = rule.targets.filter(t => t.id !== target.id);
+
+    if (rule.targets.length === 0) {
+        const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+        if(activeVersion) {
+            activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic !== rule.sourceTopic);
+        }
+        currentEditingSourceTopic = null;
+        mapperTransformPlaceholder.style.display = 'block';
+        mapperTransformForm.style.display = 'none';
+    } else {
+        renderTransformEditor(rule.sourceTopic);
+    }
+
+    onSave(); // Save changes
+    hidePruneModal();
+}
+
+/**
+ * Event handler for "Delete AND Prune history" button.
+ */
+async function onDeleteAndPrune() {
+    if (!deleteModalContext) return;
+    const { rule, target } = deleteModalContext;
+    const topicPattern = deleteModalPattern.value;
+
+    // Use the callback to notify app.js to ignore this pattern
+    appCallbacks.addPruneIgnorePattern(topicPattern);
+
+    modalBtnDeletePrune.disabled = true;
+    showMapperSaveStatus('Purging history...', 'info');
+
+    try {
+        const response = await fetch('api/context/prune-topic', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topicPattern })
+        });
+        if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to prune database.');
+        }
+        const result = await response.json();
+        console.log(`Pruned ${result.count} entries from DB.`);
+
+        rule.targets = rule.targets.filter(t => t.id !== target.id);
+
+        let ruleWasRemoved = false;
+        if (rule.targets.length === 0) {
+            const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+            if(activeVersion) {
+                activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic !== rule.sourceTopic);
+            }
+                ruleWasRemoved = true;
+        }
+
+        await onSave(); // Save config changes
+
+        // Use the callback to trigger a frontend-wide prune and rebuild
+        await appCallbacks.pruneTopicFromFrontend(topicPattern);
+
+        if(ruleWasRemoved) {
+            currentEditingSourceTopic = null;
+            mapperTransformPlaceholder.style.display = 'block';
+            mapperTransformForm.style.display = 'none';
+        } else {
+            renderTransformEditor(rule.sourceTopic);
+        }
+
+        showMapperSaveStatus(`Rule deleted & ${result.count} entries pruned.`, 'success');
+        hidePruneModal();
+
+    } catch (err) {
+        console.error('Error during prune operation:', err);
+        showMapperSaveStatus(`Prune failed: ${err.message}`, 'error');
+        hidePruneModal();
+    } finally {
+            modalBtnDeletePrune.disabled = false;
+    }
+}
