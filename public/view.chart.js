@@ -200,44 +200,86 @@ export function updateChartSliderUI(min, max, isInitialLoad = false) {
 
 /**
  * [HELPER] Safely gets a nested value from an object using a dot-notation string.
+ * [MODIFIED] Now understands Sparkplug-style array paths like 'metrics[Level]'.
  * @param {object} obj - The object to search.
- * @param {string} path - The dot-notation path (e.g., "variables.temp").
+ * @param {string} path - The dot-notation path (e.g., "variables.temp" or "metrics[Level]").
  * @returns {*} The value, or undefined if not found.
  */
 function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return undefined;
-    return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
+
+    // [CORRECTION] Split by '.' or by literal '[' and ']'
+    // e.g., "metrics[Level]" becomes ["metrics", "Level"]
+    // e.g., "timestamp.low" becomes ["timestamp", "low"]
+    const parts = path.split(/\.|\[|\]/).filter(Boolean); // Removed '\\'
+
+    let current = obj;
+    for (const part of parts) {
+        if (current === undefined || current === null) return undefined;
+
+        if (Array.isArray(current)) {
+            // If we're in an array, assume it's a Sparkplug metrics array
+            // and the 'part' is the 'name' we're looking for.
+            const metric = current.find(m => m.name === part);
+            current = metric ? metric.value : undefined;
+        } else {
+            // Standard object property access
+            current = current[part];
+        }
+    }
+    return current;
 }
+
 
 /**
  * [HELPER] Recursively finds all numeric properties in a JSON object.
- * Now also detects strings that are valid numbers.
- * @param {object} obj - The object to scan.
+ * [MODIFIED] Now handles Sparkplug 'metrics' arrays and string-based numbers.
+ * @param {object} obj - The object or array to scan.
  * @param {string} path - The current path prefix.
  * @param {Array} list - The list to add results to.
  */
 function findNumericKeys(obj, path = '', list = []) {
     if (obj === null || typeof obj !== 'object') return list;
 
+    // [NEW] Special handling for arrays (like Sparkplug 'metrics')
+    if (Array.isArray(obj)) {
+        // Check if it looks like a Sparkplug metrics array
+        if (obj.length > 0 && obj.every(item => typeof item === 'object' && item.hasOwnProperty('name') && item.hasOwnProperty('value'))) {
+            obj.forEach(metric => {
+                // Create a custom path like 'metrics[Level]'
+                const newPath = path ? `${path}[${metric.name}]` : `[${metric.name}]`; 
+                const value = metric.value;
+                
+                if (typeof value === 'number') {
+                    list.push({ path: newPath, type: Number.isInteger(value) ? 'int' : 'float' });
+                } else if (typeof value === 'string' && value.trim() !== '') {
+                    // Check if string is a number
+                    if (!isNaN(parseFloat(value)) && isFinite(Number(value))) {
+                        list.push({ path: newPath, type: value.includes('.') ? 'float (string)' : 'int (string)' });
+                    }
+                }
+                // Note: We don't recurse deeper into metric.value, assume it's a primitive or non-chartable
+            });
+        }
+        // We don't process other types of arrays (e.g., [1, 2, 3]) for now.
+        return list;
+    }
+
+    // Standard object property iteration (for non-array objects)
     for (const key of Object.keys(obj)) {
         const newPath = path ? `${path}.${key}` : key;
         const value = obj[key];
 
         if (typeof value === 'number') {
-            // It's already a number
             list.push({ path: newPath, type: Number.isInteger(value) ? 'int' : 'float' });
-        
         } else if (typeof value === 'string' && value.trim() !== '') {
-            // Check if it's a string that represents a number
             if (!isNaN(parseFloat(value)) && isFinite(Number(value))) {
                 list.push({ path: newPath, type: value.includes('.') ? 'float (string)' : 'int (string)' });
             }
-        
-        } else if (typeof value === 'object' && !Array.isArray(value)) {
-            // Recurse into sub-objects
+        } else if (typeof value === 'object') { // Recurse for both objects and arrays
+            // This will pass arrays to the special handling block above
             findNumericKeys(value, newPath, list);
         }
-        // We ignore arrays for simplicity
     }
     return list;
 }
@@ -267,7 +309,8 @@ function populateChartVariables(payloadString) {
         numericKeys.forEach(key => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'chart-variable-item';
-
+            
+            // key.path is now 'timestamp.low' or 'metrics[Level]'
             const varId = `${selectedChartTopic}|${key.path}`;
 
             const checkbox = document.createElement('input');
@@ -275,7 +318,7 @@ function populateChartVariables(payloadString) {
             checkbox.id = `chart-var-${varId.replace(/[^a-zA-Z0-9]/g, '_')}`; // Create a DOM-safe ID
             checkbox.value = varId; // Store the unique ID
             checkbox.dataset.topic = selectedChartTopic;
-            checkbox.dataset.path = key.path;
+            checkbox.dataset.path = key.path; // Store the path
             
             // Check if this variable is in our global map
             checkbox.checked = chartedVariables.has(varId);
@@ -284,7 +327,7 @@ function populateChartVariables(payloadString) {
 
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
-            label.textContent = key.path;
+            label.textContent = key.path; // Show the path e.g., 'metrics[Level]'
 
             const typeSpan = document.createElement('span');
             typeSpan.className = 'var-type';
@@ -324,13 +367,13 @@ function onClearAll() {
  */
 function onChartVariableToggle(event) {
     const checkbox = event.target;
-    const varId = checkbox.value; // e.g., "topic/a|value"
+    const varId = checkbox.value; // e.g., "topic/a|metrics[Level]"
 
     if (checkbox.checked) {
         // Add to map
         chartedVariables.set(varId, {
             topic: checkbox.dataset.topic,
-            path: checkbox.dataset.path
+            path: checkbox.dataset.path // e.g., "metrics[Level]"
         });
     } else {
         // Remove from map
@@ -347,7 +390,7 @@ function onChartVariableToggle(event) {
 /**
  * Main function to generate or update the chart.
  * This now builds the chart from the global 'chartedVariables' map.
- * [MODIFIED] Added dynamic Y-axis generation.
+ * Added dynamic Y-axis generation.
  */
 function onGenerateChart() {
     // 1. Check if we have any variables to plot
@@ -391,12 +434,12 @@ function onGenerateChart() {
     let datasets = [];
     let labels = [];
 
-    // [MODIFIED] Get shared color info
+    // Get shared color info
     const isDarkMode = document.body.classList.contains('dark-mode');
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
     const textColor = isDarkMode ? '#e0e0e0' : '#333';
 
-    // [NEW] Prepare dynamic scales object
+    // Prepare dynamic scales object
     const dynamicScales = {
         x: {
             type: 'time',
@@ -415,7 +458,9 @@ function onGenerateChart() {
         // Initialize totals map
         chartedVariables.forEach((varInfo, varId) => {
             const topicParts = varInfo.topic.split('/');
-            const label = `${topicParts.slice(-2).join('/')} | ${varInfo.path}`;
+            // Use path, but clean brackets for label
+            const cleanPath = varInfo.path.replace(/\[|\]/g, ''); // Remove brackets
+            const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
             totals[label] = 0;
         });
 
@@ -426,6 +471,7 @@ function onGenerateChart() {
                     try {
                         const payload = JSON.parse(entry.payload);
                         
+                        // Use new getNestedValue
                         let value = getNestedValue(payload, path);
                         if (typeof value === 'string') {
                             const numVal = parseFloat(value);
@@ -436,7 +482,8 @@ function onGenerateChart() {
                         
                         if (typeof value === 'number') {
                             const topicParts = topic.split('/');
-                            const label = `${topicParts.slice(-2).join('/')} | ${path}`;
+                            const cleanPath = path.replace(/\[|\]/g, ''); // Remove brackets
+                            const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
                             totals[label] += value;
                         }
                     } catch (e) { /* ignore invalid JSON */ }
@@ -463,6 +510,7 @@ function onGenerateChart() {
                     try {
                         const payload = JSON.parse(entry.payload);
                         
+                        // Use new getNestedValue
                         let value = getNestedValue(payload, path);
                         if (typeof value === 'string') {
                             const numVal = parseFloat(value);
@@ -503,9 +551,10 @@ function onGenerateChart() {
             const data = labels.map(ts => varDataMap.get(ts) ?? null);
 
             const topicParts = topic.split('/');
-            const label = `${topicParts.slice(-2).join('/')} | ${path}`;
+            // Use path, but clean brackets for label
+            const cleanPath = path.replace(/\[|\]/g, ''); // Remove brackets
+            const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
             
-            // [NEW] Define Y-axis ID and position
             const yAxisId = `y${i}`; // e.g., y0, y1, y2
             const position = (i % 2 === 0) ? 'left' : 'right'; // Alternate position
 
@@ -517,10 +566,10 @@ function onGenerateChart() {
                 fill: false,
                 spanGaps: connectNulls,
                 tension: 0.1,
-                yAxisID: yAxisId // [NEW] Assign dataset to this axis
+                yAxisID: yAxisId // Assign dataset to this axis
             });
 
-            // [NEW] Add the scale configuration for this axis
+            // Add the scale configuration for this axis
             dynamicScales[yAxisId] = {
                 type: 'linear',
                 position: position,
@@ -554,7 +603,7 @@ function onGenerateChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            // [MODIFIED] Use the dynamically built scales object
+            // Use the dynamically built scales object
             scales: (chartType === 'pie') ? {} : dynamicScales,
             plugins: {
                 legend: {
