@@ -228,7 +228,47 @@ The following variables can be set in your `data/.env` file:
             <text>Temp: <tspan data-key="value">--</tspan> °C</text>
         </g>
         ```
+### Advanced: Adding Client-Side Alarm Logic
 
+You can make your SVG view smarter by adding client-side alarm logic. This allows you to show or hide elements (like an alarm warning) based on a value comparison, rather than just displaying the value.
+
+1.  **Create a Parent Group:** In your SVG, create a parent group (`<g>`) for the entire alarm line. Give it a class like `alarm-line` and hide it by default.
+    ```xml
+    <g class="alarm-line" style="display: none;">
+        </g>
+    ```
+
+2.  **Add Alarm Attributes:** Find the `<tspan>` element that displays your value (the one with the `data-key`). Add two new attributes to it:
+    * `data-alarm-type`: The comparison type. Can be `H` (High), `HH` (High-High), `L` (Low), or `LL` (Low-Low).
+    * `data-alarm-value`: The numerical threshold for the alarm.
+
+3.  **Example:**
+    This example will only show the text "P. Aspiration Biogaz (HH: 450)" if the value from `variables.AI_PT0101` is **greater than 450**.
+
+    ```xml
+    <g class="alarm-line" style="display: none;">
+        <text x="860" y="420" class="alarm-label">P. Aspiration Biogaz (HH: 450):</text>
+        <text x="1080" y="420" class="alarm-label">
+            <tspan 
+                class="alarm-value" 
+                data-key="variables.AI_PT0101" 
+                data-alarm-type="HH" 
+                data-alarm-value="450"
+            >0.00</tspan>
+            <tspan class="unit-label"> mbar</tspan>
+        </text>
+    </g>
+    ```
+
+4.  **Add a Placeholder (Optional):**
+    If you have a list of alarms, you can add a placeholder text that will be shown when no alarms are active. Simply add an element with the `id="no-alarms-text"`.
+
+    ```xml
+    <text id="no-alarms-text" x="1010" y="490" text-anchor="middle" class="instrument-label">
+        (Aucune alarme active)
+    </text>
+    ```
+    
 ---
 
 ## License

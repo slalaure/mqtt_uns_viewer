@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KINDD, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -98,6 +98,8 @@ async function loadSvgPlan() {
             textElements.forEach(el => {
                 svgInitialTextValues.set(el, el.textContent);
             });
+            // Ensure placeholder is correct on load
+            updateAlarmPlaceholder(); 
         }
     } catch (error) {
         console.error("Could not load the SVG file:", error);
@@ -130,7 +132,56 @@ function toggleFullscreen() {
  */
 function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return null;
+    // This handles keys like 'variables.6000_CPT_CH4_J'
     return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
+}
+
+/**
+ * [NEW HELPER] Checks if a value triggers an alarm.
+ * @param {*} currentValue - The value from the payload (usually a string).
+ * @param {string} alarmType - The type of alarm (e.g., "HH", "H", "L", "LL").
+ * @param {string} alarmThreshold - The threshold value (as a string).
+ * @returns {boolean} True if in alarm, false otherwise.
+ */
+function checkAlarm(currentValue, alarmType, alarmThreshold) {
+    const value = parseFloat(currentValue);
+    const threshold = parseFloat(alarmThreshold);
+
+    // If values are not valid numbers, it's not an alarm.
+    if (isNaN(value) || isNaN(threshold)) {
+        return false;
+    }
+
+    switch (alarmType) {
+        case 'HH': // High-High
+        case 'H':  // High
+            return value > threshold;
+        case 'LL': // Low-Low
+        case 'L':  // Low
+            return value < threshold;
+        default:
+            return false;
+    }
+}
+
+/**
+ * [NEW HELPER] Updates the visibility of the "(Aucune alarme active)" placeholder.
+ * This checks the *entire SVG* for any visible alarm lines.
+ */
+function updateAlarmPlaceholder() {
+    if (!svgContent) return;
+    const noAlarmsEl = svgContent.querySelector('#no-alarms-text');
+    if (!noAlarmsEl) return; // Placeholder not found
+
+    // Find all *visible* alarm lines in the whole document
+    // We check for `style=""` as well in case the default "display: none" was just removed.
+    const visibleAlarms = svgContent.querySelectorAll('.alarm-line[style*="block"]');
+    
+    if (visibleAlarms.length > 0) {
+        noAlarmsEl.style.display = 'none'; // Hide placeholder
+    } else {
+        noAlarmsEl.style.display = 'block'; // Show placeholder
+    }
 }
 
 /**
@@ -149,36 +200,46 @@ export function updateMap(topic, payload) {
         const groupElement = svgContent?.querySelector(`#${svgId}`);
         if (!groupElement) return;
 
-        // [NEW LOGIC]
-        // 1. Find all elements with a data-key *within* this group
+        // [MODIFIED LOGIC]
         const dataElements = groupElement.querySelectorAll('[data-key]');
         
-        // 2. Iterate over them
         dataElements.forEach(el => {
             const keyPath = el.dataset.key; // Get the "variables.STORAGE_LEVEL" string
-            
-            // 3. Get the nested value
             const value = getNestedValue(data, keyPath);
             
-            // 4. Update the text content if the value is found
             if (value !== null && value !== undefined) {
-                // Format numbers to 2 decimal places if they are not integers
+                // 1. Update the text content
                 if (typeof value === 'number' && !Number.isInteger(value)) {
-                    el.textContent = value.toFixed(2);
+                    el.textContent = parseFloat(value).toFixed(2);
                 } else {
                     el.textContent = value;
                 }
+                
+                // 2. --- NEW ALARM LOGIC ---
+                const alarmType = el.dataset.alarmType;
+                const alarmValue = el.dataset.alarmValue;
+                
+                if (alarmType && alarmValue) {
+                    const alarmLineGroup = el.closest('.alarm-line');
+                    if (alarmLineGroup) {
+                        const isAlarm = checkAlarm(value, alarmType, alarmValue);
+                        // Show or hide the entire alarm line
+                        alarmLineGroup.style.display = isAlarm ? 'block' : 'none';
+                    }
+                }
+                // --- END ALARM LOGIC ---
             }
-            // Optional: else { el.textContent = 'N/A'; } // Or just leave it as is
         });
-        // [END NEW LOGIC]
+        
+        // 3. --- UPDATE PLACEHOLDER ---
+        // After processing all elements in this group, check the global alarm state.
+        updateAlarmPlaceholder();
 
         // Add a visual highlight pulse
         groupElement.classList.add('highlight-svg');
         setTimeout(() => groupElement.classList.remove('highlight-svg'), 500);
     } catch (e) { 
-        // Payload is not JSON or element not found, ignore for map
-        console.warn("SVG updateMap error:", e); // Uncomment for debugging
+        console.warn("SVG updateMap error:", e);
     }
 }
 
@@ -209,7 +270,6 @@ export function updateSvgTimelineUI(min, max) {
 
 /**
  * [MODIFIED] Replays the SVG state up to a specific point in time.
- * @param {number} replayUntilTimestamp - The timestamp to replay to.
  */
 function replaySvgHistory(replayUntilTimestamp) {
     if (!svgContent) return;
@@ -218,13 +278,14 @@ function replaySvgHistory(replayUntilTimestamp) {
     svgInitialTextValues.forEach((text, element) => {
         element.textContent = text;
     });
+    // Also reset all alarm lines to hidden
+    svgContent.querySelectorAll('.alarm-line').forEach(el => el.style.display = 'none');
 
     // 2. Filter messages up to the replay timestamp
     const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
     
     // 3. Determine the final state of each topic at that point in time
     const finalState = new Map();
-    // Iterate backwards (from newest to oldest)
     for (let i = entriesToReplay.length - 1; i >= 0; i--) {
         const entry = entriesToReplay[i];
         if (!finalState.has(entry.topic)) {
@@ -240,30 +301,44 @@ function replaySvgHistory(replayUntilTimestamp) {
             const groupElement = svgContent?.querySelector(`#${svgId}`);
             if (!groupElement) return;
 
-            // [NEW LOGIC]
-            // 1. Find all elements with a data-key *within* this group
+            // [MODIFIED LOGIC]
             const dataElements = groupElement.querySelectorAll('[data-key]');
             
-            // 2. Iterate over them
             dataElements.forEach(el => {
-                const keyPath = el.dataset.key; // Get the "variables.STORAGE_LEVEL" string
-                
-                // 3. Get the nested value
+                const keyPath = el.dataset.key; 
                 const value = getNestedValue(data, keyPath);
                 
-                // 4. Update the text content if the value is found
                 if (value !== null && value !== undefined) {
-                    // Format numbers to 2 decimal places if they are not integers
+                    // 1. Update text content
                     if (typeof value === 'number' && !Number.isInteger(value)) {
-                        el.textContent = value.toFixed(2);
+                        el.textContent = parseFloat(value).toFixed(2);
                     } else {
                         el.textContent = value;
                     }
+                    
+                    // 2. --- NEW ALARM LOGIC ---
+                    const alarmType = el.dataset.alarmType;
+                    const alarmValue = el.dataset.alarmValue;
+                    
+                    if (alarmType && alarmValue) {
+                        const alarmLineGroup = el.closest('.alarm-line');
+                        if (alarmLineGroup) {
+                            const isAlarm = checkAlarm(value, alarmType, alarmValue);
+                            if (isAlarm) {
+                                // *Only set to block*, don't set to 'none'
+                                // Otherwise, a non-alarm value from another topic could hide it
+                                alarmLineGroup.style.display = 'block';
+                            }
+                        }
+                    }
                 }
             });
-            // [END NEW LOGIC]
         } catch (e) { /* Payload is not JSON, ignore */ }
     });
+    
+    // 5. --- UPDATE PLACEHOLDER ---
+    // After all states are replayed, check the global alarm visibility
+    updateAlarmPlaceholder();
 }
 
 /**
