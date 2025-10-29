@@ -103,9 +103,11 @@ const config = {
     VIEW_SVG_ENABLED: process.env.VIEW_SVG_ENABLED !== 'false', // Default to true
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
+    VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
+    VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // [NEW] Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
     SVG_DEFAULT_FULLSCREEN: process.env.SVG_DEFAULT_FULLSCREEN === 'true',
-    BASE_PATH: process.env.BASE_PATH?.trim() || '/' // [NEW] Added BASE_PATH
+    BASE_PATH: process.env.BASE_PATH?.trim() || '/'
 };
 
 
@@ -116,7 +118,8 @@ if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
 }
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
-logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}]`);
+// [MODIFIED] Added CHART_ENABLED to log
+logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] Fullscreen[${config.SVG_DEFAULT_FULLSCREEN}]`);
 
 // --- [NEW] Normalize Base Path ---
@@ -171,8 +174,6 @@ db.exec(`
 // --- Express App & WebSocket Server Setup ---
 const app = express();
 const server = http.createServer(app);
-// [MODIFIED] WebSocket server is attached to the HTTP server, 
-// it will handle upgrade requests regardless of the base path.
 const wss = new WebSocketServer({ server }); 
 
 // --- WebSocket Logic ---
@@ -203,8 +204,6 @@ const mapperEngine = require('./mapper_engine')(
 
 // --- Middleware ---
 const authMiddleware = (req, res, next) => {
-    // [MODIFIED] Auth middleware is applied *before* the base path router,
-    // so it protects everything.
     if (!config.HTTP_USER || !config.HTTP_PASSWORD) {
         return next();
     }
@@ -229,7 +228,6 @@ const ipFilterMiddleware = (req, res, next) => {
 };
 
 // --- [NEW] Main Router for Base Path ---
-// Create a main router that will hold all application routes
 const mainRouter = express.Router();
 
 // Apply global middleware to the main router
@@ -246,9 +244,6 @@ const { startSimulator, stopSimulator, getStatus } = require('./simulator')(logg
 
 // --- API Routes (Mounted on mainRouter) ---
 
-// This endpoint now serves the SVG file specified in the .env config
-// The frontend will still request '/view.svg', but this route intercepts it
-// and sends back the contents of the *configured* file.
 mainRouter.get('/view.svg', (req, res) => {
     const configuredSvgPath = path.join(DATA_PATH, config.SVG_FILE_PATH);
     if (fs.existsSync(configuredSvgPath)) {
@@ -259,7 +254,7 @@ mainRouter.get('/view.svg', (req, res) => {
     }
 });
 
-//  Pass all new config flags to the frontend
+// [MODIFIED] Pass all config flags to the frontend
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
@@ -269,8 +264,10 @@ mainRouter.get('/api/config', (req, res) => {
         viewSvgEnabled: config.VIEW_SVG_ENABLED,
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
+        viewChartEnabled: config.VIEW_CHART_ENABLED, 
+        viewChartEnabled: config.VIEW_CHART_ENABLED, // [NEW]
         svgDefaultFullscreen: config.SVG_DEFAULT_FULLSCREEN,
-        basePath: basePath // [NEW] Send the normalized base path to the client
+        basePath: basePath
     });
 });
 
@@ -304,17 +301,13 @@ const mapperRouter = require('./routes/mapperApi')(mapperEngine);
 mainRouter.use('/api/mapper', ipFilterMiddleware, mapperRouter);
 
 // --- [MODIFIED] Static Assets ---
-// Serve static files (HTML, CSS, JS) from the public directory
 mainRouter.use(express.static(path.join(__dirname, 'public')));
 
 // --- [MODIFIED] Mount Everything ---
-// Apply auth middleware to the whole app
 app.use(authMiddleware);
-// Mount the main router under the normalized base path
 app.use(basePath, mainRouter);
 
 // --- [NEW] Root Redirect ---
-// Add a redirect from the server root to the base path
 if (basePath !== '/') {
     app.get('/', (req, res) => {
         res.redirect(basePath);
@@ -324,8 +317,6 @@ if (basePath !== '/') {
 
 // --- WebSocket Connection Handling ---
 wss.on('connection', (ws, req) => {
-    // [MODIFIED] Check if the connection path matches the base path
-    // This provides an extra layer of security if WSS is exposed directly
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (!url.pathname.startsWith(basePath)) {
         logger.warn(`WebSocket connection rejected: Path ${url.pathname} does not match base path ${basePath}`);
@@ -338,7 +329,6 @@ wss.on('connection', (ws, req) => {
     // Send initial batch of historical data
     db.all("SELECT * FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
         if (!err && ws.readyState === ws.OPEN) {
-            // [MODIFIED] Stringify payloads before sending
             const processedRows = rows.map(row => {
                 if (typeof row.payload === 'object' && row.payload !== null) {
                     try {
@@ -356,7 +346,7 @@ wss.on('connection', (ws, req) => {
         }
     });
 
-    // [NEW] Send initial tree state (latest message for EVERY topic)
+    // Send initial tree state (latest message for EVERY topic)
     const treeStateQuery = `
         WITH RankedEvents AS (
             SELECT *, ROW_NUMBER() OVER(PARTITION BY topic ORDER BY timestamp DESC) as rn
@@ -371,7 +361,6 @@ wss.on('connection', (ws, req) => {
         if (err) {
             logger.error({ err }, "❌ DuckDB Error fetching initial tree state");
         } else if (ws.readyState === ws.OPEN) {
-            // [NEW] Stringify payloads before sending
             const processedRows = rows.map(row => {
                 if (typeof row.payload === 'object' && row.payload !== null) {
                     try {
@@ -390,7 +379,7 @@ wss.on('connection', (ws, req) => {
     });
 
 
-    // Handle messages from client (e.g., request for specific topic history)
+    // Handle messages from client
     ws.on('message', (message) => {
         try {
             const parsedMessage = JSON.parse(message);
@@ -399,7 +388,6 @@ wss.on('connection', (ws, req) => {
                     if (err) {
                         logger.error({ err, topic: parsedMessage.topic }, `❌ DuckDB Error fetching history for topic`);
                     } else if (ws.readyState === ws.OPEN) {
-                        // [MODIFIED] Stringify payloads before sending
                         const processedRows = rows.map(row => {
                             if (typeof row.payload === 'object' && row.payload !== null) {
                                 try {

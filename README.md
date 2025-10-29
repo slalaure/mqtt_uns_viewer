@@ -28,6 +28,7 @@ A lightweight, real-time web application to visualize MQTT topic trees and dynam
     * Offers **Deletion with Purge**: Option to remove associated historical data from the database when deleting a mapping rule target.
     * Handles **Sparkplug B** correctly: Re-encodes to Protobuf for SPB->SPB mappings, stringifies to JSON (with BigInt handling) for SPB->UNS mappings, and prevents invalid JSON->SPB mappings.
 -   **AI Agent Integration:** A dedicated MCP Server exposes application controls and data as structured tools for Large Language Model (LLM) agents.
+-   **NEW: Multi-axis Chart View** for plotting time-series data from multiple topics.
 -   **Web-Based Configuration:** A built-in configuration page allows for easy updates to all server settings (`.env` file).
 -   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database that persists across restarts.
 -   **Advanced History Filtering:** The history view features keyword search (with highlighting) and a dual-handle time-range slider.
@@ -212,6 +213,7 @@ The following variables can be set in your `data/.env` file:
 | `VIEW_SVG_ENABLED` | **[UI]** Enable or disable the 'SVG View' tab. | `true` |
 | `VIEW_HISTORY_ENABLED` | **[UI]** Enable or disable the 'History' tab. | `true` |
 | `VIEW_MAPPER_ENABLED` | **[UI]** Enable or disable the 'Mapper' tab. | `true` |
+| `VIEW_CHART_ENABLED` | **[UI]** Enable or disable the 'Chart' tab. | `true` |
 | `SVG_FILE_PATH` | **[UI]** The path to the SVG file to load, relative to the 'data' directory. | `view.svg` |
 
 ### Customizing the SVG Plan
@@ -268,7 +270,17 @@ You can make your SVG view smarter by adding client-side alarm logic. This allow
         (Aucune alarme active)
     </text>
     ```
-    
+
+### 📊 Chart View
+
+The Chart View allows you to plot time-series data from one or more MQTT topics on a single graph.
+
+* **Multi-Topic Plotting:** Select numeric variables (including numbers sent as strings) from different topics. The chart will display them all at once.
+* **Dynamic Multi-Axis:** To compare data of different scales (e.g., temperature and pressure), the chart automatically generates a new, independent Y-axis for each variable.
+* **Smart Axis Display:** Axes are automatically positioned on the left and right sides to prevent clutter, and their color matches the data line for easy identification.
+* **Chart Types:** Supports **Line**, **Bar**, and **Pie** charts.
+* **Time Slider:** Uses the same time-range slider as the History view to select your desired data window.
+* **Export:** Export the chart view as a **PNG** or the raw dataset as a **CSV**.
 ---
 
 ## License

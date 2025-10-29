@@ -7,6 +7,8 @@
     <title>MQTT Real-Time Web Viewer</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 
 <body>
@@ -38,6 +40,7 @@
         <button id="btn-map-view" class="tab-button">SVG View</button>
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
+        <button id="btn-chart-view" class="tab-button">Chart</button>
     </nav>
 
     <div class="view-container">
@@ -135,7 +138,7 @@
                     <span id="mapper-save-status"></span>
                 </div>
                 <div id="mapper-tree" class="tree-container">
-                    </div>
+                </div>
             </div>
 
             <div class="resizer" id="drag-handle-vertical-mapper"></div>
@@ -145,7 +148,8 @@
                     <div class="payload-header">
                         <h2>Payload (Source)</h2>
                     </div>
-                    <div id="mapper-payload-topic" class="payload-topic-display">Select a topic from the Mapper tree.</div>
+                    <div id="mapper-payload-topic" class="payload-topic-display">Select a topic from the Mapper tree.
+                    </div>
                     <pre id="mapper-payload-content"></pre>
                 </div>
 
@@ -166,7 +170,7 @@
                         </div>
 
                         <div id="mapper-targets-list">
-                            </div>
+                        </div>
 
                         <div id="mapper-targets-placeholder" class="history-placeholder" style="display: none;">
                             <p>No targets defined for this rule. Click "Add Target" to create one.</p>
@@ -184,9 +188,10 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Target Topic</label>
-                                    <input type="text" class="target-output-topic" placeholder="e.g., my_uns/facility/{{id}}">
+                                    <input type="text" class="target-output-topic"
+                                        placeholder="e.g., my_uns/facility/{{id}}">
                                 </div>
-                                
+
                                 <div class="form-group">
                                     <label class="target-code-label">Transform (JavaScript)</label>
                                     <textarea class="target-code-editor" rows="10" spellcheck="false"></textarea>
@@ -208,7 +213,74 @@
                 </div>
             </div>
         </main>
-    </div> <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
+
+        <main id="chart-view" class="view">
+            <div class="chart-tree-wrapper">
+                <div class="chart-controls">
+                    <h3 class="chart-controls-title">Select Topic</h3>
+                </div>
+                <div id="chart-tree" class="tree-container">
+                    </div>
+            </div>
+
+            <div class="resizer" id="drag-handle-vertical-chart"></div>
+
+            <div id="chart-payload-container" class="payload-container">
+                <div id="chart-payload-area">
+                    <div class="payload-header">
+                        <h2>Payload & Variables</h2>
+                    </div>
+                    <div id="chart-payload-topic" class="payload-topic-display">Select a topic from the Chart tree.
+                    </div>
+                    <div id="chart-variable-list" class="chart-variable-list">
+                        <p class="history-placeholder">Numeric variables will appear here.</p>
+                    </div>
+                </div>
+
+                <div class="resizer-horizontal" id="drag-handle-horizontal-chart"></div>
+
+                <div id="chart-main-area">
+                    <div class="chart-config-bar">
+                        <div class="form-group">
+                            <label for="chart-type-select">Type:</label>
+                            <select id="chart-type-select">
+                                <option value="line">Line</option>
+                                <option value="bar">Bar</option>
+                                <option value="pie">Pie</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <input type="checkbox" id="chart-connect-nulls-toggle" name="chart-connect-nulls-toggle">
+                            <label for="chart-connect-nulls-toggle" class="checkbox-label">Connect Gaps</label>
+                        </div>
+                        
+                        <div id="chart-time-range-slider-container" class="time-slider-container">
+                            <div class="slider-track"></div>
+                            <div class="slider-range" id="chart-slider-range"></div>
+                            <div class="slider-handle" id="chart-handle-min">
+                                <div class="slider-label" id="chart-label-min"></div>
+                            </div>
+                            <div class="slider-handle" id="chart-handle-max">
+                                <div class="slider-label" id="chart-label-max"></div>
+                            </div>
+                        </div>
+
+                        <button id="btn-chart-generate" class="chart-button">Refresh</button>
+                        <button id="btn-chart-clear" class="chart-button" title="Clear All Selections">Clear All</button>
+                        <button id="btn-chart-export-csv" class="chart-button" title="Export CSV">CSV</button>
+                        <button id="btn-chart-export-png" class="chart-button" title="Export PNG">PNG</button>
+                        <button id="btn-chart-fullscreen" class="chart-button" title="Toggle Fullscreen">&#x2922;</button>
+                    </div>
+                    <div id="chart-canvas-container">
+                        <p id="chart-placeholder">Select a topic, choose variables, and click "Generate Chart".</p>
+                        <canvas id="chart-canvas" style="display: none;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+    <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirmer la suppression</h3>
             <p id="delete-modal-text">Que souhaitez-vous faire avec la règle pour le topic cible :</p>
@@ -222,7 +294,8 @@
             <div class="modal-actions">
                 <button id="modal-btn-cancel" class="modal-button">Annuler</button>
                 <button id="modal-btn-delete-rule" class="modal-button button-primary">Supprimer la règle seulement</button>
-                <button id="modal-btn-delete-prune" class="modal-button button-danger">Supprimer ET Purger l'historique</button>
+                <button id="modal-btn-delete-prune" class="modal-button button-danger">Supprimer ET Purger
+                    l'historique</button>
             </div>
         </div>
     </div>
@@ -232,6 +305,7 @@
     </footer>
 
     <script src="app.js" type="module"></script>
+    <script src="view.chart.js" type="module"></script>
 </body>
 
 </html>

@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOTT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -39,6 +39,8 @@ import {
     getTopicMappingStatus,
     addMappedTargetTopic
 } from './view.mapper.js';
+// [MODIFIED] Import for Chart module
+import { initChartView, handleChartNodeClick, updateChartSliderUI, getChartedTopics } from './view.chart.js';
 // --- [END NEW] ---
 
 
@@ -103,10 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMapView = document.getElementById('btn-map-view');
     const btnHistoryView = document.getElementById('btn-history-view');
     const btnMapperView = document.getElementById('btn-mapper-view');
+    const btnChartView = document.getElementById('btn-chart-view'); // [NEW]
     const treeView = document.getElementById('tree-view');
     const mapView = document.getElementById('map-view');
     const historyView = document.getElementById('history-view');
     const mapperView = document.getElementById('mapper-view');
+    const chartView = document.getElementById('chart-view'); // [NEW]
 
     // --- History View Elements (Shared) ---
     const historyTotalMessages = document.getElementById('history-total-messages');
@@ -128,21 +132,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const simulatorControls = document.querySelector('.simulator-controls');
 
     // --- [REMOVED] Mapper View Elements ---
-    // (This logic is now in public/view.mapper.js)
     const mapperTreeContainer = document.getElementById('mapper-tree');
-    // ... all other mapper elements removed ...
-    
-    // --- [REMOVED] Mapper State ---
-    // (This logic is now in public/view.mapper.js)
-
-    // --- [REMOVED] Delete Modal Elements ---
-    // (This logic is now in public/view.mapper.js)
+    // [NEW] Chart View Elements
+    const chartTreeContainer = document.getElementById('chart-tree');
 
 
     // --- Tab Switching Logic ---
     function switchView(viewToShow) {
-        const views = [treeView, mapView, historyView, mapperView];
-        const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView];
+        // [MODIFIED] Add chart view
+        const views = [treeView, mapView, historyView, mapperView, chartView];
+        const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView, btnChartView];
 
         let targetView, targetButton;
         if (viewToShow === 'map') {
@@ -154,6 +153,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (viewToShow === 'mapper') {
             targetView = mapperView;
             targetButton = btnMapperView;
+        } else if (viewToShow === 'chart') { // [NEW]
+            targetView = chartView;
+            targetButton = btnChartView;
         } else {
             targetView = treeView;
             targetButton = btnTreeView;
@@ -170,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnMapView?.addEventListener('click', () => switchView('map'));
     btnHistoryView?.addEventListener('click', () => switchView('history'));
     btnMapperView?.addEventListener('click', () => switchView('mapper'));
+    btnChartView?.addEventListener('click', () => switchView('chart')); // [NEW]
 
     // --- Real-Time Clock ---
     function updateClock() {
@@ -277,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             // [MODIFIED] Call imported function
                             updateSvgTimelineUI(minTimestamp, maxTimestamp);
+                            updateChartSliderUI(minTimestamp, maxTimestamp, false); // [NEW]
                             // --- End History Update ---
 
 
@@ -294,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     // Update mapper tree (no animations)
                                     options.enableAnimations = false;
                                     updateTree(message.topic, message.payload, message.timestamp, mapperTreeContainer, options);
+                                    updateTree(message.topic, message.payload, message.timestamp, chartTreeContainer, options); // [NEW]
                             }
                             // --- End Tree Updates ---
 
@@ -318,6 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             // [MODIFIED] Call imported function
                             updateSvgTimelineUI(minTimestamp, maxTimestamp);
+                            updateChartSliderUI(minTimestamp, maxTimestamp, true); // [NEW]
                             
                             // [MODIFIED] We now use 'tree-initial-state' to populate the tree
                             break;
@@ -334,7 +340,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // payload is already a string from the server
                                 updateTree(entry.topic, entry.payload, entry.timestamp, treeContainer, options);
                                 updateTree(entry.topic, entry.payload, entry.timestamp, mapperTreeContainer, options);
+                                updateTree(entry.topic, entry.payload, entry.timestamp, chartTreeContainer, options); // [NEW]
                             }
+                            
+                            // [NEW] Color the chart tree after initial load
+                            colorChartTree();
                             break;
                         }
                         case 'topic-history-data':
@@ -433,6 +443,17 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 btnMapperView.style.display = 'none';
             }
+
+            // [NEW] Chart View Toggle
+            if (appConfig.viewChartEnabled) {
+                btnChartView.style.display = 'block';
+                if (!defaultViewActivated) {
+                    switchView('chart');
+                    defaultViewActivated = true;
+                }
+            } else {
+                btnChartView.style.display = 'none';
+            }
             
             if (!defaultViewActivated) {
                     switchView('tree');
@@ -443,13 +464,14 @@ document.addEventListener('DOMContentLoaded', () => {
             initSvgView(appConfig);
             initHistoryView(); // Init history view listeners
             
-            // Init mapper view, passing callbacks it needs from the main app
+            // Init mapper view
             initMapperView({
                 pruneTopicFromFrontend: pruneTopicFromFrontend,
                 getSubscribedTopics: () => subscribedTopicPatterns,
                 colorAllTrees: () => {
                     colorTreeNodes(treeContainer);
                     colorTreeNodes(mapperTreeContainer);
+                    // [NEW] color chart tree? No, chart tree doesn't need mapping colors.
                 },
                 addPruneIgnorePattern: (pattern) => {
                     recentlyPrunedPatterns.add(pattern);
@@ -459,7 +481,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.log(`Removed pattern from ignore list: ${pattern}`);
                     }, PRUNE_IGNORE_DURATION_MS);
                 },
-                displayPayload: displayPayload // Pass the shared displayPayload function
+                displayPayload: displayPayload
+            });
+
+            // [NEW] Init chart view
+            initChartView({
+                getHistory: () => allHistoryEntries,
+                displayPayload: displayPayload, // Pass the shared displayPayload function
+                colorChartTreeCallback: colorChartTree // [MODIFIED] Pass callback
             });
             // --- [END MODIFIED] ---
             
@@ -483,8 +512,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to finish app initialization:", error);
         }
-        
-        // [REMOVED] loadMapperConfig(); // (Now handled by initMapperView)
     }
     // --- [END NEW] Revised Initialization Logic ---
 
@@ -585,6 +612,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * [NEW] Colors the chart tree based on globally selected variables.
+     */
+    function colorChartTree() {
+        if (!chartTreeContainer) return;
+        
+        const chartedTopics = getChartedTopics(); // Get the Set of topics
+        if (chartedTopics.size === 0) {
+            // Optimization: If no topics are selected, clear all highlights
+            chartTreeContainer.querySelectorAll('.has-charted-variable').forEach(el => {
+                el.classList.remove('has-charted-variable');
+            });
+            return;
+        }
+
+        chartTreeContainer.querySelectorAll('li').forEach(li => {
+            const nodeContainer = li.querySelector(':scope > .node-container');
+            if (!nodeContainer) return;
+            const topic = nodeContainer.dataset.topic;
+            if (!topic) return;
+
+            let isOrHasChartedChild = false;
+            // Check if this exact topic is selected
+            if (chartedTopics.has(topic)) {
+                isOrHasChartedChild = true;
+            } else {
+                // Check if this is a parent folder of a selected topic
+                const folderPath = topic + '/';
+                for (const t of chartedTopics) {
+                    if (t.startsWith(folderPath)) {
+                        isOrHasChartedChild = true;
+                        break;
+                    }
+                }
+            }
+
+            // Toggle the class based on the result
+            li.classList.toggle('has-charted-variable', isOrHasChartedChild);
+        });
+    }
+
+
+    /**
      * Creates or updates a node in one of the trees.
      * @param {string} topic Full topic string.
      * @param {string} payload The payload string.
@@ -637,13 +706,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', handleCheckboxClick);
                     nodeContainer.addEventListener('click', handleNodeClick); // Main tree click
-                } else { // Mapper Tree (ID: mapper-tree)
+                } else if (treeRoot === mapperTreeContainer) { // Mapper Tree (ID: mapper-tree)
                     nodeContainer.innerHTML = `
                         <span class="node-name"></span>
                         <span class="node-timestamp"></span>
                     `;
                     // [MODIFIED] Attach imported handler
                     nodeContainer.addEventListener('click', handleMapperNodeClick);
+                } else if (treeRoot === chartTreeContainer) { // [NEW] Chart Tree (ID: chart-tree)
+                    nodeContainer.innerHTML = `
+                        <span class="node-name"></span>
+                        <span class="node-timestamp"></span>
+                    `;
+                    // [NEW] Attach imported handler
+                    nodeContainer.addEventListener('click', handleChartNodeClick);
                 }
 
                 nodeContainer.querySelector('.node-name').textContent = part;
@@ -652,12 +728,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 ul.appendChild(li);
             }
 
-            // Apply coloring
-            // [MODIFIED] Use imported function
-            const mappingStatus = getTopicMappingStatus(currentTopicPath);
-            li.classList.remove('mapped-source', 'mapped-target');
-            if (mappingStatus === 'source') li.classList.add('mapped-source');
-            else if (mappingStatus === 'target') li.classList.add('mapped-target');
+            // [MODIFIED] Apply coloring (Mapper or Chart)
+            if (treeRoot === mapperTreeContainer) {
+                const mappingStatus = getTopicMappingStatus(currentTopicPath);
+                li.classList.remove('mapped-source', 'mapped-target');
+                if (mappingStatus === 'source') li.classList.add('mapped-source');
+                else if (mappingStatus === 'target') li.classList.add('mapped-target');
+            } else if (treeRoot === chartTreeContainer) {
+                // Check chart status *only if* not animating
+                // The main colorChartTree() function will handle this
+                // to avoid performance issues on every single message.
+                if (!enableAnimations) {
+                    const chartedTopics = getChartedTopics();
+                    let isOrHasChartedChild = false;
+                    if (chartedTopics.has(currentTopicPath)) {
+                        isOrHasChartedChild = true;
+                    } else {
+                        const folderPath = currentTopicPath + '/';
+                        for (const t of chartedTopics) {
+                            if (t.startsWith(folderPath)) {
+                                isOrHasChartedChild = true;
+                                break;
+                            }
+                        }
+                    }
+                    li.classList.toggle('has-charted-variable', isOrHasChartedChild);
+                }
+            }
+
 
             const nodeContainer = li.querySelector('.node-container');
             const timestampSpan = nodeContainer.querySelector('.node-timestamp');
@@ -678,9 +776,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             nodeContainer.addEventListener('click', handleNodeClick);
                             nodeContainer.dataset.folderListener = 'true';
                     }
-                } else { // Mapper tree folders are just for navigation
+                } else if (treeRoot === mapperTreeContainer) { // Mapper tree folders
                     // [MODIFIED] Attach imported handler
                     nodeContainer.addEventListener('click', handleMapperNodeClick);
+                } else if (treeRoot === chartTreeContainer) { // [NEW] Chart tree folders
+                    // [NEW] Attach imported handler
+                    nodeContainer.addEventListener('click', handleChartNodeClick);
                 }
             }
             currentNode = li;
@@ -806,51 +907,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- [REMOVED] Mapper View Logic ---
-    // (This logic is now in public/view.mapper.js)
-    
-    // --- [REMOVED] Delete Modal Logic ---
-    // (This logic is now in public/view.mapper.js)
-
-
     /**
-     * [SHARED] Rebuilds both trees from the filtered history.
+     * [SHARED] Rebuilds all trees from the filtered history.
      */
     function populateTreesFromHistory() {
-        // 1. Wipe both trees
+        // 1. Wipe all trees
         if(treeContainer) treeContainer.innerHTML = '';
         if(mapperTreeContainer) mapperTreeContainer.innerHTML = '';
+        if(chartTreeContainer) chartTreeContainer.innerHTML = ''; // [NEW]
 
         // 2. Get latest entry for each topic from filtered history
         const uniqueTopics = new Map();
-        // allHistoryEntries is [newest, ..., oldest]
-        // Iterate chronologically (from oldest to newest) to get the latest
-        for (let i = allHistoryEntries.length - 1; i >= 0; i--) { // Iterates from oldest (end of array)
+        for (let i = allHistoryEntries.length - 1; i >= 0; i--) { 
             const entry = allHistoryEntries[i];
-            // [FIX] Always set, overwriting older ones. The last one set (newest) will be kept.
             uniqueTopics.set(entry.topic, entry);
         }
 
 
-        // 3. Re-populate both trees (no animations)
+        // 3. Re-populate all trees (no animations)
         const options = {
             enableAnimations: false,
-            // [MODIFIED] Get config/topics from mapper module
             rulesConfig: getMapperConfig(),
             targetTopics: getMappedTargetTopics()
         };
-        console.log("Repopulated trees from history."); // Add log
+        console.log("Repopulated trees from history."); 
 
-        // Sort topics alphabetically before populating for consistent order
         const sortedTopics = Array.from(uniqueTopics.keys()).sort();
 
         for (const topic of sortedTopics) {
                 const entry = uniqueTopics.get(topic);
-                // entry.payload is a string because 'history-initial-data' and 'mqtt-message'
-                // both store strings in allHistoryEntries
                 updateTree(topic, entry.payload, entry.timestamp, treeContainer, options);
                 updateTree(topic, entry.payload, entry.timestamp, mapperTreeContainer, options);
+                updateTree(topic, entry.payload, entry.timestamp, chartTreeContainer, options); // [NEW]
             }
+        
+        // [NEW] Re-color the chart tree after repopulating
+        colorChartTree();
     }
 
     /**
@@ -860,38 +952,33 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function pruneTopicFromFrontend(topicPattern) {
         console.log(`Pruning frontend with pattern: ${topicPattern}`);
-        // [MODIFIED] Use imported function
         const regex = mqttPatternToRegex(topicPattern);
 
         const initialLength = allHistoryEntries.length;
-        // allHistoryEntries entries have string payloads, this filter is fine
         allHistoryEntries = allHistoryEntries.filter(entry => !regex.test(entry.topic));
         console.log(`Filtered allHistoryEntries: ${initialLength} -> ${allHistoryEntries.length}`);
 
         // [MODIFIED] Push pruned history data to modules
         setSvgHistoryModuleData(allHistoryEntries);
+        
         // [MODIFIED] Update history view with pruned data
         const newState = setHistoryData(allHistoryEntries, false, false); // Not initial load, not live
         minTimestamp = newState.min;
         maxTimestamp = newState.max;
         currentMinTimestamp = newState.currentMin;
         currentMaxTimestamp = newState.currentMax;
+
+        // [NEW] Update chart slider
+        updateChartSliderUI(minTimestamp, maxTimestamp, true);
         // [END MODIFIED]
 
-        // 2. Filter mappedTargetTopics
+        // ... (Mapper topic filtering logic remains) ...
         const topicsToRemove = [];
-        // [MODIFIED] Get topics from mapper module
         getMappedTargetTopics().forEach(topic => {
             if (regex.test(topic)) {
                 topicsToRemove.push(topic);
             }
         });
-        // This needs to be handled *inside* the mapper module.
-        // Let's adjust. The mapper module should expose a function for this.
-        // For now, we'll just re-build the tree, which is the most important part.
-        // We will refine this in the next step.
-        
-        // This is a temporary fix:
         const newMappedTopics = getMappedTargetTopics();
         topicsToRemove.forEach(topic => newMappedTopics.delete(topic));
         console.log(`Removed target topics matching pattern:`, topicsToRemove);
@@ -900,17 +987,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Re-render history tab (already done by setHistoryData)
 
         // 4. Rebuild both trees from the filtered history
-        populateTreesFromHistory(); // This now works correctly
+        populateTreesFromHistory(); // This now rebuilds all 3 trees
 
-        // 5. If the currently selected node in mapper was pruned, clear selection/editor
-            // [MODIFIED] We need to ask the mapper module to clear its own state.
-            // This is another refinement for the next step.
-            // For now, this DOM check is "good enough"
+        // 5. If the currently selected node in mapper was pruned, clear selection
             const selectedMapperNode = mapperTreeContainer.querySelector('.selected');
             if (selectedMapperNode && regex.test(selectedMapperNode.dataset.topic)) {
                 console.log("Clearing selected mapper node.");
                 selectedMapperNode.classList.remove('selected');
-                // Manually clear the mapper payload display
                 displayPayload(null, null, document.getElementById('mapper-payload-topic'), document.getElementById('mapper-payload-content'));
                 document.getElementById('mapper-transform-placeholder').style.display = 'block';
                 document.getElementById('mapper-transform-form').style.display = 'none';
@@ -924,6 +1007,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayPayload(null, null, payloadTopic, payloadContent); // Clear payload display
                 topicHistoryLog.innerHTML = '<p class="history-placeholder">Select a topic to see its recent history.</p>'; // Clear history log
             }
+
+            // 7. [NEW] If the currently selected node in chart view was pruned, clear selection
+            const selectedChartNode = chartTreeContainer.querySelector('.selected');
+            if (selectedChartNode && regex.test(selectedChartNode.dataset.topic)) {
+                 console.log("Clearing selected chart node.");
+                 selectedChartNode.classList.remove('selected');
+                 displayPayload(null, null, document.getElementById('chart-payload-topic'), document.getElementById('chart-payload-content'));
+                 document.getElementById('chart-variable-list').innerHTML = '<p class="history-placeholder">Numeric variables will appear here.</p>';
+            }
+
             console.log("Frontend prune finished.");
     }
     // --- [END MODAL LOGIC] ---
@@ -934,38 +1027,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const resizerHorizontal = document.getElementById('drag-handle-horizontal');
     const resizerVerticalMapper = document.getElementById('drag-handle-vertical-mapper');
     const resizerHorizontalMapper = document.getElementById('drag-handle-horizontal-mapper');
+    const resizerVerticalChart = document.getElementById('drag-handle-vertical-chart'); // [NEW]
+    const resizerHorizontalChart = document.getElementById('drag-handle-horizontal-chart'); // [NEW]
 
     // Vertical Resizing (generic function)
     const resizePanel = (e, panel) => {
         if (!panel) return;
-        // Prevent resizing beyond reasonable limits if needed
-        const minWidth = 200; // Example minimum width
+        const minWidth = 200; 
         const containerRect = panel.parentElement.getBoundingClientRect();
         let panelWidth = e.pageX - panel.getBoundingClientRect().left;
 
-        // Simple boundary check (can be made more sophisticated)
         if (panelWidth < minWidth) panelWidth = minWidth;
-        // Ensure right panel also has min width
         if (containerRect.width - panelWidth < minWidth) {
                 panelWidth = containerRect.width - minWidth;
         }
-
         panel.style.flexBasis = `${panelWidth}px`;
     }
 
     // Horizontal Resizing (generic function)
     const resizeHorizontalPanel = (e, topPanel, container) => {
             if (!topPanel || !container) return;
-            const minHeight = 100; // Example minimum height
+            const minHeight = 100; 
             const containerRect = container.getBoundingClientRect();
             let panelHeight = e.pageY - containerRect.top;
 
             if (panelHeight < minHeight) panelHeight = minHeight;
-            // Ensure bottom panel also has min height
             if (containerRect.height - panelHeight < minHeight) {
                 panelHeight = containerRect.height - minHeight;
             }
-
             topPanel.style.flexBasis = `${panelHeight}px`;
     };
 
@@ -977,28 +1066,36 @@ document.addEventListener('DOMContentLoaded', () => {
             const mouseMoveHandler = (ev) => resizePanel(ev, treeViewWrapper);
             const mouseUpHandler = () => {
                 document.removeEventListener('mousemove', mouseMoveHandler);
-                // No need to remove mouseup here due to { once: true }
             };
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler, { once: true });
         });
-    } else {
-        console.error("Could not find element with ID 'drag-handle-vertical'");
     }
 
     // Vertical Resizer (Mapper View)
     if (resizerVerticalMapper) {
         resizerVerticalMapper.addEventListener('mousedown', (e) => {
             e.preventDefault();
-            const mouseMoveHandler = (ev) => resizePanel(ev, document.querySelector('.mapper-tree-wrapper')); // Use querySelector as element is in mapper module
+            const mouseMoveHandler = (ev) => resizePanel(ev, document.querySelector('.mapper-tree-wrapper'));
                 const mouseUpHandler = () => {
                 document.removeEventListener('mousemove', mouseMoveHandler);
             };
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler, { once: true });
         });
-    } else {
-        console.error("Could not find element with ID 'drag-handle-vertical-mapper'");
+    }
+
+    // [NEW] Vertical Resizer (Chart View)
+    if (resizerVerticalChart) {
+        resizerVerticalChart.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const mouseMoveHandler = (ev) => resizePanel(ev, document.querySelector('.chart-tree-wrapper'));
+            const mouseUpHandler = () => {
+                document.removeEventListener('mousemove', mouseMoveHandler);
+            };
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', mouseUpHandler, { once: true });
+        });
     }
 
     // Horizontal Resizer (Tree View)
@@ -1012,8 +1109,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler, { once: true });
         });
-    } else {
-        console.error("Could not find element with ID 'drag-handle-horizontal'");
     }
 
     // Horizontal Resizer (Mapper View)
@@ -1027,7 +1122,18 @@ document.addEventListener('DOMContentLoaded', () => {
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler, { once: true });
         });
-    } else {
-        console.error("Could not find element with ID 'drag-handle-horizontal-mapper'");
+    }
+
+    // [NEW] Horizontal Resizer (Chart View)
+    if (resizerHorizontalChart) {
+        resizerHorizontalChart.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const mouseMoveHandler = (ev) => resizeHorizontalPanel(ev, document.getElementById('chart-payload-area'), document.getElementById('chart-payload-container'));
+            const mouseUpHandler = () => {
+                document.removeEventListener('mousemove', mouseMoveHandler);
+            };
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', mouseUpHandler, { once: true });
+        });
     }
 });
