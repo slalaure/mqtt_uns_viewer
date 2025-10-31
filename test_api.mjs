@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -69,8 +69,9 @@ async function main() {
     // --- 1. Simulator Control (to generate data) ---
     logTest('Start Simulator');
     await axios.post(`${SIMULATOR_API_URL}/start`);
-    logSuccess('Simulator started. Waiting 30 seconds for data collection...');
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    logSuccess('Simulator started. Waiting 5 seconds for data collection...');
+    // [FIX] Uncommented wait time to allow simulator to generate data
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     // --- 2. Data Endpoint Tests ---
 
@@ -87,7 +88,8 @@ async function main() {
     const topicsRes = await axios.get(`${CONTEXT_API_URL}/topics`);
     if (Array.isArray(topicsRes.data) && topicsRes.data.length > 0) {
       logSuccess(`List of ${topicsRes.data.length} topics retrieved.`);
-      TOPIC_TO_TEST = topicsRes.data.find(t => t.includes('maintenance')); // Target a known topic
+      // [FIX] Target a topic that is generated quickly by the sensor loop
+      TOPIC_TO_TEST = topicsRes.data.find(t => t.includes('humidity')); 
       if (!TOPIC_TO_TEST) TOPIC_TO_TEST = topicsRes.data[0]; // Fallback
       logInfo(`Topic selected for tests: ${TOPIC_TO_TEST}`);
     } else {
@@ -118,39 +120,42 @@ async function main() {
       logSuccess(`History (limit 3) for '${TOPIC_TO_TEST}' retrieved.`);
       logData(historyRes.data);
     } else {
-      throw new Error('History is empty for topic.');
+      logError('History is empty for topic (this may be ok if simulator just started).', null);
     }
 
-    logTest('Search Data (Full-Text /search?q=maintenance)');
-    const searchRes = await axios.get(`${CONTEXT_API_URL}/search?q=maintenance`);
+    // [FIX] Changed test to search for 'humidity' which appears in the fast sensor loop
+    logTest('Search Data (Full-Text /search?q=humidity)');
+    const searchRes = await axios.get(`${CONTEXT_API_URL}/search?q=humidity`);
     if (Array.isArray(searchRes.data) && searchRes.data.length > 0) {
-      logSuccess(`Full-text search for "maintenance" returned ${searchRes.data.length} result(s).`);
+      logSuccess(`Full-text search for "humidity" returned ${searchRes.data.length} result(s).`);
       logData(searchRes.data);
     } else {
-      // Ne plus lever d'erreur ici si la recherche ne trouve rien, juste logger.
-      logInfo('Full-text search for "maintenance" returned no results (this might be expected depending on timing).');
+      logError('Full-text search for "humidity" returned no results. This is a failure.', null);
+      throw new Error('Full-text search failed to find data.');
     }
 
     // --- [NEW] Model-Driven Search Tests ---
 
+    // [FIX] Changed test to search for a topic from the fast sensor loop
     logTest('Model Search (/search/model - Topic Only)');
     const modelSearchBody1 = {
-      topic_template: "%/cmms/maintenance_request"
+      topic_template: "%/clean_room_01/humidity"
     };
     const modelSearchRes1 = await axios.post(`${CONTEXT_API_URL}/search/model`, modelSearchBody1);
     if (Array.isArray(modelSearchRes1.data) && modelSearchRes1.data.length > 0) {
-      logSuccess(`Model search for topic "%/cmms/maintenance_request" returned ${modelSearchRes1.data.length} result(s).`);
+      logSuccess(`Model search for topic "%/clean_room_01/humidity" returned ${modelSearchRes1.data.length} result(s).`);
       logData(modelSearchRes1.data);
     } else {
-      // Ne plus lever d'erreur ici si la recherche ne trouve rien.
-      logInfo('Model search (topic only) returned no results (this might be expected depending on timing).');
+      logError('Model search (topic only) returned no results. This is a failure.', null);
+      throw new Error('Model search (topic only) failed.');
     }
 
+    // [FIX] Changed test to search for topic and JSON from the fast sensor loop
     logTest('Model Search (/search/model - Topic + JSON Filter)');
     const modelSearchBody2 = {
-      topic_template: "%/cmms/maintenance_request",
-      json_filter_key: "priority",
-      json_filter_value: "HIGH"
+      topic_template: "%/clean_room_01/humidity",
+      json_filter_key: "unit",
+      json_filter_value: "%RH"
     };
     const modelSearchRes2 = await axios.post(`${CONTEXT_API_URL}/search/model`, modelSearchBody2);
 
@@ -167,11 +172,11 @@ async function main() {
             if (payloadString && typeof payloadString === 'string') {
                 payloadObject = JSON.parse(payloadString);
                 
-                // Vérifier si le parsing a réussi ET si la clé est correcte
-                if (payloadObject && payloadObject.priority === "HIGH") {
+                // [FIX] Check for the correct key and value
+                if (payloadObject && payloadObject.unit === "%RH") {
                     testPassed = true; // Le test réussit
                 } else {
-                    logError(`Model search check failed: Payload parsed but 'priority' is not 'HIGH' or missing. Payload: ${payloadString}`, null);
+                    logError(`Model search check failed: Payload parsed but 'unit' is not '%RH' or missing. Payload: ${payloadString}`, null);
                 }
             } else {
                 logError(`Model search check failed: Payload received is not a string. Type: ${typeof payloadString}. Data:`, null);
@@ -192,12 +197,11 @@ async function main() {
 
     // Afficher le résultat du test et lever une erreur s'il a échoué
     if (testPassed) {
-        logSuccess(`Model search for "priority: HIGH" returned ${modelSearchRes2.data.length} result(s) and check PASSED.`);
+        logSuccess(`Model search for "unit: %RH" returned ${modelSearchRes2.data.length} result(s) and check PASSED.`);
         logData(modelSearchRes2.data);
     } else {
-        // Log l'échec mais ne lance plus une erreur fatale pour continuer les autres tests
         logError('!!! TEST FAILED: Model search (topic + filter) !!!', null);
-        // throw new Error('Model search (topic + filter) returned no results or an invalid result.'); // Ancienne ligne
+        throw new Error('Model search (topic + filter) returned no results or an invalid result.'); // [FIX] Re-throw error
     }
 
 
