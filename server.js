@@ -31,7 +31,8 @@ const fs = require('fs');
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const duckdb = require('duckdb');
-const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
+// [CORRECTED] Changed "spBv10" to "spBv1.0"
+const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); 
 const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
 
@@ -77,6 +78,8 @@ function longReplacer(key, value) {
 let mcpProcess = null;
 let mainConnection = null;
 let isPruning = false;
+let dbWriteQueue = []; // [NEW] Queue for batch inserts
+let dbBatchTimer = null; // [NEW] Timer for batch processor
 
 // --- Configuration from Environment ---
 const config = {
@@ -96,6 +99,9 @@ const config = {
     PORT: process.env.PORT || 8080,
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
+    // [NEW] Database Optimization Config
+    DB_BATCH_INSERT_ENABLED: process.env.DB_BATCH_INSERT_ENABLED === 'true',
+    DB_BATCH_INTERVAL_MS: process.env.DB_BATCH_INTERVAL_MS ? parseInt(process.env.DB_BATCH_INTERVAL_MS, 10) : 2000,
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
     // UI and View configuration
@@ -121,6 +127,13 @@ if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic A
 // [MODIFIED] Added CHART_ENABLED to log
 logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] Fullscreen[${config.SVG_DEFAULT_FULLSCREEN}]`);
+// [NEW] Log DB optimization status
+if (config.DB_BATCH_INSERT_ENABLED) {
+    logger.info(`✅ ⚡ Database batch insert is ENABLED (Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
+} else {
+    logger.info("✅ 🐢 Database batch insert is DISABLED (writing message-by-message).");
+}
+
 
 // --- [NEW] Normalize Base Path ---
 let basePath = config.BASE_PATH;
@@ -156,6 +169,9 @@ const db = new duckdb.Database(dbFile, (err) => {
         process.exit(1);
     }
     logger.info("✅ 🦆 DuckDB database connected successfully at: %s", dbFile);
+
+    // [NEW] Start the batch processor only AFTER DB is ready
+    startDbBatchProcessor();
 });
 
 db.exec(`
@@ -187,6 +203,74 @@ function broadcast(message) {
 
 // --- Database Maintenance ---
 const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
+
+// --- [NEW] DB Batch Insert Processor ---
+function processDbQueue() {
+    if (!config.DB_BATCH_INSERT_ENABLED) {
+        return; // Do nothing if batch mode is disabled
+    }
+    
+    // Take all messages currently in the queue
+    const batch = dbWriteQueue.splice(0);
+    if (batch.length === 0) {
+        return; // No work to do
+    }
+
+    // Use db.serialize to ensure these operations run in order
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION;', (err) => {
+            if (err) return logger.error({ err }, "DB Batch: Failed to BEGIN TRANSACTION");
+        });
+
+        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
+        let errorCount = 0;
+
+        for (const msg of batch) {
+            // Run the prepared statement for each message in the batch
+            stmt.run(msg.timestamp, msg.topic, msg.payloadStringForDb, (runErr) => {
+                if (runErr) {
+                    logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
+                    errorCount++;
+                }
+            });
+        }
+
+        // Finalize the statement (executes all queued .run calls)
+        stmt.finalize((finalizeErr) => {
+            if (finalizeErr) {
+                 logger.error({ err: finalizeErr }, "DB Batch: Failed to finalize statement");
+                 db.run('ROLLBACK;'); // Rollback on finalize error
+                 return;
+            }
+
+            if (errorCount > 0) {
+                logger.warn(`DB Batch: ${errorCount} errors, rolling back transaction.`);
+                db.run('ROLLBACK;');
+            } else {
+                // All insertions were successful, commit the transaction
+                db.run('COMMIT;', (commitErr) => {
+                    if (commitErr) {
+                        logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
+                    } else {
+                        logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
+                        // Update DB status after a successful batch
+                        broadcastDbStatus();
+                    }
+                });
+            }
+        });
+    });
+}
+
+// [NEW] Function to start the interval
+function startDbBatchProcessor() {
+    if (config.DB_BATCH_INSERT_ENABLED) {
+        logger.info(`Starting DB batch processor (interval: ${config.DB_BATCH_INTERVAL_MS}ms)`);
+        if (dbBatchTimer) clearInterval(dbBatchTimer); // Clear any existing timer
+        dbBatchTimer = setInterval(processDbQueue, config.DB_BATCH_INTERVAL_MS);
+    }
+}
+
 
 // ---  Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
@@ -289,7 +373,8 @@ if (config.IS_SIMULATOR_ENABLED) {
 }
 
 // MCP Context API Router
-const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, getStatus, getDbStatus);
+// [MODIFIED] Pass the entire config object to the MCP API router
+const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, getStatus, getDbStatus, config);
 mainRouter.use('/api/context', ipFilterMiddleware, mcpRouter);
 
 // Configuration API Router
@@ -491,15 +576,26 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
             broadcast(JSON.stringify(finalMessageObject));
 
             // --- 4. Insert into DuckDB ---
-            const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-            stmt.run(timestamp, topic, payloadStringForDb, (err) => { // Insert string representation
-                if (err) {
-                    logger.error({ msg: "❌ DuckDB Insert Error", error: err, topic: topic, payloadAttempted: (payloadStringForDb || '').substring(0, 200) + '...' });
-                } else {
-                    broadcastDbStatus();
-                }
-                 stmt.finalize();
-            });
+            // [MODIFIED] Check config flag
+            if (config.DB_BATCH_INSERT_ENABLED) {
+                // Add to queue instead of inserting directly
+                dbWriteQueue.push({ timestamp, topic, payloadStringForDb });
+                // We still call broadcastDbStatus, but it only queries COUNT(*), which is fast.
+                // The size will only update after the batch runs.
+                broadcastDbStatus();
+            } else {
+                // Legacy: Insert one-by-one
+                const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
+                stmt.run(timestamp, topic, payloadStringForDb, (err) => { // Insert string representation
+                    if (err) {
+                        logger.error({ msg: "❌ DuckDB Insert Error", error: err, topic: topic, payloadAttempted: (payloadStringForDb || '').substring(0, 200) + '...' });
+                    } else {
+                        broadcastDbStatus();
+                    }
+                     stmt.finalize();
+                });
+            }
+
 
             // --- 5. Process Message through Mapper Engine ---
             // Pass the original topic, the decoded/parsed object, and the flag
@@ -545,8 +641,19 @@ process.on('SIGINT', () => {
         logger.info("✅    -> Stopping MCP Server process...");
         mcpProcess.kill('SIGINT');
     }*/
+
+    // [NEW] Stop the batch timer
+    if (dbBatchTimer) {
+        clearInterval(dbBatchTimer);
+        logger.info("✅    -> Stopped DB batch timer.");
+        // Process any remaining items in the queue *before* closing DB
+        logger.info("✅    -> Processing final DB write queue...");
+        processDbQueue();
+    }
+    
     stopSimulator();
     wss.clients.forEach(ws => ws.terminate());
+    
     const finalShutdown = () => {
         logger.info("✅ Forcing final database checkpoint...");
         db.exec("CHECKPOINT;", (err) => {
@@ -567,10 +674,12 @@ process.on('SIGINT', () => {
             if (mainConnection?.connected) {
                 mainConnection.end(true, () => {
                     logger.info("✅ MQTT connection closed.");
-                    finalShutdown();
+                    // [MODIFIED] Wait 1s for final batch to clear before shutting down
+                    setTimeout(finalShutdown, 1000);
                 });
             } else {
-                finalShutdown();
+                // [MODIFIED] Wait 1s for final batch to clear
+                setTimeout(finalShutdown, 1000);
             }
         });
     });

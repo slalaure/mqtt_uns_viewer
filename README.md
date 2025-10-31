@@ -215,6 +215,8 @@ The following variables can be set in your `data/.env` file:
 | `VIEW_MAPPER_ENABLED` | **[UI]** Enable or disable the 'Mapper' tab. | `true` |
 | `VIEW_CHART_ENABLED` | **[UI]** Enable or disable the 'Chart' tab. | `true` |
 | `SVG_FILE_PATH` | **[UI]** The path to the SVG file to load, relative to the 'data' directory. | `view.svg` |
+| **DB\_BATCH\_INSERT\_ENABLED** | `true` to enable high-performance batch inserts to the DB. | `true` |
+| **DB\_BATCH\_INTERVAL\_MS** | How often (in ms) to perform the batch insert. | `2000` |
 
 ### Customizing the SVG Plan
 

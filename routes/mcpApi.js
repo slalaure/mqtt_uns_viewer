@@ -62,7 +62,8 @@ const mqttToSqlLike = (topicPattern) => {
 }
 
 
-module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
+// [MODIFIED] Accept the 'config' object from server.js
+module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, config) => {
     const router = express.Router();
 
     // ... (les routes /status, /topics, /tree restent inchangées) ...
@@ -169,7 +170,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
         });
     });
 
-    // --- [VERSION 17 - CTE + ->>] ---
+    // --- [MODIFIED] Endpoint /search/model ---
     router.post('/search/model', (req, res) => {
         const { topic_template, json_filter_key, json_filter_value } = req.body;
 
@@ -186,21 +187,38 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
             const safe_json_key = "'" + escapeSQL(json_filter_key) + "'";
             const safe_json_value = "'" + escapeSQL(json_filter_value) + "'";
             
-            // --- [LA CORRECTION EST ICI] ---
-            // On utilise le CTE pour filtrer le topic d'abord,
-            // PUIS on applique l'opérateur ->> sur le payload (qui est un OBJET)
-            sqlQuery = `
-                WITH FilteredTopics AS (
-                    SELECT * FROM mqtt_events
-                    WHERE topic LIKE '${safe_topic}'
-                )
-                SELECT topic, payload, timestamp
-                FROM FilteredTopics
-                WHERE CAST((CAST(payload AS VARCHAR)::JSON)->>${safe_json_key} AS VARCHAR) = ${safe_json_value}
-                ORDER BY timestamp DESC
-                LIMIT ${limit};
-            `;
-             // Note: On n'a plus besoin du CAST AS VARCHAR car ->> retourne du texte.
+            // --- [MODIFIED] Select query based on config flag ---
+            const useOptimizedQuery = config.DB_BATCH_INSERT_ENABLED === true;
+
+            if (useOptimizedQuery) {
+                // Optimized query: Access JSON key directly
+                sqlQuery = `
+                    WITH FilteredTopics AS (
+                        SELECT * FROM mqtt_events
+                        WHERE topic LIKE '${safe_topic}'
+                    )
+                    SELECT topic, payload, timestamp
+                    FROM FilteredTopics
+                    WHERE (payload->>${safe_json_key}) = ${safe_json_value}
+                    ORDER BY timestamp DESC
+                    LIMIT ${limit};
+                `;
+                console.log(`[DEBUG] Model Search Query (Optimized): ${sqlQuery.replace(/\s+/g, ' ')}`);
+            } else {
+                // Legacy query: Use CAST operations
+                sqlQuery = `
+                    WITH FilteredTopics AS (
+                        SELECT * FROM mqtt_events
+                        WHERE topic LIKE '${safe_topic}'
+                    )
+                    SELECT topic, payload, timestamp
+                    FROM FilteredTopics
+                    WHERE CAST((CAST(payload AS VARCHAR)::JSON)->>${safe_json_key} AS VARCHAR) = ${safe_json_value}
+                    ORDER BY timestamp DESC
+                    LIMIT ${limit};
+                `;
+                console.log(`[DEBUG] Model Search Query (Legacy V17): ${sqlQuery.replace(/\s+/g, ' ')}`);
+            }
 
         } else {
              sqlQuery = `
@@ -210,14 +228,13 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus) => {
                 ORDER BY timestamp DESC
                 LIMIT ${limit}
             `;
+             console.log(`[DEBUG] Model Search Query (Topic Only): ${sqlQuery.replace(/\s+/g, ' ')}`);
         }
         
-        console.log(`[DEBUG] Model Search Query (V17 avec CTE + ->>): ${sqlQuery.replace(/\s+/g, ' ')}`);
-
         // Appel de la DB avec 2 arguments (sql, callback)
         db.all(sqlQuery, (err, rows) => {
             if (err) {
-                console.error("❌ Erreur de la requête de recherche par modèle (V17):", err);
+                console.error("❌ Erreur de la requête de recherche par modèle:", err);
                 return res.status(500).json({ error: "Database model search query failed." });
             }
              // [V17 Fix] Le payload est un OBJET, mais le client s'attend à un STRING
