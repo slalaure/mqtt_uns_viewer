@@ -122,8 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let allHistoryEntries = [];
     let minTimestamp = 0;
     let maxTimestamp = 0;
-    let currentMinTimestamp = 0;
-    let currentMaxTimestamp = 0;
+    // [MODIFIED] Removed currentMinTimestamp and currentMaxTimestamp
+    // They are now managed internally by view.history.js
 
     // --- Simulator UI Elements ---
     const btnStartSim = document.getElementById('btn-start-sim');
@@ -264,15 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             // --- History Update (Happens *before* potentially skipping tree update) ---
                             // message.payload is already a string here
                             const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
-                            const wasLive = currentMaxTimestamp === maxTimestamp;
+                            // [MODIFIED] Removed wasLive check.
                             allHistoryEntries.unshift(newEntry);
                             
                             // [MODIFIED] Send data to history module and get back new state
-                            const newState = setHistoryData(allHistoryEntries, false, wasLive);
+                            const newState = setHistoryData(allHistoryEntries, false); // Removed wasLive
                             minTimestamp = newState.min;
                             maxTimestamp = newState.max;
-                            currentMinTimestamp = newState.currentMin;
-                            currentMaxTimestamp = newState.currentMax;
+                            // [MODIFIED] Removed currentMin/MaxTimestamp updates
                             // [END MODIFIED]
                             
                             // [MODIFIED] Push new history data to modules
@@ -315,11 +314,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             setSvgHistoryModuleData(allHistoryEntries);
                             
                             // [MODIFIED] Send data to history module and get back new state
-                            const newState = setHistoryData(allHistoryEntries, true, true);
+                            const newState = setHistoryData(allHistoryEntries, true); // Removed wasLive
                             minTimestamp = newState.min;
                             maxTimestamp = newState.max;
-                            currentMinTimestamp = newState.currentMin;
-                            currentMaxTimestamp = newState.currentMax;
+                            // [MODIFIED] Removed currentMin/MaxTimestamp updates
 
                             // [MODIFIED] Call imported function
                             updateSvgTimelineUI(minTimestamp, maxTimestamp);
@@ -962,11 +960,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setSvgHistoryModuleData(allHistoryEntries);
         
         // [MODIFIED] Update history view with pruned data
-        const newState = setHistoryData(allHistoryEntries, false, false); // Not initial load, not live
+        const newState = setHistoryData(allHistoryEntries, false); // Not initial load
         minTimestamp = newState.min;
         maxTimestamp = newState.max;
-        currentMinTimestamp = newState.currentMin;
-        currentMaxTimestamp = newState.currentMax;
+        // [MODIFIED] Removed currentMin/MaxTimestamp updates
 
         // [NEW] Update chart slider
         updateChartSliderUI(minTimestamp, maxTimestamp, true);

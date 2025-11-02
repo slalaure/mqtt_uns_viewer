@@ -59,19 +59,21 @@ export function initHistoryView() {
  * Receives the full history log and timestamp data from the main app.
  * @param {Array} entries - The complete list of history entries.
  * @param {boolean} isInitialLoad - True if this is the first batch of data.
- * @param {boolean} isLive - True if the slider is at the 'live' edge.
  */
-export function setHistoryData(entries, isInitialLoad, isLive) {
+export function setHistoryData(entries, isInitialLoad) { // [MODIFIED] Removed isLive
     allHistoryEntries = entries;
 
     if (allHistoryEntries.length === 0) {
         if(timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'none';
         minTimestamp = maxTimestamp = currentMinTimestamp = currentMaxTimestamp = 0;
         applyAndRenderFilters(); // Render empty state
-        return { min: 0, max: 0, currentMin: 0, currentMax: 0 }; // Return state
+        return { min: 0, max: 0 }; // [MODIFIED] Return state
     }
 
     if (timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'block';
+
+    // [MODIFIED] Check if the handle is at the live edge *before* updating maxTimestamp
+    const isLive = currentMaxTimestamp === maxTimestamp;
 
     // Update global timestamps
     minTimestamp = allHistoryEntries[allHistoryEntries.length - 1].timestampMs;
@@ -82,9 +84,11 @@ export function setHistoryData(entries, isInitialLoad, isLive) {
         currentMinTimestamp = minTimestamp;
         currentMaxTimestamp = maxTimestamp;
     } else if (isLive) {
-        // If we are 'live', keep the max handle pegged to the new max timestamp
+        // If we were 'live', keep the max handle pegged to the new max timestamp
         currentMaxTimestamp = maxTimestamp;
     }
+    // If not initialLoad and not isLive, currentMin/MaxTimestamp are *not*
+    // touched, preserving the user's selection.
 
     // Re-render and update UI
     applyAndRenderFilters();
@@ -93,9 +97,8 @@ export function setHistoryData(entries, isInitialLoad, isLive) {
     // Return the new state to app.js
     return { 
         min: minTimestamp, 
-        max: maxTimestamp, 
-        currentMin: currentMinTimestamp, 
-        currentMax: currentMaxTimestamp 
+        max: maxTimestamp
+        // [MODIFIED] Removed currentMin/Max from return
     };
 }
 
