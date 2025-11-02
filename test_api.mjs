@@ -3,7 +3,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to a person obtaining a copy
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
@@ -134,7 +134,7 @@ async function main() {
       throw new Error('Full-text search failed to find data.');
     }
 
-    // --- [NEW] Model-Driven Search Tests ---
+    // --- [MODIFIED] Model-Driven Search Tests ---
 
     // [FIX] Changed test to search for a topic from the fast sensor loop
     logTest('Model Search (/search/model - Topic Only)');
@@ -150,12 +150,14 @@ async function main() {
       throw new Error('Model search (topic only) failed.');
     }
 
-    // [FIX] Changed test to search for topic and JSON from the fast sensor loop
+    // [MODIFIED] Changed test to search for topic and JSON from the fast sensor loop
     logTest('Model Search (/search/model - Topic + JSON Filter)');
+    // [MODIFIED] Use the new 'filters' object signature
     const modelSearchBody2 = {
       topic_template: "%/clean_room_01/humidity",
-      json_filter_key: "unit",
-      json_filter_value: "%RH"
+      filters: {
+        "unit": "%RH"
+      }
     };
     const modelSearchRes2 = await axios.post(`${CONTEXT_API_URL}/search/model`, modelSearchBody2);
 
@@ -234,7 +236,8 @@ async function main() {
 
     logTest('Error 400 for bad model search (missing topic_template)');
     try {
-      const badBody = { json_filter_key: "priority", json_filter_value: "HIGH" };
+      // [MODIFIED] Test with the new 'filters' signature
+      const badBody = { filters: { "priority": "HIGH" } };
       await axios.post(`${CONTEXT_API_URL}/search/model`, badBody);
       logError('Expected 400 error, but request succeeded (test failed).', null);
     } catch (err) {

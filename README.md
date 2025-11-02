@@ -1,41 +1,34 @@
 # MQTT UNS Viewer
 
-A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages. This project is fully containerized with Docker and includes a powerful, event-driven data simulator that generates correlated **Unified Namespace (UNS)** and **Sparkplug B** data streams.
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Version: 1.1.0](https://img.shields.io/badge/version-1.1.0-blue.svg)
 
-![Application Screenshot1](./assets/mqtt_uns_viewer1.png)
-![Application Screenshot2](./assets/mqtt_uns_viewer2.png)
-![Application Screenshot3](./assets/mqtt_uns_viewer3.png)
+A lightweight, real-time web application to visualize MQTT topic trees, dynamic SVG graphics, and historical data, designed for Unified Namespace (UNS) and Sparkplug B architectures.
 
----
+## 🌟 Key Features
 
-## Core Features
-
--   **Dual-Stream Simulation:** Features an advanced simulator that generates two distinct, correlated data streams:
-    -   **OT Layer (Sparkplug B):** Publishes `NBIRTH` and `DDATA` messages (Protobuf) for a fleet of industrial assets (robots, CNCs, power meters, gas tanks).
-    -   **IT/UNS Layer (JSON):** Publishes structured JSON events from simulated IT systems (ERP, MES, WMS, CMMS, FMS, Safety) that are temporally correlated with the OT data.
--   **Realistic Scenarios:** The simulator models complex, event-driven scenarios like machine faults (triggering CMMS alerts and abnormal sensor data), fire alarms (triggering FMS events and machine stops), and gas leaks (triggering safety alerts and rapid pressure drops).
--   **Real-Time Topic Tree (Tree View):** Automatically builds and updates a hierarchical tree of all received MQTT topics with live animations. Includes live filtering and expand/collapse controls. Displays payload and recent history upon selection.
--   **Dynamic SVG View:** Updates a custom 2D plan in real-time based on message payloads. Includes a "History Mode" to replay the visual state of the system using a timeline slider.
--   **Advanced Visual Mapper (Mapper Tab):**
-    * Dedicated tab featuring a static topic tree of all received topics for configuration.
-    * Select specific topics/objects (file nodes) to define real-time transformation rules.
-    * Define multiple output targets per source topic.
-    * Use **JavaScript functions** (`(msg) => { ... return msg; }`) to modify the message payload before republication.
-    * Specify target topics using **Mustache templating** (e.g., `my/uns/{{payload.deviceId}}`) based on the *transformed* payload.
-    * Includes **Rule Versioning** allowing users to "Save" changes or "Save as New Version" and switch between configurations.
-    * Tracks **Execution Metrics** (count) and **Logs** for each transformation rule target, displayed in the UI.
-    * Provides **Visual Feedback** in the mapper tree: highlights mapped source topics (purple) and locally generated target topics (green).
-    * Offers **Deletion with Purge**: Option to remove associated historical data from the database when deleting a mapping rule target.
-    * Handles **Sparkplug B** correctly: Re-encodes to Protobuf for SPB->SPB mappings, stringifies to JSON (with BigInt handling) for SPB->UNS mappings, and prevents invalid JSON->SPB mappings.
--   **AI Agent Integration:** A dedicated MCP Server exposes application controls and data as structured tools for Large Language Model (LLM) agents.
--   **NEW: Multi-axis Chart View** for plotting time-series data from multiple topics.
--   **Web-Based Configuration:** A built-in configuration page allows for easy updates to all server settings (`.env` file).
--   **Persistent Message History:** Stores all MQTT messages in a local **DuckDB** database that persists across restarts.
--   **Advanced History Filtering:** The history view features keyword search (with highlighting) and a dual-handle time-range slider.
--   **Secure Access:** Optional HTTP Basic Authentication to protect the entire application.
--   **Customizable UI**: Includes a user-selectable dark mode for visual comfort, enable or disable specific view tabs (Tree, SVG, History, Mapper).
-    *
--   **Containerized:** Runs in a Docker container for simple, one-command deployment.
+* **Real-time Topic Tree:** Automatically builds a collapsible tree of all MQTT topics as they arrive.
+* **Live Payload Viewer:** Inspect any topic's payload in real-time or pause to view its recent history.
+* **Dynamic SVG View:** Binds MQTT data to any SVG element (`<text>`, `<tspan>`) by adding a `data-key` attribute. Includes a time-scrubbing "History Mode".
+* **Persistent History:** Automatically records all messages into an embedded **DuckDB** database for historical analysis.
+* **History View:** A dedicated tab to search the entire message history with time-range sliders and full-text search.
+* **Topic Mapper Engine:** A powerful UI to create real-time data transformations.
+    * Create rules to map/transform data from a source topic (e.g., raw sensor data) to a new destination topic (e.g., a clean UNS topic).
+    * Use **JavaScript** for complex transformations.
+    * Rule-sets are versioned, allowing you to activate, edit, and save new versions.
+* **Charting View:**
+    * Dynamically plot data from *any* numeric variable in *any* topic.
+    * Supports multi-topic and multi-variable charting on the same timeline.
+    * Time-range selection, PNG/CSV export, and chart type selection (line, bar).
+* **Sparkplug B Support:** Natively decodes `spBv1.0` Protobuf payloads (NBIRTH, DDATA) into JSON for visualization and mapping.
+* **Built-in Simulator:** Includes a data simulator that generates realistic JSON UNS data (ERP, MES, WMS) *and* Sparkplug B data (DDATA).
+* **MCP Server (AI Agent):** Includes a **Model-Context Protocol** server (`mcp_server.mjs`) that allows an AI agent (like a GPT) to interact with the application to perform:
+    * Semantic search (e.g., "Find all high-priority maintenance requests").
+    * Schema inference for unknown topics.
+    * Administrative tasks (e.g., "Prune all data from the R&D lab").
+* **Admin & Security:**
+    * Web-based configuration editor for the `.env` file.
+    * Optional HTTP Basic Authentication.
 
 ---
 
@@ -185,38 +178,39 @@ Navigate to **http://localhost:8080/config.html** to access the web-based config
 -   All settings from your `data/.env` file are displayed here.
 -   After saving, you will be prompted to restart the server. If you confirm, the Docker container will gracefully restart to apply the new settings.
 
-### `.env` File Variables
+## 🔧 Configuration (`data/.env`)
 
-The following variables can be set in your `data/.env` file:
+The application is configured using the `.env` file located in the `data/` directory.
 
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `MQTT_BROKER_HOST` | The full hostname of your MQTT broker. | `a1b2c3d4e5f6.iot.us-east-1.amazonaws.com` |
-| `MQTT_PORT` | The connection port for the broker. | `8883` |
-| `MQTT_PROTOCOL` | The protocol to use. | `mqtts` |
-| `CLIENT_ID` | A unique client ID for the application. | `mqtt-web-viewer` |
-| `MQTT_TOPIC` | Comma-separated list of topics to subscribe to. | `stark_industries/#,spBv1.0/#` |
-| `MQTT_USERNAME` | Username for authentication (if not using certs). | `myuser` |
-| `MQTT_PASSWORD` | Password for authentication (if not using certs). | `my-secret-password` |
-| `CERT_FILENAME` | Certificate file for MTLS (in `data/certs`). | `certificate.pem.crt` |
-| `KEY_FILENAME` | Private key file for MTLS (in `data/certs`). | `private.pem.key` |
-| `CA_FILENAME` | CA certificate file for MTLS (in `data/certs`). | `AmazonRootCA1.pem` |
-| `MQTT_ALPN_PROTOCOL` | ALPN protocol, required for some brokers like AWS IoT on port 443. | `x-amzn-mqtt-ca` |
-| `SIMULATOR_ENABLED` | Enable the built-in data simulator. | `true` |
-| `PORT` | The port on which the web server will run. | `8080` |
-| `SPARKPLUG_ENABLED` | Enables Sparkplug B decoding *and* enables the simulator to generate a parallel Sparkplug B (Protobuf) data stream in addition to the JSON/UNS stream. | `true` |
-| `DUCKDB_MAX_SIZE_MB` | Max DB size in MB before old data is pruned. | `100` |
-| `DUCKDB_PRUNE_CHUNK_SIZE`| Number of old records to delete when pruning. | `500` |
-| `HTTP_USER` | **[Security]** Username for HTTP Basic Auth. Leave empty to disable. | `admin` |
-| `HTTP_PASSWORD` | **[Security]** Password for HTTP Basic Auth. Leave empty to disable. | `super-secure-password` |
-| `VIEW_TREE_ENABLED` | [cite_start]**[UI]** Enable or disable the 'Tree View' tab. [cite: 17] | `true` |
-| `VIEW_SVG_ENABLED` | **[UI]** Enable or disable the 'SVG View' tab. | `true` |
-| `VIEW_HISTORY_ENABLED` | **[UI]** Enable or disable the 'History' tab. | `true` |
-| `VIEW_MAPPER_ENABLED` | **[UI]** Enable or disable the 'Mapper' tab. | `true` |
-| `VIEW_CHART_ENABLED` | **[UI]** Enable or disable the 'Chart' tab. | `true` |
-| `SVG_FILE_PATH` | **[UI]** The path to the SVG file to load, relative to the 'data' directory. | `view.svg` |
-| **DB\_BATCH\_INSERT\_ENABLED** | `true` to enable high-performance batch inserts to the DB. | `true` |
-| **DB\_BATCH\_INTERVAL\_MS** | How often (in ms) to perform the batch insert. | `2000` |
+| Variable | Description |
+| :--- | :--- |
+| **Broker Settings** | |
+| `MQTT_BROKER_HOST` | Full URL of your broker (e.g., `mqtts://your-broker.com`). |
+| `MQTT_PORT` | The port for your broker (e.g., `8883`). |
+| `MQTT_TOPIC` | The topic(s) to subscribe to. Use commas for multiple (e.g., `stark_industries/#,spBv1.0/#`). |
+| `MQTT_USERNAME` | Username for the broker. |
+| `MQTT_PASSWORD` | Password for the broker. |
+| **Certificates (for MTLS)** | |
+| `CERT_FILENAME` | Filename of your certificate (`.crt`) located in `data/certs/`. |
+| `KEY_FILENAME` | Filename of your private key (`.key`) located in `data/certs/`. |
+| `CA_FILENAME` | Filename of your CA cert (`.pem`) located in `data/certs/`. |
+| **Application Settings** | |
+| `PORT` | The port for the web server to run on (e.g., `8080`). |
+| `SPARKPLUG_ENABLED`| Set to `true` to enable Sparkplug B decoding. |
+| `SIMULATOR_ENABLED`| Set to `true` to enable the built-in data simulator and its API endpoints. |
+| `HTTP_USER` | Set a username to enable HTTP Basic Auth for the website. |
+| `HTTP_PASSWORD` | Set a password to enable HTTP Basic Auth. |
+| `BASE_PATH` | The base path for reverse proxy (e.g., `/myapp`). Defaults to `/`. |
+| **Database Settings** | |
+| `DUCKDB_MAX_SIZE_MB`| Max size of the DB file before old data is pruned (e.g., `100`). |
+| `DB_BATCH_INSERT_ENABLED` | Set to `true` for high-performance batch inserts into the database. |
+| **View Settings** | |
+| `VIEW_TREE_ENABLED` | `true`/`false` to show or hide the Tree View tab. |
+| `VIEW_SVG_ENABLED` | `true`/`false` to show or hide the SVG View tab. |
+| `VIEW_HISTORY_ENABLED`| `true`/`false` to show or hide the History View tab. |
+| `VIEW_MAPPER_ENABLED`| `true`/`false` to show or hide the Mapper View tab. |
+| `VIEW_CHART_ENABLED` | `true`/`false` to show or hide the Chart View tab. |
+| `SVG_FILE_PATH` | Path to your SVG file, relative to the `data` directory (e.g., `my_plant_layout.svg`). |
 
 ### Customizing the SVG Plan
 

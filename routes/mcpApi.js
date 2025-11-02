@@ -171,8 +171,9 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     });
 
     // --- [MODIFIED] Endpoint /search/model ---
+    // Change signature to accept an object of filters
     router.post('/search/model', (req, res) => {
-        const { topic_template, json_filter_key, json_filter_value } = req.body;
+        const { topic_template, filters } = req.body; // Changed from json_filter_key/value to filters
 
         if (!topic_template) {
             return res.status(400).json({ error: "Missing 'topic_template' (e.g., '%/erp/workorder')." });
@@ -180,55 +181,55 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
         const safe_topic = escapeSQL(topic_template);
         const limit = 5000;
+        const useOptimizedQuery = config.DB_BATCH_INSERT_ENABLED === true;
 
         let sqlQuery;
+        let whereClauses = [`topic LIKE '${safe_topic}'`]; // Start with topic filter
 
-        if (json_filter_key && json_filter_value) {
-            const safe_json_key = "'" + escapeSQL(json_filter_key) + "'";
-            const safe_json_value = "'" + escapeSQL(json_filter_value) + "'";
-            
-            // --- [MODIFIED] Select query based on config flag ---
-            const useOptimizedQuery = config.DB_BATCH_INSERT_ENABLED === true;
-
-            if (useOptimizedQuery) {
-                // Optimized query: Access JSON key directly
-                sqlQuery = `
-                    WITH FilteredTopics AS (
-                        SELECT * FROM mqtt_events
-                        WHERE topic LIKE '${safe_topic}'
-                    )
-                    SELECT topic, payload, timestamp
-                    FROM FilteredTopics
-                    WHERE (payload->>${safe_json_key}) = ${safe_json_value}
-                    ORDER BY timestamp DESC
-                    LIMIT ${limit};
-                `;
-                console.log(`[DEBUG] Model Search Query (Optimized): ${sqlQuery.replace(/\s+/g, ' ')}`);
-            } else {
-                // Legacy query: Use CAST operations
-                sqlQuery = `
-                    WITH FilteredTopics AS (
-                        SELECT * FROM mqtt_events
-                        WHERE topic LIKE '${safe_topic}'
-                    )
-                    SELECT topic, payload, timestamp
-                    FROM FilteredTopics
-                    WHERE CAST((CAST(payload AS VARCHAR)::JSON)->>${safe_json_key} AS VARCHAR) = ${safe_json_value}
-                    ORDER BY timestamp DESC
-                    LIMIT ${limit};
-                `;
-                console.log(`[DEBUG] Model Search Query (Legacy V17): ${sqlQuery.replace(/\s+/g, ' ')}`);
+        // [NEW] Build dynamic WHERE clauses for filters
+        if (filters && typeof filters === 'object' && Object.keys(filters).length > 0) {
+            for (const [key, value] of Object.entries(filters)) {
+                // Basic sanitation. Note: Key cannot be parameterized in payload->>
+                const safe_key = "'" + escapeSQL(key) + "'";
+                const safe_value = "'" + escapeSQL(value) + "'";
+                
+                if (useOptimizedQuery) {
+                    // Optimized query: Access JSON key directly
+                    whereClauses.push(`(payload->>${safe_key}) = ${safe_value}`);
+                } else {
+                    // Legacy query: Use CAST operations
+                    whereClauses.push(`CAST((CAST(payload AS VARCHAR)::JSON)->>${safe_key} AS VARCHAR) = ${safe_value}`);
+                }
             }
+        }
+        
+        const whereString = whereClauses.join(' AND ');
 
-        } else {
-             sqlQuery = `
+        // [NEW] Build final query
+        if (useOptimizedQuery) {
+            sqlQuery = `
+                WITH FilteredTopics AS (
+                    SELECT * FROM mqtt_events
+                )
                 SELECT topic, payload, timestamp
-                FROM mqtt_events
-                WHERE topic LIKE '${safe_topic}'
+                FROM FilteredTopics
+                WHERE ${whereString}
                 ORDER BY timestamp DESC
-                LIMIT ${limit}
+                LIMIT ${limit};
             `;
-             console.log(`[DEBUG] Model Search Query (Topic Only): ${sqlQuery.replace(/\s+/g, ' ')}`);
+            console.log(`[DEBUG] Model Search Query (Optimized): ${sqlQuery.replace(/\s+/g, ' ')}`);
+        } else {
+            sqlQuery = `
+                WITH FilteredTopics AS (
+                    SELECT * FROM mqtt_events
+                )
+                SELECT topic, payload, timestamp
+                FROM FilteredTopics
+                WHERE ${whereString}
+                ORDER BY timestamp DESC
+                LIMIT ${limit};
+            `;
+            console.log(`[DEBUG] Model Search Query (Legacy V17): ${sqlQuery.replace(/\s+/g, ' ')}`);
         }
         
         // Appel de la DB avec 2 arguments (sql, callback)

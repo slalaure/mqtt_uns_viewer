@@ -1227,11 +1227,13 @@ body.scrollable-page {
     padding: 10px;
     font-size: 0.9em;
 }
+/* [MODIFIÉ] Ajout de position: relative et padding pour le bouton copier */
 .target-log-entry {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.9em;
-    padding: 5px 10px;
+    padding: 5px 30px 5px 10px;
     border-bottom: 1px solid var(--color-border-secondary);
+    position: relative;
 }
 .target-log-entry:last-child {
     border-bottom: none;
@@ -1245,6 +1247,19 @@ body.scrollable-page {
     color: var(--color-primary-hover);
     word-break: break-all;
 }
+
+/* --- [NEW] Style for error logs in mapper --- */
+.target-log-entry.is-error {
+    background-color: color-mix(in srgb, var(--color-danger) 15%, transparent);
+    color: var(--color-danger);
+}
+.log-entry-error-label {
+    font-weight: bold;
+    color: var(--color-danger);
+    margin-left: 10px;
+}
+/* --- [END NEW] --- */
+
 
 .input-warning {
     border-color: var(--color-danger) !important; /* Use !important to override default focus style if needed */
@@ -1568,3 +1583,61 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 #chart-main-area:-webkit-full-screen { background-color: var(--color-bg-secondary); }
 #chart-main-area:-moz-full-screen { background-color: var(--color-bg-secondary); }
 #chart-main-area:-ms-fullscreen { background-color: var(--color-bg-secondary); }
+
+/* --- [NEW] Style for error logs in mapper --- */
+.target-log-entry.is-error {
+    background-color: color-mix(in srgb, var(--color-danger) 15%, transparent);
+    color: var(--color-danger);
+}
+.log-entry-error-label {
+    font-weight: bold;
+    color: var(--color-danger);
+    margin-left: 10px;
+}
+
+/* --- [NEW] Style for debug/trace logs in mapper --- */
+.target-log-entry.is-debug {
+    background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+.log-entry-debug-label {
+    font-weight: bold;
+    color: var(--color-primary);
+    margin-left: 10px;
+}
+
+/* --- [NEW] Style for copy button in mapper logs --- */
+.log-copy-btn {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--color-border-secondary);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.2; /* Hide by default */
+    transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.target-log-entry:hover .log-copy-btn {
+    opacity: 1; /* Show on parent hover */
+}
+.log-copy-btn:hover {
+    background-color: var(--color-bg-accent);
+}
+.log-copy-btn.copied {
+    background-color: var(--color-success);
+    color: white;
+    opacity: 1;
+}

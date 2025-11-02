@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -204,7 +204,8 @@ function broadcast(message) {
 // --- Database Maintenance ---
 const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
 
-// --- [NEW] DB Batch Insert Processor ---
+// --- [MODIFIED] DB Batch Insert Processor ---
+// This function will now ONLY run mappers that require the DB.
 function processDbQueue() {
     if (!config.DB_BATCH_INSERT_ENABLED) {
         return; // Do nothing if batch mode is disabled
@@ -255,6 +256,28 @@ function processDbQueue() {
                         logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
                         // Update DB status after a successful batch
                         broadcastDbStatus();
+                        
+                        // --- [MODIFIED] Trigger mappers that *needed* the DB ---
+                        (async () => {
+                            for (const msg of batch) {
+                                // Only run mappers that were deferred
+                                if (msg.needsDb) { 
+                                    try {
+                                        // [FIX] Re-parse the payload object from the string
+                                        const payloadObject = JSON.parse(msg.payloadStringForDb);
+                                        await mapperEngine.processMessage(
+                                            msg.topic, 
+                                            payloadObject,
+                                            msg.isSparkplugOrigin
+                                        );
+                                    } catch (mapperErr) {
+                                        // This catch is for safety, but processMessage handles its own errors
+                                        logger.error({ err: mapperErr, topic: msg.topic }, "Mapper trigger failed after batch.");
+                                    }
+                                }
+                            }
+                        })();
+                        // --- [END MODIFIED] ---
                     }
                 });
             }
@@ -273,7 +296,9 @@ function startDbBatchProcessor() {
 
 
 // ---  Mapper Engine Setup ---
+// [MODIFIED] Pass the 'db' object to the mapper engine
 const mapperEngine = require('./mapper_engine')(
+    db, // <-- [NEW] Pass the database connection
     (topic, payload) => { // Publisher callback
         if (mainConnection) {
             // The payload here can be a String (JSON) or a Buffer (Sparkplug)
@@ -334,7 +359,7 @@ mainRouter.get('/view.svg', (req, res) => {
         res.sendFile(configuredSvgPath);
     } else {
         logger.error(`Configured SVG file not found at: ${configuredSvgPath}`);
-        res.status(404).send(`SVG file not found. Checked path: ${configuredSvgPath}`);
+        res.status(444).send(`SVG file not found. Checked path: ${configuredSvgPath}`);
     }
 });
 
@@ -503,7 +528,8 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
     mainConnection = connection;
 
     // MQTT Message Handler
-    mainConnection.on('message', (topic, payload) => {
+    // [MODIFIED] Add 'async' to handle awaiting the mapper
+    mainConnection.on('message', async (topic, payload) => {
         const timestamp = new Date();
         let payloadObjectForMapper = null; // Object to pass to mapper
         let payloadStringForWs = null;     // String to broadcast via WS
@@ -575,16 +601,33 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
             };
             broadcast(JSON.stringify(finalMessageObject));
 
-            // --- 4. Insert into DuckDB ---
-            // [MODIFIED] Check config flag
+            // --- 4. [MODIFIED] Smart DB/Mapper Execution ---
             if (config.DB_BATCH_INSERT_ENABLED) {
-                // Add to queue instead of inserting directly
-                dbWriteQueue.push({ timestamp, topic, payloadStringForDb });
-                // We still call broadcastDbStatus, but it only queries COUNT(*), which is fast.
-                // The size will only update after the batch runs.
+                // --- BATCH MODE ---
+                // Check if any rule for this topic needs the DB
+                const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
+                
+                // Add all data to the queue.
+                dbWriteQueue.push({ 
+                    timestamp, 
+                    topic, 
+                    payloadStringForDb, 
+                    payloadObjectForMapper, // Store the object
+                    isSparkplugOrigin, 
+                    needsDb // <-- Tell the queue if this message needs deferred mapping
+                });
                 broadcastDbStatus();
+
+                if (!needsDb) {
+                    // This mapper is simple/stateless. Run it IMMEDIATELY for low latency.
+                    // It won't see its own message in the DB, but it doesn't care.
+                    await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
+                }
+                // If 'needsDb' is true, the mapper will be called inside 'processDbQueue'
+                
             } else {
-                // Legacy: Insert one-by-one
+                // --- NON-BATCH MODE ---
+                // Insert one-by-one
                 const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
                 stmt.run(timestamp, topic, payloadStringForDb, (err) => { // Insert string representation
                     if (err) {
@@ -592,15 +635,14 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
                     } else {
                         broadcastDbStatus();
                     }
-                     stmt.finalize();
+                     // Call mapper *after* statement is finalized.
+                     // This ensures 'await db.all()' works even in non-batch mode.
+                     stmt.finalize(async () => {
+                         await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
+                     });
                 });
             }
-
-
-            // --- 5. Process Message through Mapper Engine ---
-            // Pass the original topic, the decoded/parsed object, and the flag
-            mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
-
+            // --- 5. [END OF MODIFIED LOGIC] ---
 
         } catch (err) { // Catch unexpected errors in this block's logic
             logger.error({ msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`, topic: topic, error_message: err.message, error_stack: err.stack, rawPayloadStartHex: payload.slice(0, 30).toString('hex') });
@@ -648,7 +690,8 @@ process.on('SIGINT', () => {
         logger.info("✅    -> Stopped DB batch timer.");
         // Process any remaining items in the queue *before* closing DB
         logger.info("✅    -> Processing final DB write queue...");
-        processDbQueue();
+        // [MODIFIED] We must pass 'mapperEngine' to the final flush
+        processDbQueue(); 
     }
     
     stopSimulator();
@@ -667,6 +710,10 @@ process.on('SIGINT', () => {
             });
         });
     };
+    
+    // [MODIFIED] Wait a bit longer for the final batch + mappers to run
+    const shutdownDelay = config.DB_BATCH_INTERVAL_MS + 1000; // Wait for batch + 1s
+    
     wss.close(() => {
         logger.info("✅ WebSocket server closed.");
         server.close(() => {
@@ -674,12 +721,10 @@ process.on('SIGINT', () => {
             if (mainConnection?.connected) {
                 mainConnection.end(true, () => {
                     logger.info("✅ MQTT connection closed.");
-                    // [MODIFIED] Wait 1s for final batch to clear before shutting down
-                    setTimeout(finalShutdown, 1000);
+                    setTimeout(finalShutdown, shutdownDelay);
                 });
             } else {
-                // [MODIFIED] Wait 1s for final batch to clear
-                setTimeout(finalShutdown, 1000);
+                setTimeout(finalShutdown, shutdownDelay);
             }
         });
     });

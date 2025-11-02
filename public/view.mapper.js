@@ -53,7 +53,7 @@ let mapperMetrics = {};
 let mappedTargetTopics = new Set();
 let mapperSaveTimer = null;
 let currentEditingSourceTopic = null;
-let defaultJSCode = '';
+let defaultJSCode = ''; // Will be set by initMapperView
 let selectedMapperNode = null;
 let deleteModalContext = null;
 
@@ -73,6 +73,35 @@ let appCallbacks = {
  */
 export function initMapperView(callbacks) {
     appCallbacks = { ...appCallbacks, ...callbacks };
+    
+    // [MODIFIED] Set default JS code here
+    defaultJSCode = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
+// 'db' object is available with await db.all(sql) and await db.get(sql).
+// Return the modified 'msg' object to publish.
+// Return null or undefined to skip publishing.
+
+/* // Example: Get average of last 5 values for this topic
+try {
+    const sql = \`
+        SELECT AVG(CAST(payload->>'value' AS DOUBLE)) as avg_val 
+        FROM (
+            SELECT payload FROM mqtt_events 
+            WHERE topic = '\${msg.topic}' 
+            ORDER BY timestamp DESC 
+            LIMIT 5
+        )
+    \`;
+    const result = await db.get(sql);
+    if (result && result.avg_val) {
+        msg.payload.average_5 = result.avg_val;
+    }
+} catch (e) {
+    console.error("DB query failed: " + e.message);
+}
+*/
+
+return msg;
+`;
     
     loadMapperConfig(); // Load initial config
     
@@ -209,13 +238,7 @@ async function loadMapperConfig() {
         if (!response.ok) throw new Error('Failed to fetch mapper config');
         mapperConfig = await response.json();
 
-        // For now, use a hardcoded default.
-        defaultJSCode = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
-// Return the modified 'msg' object to publish.
-// Return null or undefined to skip publishing.
-
-return msg;
-`;
+        // Note: defaultJSCode is now set in initMapperView()
 
         updateMapperVersionSelector();
         appCallbacks.colorAllTrees();
@@ -392,8 +415,15 @@ function createTargetEditor(rule, target) {
     codeLabel.textContent = 'Transform (JavaScript)';
 
     const codeEditor = editorDiv.querySelector('.target-code-editor');
-    target.code = (target.code && target.code.includes('return msg;')) ? target.code : defaultJSCode;
+    
+    // [FIX] This logic was wrong.
+    // If the code from the server (target.code) is empty/null, use the default.
+    // Otherwise, *always* use the code from the server.
+    if (!target.code) {
+        target.code = defaultJSCode;
+    }
     codeEditor.value = target.code;
+    // [END FIX]
 
     codeEditor.addEventListener('input', () => {
         target.code = codeEditor.value;
@@ -464,15 +494,62 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
             ruleMetrics.logs.forEach(log => {
                 const logDiv = document.createElement('div');
                 logDiv.className = 'target-log-entry';
-                logDiv.innerHTML = `
-                    <span class="log-entry-ts">${new Date(log.ts).toLocaleTimeString()}</span>
-                    <span class="log-entry-topic">${log.outTopic}</span>
-                `;
-                logDiv.title = `Payload: ${log.outPayload}`;
+                let fullLogContent = ''; // [NEW] Store full content for copy
+
+                // [MODIFIED] Check if the log entry is an error or debug
+                if (log.error) {
+                    logDiv.classList.add('is-error');
+                    logDiv.innerHTML = `
+                        <span class="log-entry-ts">${new Date(log.ts).toLocaleTimeString('en-GB')}</span>
+                        <span class="log-entry-error-label">ERROR</span>
+                    `;
+                    fullLogContent = `Input: ${log.inTopic}\nError: ${log.error}`; // [NEW]
+                    logDiv.title = fullLogContent;
+                
+                } else if (log.debug) { // <-- [NEW] Ajout de ce bloc
+                    logDiv.classList.add('is-debug');
+                    logDiv.innerHTML = `
+                        <span class="log-entry-ts">${new Date(log.ts).toLocaleTimeString('en-GB')}</span>
+                        <span class="log-entry-debug-label">TRACE</span>
+                    `;
+                    fullLogContent = `Input: ${log.inTopic}\nTrace: ${log.debug}`; // [NEW]
+                    logDiv.title = fullLogContent;
+
+                } else {
+                    logDiv.innerHTML = `
+                        <span class="log-entry-ts">${new Date(log.ts).toLocaleTimeString('en-GB')}</span>
+                        <span class="log-entry-topic">${log.outTopic}</span>
+                    `;
+                    fullLogContent = `Payload: ${log.outPayload}`; // [NEW]
+                    logDiv.title = fullLogContent;
+                }
+
+                // --- [NEW] Add Copy Button ---
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'log-copy-btn';
+                copyBtn.innerHTML = '📋'; // Clipboard emoji
+                copyBtn.title = 'Copy log details';
+                copyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(fullLogContent).then(() => {
+                        copyBtn.innerHTML = '✓'; // Checkmark
+                        copyBtn.classList.add('copied');
+                        setTimeout(() => {
+                            copyBtn.innerHTML = '📋';
+                            copyBtn.classList.remove('copied');
+                        }, 1000);
+                    }).catch(err => {
+                        console.error('Failed to copy log:', err);
+                        copyBtn.innerHTML = 'X';
+                    });
+                });
+                logDiv.appendChild(copyBtn);
+                // --- [END NEW] ---
+
                 logsList.appendChild(logDiv);
             });
         } else {
-            logsList.innerHTML = '<p class="history-placeholder">No executions yet.</p>';
+            logsList.innerHTML = '<p class.history-placeholder">No executions yet.</p>';
         }
     } else {
         countSpan.textContent = '0';
