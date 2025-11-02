@@ -1,0 +1,64 @@
+/* public/css/config.css */
+
+/* Allows config page to scroll, unlike main app */
+body.scrollable-page {
+    height: auto;
+    overflow-y: auto;
+}
+
+.config-page-container {
+    padding: 20px 40px;
+    max-width: 800px;
+    margin: 20px auto;
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+.config-page-container h1 {
+    border-bottom: 2px solid var(--color-bg-accent);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+/* Use monospace font for env var keys */
+.form-group label:not(.checkbox-label) {
+     font-family: 'Courier New', Courier, monospace;
+}
+
+.form-actions {
+    margin-top: 30px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+#save-config-button {
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+    background-color: var(--color-primary);
+    color: var(--color-header-text);
+    border: none;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+#save-config-button:hover {
+    background-color: var(--color-primary-hover);
+}
+
+#save-config-button:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+}
+
+.status-message {
+    font-weight: 500;
+}
+.status-message.success {
+    color: var(--color-success);
+}
+.status-message.error {
+    color: var(--color-danger);
+}

@@ -1,0 +1,170 @@
+/* public/css/view.tree.css */
+
+/* --- View Layout --- */
+main#tree-view {
+    flex-direction: row;
+}
+
+.tree-view-wrapper {
+    flex: 0 0 50%;
+    min-width: 250px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-border);
+    background-color: var(--color-bg-secondary);
+}
+
+#payload-display {
+    /* Uses .payload-container base style */
+    padding: 20px;
+}
+
+/* --- Tree Controls --- */
+.tree-controls {
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+#tree-filter-input {
+    flex-grow: 1;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-size: 14px;
+}
+#tree-filter-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.tree-controls button {
+    padding: 6px 12px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 1.2em;
+    line-height: 1;
+}
+.tree-controls button:hover {
+    background-color: var(--color-bg-accent);
+}
+
+/* --- #mqtt-tree Specifics --- */
+#mqtt-tree .node-filter-checkbox {
+    position: absolute;
+    left: -18px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+#mqtt-tree .new-node { 
+    opacity: 0; 
+    transform: translateY(-10px); 
+}
+
+@keyframes reveal-and-pulse {
+    0% { opacity: 0.5; transform: translateY(-5px) scale(0.95); }
+    50% { opacity: 1; transform: translateY(0) scale(1.05); background-color: rgba(0, 123, 255, 0.2); }
+    100% { opacity: 1; transform: translateY(0) scale(1); background-color: transparent; }
+}
+
+#mqtt-tree .pulse > .node-container { 
+    animation: reveal-and-pulse 1.2s ease-out; 
+}
+#mqtt-tree .pulse { 
+    --line-color: var(--color-primary); 
+    transition: --line-color 1.2s ease-out; 
+    opacity: 1; 
+    transform: translateY(0); 
+}
+
+#mqtt-tree .selected { 
+    background-color: var(--selected-bg); 
+    color: var(--selected-text); 
+}
+#mqtt-tree .selected .node-name::before { 
+    filter: brightness(0) invert(1); 
+}
+body.dark-mode #mqtt-tree .selected .node-name::before { 
+    filter: brightness(0) invert(0.2); 
+}
+#mqtt-tree .selected .node-timestamp { 
+    color: var(--selected-text); 
+    opacity: 0.8; 
+}
+
+#mqtt-tree .is-folder.collapsed > ul { 
+    display: none; 
+}
+#mqtt-tree .filtered-out { 
+    display: none; 
+}
+
+/* --- Tree View Payload Controls --- */
+.payload-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+}
+.payload-controls label {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* --- Recent Topic History (in Tree View) --- */
+.topic-history-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.topic-history-header {
+    font-size: 1.1em;
+    color: var(--color-text);
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--color-border-secondary);
+}
+.topic-history-log {
+    flex-grow: 1;
+    overflow-y: auto;
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 4px;
+}
+.topic-history-entry {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-bg-accent);
+}
+.topic-history-entry:last-child {
+    border-bottom: none;
+}
+.history-entry-timestamp {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: var(--color-text-secondary);
+    margin-bottom: 5px;
+    display: block;
+}
+.history-entry-payload {
+    margin: 0;
+    padding: 8px;
+    background-color: var(--color-bg-secondary);
+    border-radius: 3px;
+    font-size: 0.95em;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
