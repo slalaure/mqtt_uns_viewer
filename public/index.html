@@ -249,6 +249,15 @@
                 <div id="chart-main-area">
                     <div class="chart-config-bar">
                         <div class="form-group">
+                            <label for="chart-config-select">Saved Charts:</label>
+                            <select id="chart-config-select">
+                                <option value="">-- New Chart --</option>
+                            </select>
+                        </div>
+                        <button id="btn-chart-save-current" class="chart-button" title="Save">Save</button>
+                        <button id="btn-chart-save-as" class="chart-button" title="Save As New...">Save As...</button>
+                        <button id="btn-chart-delete-config" class="chart-button danger-button" title="Delete Selected Chart">Delete</button>
+                        <div class="form-group">
                             <label for="chart-type-select">Type:</label>
                             <select id="chart-type-select">
                                 <option value="line">Line</option>
@@ -274,12 +283,15 @@
 
                         <button id="btn-chart-generate" class="chart-button">Refresh</button>
                         <button id="btn-chart-clear" class="chart-button" title="Clear All Selections">Clear All</button>
+                        
                         <button id="btn-chart-export-csv" class="chart-button" title="Export CSV">CSV</button>
                         <button id="btn-chart-export-png" class="chart-button" title="Export PNG">PNG</button>
                         <button id="btn-chart-fullscreen" class="chart-button" title="Toggle Fullscreen">&#x2922;</button>
+                        
+                        <span id="chart-save-status"></span>
                     </div>
                     <div id="chart-canvas-container">
-                        <p id="chart-placeholder">Select a topic, choose variables, and click "Generate Chart".</p>
+                        <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
                         <canvas id="chart-canvas" style="display: none;"></canvas>
                     </div>
                 </div>

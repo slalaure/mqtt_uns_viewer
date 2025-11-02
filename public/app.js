@@ -40,7 +40,13 @@ import {
     addMappedTargetTopic
 } from './view.mapper.js';
 // [MODIFIED] Import for Chart module
-import { initChartView, handleChartNodeClick, updateChartSliderUI, getChartedTopics } from './view.chart.js';
+import { 
+    initChartView, 
+    handleChartNodeClick, 
+    updateChartSliderUI, 
+    getChartedTopics,
+    pruneChartedVariables // [MODIFIED] Import pruneChartedVariables
+} from './view.chart.js';
 // --- [END NEW] ---
 
 
@@ -967,6 +973,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // [NEW] Update chart slider
         updateChartSliderUI(minTimestamp, maxTimestamp, true);
+        // [END MODIFIED]
+
+        // [MODIFIED] Prune charted variables
+        pruneChartedVariables(regex);
         // [END MODIFIED]
 
         // ... (Mapper topic filtering logic remains) ...

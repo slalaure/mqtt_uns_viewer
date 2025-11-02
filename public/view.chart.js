@@ -44,6 +44,14 @@ const btnChartClear = document.getElementById('btn-chart-clear');
 const chartTypeSelect = document.getElementById('chart-type-select');
 const chartConnectNulls = document.getElementById('chart-connect-nulls-toggle');
 
+// [MODIFIED] Save/Load controls
+const chartConfigSelect = document.getElementById('chart-config-select');
+const btnChartSaveCurrent = document.getElementById('btn-chart-save-current');
+const btnChartSaveAs = document.getElementById('btn-chart-save-as');
+const btnChartDeleteConfig = document.getElementById('btn-chart-delete-config');
+const chartSaveStatus = document.getElementById('chart-save-status');
+
+
 // Time Slider Elements
 const chartTimeSliderContainer = document.getElementById('chart-time-range-slider-container');
 const chartHandleMin = document.getElementById('chart-handle-min');
@@ -65,6 +73,13 @@ let maxTimestamp = 0;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
 
+// [MODIFIED] State for live mode and saving
+let isChartLive = true; // Default to live mode
+let chartSaveTimer = null;
+let allChartConfigs = { configurations: [] }; // Holds all saved configs
+let currentConfigId = null; // ID of the currently loaded chart
+
+
 // --- Callbacks from main app.js ---
 let appCallbacks = {
     getHistory: () => [],
@@ -85,7 +100,7 @@ export function getChartedTopics() {
 }
 
 /**
- * Removes any charted variables that match a topic pattern.
+ * [NEW] Removes any charted variables that match a topic pattern.
  * @param {RegExp} regex - The regex to test against topic strings.
  */
 export function pruneChartedVariables(regex) {
@@ -100,8 +115,15 @@ export function pruneChartedVariables(regex) {
     if (wasPruned) {
         onGenerateChart(); // Re-generate chart with pruned variables
         appCallbacks.colorChartTreeCallback(); // Re-color the tree
+        
+        // If the *currently selected node* (for variable picking) was pruned,
+        // we need to refresh its variable list
+        if (selectedChartNode && regex.test(selectedChartNode.dataset.topic)) {
+             populateChartVariables(selectedChartNode.dataset.payload);
+        }
     }
 }
+
 
 /**
  * Initializes the Chart View functionality.
@@ -115,6 +137,12 @@ export function initChartView(callbacks) {
     btnChartExportPNG?.addEventListener('click', onExportPNG);
     btnChartExportCSV?.addEventListener('click', onExportCSV);
     btnChartClear?.addEventListener('click', onClearAll); 
+    
+    // [MODIFIED] Add listeners for new controls
+    chartConfigSelect?.addEventListener('change', onChartConfigChange);
+    btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
+    btnChartSaveAs?.addEventListener('click', onSaveAsNew);
+    btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
 
     // Add listeners to other controls to trigger re-gen
     chartTypeSelect?.addEventListener('change', onGenerateChart);
@@ -124,6 +152,8 @@ export function initChartView(callbacks) {
         makeDraggable(chartHandleMin, true);
         makeDraggable(chartHandleMax, false);
     }
+
+    loadChartConfig(); // Load saved configs on init
 }
 
 /**
@@ -163,13 +193,22 @@ export function handleChartNodeClick(event) {
 export function updateChartSliderUI(min, max, isInitialLoad = false) {
     if (!chartHandleMin || !chartHandleMax) return;
 
+    // Check if we were live BEFORE updating timestamps
+    const wasLive = isChartLive;
+
     minTimestamp = min;
     maxTimestamp = max;
 
     if (isInitialLoad) {
         currentMinTimestamp = min;
         currentMaxTimestamp = max;
+        isChartLive = true;
+    } else if (isChartLive && wasLive) {
+        // If we are in live mode and were in live mode, stick to the new edge
+        currentMaxTimestamp = max;
     }
+    // If user dragged (isChartLive = false), timestamps are preserved
+    
 
     if (chartTimeSliderContainer) {
          chartTimeSliderContainer.style.display = (min === 0 && max === 0) ? 'none' : 'flex';
@@ -196,6 +235,11 @@ export function updateChartSliderUI(min, max, isInitialLoad = false) {
     chartSliderRange.style.width = `${maxPercent - minPercent}%`;
     chartLabelMin.textContent = formatTimestampForLabel(currentMinTimestamp);
     chartLabelMax.textContent = formatTimestampForLabel(currentMaxTimestamp);
+    
+    // [NEW] Auto-refresh chart if in live mode
+    if (isChartLive && !isInitialLoad && chartedVariables.size > 0) {
+        onGenerateChart();
+    }
 }
 
 /**
@@ -296,6 +340,12 @@ function populateChartVariables(payloadString) {
 
     // This function must only be called after selectedChartTopic is set
     if (!selectedChartTopic) return;
+    
+    // Check for null or undefined payloadString
+    if (payloadString === null || payloadString === undefined) {
+         chartVariableList.innerHTML = '<p class="history-placeholder">No payload for this topic.</p>';
+         return;
+    }
 
     try {
         const payload = JSON.parse(payloadString);
@@ -345,7 +395,8 @@ function populateChartVariables(payloadString) {
 }
 
 /**
- * Handler for the "Clear All" button.
+ * [MODIFIED] Handler for the "Clear All" button.
+ * Resets the UI to the "New Chart" state without saving.
  */
 function onClearAll() {
     chartedVariables.clear();
@@ -356,6 +407,12 @@ function onClearAll() {
             cb.checked = false;
         });
     }
+
+    // Reset UI controls
+    chartTypeSelect.value = 'line';
+    chartConnectNulls.checked = false;
+    currentConfigId = null;
+    chartConfigSelect.value = ""; // Set dropdown to "-- New Chart --"
     
     onGenerateChart(); // This will clear the chart
     appCallbacks.colorChartTreeCallback(); // This will clear the tree highlights
@@ -400,7 +457,7 @@ function onGenerateChart() {
             chartInstance = null;
         }
         chartPlaceholder.style.display = 'block';
-        chartPlaceholder.textContent = "Select a topic and check variables to plot.";
+        chartPlaceholder.textContent = 'Select a topic and check variables to plot, or load a saved chart.';
         chartCanvas.style.display = 'none';
         lastGeneratedData = { labels: [], datasets: [] };
         return;
@@ -426,7 +483,7 @@ function onGenerateChart() {
         return;
     }
 
-    // 3. Get chart config
+    // 3. Get chart config from UI
     const chartType = chartTypeSelect.value;
     const connectNulls = chartConnectNulls.checked;
 
@@ -591,7 +648,7 @@ function onGenerateChart() {
     }
 
     chartPlaceholder.style.display = 'none';
-    chartPlaceholder.textContent = "Select a topic, choose variables, and click \"Generate Chart\"."; // Reset placeholder text
+    chartPlaceholder.textContent = 'Select a topic, choose variables, and click "Refresh", or load a saved chart.'; // Reset placeholder text
     chartCanvas.style.display = 'block';
 
     chartInstance = new Chart(chartCanvas, {
@@ -723,8 +780,11 @@ function makeDraggable(handle, isMin) {
 
             if (isMin) {
                 currentMinTimestamp = Math.min(newTimestamp, currentMaxTimestamp);
+                isChartLive = false; // Moving min handle always breaks live mode
             } else {
                 currentMaxTimestamp = Math.max(newTimestamp, currentMinTimestamp);
+                // Moving max handle breaks live mode unless we're very close to the end
+                isChartLive = (percent > 99.9);
             }
             // Update UI without re-filtering
             updateChartSliderUI(minTimestamp, maxTimestamp, false);
@@ -733,6 +793,13 @@ function makeDraggable(handle, isMin) {
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+
+            // Re-check live state on mouse up for max handle
+            if (!isMin) {
+                const percent = parseFloat(handle.style.left);
+                isChartLive = (percent > 99.9);
+            }
+
             // We trigger a chart refresh on mouse up
             onGenerateChart();
         };
@@ -740,4 +807,273 @@ function makeDraggable(handle, isMin) {
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     });
+}
+
+/**
+ * [NEW] Helper to show a save status message.
+ */
+function showChartSaveStatus(message, type = 'success') {
+    if (!chartSaveStatus) return;
+    chartSaveStatus.textContent = message;
+    chartSaveStatus.className = type;
+    clearTimeout(chartSaveTimer);
+    chartSaveTimer = setTimeout(() => {
+        chartSaveStatus.textContent = '';
+        chartSaveStatus.className = '';
+    }, 3000);
+}
+
+/**
+ * [MODIFIED] Loads the saved chart configurations from the server.
+ * [FIX] This function now loads the *first* config by default,
+ * or calls onClearAll() if no configs are saved.
+ */
+async function loadChartConfig() {
+    try {
+        const response = await fetch('api/chart/config');
+        if (!response.ok) throw new Error('Failed to fetch chart config');
+        let savedConfig = await response.json(); // This is now { configurations: [...] } or old array
+
+        // [NEW] Migration logic for old array format
+        if (Array.isArray(savedConfig)) {
+            console.warn("Old chart config format detected. Migrating...");
+            allChartConfigs = {
+                configurations: [
+                    {
+                        id: `chart_${Date.now()}`,
+                        name: "Migrated Chart",
+                        chartType: "line",
+                        connectNulls: false,
+                        variables: savedConfig // The old array is now the 'variables'
+                    }
+                ]
+            };
+            // Immediately save the new structure back
+            await saveAllChartConfigs(allChartConfigs, false); // 'false' = don't show status
+        } else if (savedConfig && Array.isArray(savedConfig.configurations)) {
+            allChartConfigs = savedConfig; // It's the new format
+        } else {
+            allChartConfigs = { configurations: [] }; // Fallback for corrupt data
+        }
+        
+        console.log(`Loaded ${allChartConfigs.configurations.length} saved charts.`);
+
+        // Refresh UI
+        populateChartConfigSelect(); // Fills the dropdown
+        
+        // [FIXED LOGIC]
+        if (allChartConfigs.configurations.length > 0) {
+            // If we have saved charts, load the first one by default.
+            const firstConfigId = allChartConfigs.configurations[0].id;
+            chartConfigSelect.value = firstConfigId; // Set the dropdown
+            onChartConfigChange(); // Manually trigger the load
+        } else {
+            // No saved charts, just start fresh.
+            onClearAll(); 
+        }
+        // [END FIXED LOGIC]
+
+    } catch (error) {
+        console.error('Error loading chart config:', error);
+        showChartSaveStatus('Load failed', 'error');
+    }
+}
+
+/**
+ * [NEW] Populates the <select> dropdown with saved charts.
+ */
+function populateChartConfigSelect() {
+    if (!chartConfigSelect) return;
+    
+    chartConfigSelect.innerHTML = ''; // Clear old options
+    
+    // Add the "New Chart" default option
+    const newOption = document.createElement('option');
+    newOption.value = "";
+    newOption.textContent = "-- New Chart --";
+    chartConfigSelect.appendChild(newOption);
+
+    // Add all saved charts
+    allChartConfigs.configurations.forEach(config => {
+        const option = document.createElement('option');
+        option.value = config.id;
+        option.textContent = config.name;
+        chartConfigSelect.appendChild(option);
+    });
+    
+    // Set the dropdown to the currently loaded config (or "New Chart")
+    chartConfigSelect.value = currentConfigId || "";
+}
+
+/**
+ * [NEW] Handles the 'change' event on the chart config <select>.
+ */
+function onChartConfigChange() {
+    const configId = chartConfigSelect.value;
+    currentConfigId = configId;
+    
+    if (!configId) {
+        // User selected "-- New Chart --"
+        onClearAll();
+        return;
+    }
+    
+    // Find the config and load it
+    const config = allChartConfigs.configurations.find(c => c.id === configId);
+    if (!config) {
+        console.error(`Could not find config with ID: ${configId}`);
+        onClearAll(); // Reset to be safe
+        return;
+    }
+    
+    // Load the config into the UI
+    chartTypeSelect.value = config.chartType || 'line';
+    chartConnectNulls.checked = config.connectNulls || false;
+    
+    // Load variables
+    chartedVariables.clear();
+    if (Array.isArray(config.variables)) {
+        config.variables.forEach(v => {
+            const varId = `${v.topic}|${v.path}`;
+            chartedVariables.set(varId, v);
+        });
+    }
+    
+    // Refresh UI
+    onGenerateChart();
+    appCallbacks.colorChartTreeCallback();
+    if (selectedChartNode) {
+        populateChartVariables(selectedChartNode.dataset.payload);
+    }
+    
+    showChartSaveStatus(`Loaded '${config.name}'`, 'success');
+}
+
+/**
+ * [NEW] Saves all chart configurations back to the server.
+ * @param {object} configObject - The entire config object { configurations: [...] }.
+ * @param {boolean} [showStatus=true] - Whether to show the "Saving..." message.
+ * @returns {Promise<boolean>} True on success, false on failure.
+ */
+async function saveAllChartConfigs(configObject, showStatus = true) {
+    if (showStatus) {
+        showChartSaveStatus('Saving...', 'success');
+    }
+    
+    try {
+        const response = await fetch('api/chart/config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(configObject),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to save');
+        }
+        
+        allChartConfigs = configObject; // Update local state
+        
+        if (showStatus) {
+            showChartSaveStatus('Saved!', 'success');
+        }
+        return true;
+
+    } catch (error) {
+        console.error('Error saving chart config:', error);
+        if (showStatus) {
+            showChartSaveStatus(`Error: ${error.message}`, 'error');
+        }
+        return false;
+    }
+}
+
+/**
+ * [NEW] Handles the "Save" button click. Saves over the current config or triggers "Save As".
+ */
+async function onSaveCurrent() {
+    if (!currentConfigId) {
+        // No config is loaded, so this is a "Save As"
+        onSaveAsNew();
+        return;
+    }
+    
+    // Find the config to update
+    const config = allChartConfigs.configurations.find(c => c.id === currentConfigId);
+    if (!config) {
+        console.error(`Cannot save, config ID ${currentConfigId} not found.`);
+        showChartSaveStatus('Error: Config not found', 'error');
+        return;
+    }
+    
+    // Update the config object with current UI state
+    config.name = chartConfigSelect.options[chartConfigSelect.selectedIndex].text; // Get name from dropdown
+    config.chartType = chartTypeSelect.value;
+    config.connectNulls = chartConnectNulls.checked;
+    config.variables = Array.from(chartedVariables.values());
+    
+    // Save the entire config object
+    await saveAllChartConfigs(allChartConfigs);
+}
+
+/**
+ * [NEW] Handles the "Save As..." button click.
+ */
+async function onSaveAsNew() {
+    const name = prompt("Enter a name for this new chart configuration:");
+    if (!name || name.trim().length === 0) {
+        return; // User cancelled
+    }
+    
+    // Create new config object
+    const newConfig = {
+        id: `chart_${Date.now()}`,
+        name: name.trim(),
+        chartType: chartTypeSelect.value,
+        connectNulls: chartConnectNulls.checked,
+        variables: Array.from(chartedVariables.values())
+    };
+    
+    allChartConfigs.configurations.push(newConfig);
+    currentConfigId = newConfig.id; // Set this as the new active config
+    
+    // Save and wait for it to complete
+    const success = await saveAllChartConfigs(allChartConfigs);
+    
+    if (success) {
+        // Refresh the dropdown to show the new item
+        populateChartConfigSelect();
+    }
+}
+
+/**
+ * [NEW] Handles the "Delete" button click.
+ */
+async function onDeleteConfig() {
+    if (!currentConfigId) {
+        alert("No chart configuration is selected to delete.");
+        return;
+    }
+    
+    const configName = chartConfigSelect.options[chartConfigSelect.selectedIndex].text;
+    if (!confirm(`Are you sure you want to delete the chart configuration "${configName}"?`)) {
+        return;
+    }
+    
+    // Filter out the config to delete
+    allChartConfigs.configurations = allChartConfigs.configurations.filter(
+        c => c.id !== currentConfigId
+    );
+    
+    // Save the modified config object
+    const success = await saveAllChartConfigs(allChartConfigs);
+    
+    if (success) {
+        // Reset the UI
+        onClearAll();
+        // Refresh the dropdown
+        populateChartConfigSelect();
+    }
 }

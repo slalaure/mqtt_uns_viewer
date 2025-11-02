@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -43,6 +43,8 @@ const ENV_PATH = path.join(DATA_PATH, '.env');
 const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
 const CERTS_PATH = path.join(DATA_PATH, 'certs');
 const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
+// [NEW] Path for chart configurations
+const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 // SVG_PATH is now dynamically determined from config
 
 // --- Logger Setup ---
@@ -65,6 +67,18 @@ if (!fs.existsSync(ENV_PATH)) {
     }
 }
 require('dotenv').config({ path: ENV_PATH });
+
+// --- [NEW] Initial charts.json File Setup ---
+if (!fs.existsSync(CHART_CONFIG_PATH)) {
+    logger.info("✅ No 'charts.json' file found in 'data' directory. Creating one...");
+    try {
+        fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify([], null, 2)); // Default to empty array
+        logger.info("✅ charts.json file created successfully in ./data/");
+    } catch (err) {
+        logger.error({ err }, "❌ FATAL ERROR: Could not create charts.json file.");
+        process.exit(1);
+    }
+}
 
 // --- Helper Function for Sparkplug (handles BigInt) ---
 function longReplacer(key, value) {
@@ -110,7 +124,6 @@ const config = {
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
-    VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // [NEW] Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
     SVG_DEFAULT_FULLSCREEN: process.env.SVG_DEFAULT_FULLSCREEN === 'true',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/'
@@ -373,8 +386,7 @@ mainRouter.get('/api/config', (req, res) => {
         viewSvgEnabled: config.VIEW_SVG_ENABLED,
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
-        viewChartEnabled: config.VIEW_CHART_ENABLED, 
-        viewChartEnabled: config.VIEW_CHART_ENABLED, // [NEW]
+        viewChartEnabled: config.VIEW_CHART_ENABLED,
         svgDefaultFullscreen: config.SVG_DEFAULT_FULLSCREEN,
         basePath: basePath
     });
@@ -409,6 +421,11 @@ mainRouter.use('/api/env', ipFilterMiddleware, configRouter);
 // Mapper API Router
 const mapperRouter = require('./routes/mapperApi')(mapperEngine);
 mainRouter.use('/api/mapper', ipFilterMiddleware, mapperRouter);
+
+// [NEW] Chart API Router
+const chartRouter = require('./routes/chartApi')(CHART_CONFIG_PATH, logger);
+mainRouter.use('/api/chart', ipFilterMiddleware, chartRouter);
+
 
 // --- [MODIFIED] Static Assets ---
 mainRouter.use(express.static(path.join(__dirname, 'public')));
