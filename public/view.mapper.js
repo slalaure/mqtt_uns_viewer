@@ -57,6 +57,10 @@ let defaultJSCode = ''; // Will be set by initMapperView
 // [REMOVED] selectedMapperNode (managed by app.js)
 let deleteModalContext = null;
 
+// [NEW] Ace Editor State
+let aceEditors = new Map(); // Stores Ace editor instances by target.id
+let isDarkTheme = localStorage.getItem('theme') === 'dark'; // Track theme for new editors
+
 // [NEW] Create an instance of the payload viewer for this view
 const payloadViewer = createPayloadViewer({
     topicEl: document.getElementById('mapper-payload-topic'),
@@ -71,8 +75,23 @@ let appCallbacks = {
     pruneTopicFromFrontend: () => console.error("pruneTopicFromFrontend callback not set"),
     getSubscribedTopics: () => ['#'], // Default fallback
     colorAllTrees: () => console.error("colorAllTrees callback not set"),
+    addPruneIgnorePattern: () => console.error("addPruneIgnorePattern callback not set"),
     // [REMOVED] displayPayload (now handled by internal payloadViewer)
 };
+
+/**
+ * [NEW] Updates the theme for all active Ace editor instances.
+ * This is exported and called by app.js.
+ * @param {boolean} isDark - True if dark mode is enabled.
+ */
+export function setMapperTheme(isDark) {
+    isDarkTheme = isDark;
+    const theme = isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome';
+    aceEditors.forEach(editor => {
+        editor.setTheme(theme);
+    });
+}
+
 
 /**
  * Initializes the Mapper View functionality.
@@ -297,7 +316,13 @@ function renderTransformEditor(sourceTopic) {
     mapperTransformPlaceholder.style.display = 'none';
     mapperTransformForm.style.display = 'flex';
     mapperSourceTopicInput.value = sourceTopic;
-    mapperTargetsList.innerHTML = '';
+
+    // --- [NEW] Destroy old editors before clearing ---
+    aceEditors.forEach(editor => editor.destroy());
+    aceEditors.clear();
+    // --- [END NEW] ---
+    
+    mapperTargetsList.innerHTML = ''; // This is fine now
 
     const rule = getRuleForTopic(sourceTopic, false); // Don't create yet
 
@@ -417,20 +442,34 @@ function createTargetEditor(rule, target) {
     const codeLabel = editorDiv.querySelector('.target-code-label');
     codeLabel.textContent = 'Transform (JavaScript)';
 
-    const codeEditor = editorDiv.querySelector('.target-code-editor');
+    // [MODIFIED] This section is now for Ace Editor initialization
+    const codeEditorDiv = editorDiv.querySelector('.target-code-editor');
     
-    // [FIX] This logic was wrong.
-    // If the code from the server (target.code) is empty/null, use the default.
-    // Otherwise, *always* use the code from the server.
     if (!target.code) {
         target.code = defaultJSCode;
     }
-    codeEditor.value = target.code;
-    // [END FIX]
-
-    codeEditor.addEventListener('input', () => {
-        target.code = codeEditor.value;
+    
+    // --- [NEW] Initialize Ace Editor ---
+    const editor = ace.edit(codeEditorDiv);
+    editor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+    editor.session.setMode('ace/mode/javascript');
+    editor.session.setValue(target.code);
+    editor.setOptions({
+        fontSize: "14px",
+        fontFamily: "monospace",
+        enableBasicAutocompletion: true,
+        enableLiveAutocompletion: true,
+        enableSnippets: true,
+        useWorker: true // Enable syntax checking
     });
+
+    editor.session.on('change', () => {
+        target.code = editor.session.getValue();
+    });
+    
+    // Store the editor instance
+    aceEditors.set(target.id, editor);
+    // --- [END NEW] ---
 
     updateMetricsForTarget(editorDiv, rule.sourceTopic, target.id);
 
@@ -708,6 +747,14 @@ function onDeleteRule() {
     if (!deleteModalContext) return;
     const { rule, target } = deleteModalContext;
 
+    // --- [NEW] Destroy Ace editor ---
+    const editor = aceEditors.get(target.id);
+    if (editor) {
+        editor.destroy();
+        aceEditors.delete(target.id);
+    }
+    // --- [END NEW] ---
+
     rule.targets = rule.targets.filter(t => t.id !== target.id);
 
     if (rule.targets.length === 0) {
@@ -753,6 +800,14 @@ async function onDeleteAndPrune() {
         }
         const result = await response.json();
         console.log(`Pruned ${result.count} entries from DB.`);
+        
+        // --- [NEW] Destroy Ace editor ---
+        const editor = aceEditors.get(target.id);
+        if (editor) {
+            editor.destroy();
+            aceEditors.delete(target.id);
+        }
+        // --- [END NEW] ---
 
         rule.targets = rule.targets.filter(t => t.id !== target.id);
 

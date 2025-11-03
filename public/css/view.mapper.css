@@ -230,18 +230,15 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     gap: 15px;
 }
 
+/* [MODIFIED] Styles for the new Ace Editor <div> */
 .target-code-editor {
     width: 100%;
     box-sizing: border-box;
-    padding: 10px;
     border: 1px solid var(--color-border);
     border-radius: 4px;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 14px;
     background-color: var(--color-code-bg);
-    color: var(--color-code-text);
-    resize: vertical;
-    min-height: 150px;
+    min-height: 300px; /* Increased height */
+    /* Removed font-family, resize, and padding as Ace handles this */
 }
 
 /* --- Mapper Metrics & Logs --- */

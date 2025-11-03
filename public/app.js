@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOTT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -38,7 +38,8 @@ import {
     getMapperConfig,
     getMappedTargetTopics,
     getTopicMappingStatus,
-    addMappedTargetTopic
+    addMappedTargetTopic,
+    setMapperTheme // [MODIFIED] Import new theme switcher
 } from './view.mapper.js';
 import { 
     initChartView, 
@@ -128,11 +129,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('dark-mode');
         localStorage.setItem('theme', 'dark');
         if (darkModeToggle) darkModeToggle.checked = true;
+        setMapperTheme(true); // [MODIFIED] Update Ace Editor theme
     };
     const disableDarkMode = () => {
         document.body.classList.remove('dark-mode');
         localStorage.setItem('theme', 'light');
         if (darkModeToggle) darkModeToggle.checked = false;
+        setMapperTheme(false); // [MODIFIED] Update Ace Editor theme
     };
     if (localStorage.getItem('theme') === 'dark') {
         enableDarkMode();
@@ -178,17 +181,21 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- Simulator UI Logic ---
+    // --- Simulator UI Logic [MODIFIED] ---
     function updateSimulatorStatusUI(status) {
         if (!simStatusIndicator) return;
         if (status === 'running') {
             simStatusIndicator.textContent = 'Running';
             simStatusIndicator.classList.add('running');
             simStatusIndicator.classList.remove('stopped');
+            btnStartSim?.setAttribute('disabled', true); // Disable Start button
+            btnStopSim?.removeAttribute('disabled');     // Enable Stop button
         } else {
             simStatusIndicator.textContent = 'Stopped';
             simStatusIndicator.classList.add('stopped');
             simStatusIndicator.classList.remove('running');
+            btnStartSim?.removeAttribute('disabled'); // Enable Start button
+            btnStopSim?.setAttribute('disabled', true);  // Disable Stop button
         }
     }
     btnStartSim?.addEventListener('click', () => fetch('api/simulator/start', { method: 'POST' }));

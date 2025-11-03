@@ -16,6 +16,8 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.33.2/ace.js"></script>
 </head>
 
 <body>
@@ -38,7 +40,7 @@
         <div class="simulator-controls">
             <span id="sim-status" class="status-indicator stopped">Stopped</span>
             <button id="btn-start-sim">Start Simulator</button>
-            <button id="btn-stop-sim">Stop Simulator</button>
+            <button id="btn-stop-sim" disabled>Stop Simulator</button>
         </div>
     </header>
 
@@ -208,7 +210,7 @@
 
                                 <div class="form-group">
                                     <label class="target-code-label">Transform (JavaScript)</label>
-                                    <textarea class="target-code-editor" rows="10" spellcheck="false"></textarea>
+                                    <div class="target-code-editor" spellcheck="false"></div>
                                 </div>
                                 <div class="target-metrics">
                                     <h5 class="target-metrics-title">Metrics</h5>

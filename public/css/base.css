@@ -90,25 +90,25 @@ body {
     overflow: hidden;
 }
 
-/* --- Header --- */
+/* --- Header [MODIFIED] --- */
 header {
     background-color: var(--color-header-bg);
     color: var(--color-header-text);
-    padding: 10px 20px;
+    padding: 8px 20px; /* Reduced padding */
     flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-header h1 { margin: 0; font-size: 1.5em; text-align: left; }
-header p { margin: 4px 0 0; font-size: 0.9em; opacity: 0.9; text-align: left; }
+header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font size */
+header p { margin: 0 0 0 10px; font-size: 0.8em; opacity: 0.9; text-align: left; } /* Reduced margin and font size */
 
 .datetime-container {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 1.1em;
+    font-size: 1em; /* Reduced font size */
     font-weight: bold;
     background-color: rgba(0, 0, 0, 0.1);
-    padding: 5px 10px;
+    padding: 4px 8px; /* Reduced padding */
     border-radius: 4px;
 }
 
@@ -192,6 +192,17 @@ input:checked + .slider:before {
     background-color: var(--color-bg-accent);
 }
 
+/* [NEW] Added disabled styles */
+.simulator-controls button:disabled {
+    background-color: var(--color-bg-accent);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+.simulator-controls button:disabled:hover {
+    background-color: var(--color-bg-accent);
+}
+
 .status-indicator {
     font-weight: bold;
     font-size: 14px;
@@ -243,7 +254,7 @@ body.dark-mode .nav-button {
     background-color: rgba(255, 255, 255, 0.3);
 }
 .icon-button {
-    font-size: 1.5em;
+    font-size: 1.25em; /* Reduced font size */
     padding: 0 10px;
 }
 
@@ -286,13 +297,13 @@ body.dark-mode .nav-button {
     display: flex;
 }
 
-/* --- Footer --- */
+/* --- Footer [MODIFIED] --- */
 .app-footer {
     background-color: var(--color-footer-bg);
     color: var(--color-footer-text);
     text-align: center;
-    padding: 5px;
-    font-size: 0.8em;
+    padding: 2px 5px; /* Reduced padding */
+    font-size: 0.75em; /* Reduced font size */
     flex-shrink: 0;
 }
 .app-footer a {
