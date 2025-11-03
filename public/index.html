@@ -14,10 +14,9 @@
     <link rel="stylesheet" href="css/view.mapper.css">
     <link rel="stylesheet" href="css/view.chart.css">
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.33.2/ace.js"></script>
+    <script src="libs/chart-min.js"></script>
+    <script src="libs/chartjs-adapter-date-fns-min.js"></script>
+    <script src="libs/ace-min.js"></script>
 </head>
 
 <body>
@@ -310,25 +309,27 @@
         </main>
 
     </div>
+    
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
-            <h3 id="delete-modal-title">Confirmer la suppression</h3>
-            <p id="delete-modal-text">Que souhaitez-vous faire avec la règle pour le topic cible :</p>
+            <h3 id="delete-modal-title">Confirm Deletion</h3>
+            <p id="delete-modal-text">What would you like to do with the rule for the target topic:</p>
             <p id="delete-modal-topic" class="modal-topic-display"></p>
 
             <div class="form-group">
-                <label for="delete-modal-pattern">Topic à purger (utilise <code>+</code> et <code>#</code>)</label>
+                <label for="delete-modal-pattern">Topic to prune (uses <code>+</code> and <code>#</code>)</label>
                 <input type="text" id="delete-modal-pattern" class="modal-input">
             </div>
 
             <div class="modal-actions">
-                <button id="modal-btn-cancel" class="modal-button">Annuler</button>
-                <button id="modal-btn-delete-rule" class="modal-button button-primary">Supprimer la règle seulement</button>
-                <button id="modal-btn-delete-prune" class="modal-button button-danger">Supprimer ET Purger
-                    l'historique</button>
+                <button id="modal-btn-cancel" class="modal-button">Cancel</button>
+                <button id="modal-btn-delete-rule" class="modal-button button-primary">Delete Rule Only</button>
+                <button id="modal-btn-delete-prune" class="modal-button button-danger">Delete Rule & Prune
+                    History</button>
             </div>
         </div>
     </div>
+    
     <footer class="app-footer">
         <p>Connect with us on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
                 rel="noopener noreferrer">github</a></p>
