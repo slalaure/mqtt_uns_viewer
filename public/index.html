@@ -135,14 +135,10 @@
 
         <main id="mapper-view" class="view">
             <div class="mapper-tree-wrapper">
-                <div class="mapper-controls">
-                    <div class="form-group">
-                        <label for="mapper-version-select">Active Version:</label>
-                        <select id="mapper-version-select"></select>
-                    </div>
-                    <button id="mapper-save-button" class="mapper-button">Save</button>
-                    <button id="mapper-save-as-new-button" class="mapper-button">Save as New...</button>
-                    <span id="mapper-save-status"></span>
+                <div class="tree-controls">
+                    <input type="text" id="mapper-filter-input" placeholder="Filter topics...">
+                    <button id="btn-mapper-expand-all" title="Expand All">▲</button>
+                    <button id="btn-mapper-collapse-all" title="Collapse All">▼</button>
                 </div>
                 <div id="mapper-tree" class="tree-container">
                 </div>
@@ -163,6 +159,17 @@
                 <div class="resizer-horizontal" id="drag-handle-horizontal-mapper"></div>
 
                 <div id="mapper-transform-area" class="topic-history-container">
+                    
+                    <div class="mapper-controls">
+                        <div class="form-group">
+                            <label for="mapper-version-select">Active Version:</label>
+                            <select id="mapper-version-select"></select>
+                        </div>
+                        <button id="mapper-save-button" class="mapper-button">Save</button>
+                        <button id="mapper-save-as-new-button" class="mapper-button">Save as New...</button>
+                        <span id="mapper-save-status"></span>
+                    </div>
+
                     <div id="mapper-transform-placeholder" class="history-placeholder">
                         <p>Select a topic in the Mapper tree to create or edit its transformation rules.</p>
                     </div>
@@ -223,8 +230,10 @@
 
         <main id="chart-view" class="view">
             <div class="chart-tree-wrapper">
-                <div class="chart-controls">
-                    <h3 class="chart-controls-title">Select Topic</h3>
+                <div class="tree-controls">
+                    <input type="text" id="chart-filter-input" placeholder="Filter topics...">
+                    <button id="btn-chart-expand-all" title="Expand All">▲</button>
+                    <button id="btn-chart-collapse-all" title="Collapse All">▼</button>
                 </div>
                 <div id="chart-tree" class="tree-container">
                     </div>

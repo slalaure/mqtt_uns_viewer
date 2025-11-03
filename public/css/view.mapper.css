@@ -14,6 +14,43 @@ main#mapper-view {
     background-color: var(--color-bg-secondary);
 }
 
+/* [NEW] Add styles for the new tree-controls */
+.mapper-tree-wrapper .tree-controls {
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+.mapper-tree-wrapper .tree-controls input {
+    flex-grow: 1;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-size: 14px;
+}
+.mapper-tree-wrapper .tree-controls input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+.mapper-tree-wrapper .tree-controls button {
+    padding: 6px 12px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 1.2em;
+    line-height: 1;
+}
+.mapper-tree-wrapper .tree-controls button:hover {
+    background-color: var(--color-bg-accent);
+}
+
+
 #mapper-payload-container {
     /* Uses .payload-container base */
     padding: 0; /* Remove padding for sub-containers */
@@ -29,14 +66,16 @@ main#mapper-view {
     background-color: var(--color-bg-secondary);
 }
 
-/* --- Mapper Controls (Top-left) --- */
+/* --- Mapper Controls (Top-left) [MOVED] --- */
 .mapper-controls {
-    padding: 10px;
+    /* [MODIFIED] Styles for new position */
+    padding: 0 0 15px 0;
     display: flex;
     gap: 10px;
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
     align-items: center;
+    margin-bottom: 15px; /* Add margin to separate from form */
 }
 .mapper-controls .form-group {
     margin-bottom: 0;

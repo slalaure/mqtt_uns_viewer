@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOTT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -108,6 +108,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnStopSim = document.getElementById('btn-stop-sim');
     const simStatusIndicator = document.getElementById('sim-status');
     const simulatorControls = document.querySelector('.simulator-controls');
+
+    // --- [NEW] Mapper View Elements ---
+    const mapperFilterInput = document.getElementById('mapper-filter-input');
+    const btnMapperExpandAll = document.getElementById('btn-mapper-expand-all');
+    const btnMapperCollapseAll = document.getElementById('btn-mapper-collapse-all');
+
+    // --- [NEW] Chart View Elements ---
+    const chartFilterInput = document.getElementById('chart-filter-input');
+    const btnChartExpandAll = document.getElementById('btn-chart-expand-all');
+    const btnChartCollapseAll = document.getElementById('btn-chart-collapse-all');
+
 
     // --- Dark Theme Logic ---
     const enableDarkMode = () => {
@@ -587,6 +598,17 @@ document.addEventListener('DOMContentLoaded', () => {
             btnExpandAll?.addEventListener('click', () => mainTree.toggleAllFolders(false));
             btnCollapseAll?.addEventListener('click', () => mainTree.toggleAllFolders(true));
             treeFilterInput?.addEventListener('input', () => mainTree.applyFilter(treeFilterInput.value));
+
+            // --- [NEW] Init Mapper Tree Controls ---
+            btnMapperExpandAll?.addEventListener('click', () => mapperTree.toggleAllFolders(false));
+            btnMapperCollapseAll?.addEventListener('click', () => mapperTree.toggleAllFolders(true));
+            mapperFilterInput?.addEventListener('input', () => mapperTree.applyFilter(mapperFilterInput.value));
+
+            // --- [NEW] Init Chart Tree Controls ---
+            btnChartExpandAll?.addEventListener('click', () => chartTree.toggleAllFolders(false));
+            btnChartCollapseAll?.addEventListener('click', () => chartTree.toggleAllFolders(true));
+            chartFilterInput?.addEventListener('input', () => chartTree.applyFilter(chartFilterInput.value));
+
 
             // --- [MODIFIED] Mark app as initialized and process buffer ---
             isAppInitialized = true;
