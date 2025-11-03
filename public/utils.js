@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -76,4 +76,54 @@ export function mqttPatternToRegex(pattern) {
         .replace(/#/g, '.*');          // '#' matches multiple levels (including zero)
     // Anchor the pattern to match the whole topic string
     return new RegExp(`^${regexString}$`);
+}
+
+
+/**
+ * Makes a panel resizable.
+ * @param {object} options
+ * @param {HTMLElement} options.resizerEl - The drag handle element.
+ * @param {string} options.direction - 'vertical' or 'horizontal'.
+ * @param {HTMLElement} options.panelA - The panel to resize (left or top).
+ * @param {HTMLElement} options.containerEl - (For horizontal) The parent container.
+ */
+export function makeResizable(options) {
+    const { resizerEl, direction, panelA, containerEl } = options;
+    if (!resizerEl || !panelA) return;
+
+    resizerEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        
+        const mouseMoveHandler = (ev) => {
+            if (direction === 'vertical') {
+                const minWidth = 200;
+                const containerRect = panelA.parentElement.getBoundingClientRect();
+                let panelWidth = ev.pageX - panelA.getBoundingClientRect().left;
+
+                if (panelWidth < minWidth) panelWidth = minWidth;
+                if (containerRect.width - panelWidth < minWidth) {
+                    panelWidth = containerRect.width - minWidth;
+                }
+                panelA.style.flexBasis = `${panelWidth}px`;
+                
+            } else if (direction === 'horizontal' && containerEl) {
+                const minHeight = 100;
+                const containerRect = containerEl.getBoundingClientRect();
+                let panelHeight = ev.pageY - containerRect.top;
+
+                if (panelHeight < minHeight) panelHeight = minHeight;
+                if (containerRect.height - panelHeight < minHeight) {
+                    panelHeight = containerRect.height - minHeight;
+                }
+                panelA.style.flexBasis = `${panelHeight}px`;
+            }
+        };
+        
+        const mouseUpHandler = () => {
+            document.removeEventListener('mousemove', mouseMoveHandler);
+        };
+        
+        document.addEventListener('mousemove', mouseMoveHandler);
+        document.addEventListener('mouseup', mouseUpHandler, { once: true });
+    });
 }

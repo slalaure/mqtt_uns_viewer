@@ -18,12 +18,14 @@
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF OTHER DEALINGS IN THE
  * SOFTWARE.
  */
 
 // Import shared utilities
 import { formatTimestampForLabel } from './utils.js';
+// [NEW] Import the new time slider module
+import { createSingleTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
 const svgContent = document.getElementById('svg-content');
@@ -40,6 +42,7 @@ let allHistoryEntries = []; // Local cache of history, synced from app.js
 let isSvgHistoryMode = false;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
+let svgSlider = null; // [NEW] Module instance for the slider
 
 /**
  * Initializes the SVG View functionality.
@@ -57,10 +60,24 @@ export function initSvgView(appConfig) {
         
         // When toggling, replay state up to the end to get in sync
         replaySvgHistory(currentMaxTimestamp);
+
+        // [NEW] Also update the slider's UI to the max time
+        if (svgSlider) {
+            svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
+        }
     });
 
+    // [MODIFIED] Initialize the single time slider
     if (svgHandle) {
-        makeSvgSliderDraggable(svgHandle);
+        svgSlider = createSingleTimeSlider({
+            containerEl: svgTimelineSlider,
+            handleEl: svgHandle,
+            labelEl: svgLabel,
+            onDrag: (newTime) => {
+                replaySvgHistory(newTime); // Replay history while dragging
+            },
+            onDragEnd: null // No action needed on mouse up
+        });
     }
 
     // --- Handle SVG Default Fullscreen ---
@@ -244,12 +261,13 @@ export function updateMap(topic, payload) {
 }
 
 /**
- * Updates the UI of the SVG timeline slider.
+ * [MODIFIED] Updates the UI of the SVG timeline slider
+ * by calling the slider module.
  * @param {number} min - The minimum timestamp of all history.
  * @param {number} max - The maximum timestamp of all history.
  */
 export function updateSvgTimelineUI(min, max) {
-    if (!svgHandle) return;
+    if (!svgSlider) return;
     
     // Update module state
     currentMinTimestamp = min;
@@ -258,14 +276,10 @@ export function updateSvgTimelineUI(min, max) {
     // Don't update UI if not in history mode
     if (!svgHistoryToggle?.checked) return;
 
-    const timeRange = currentMaxTimestamp - currentMinTimestamp;
-    if (timeRange <= 0) return;
-
+    // Get the slider's current time from its data attribute, or default to the max
     const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
-    const currentPercent = ((currentTimestamp - currentMinTimestamp) / timeRange) * 100;
     
-    svgHandle.style.left = `${currentPercent}%`;
-    svgLabel.textContent = formatTimestampForLabel(currentTimestamp);
+    svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentTimestamp);
 }
 
 /**
@@ -342,37 +356,6 @@ function replaySvgHistory(replayUntilTimestamp) {
 }
 
 /**
- * Makes the SVG timeline slider handle draggable.
- * @param {HTMLElement} handle - The slider handle element.
+ * [REMOVED] makeSvgSliderDraggable(handle)
+ * This logic is now in public/time-slider.js
  */
-function makeSvgSliderDraggable(handle) {
-    handle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        if (!svgTimelineSlider) return;
-        const sliderRect = svgTimelineSlider.getBoundingClientRect();
-
-        const onMouseMove = (moveEvent) => {
-            let x = moveEvent.clientX - sliderRect.left;
-            let percent = (x / sliderRect.width) * 100;
-            percent = Math.max(0, Math.min(100, percent));
-            
-            const timeRange = currentMaxTimestamp - currentMinTimestamp;
-            if (timeRange <= 0) return;
-            const newTimestamp = currentMinTimestamp + (timeRange * percent / 100);
-
-            handle.style.left = `${percent}%`;
-            handle.dataset.timestamp = newTimestamp;
-            svgLabel.textContent = formatTimestampForLabel(newTimestamp);
-
-            replaySvgHistory(newTimestamp); // Replay history while dragging
-        };
-        
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        };
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-}

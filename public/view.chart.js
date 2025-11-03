@@ -24,11 +24,13 @@
 
 // Import shared utilities
 import { formatTimestampForLabel } from './utils.js';
+// [NEW] Import the reusable payload viewer
+import { createPayloadViewer } from './payload-viewer.js';
+// [NEW] Import the new time slider module
+import { createDualTimeSlider }from './time-slider.js';
 
 // --- DOM Element Querying ---
-const chartTreeContainer = document.getElementById('chart-tree');
-const chartPayloadTopic = document.getElementById('chart-payload-topic');
-const chartPayloadContent = document.getElementById('chart-payload-content');
+// [REMOVED] chart-tree, chart-payload-topic, chart-payload-content (handled by app.js and viewer)
 const chartVariableList = document.getElementById('chart-variable-list');
 const chartMainArea = document.getElementById('chart-main-area');
 const chartCanvas = document.getElementById('chart-canvas');
@@ -63,7 +65,7 @@ const chartLabelMax = document.getElementById('chart-label-max');
 
 // --- Module-level State ---
 let chartInstance = null;
-let selectedChartNode = null; // The node selected in the tree UI
+// [REMOVED] selectedChartNode (managed by app.js)
 let selectedChartTopic = null; // The topic path for the selected UI node
 let lastGeneratedData = { labels: [], datasets: [] }; // For CSV export
 let chartedVariables = new Map(); // Stores all variables to be charted, key = 'topic|path'
@@ -79,11 +81,21 @@ let chartSaveTimer = null;
 let allChartConfigs = { configurations: [] }; // Holds all saved configs
 let currentConfigId = null; // ID of the currently loaded chart
 
+let chartSlider = null; // [NEW] Module instance for the slider
+
+// [NEW] Create an instance of the payload viewer for this view
+const payloadViewer = createPayloadViewer({
+    topicEl: document.getElementById('chart-payload-topic'),
+    contentEl: document.getElementById('chart-payload-content'),
+    historyLogEl: null, // Chart view doesn't show history
+    placeholderEl: null
+});
+
 
 // --- Callbacks from main app.js ---
 let appCallbacks = {
     getHistory: () => [],
-    displayPayload: () => console.error("displayPayload callback not set"),
+    // [REMOVED] displayPayload (now handled by internal payloadViewer)
     colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"), 
 };
 
@@ -118,8 +130,10 @@ export function pruneChartedVariables(regex) {
         
         // If the *currently selected node* (for variable picking) was pruned,
         // we need to refresh its variable list
-        if (selectedChartNode && regex.test(selectedChartNode.dataset.topic)) {
-             populateChartVariables(selectedChartNode.dataset.payload);
+        if (selectedChartTopic && regex.test(selectedChartTopic)) {
+             // We need the payload, but we don't have it.
+             // We'll just clear the list.
+             populateChartVariables(null);
         }
     }
 }
@@ -130,7 +144,9 @@ export function pruneChartedVariables(regex) {
  * @param {object} callbacks - An object containing callback functions from app.js
  */
 export function initChartView(callbacks) {
-    appCallbacks = { ...appCallbacks, ...callbacks };
+    // [NEW] Separate appCallbacks from displayPayload
+    const { displayPayload, ...otherCallbacks } = callbacks;
+    appCallbacks = { ...appCallbacks, ...otherCallbacks };
 
     btnChartGenerate?.addEventListener('click', onGenerateChart);
     btnChartFullscreen?.addEventListener('click', toggleChartFullscreen);
@@ -148,9 +164,51 @@ export function initChartView(callbacks) {
     chartTypeSelect?.addEventListener('change', onGenerateChart);
     chartConnectNulls?.addEventListener('change', onGenerateChart);
 
+    // [MODIFIED] Initialize the dual time slider
     if (chartHandleMin && chartHandleMax) {
-        makeDraggable(chartHandleMin, true);
-        makeDraggable(chartHandleMax, false);
+        chartSlider = createDualTimeSlider({
+            containerEl: chartTimeSliderContainer,
+            handleMinEl: chartHandleMin,
+            handleMaxEl: chartHandleMax,
+            rangeEl: chartSliderRange,
+            labelMinEl: chartLabelMin,
+            labelMaxEl: chartLabelMax,
+            onDrag: (newMin, newMax) => {
+                // This logic is from the old makeDraggable
+                currentMinTimestamp = newMin;
+                currentMaxTimestamp = newMax;
+                
+                const timeRange = maxTimestamp - minTimestamp;
+                if (timeRange > 0) {
+                    const minPercent = ((newMin - minTimestamp) / timeRange) * 100;
+                    const maxPercent = ((newMax - minTimestamp) / timeRange) * 100;
+                    // Moving max handle breaks live mode unless we're very close to the end
+                    isChartLive = (maxPercent > 99.9);
+                    // Moving min handle always breaks live mode
+                    if (minPercent > 0) {
+                        isChartLive = false;
+                    }
+                }
+                
+                // Update UI without re-filtering
+                updateChartSliderUI(minTimestamp, maxTimestamp, false);
+            },
+            onDragEnd: (newMin, newMax) => {
+                // This logic is from the old onMouseUp
+                currentMinTimestamp = newMin;
+                currentMaxTimestamp = newMax;
+                
+                // Re-check live state on mouse up for max handle
+                const timeRange = maxTimestamp - minTimestamp;
+                if (timeRange > 0) {
+                    const maxPercent = ((newMax - minTimestamp) / timeRange) * 100;
+                    isChartLive = (maxPercent > 99.9);
+                }
+
+                // We trigger a chart refresh on mouse up
+                onGenerateChart();
+            }
+        });
     }
 
     loadChartConfig(); // Load saved configs on init
@@ -159,25 +217,16 @@ export function initChartView(callbacks) {
 /**
  * Handles a click event on a node in the Chart tree.
  * @param {Event} event - The click event.
+ * @param {HTMLElement} nodeContainer - The clicked node's container.
+ * @param {string} topic - The node's topic.
  */
-export function handleChartNodeClick(event) {
-    const targetContainer = event.currentTarget;
-    const li = targetContainer.closest('li');
-
-    // Manage selection
-    if (selectedChartNode) {
-        selectedChartNode.classList.remove('selected');
-    }
-    selectedChartNode = targetContainer;
-    selectedChartNode.classList.add('selected');
-
-    const topic = targetContainer.dataset.topic;
-    const payload = targetContainer.dataset.payload;
-    
+export function handleChartNodeClick(event, nodeContainer, topic) {
+    const payload = nodeContainer.dataset.payload;
     selectedChartTopic = topic; // Update the currently viewed topic
 
     // Display payload using the shared function
-    appCallbacks.displayPayload(topic, payload, chartPayloadTopic, chartPayloadContent);
+    // [NEW] Use the payload viewer
+    payloadViewer.display(topic, payload);
 
     // Populate the variable selection list
     // This will now respect the chartedVariables map
@@ -185,13 +234,14 @@ export function handleChartNodeClick(event) {
 }
 
 /**
- * Updates the UI of the chart timeline slider.
+ * [MODIFIED] Updates the UI of the chart timeline slider
+ * by calling the slider module.
  * @param {number} min - The minimum timestamp of all history.
  * @param {number} max - The maximum timestamp of all history.
  * @param {boolean} isInitialLoad - True if this is the first load.
  */
 export function updateChartSliderUI(min, max, isInitialLoad = false) {
-    if (!chartHandleMin || !chartHandleMax) return;
+    if (!chartSlider) return; // Slider not initialized
 
     // Check if we were live BEFORE updating timestamps
     const wasLive = isChartLive;
@@ -214,27 +264,8 @@ export function updateChartSliderUI(min, max, isInitialLoad = false) {
          chartTimeSliderContainer.style.display = (min === 0 && max === 0) ? 'none' : 'flex';
     }
 
-    const timeRange = maxTimestamp - minTimestamp;
-    if (timeRange <= 0) {
-        // Handle case with one or zero messages
-        chartHandleMin.style.left = '0%';
-        chartHandleMax.style.left = '100%';
-        chartSliderRange.style.left = '0%';
-        chartSliderRange.style.width = '100%';
-        chartLabelMin.textContent = formatTimestampForLabel(currentMinTimestamp);
-        chartLabelMax.textContent = formatTimestampForLabel(currentMaxTimestamp);
-        return;
-    }
-
-    const minPercent = ((currentMinTimestamp - minTimestamp) / timeRange) * 100;
-    const maxPercent = ((currentMaxTimestamp - minTimestamp) / timeRange) * 100;
-
-    chartHandleMin.style.left = `${minPercent}%`;
-    chartHandleMax.style.left = `${maxPercent}%`;
-    chartSliderRange.style.left = `${minPercent}%`;
-    chartSliderRange.style.width = `${maxPercent - minPercent}%`;
-    chartLabelMin.textContent = formatTimestampForLabel(currentMinTimestamp);
-    chartLabelMax.textContent = formatTimestampForLabel(currentMaxTimestamp);
+    // [NEW] Call the slider's update method
+    chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     
     // [NEW] Auto-refresh chart if in live mode
     if (isChartLive && !isInitialLoad && chartedVariables.size > 0) {
@@ -339,7 +370,10 @@ function populateChartVariables(payloadString) {
     chartVariableList.innerHTML = ''; // Clear old list
 
     // This function must only be called after selectedChartTopic is set
-    if (!selectedChartTopic) return;
+    if (!selectedChartTopic) {
+         chartVariableList.innerHTML = '<p class="history-placeholder">No topic selected.</p>';
+         return;
+    }
     
     // Check for null or undefined payloadString
     if (payloadString === null || payloadString === undefined) {
@@ -757,57 +791,9 @@ function onExportCSV() {
 }
 
 /**
- * Makes a slider handle draggable.
- * @param {HTMLElement} handle - The handle element.
- * @param {boolean} isMin - True if this is the minimum handle.
+ * [REMOVED] makeDraggable(handle, isMin)
+ * This logic is now in public/time-slider.js
  */
-function makeDraggable(handle, isMin) {
-    if (!handle || !chartTimeSliderContainer) return;
-
-    handle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const sliderRect = chartTimeSliderContainer.getBoundingClientRect();
-
-        const onMouseMove = (moveEvent) => {
-            let x = moveEvent.clientX - sliderRect.left;
-            let percent = (x / sliderRect.width) * 100;
-            percent = Math.max(0, Math.min(100, percent));
-            
-            const timeRange = maxTimestamp - minTimestamp;
-            if (timeRange <= 0) return; // Don't drag if no range
-            
-            const newTimestamp = minTimestamp + (timeRange * percent / 100);
-
-            if (isMin) {
-                currentMinTimestamp = Math.min(newTimestamp, currentMaxTimestamp);
-                isChartLive = false; // Moving min handle always breaks live mode
-            } else {
-                currentMaxTimestamp = Math.max(newTimestamp, currentMinTimestamp);
-                // Moving max handle breaks live mode unless we're very close to the end
-                isChartLive = (percent > 99.9);
-            }
-            // Update UI without re-filtering
-            updateChartSliderUI(minTimestamp, maxTimestamp, false);
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-
-            // Re-check live state on mouse up for max handle
-            if (!isMin) {
-                const percent = parseFloat(handle.style.left);
-                isChartLive = (percent > 99.9);
-            }
-
-            // We trigger a chart refresh on mouse up
-            onGenerateChart();
-        };
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-}
 
 /**
  * [NEW] Helper to show a save status message.
@@ -942,8 +928,10 @@ function onChartConfigChange() {
     // Refresh UI
     onGenerateChart();
     appCallbacks.colorChartTreeCallback();
-    if (selectedChartNode) {
-        populateChartVariables(selectedChartNode.dataset.payload);
+    if (selectedChartTopic) {
+        // If a topic is already selected, refresh its variable list
+        const node = document.querySelector(`.node-container[data-topic="${selectedChartTopic}"]`);
+        if(node) populateChartVariables(node.dataset.payload);
     }
     
     showChartSaveStatus(`Loaded '${config.name}'`, 'success');

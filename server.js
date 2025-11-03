@@ -28,13 +28,17 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const duckdb = require('duckdb');
-// [CORRECTED] Changed "spBv10" to "spBv1.0"
-const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); 
 const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
+
+// --- Module Imports [MODIFIED] ---
+const wsManager = require('./websocket-manager');
+const mqttHandler = require('./mqtt-handler');
+const { connectToMqttBroker } = require('./mqtt_client');
+// --- [END MODIFIED] ---
+
 
 // --- Constants & Paths ---
 const ALLOWED_IPS = ["127.0.0.1", "::1", "172.17.0.1", "172.18.0.1", "::ffff:172.18.0.1","::ffff:172.21.0.1"];
@@ -43,9 +47,7 @@ const ENV_PATH = path.join(DATA_PATH, '.env');
 const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
 const CERTS_PATH = path.join(DATA_PATH, 'certs');
 const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
-// [NEW] Path for chart configurations
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
-// SVG_PATH is now dynamically determined from config
 
 // --- Logger Setup ---
 const logger = pino({
@@ -68,7 +70,7 @@ if (!fs.existsSync(ENV_PATH)) {
 }
 require('dotenv').config({ path: ENV_PATH });
 
-// --- [NEW] Initial charts.json File Setup ---
+// --- Initial charts.json File Setup ---
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
     logger.info("✅ No 'charts.json' file found in 'data' directory. Creating one...");
     try {
@@ -92,8 +94,8 @@ function longReplacer(key, value) {
 let mcpProcess = null;
 let mainConnection = null;
 let isPruning = false;
-let dbWriteQueue = []; // [NEW] Queue for batch inserts
-let dbBatchTimer = null; // [NEW] Timer for batch processor
+let dbWriteQueue = []; // Queue for batch inserts
+let dbBatchTimer = null; // Timer for batch processor
 
 // --- Configuration from Environment ---
 const config = {
@@ -113,12 +115,10 @@ const config = {
     PORT: process.env.PORT || 8080,
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
-    // [NEW] Database Optimization Config
     DB_BATCH_INSERT_ENABLED: process.env.DB_BATCH_INSERT_ENABLED === 'true',
     DB_BATCH_INTERVAL_MS: process.env.DB_BATCH_INTERVAL_MS ? parseInt(process.env.DB_BATCH_INTERVAL_MS, 10) : 2000,
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
-    // UI and View configuration
     VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false', // Default to true
     VIEW_SVG_ENABLED: process.env.VIEW_SVG_ENABLED !== 'false', // Default to true
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
@@ -137,10 +137,8 @@ if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
 }
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
-// [MODIFIED] Added CHART_ENABLED to log
 logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] Fullscreen[${config.SVG_DEFAULT_FULLSCREEN}]`);
-// [NEW] Log DB optimization status
 if (config.DB_BATCH_INSERT_ENABLED) {
     logger.info(`✅ ⚡ Database batch insert is ENABLED (Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
 } else {
@@ -148,7 +146,7 @@ if (config.DB_BATCH_INSERT_ENABLED) {
 }
 
 
-// --- [NEW] Normalize Base Path ---
+// --- Normalize Base Path ---
 let basePath = config.BASE_PATH;
 if (!basePath.startsWith('/')) {
     basePath = '/' + basePath;
@@ -157,21 +155,10 @@ if (basePath.endsWith('/') && basePath.length > 1) {
     basePath = basePath.slice(0, -1);
 }
 logger.info(`✅ Application base path set to: ${basePath}`);
-// --- [END NEW] ---
 
-
-// --- Helper Function for Sparkplug (handles BigInt) ---
-// (This function is already defined globally, no need to redefine)
-
-// --- Helper to safely parse potentially non-JSON ---
-function safeJsonParse(str) {
-    try {
-        return JSON.parse(str);
-    } catch (e) {
-        // If parsing fails, return an object indicating it's raw data
-        return { raw_payload: str };
-    }
-}
+// --- Express App & Server Setup ---
+const app = express();
+const server = http.createServer(app);
 
 // --- DuckDB Setup ---
 const dbFile = DB_PATH;
@@ -182,8 +169,6 @@ const db = new duckdb.Database(dbFile, (err) => {
         process.exit(1);
     }
     logger.info("✅ 🦆 DuckDB database connected successfully at: %s", dbFile);
-
-    // [NEW] Start the batch processor only AFTER DB is ready
     startDbBatchProcessor();
 });
 
@@ -200,37 +185,23 @@ db.exec(`
     }
 });
 
-// --- Express App & WebSocket Server Setup ---
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server }); 
-
-// --- WebSocket Logic ---
-function broadcast(message) {
-    wss.clients.forEach(client => {
-        if (client.readyState === client.OPEN) {
-            client.send(message);
-        }
-    });
-}
-
 // --- Database Maintenance ---
-const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
+const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
 
-// --- [MODIFIED] DB Batch Insert Processor ---
-// This function will now ONLY run mappers that require the DB.
+// --- Initialize WebSocket Manager ---
+wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer);
+
+// --- DB Batch Insert Processor ---
 function processDbQueue() {
     if (!config.DB_BATCH_INSERT_ENABLED) {
-        return; // Do nothing if batch mode is disabled
+        return; 
     }
     
-    // Take all messages currently in the queue
     const batch = dbWriteQueue.splice(0);
     if (batch.length === 0) {
-        return; // No work to do
+        return;
     }
 
-    // Use db.serialize to ensure these operations run in order
     db.serialize(() => {
         db.run('BEGIN TRANSACTION;', (err) => {
             if (err) return logger.error({ err }, "DB Batch: Failed to BEGIN TRANSACTION");
@@ -240,7 +211,6 @@ function processDbQueue() {
         let errorCount = 0;
 
         for (const msg of batch) {
-            // Run the prepared statement for each message in the batch
             stmt.run(msg.timestamp, msg.topic, msg.payloadStringForDb, (runErr) => {
                 if (runErr) {
                     logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
@@ -249,11 +219,10 @@ function processDbQueue() {
             });
         }
 
-        // Finalize the statement (executes all queued .run calls)
         stmt.finalize((finalizeErr) => {
             if (finalizeErr) {
                  logger.error({ err: finalizeErr }, "DB Batch: Failed to finalize statement");
-                 db.run('ROLLBACK;'); // Rollback on finalize error
+                 db.run('ROLLBACK;'); 
                  return;
             }
 
@@ -261,22 +230,17 @@ function processDbQueue() {
                 logger.warn(`DB Batch: ${errorCount} errors, rolling back transaction.`);
                 db.run('ROLLBACK;');
             } else {
-                // All insertions were successful, commit the transaction
                 db.run('COMMIT;', (commitErr) => {
                     if (commitErr) {
                         logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
                     } else {
                         logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
-                        // Update DB status after a successful batch
                         broadcastDbStatus();
                         
-                        // --- [MODIFIED] Trigger mappers that *needed* the DB ---
                         (async () => {
                             for (const msg of batch) {
-                                // Only run mappers that were deferred
                                 if (msg.needsDb) { 
                                     try {
-                                        // [FIX] Re-parse the payload object from the string
                                         const payloadObject = JSON.parse(msg.payloadStringForDb);
                                         await mapperEngine.processMessage(
                                             msg.topic, 
@@ -284,13 +248,11 @@ function processDbQueue() {
                                             msg.isSparkplugOrigin
                                         );
                                     } catch (mapperErr) {
-                                        // This catch is for safety, but processMessage handles its own errors
                                         logger.error({ err: mapperErr, topic: msg.topic }, "Mapper trigger failed after batch.");
                                     }
                                 }
                             }
                         })();
-                        // --- [END MODIFIED] ---
                     }
                 });
             }
@@ -298,31 +260,26 @@ function processDbQueue() {
     });
 }
 
-// [NEW] Function to start the interval
 function startDbBatchProcessor() {
     if (config.DB_BATCH_INSERT_ENABLED) {
         logger.info(`Starting DB batch processor (interval: ${config.DB_BATCH_INTERVAL_MS}ms)`);
-        if (dbBatchTimer) clearInterval(dbBatchTimer); // Clear any existing timer
+        if (dbBatchTimer) clearInterval(dbBatchTimer);
         dbBatchTimer = setInterval(processDbQueue, config.DB_BATCH_INTERVAL_MS);
     }
 }
 
-
-// ---  Mapper Engine Setup ---
-// [MODIFIED] Pass the 'db' object to the mapper engine
+// --- Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
-    db, // <-- [NEW] Pass the database connection
-    (topic, payload) => { // Publisher callback
+    db, 
+    (topic, payload) => {
         if (mainConnection) {
-            // The payload here can be a String (JSON) or a Buffer (Sparkplug)
             mainConnection.publish(topic, payload, { qos: 1, retain: false });
         }
     },
-    broadcast, // Pass the main broadcast function
-    logger,    // Pass the main logger
-    longReplacer // Pass the replacer function (still needed for JSON stringify)
+    wsManager.broadcast, 
+    logger,
+    longReplacer
 );
-
 
 // --- Middleware ---
 const authMiddleware = (req, res, next) => {
@@ -349,10 +306,8 @@ const ipFilterMiddleware = (req, res, next) => {
     }
 };
 
-// --- [NEW] Main Router for Base Path ---
+// --- Main Router for Base Path ---
 const mainRouter = express.Router();
-
-// Apply global middleware to the main router
 mainRouter.use(express.json());
 app.set('trust proxy', true);
 
@@ -376,12 +331,10 @@ mainRouter.get('/view.svg', (req, res) => {
     }
 });
 
-// [MODIFIED] Pass all config flags to the frontend
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
         subscribedTopics: config.MQTT_TOPIC,
-        // Pass UI configuration flags
         viewTreeEnabled: config.VIEW_TREE_ENABLED,
         viewSvgEnabled: config.VIEW_SVG_ENABLED,
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
@@ -399,18 +352,17 @@ if (config.IS_SIMULATOR_ENABLED) {
     });
     mainRouter.post('/api/simulator/start', (req, res) => {
         const result = startSimulator();
-        broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
+        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
         res.status(200).json(result);
     });
     mainRouter.post('/api/simulator/stop', (req, res) => {
         const result = stopSimulator();
-        broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
+        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
         res.status(200).json(result);
     });
 }
 
 // MCP Context API Router
-// [MODIFIED] Pass the entire config object to the MCP API router
 const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, getStatus, getDbStatus, config);
 mainRouter.use('/api/context', ipFilterMiddleware, mcpRouter);
 
@@ -422,255 +374,48 @@ mainRouter.use('/api/env', ipFilterMiddleware, configRouter);
 const mapperRouter = require('./routes/mapperApi')(mapperEngine);
 mainRouter.use('/api/mapper', ipFilterMiddleware, mapperRouter);
 
-// [NEW] Chart API Router
+// Chart API Router
 const chartRouter = require('./routes/chartApi')(CHART_CONFIG_PATH, logger);
 mainRouter.use('/api/chart', ipFilterMiddleware, chartRouter);
 
 
-// --- [MODIFIED] Static Assets ---
+// --- Static Assets ---
 mainRouter.use(express.static(path.join(__dirname, 'public')));
 
-// --- [MODIFIED] Mount Everything ---
+// --- Mount Everything ---
 app.use(authMiddleware);
 app.use(basePath, mainRouter);
 
-// --- [NEW] Root Redirect ---
+// --- Root Redirect ---
 if (basePath !== '/') {
     app.get('/', (req, res) => {
         res.redirect(basePath);
     });
 }
 
-
-// --- WebSocket Connection Handling ---
-wss.on('connection', (ws, req) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    if (!url.pathname.startsWith(basePath)) {
-        logger.warn(`WebSocket connection rejected: Path ${url.pathname} does not match base path ${basePath}`);
-        ws.terminate();
-        return;
-    }
-    
-    logger.info('✅ ➡️ WebSocket client connected.');
-
-    // Send initial batch of historical data
-    db.all("SELECT * FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
-        if (!err && ws.readyState === ws.OPEN) {
-            const processedRows = rows.map(row => {
-                if (typeof row.payload === 'object' && row.payload !== null) {
-                    try {
-                        row.payload = JSON.stringify(row.payload, longReplacer);
-                    } catch (e) {
-                        logger.warn({ err: e, topic: row.topic }, "Failed to stringify history payload");
-                        row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
-                    }
-                } else if (row.payload === null) {
-                    row.payload = 'null';
-                }
-                return row;
-            });
-            ws.send(JSON.stringify({ type: 'history-initial-data', data: processedRows }));
-        }
-    });
-
-    // Send initial tree state (latest message for EVERY topic)
-    const treeStateQuery = `
-        WITH RankedEvents AS (
-            SELECT *, ROW_NUMBER() OVER(PARTITION BY topic ORDER BY timestamp DESC) as rn
-            FROM mqtt_events
-        )
-        SELECT topic, payload, timestamp
-        FROM RankedEvents
-        WHERE rn = 1
-        ORDER BY topic ASC;
-    `;
-    db.all(treeStateQuery, (err, rows) => {
-        if (err) {
-            logger.error({ err }, "❌ DuckDB Error fetching initial tree state");
-        } else if (ws.readyState === ws.OPEN) {
-            const processedRows = rows.map(row => {
-                if (typeof row.payload === 'object' && row.payload !== null) {
-                    try {
-                        row.payload = JSON.stringify(row.payload, longReplacer);
-                    } catch (e) {
-                        logger.warn({ err: e, topic: row.topic }, "Failed to stringify tree-state payload");
-                        row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
-                    }
-                } else if (row.payload === null) {
-                    row.payload = 'null';
-                }
-                return row;
-            });
-            ws.send(JSON.stringify({ type: 'tree-initial-state', data: processedRows }));
-        }
-    });
-
-
-    // Handle messages from client
-    ws.on('message', (message) => {
-        try {
-            const parsedMessage = JSON.parse(message);
-            if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
-                db.all("SELECT * FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT 20", [parsedMessage.topic], (err, rows) => {
-                    if (err) {
-                        logger.error({ err, topic: parsedMessage.topic }, `❌ DuckDB Error fetching history for topic`);
-                    } else if (ws.readyState === ws.OPEN) {
-                        const processedRows = rows.map(row => {
-                            if (typeof row.payload === 'object' && row.payload !== null) {
-                                try {
-                                    row.payload = JSON.stringify(row.payload, longReplacer);
-                                } catch (e) {
-                                    logger.warn({ err: e, topic: row.topic }, "Failed to stringify topic-history payload");
-                                    row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
-                                }
-                            } else if (row.payload === null) {
-                                row.payload = 'null';
-                            }
-                            return row;
-                        });
-                        ws.send(JSON.stringify({ type: 'topic-history-data', topic: parsedMessage.topic, data: processedRows }));
-                    }
-                });
-            }
-        } catch (e) {
-            logger.error({ err: e }, "❌ Error processing WebSocket message from client");
-        }
-    });
-    broadcastDbStatus();
-});
-
 // --- MQTT Connection Logic ---
-const { connectToMqttBroker } = require('./mqtt_client');
 connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
     mainConnection = connection;
 
-    // MQTT Message Handler
-    // [MODIFIED] Add 'async' to handle awaiting the mapper
-    mainConnection.on('message', async (topic, payload) => {
-        const timestamp = new Date();
-        let payloadObjectForMapper = null; // Object to pass to mapper
-        let payloadStringForWs = null;     // String to broadcast via WS
-        let payloadStringForDb = null;     // String to insert into DB
-        let isSparkplugOrigin = false;
-        let processingError = null;
+    // Initialize the message handler
+    const handleMessage = mqttHandler.init(
+        logger,
+        config,
+        wsManager,
+        mapperEngine,
+        db,
+        dbWriteQueue,
+        broadcastDbStatus
+    );
 
-        try {
-            // --- 1. Decoding ---
-            if (config.IS_SPARKPLUG_ENABLED && topic.startsWith('spBv1.0/')) {
-                try {
-                    const decodedPayload = spBv10Codec.decodePayload(payload);
-                    isSparkplugOrigin = true;
-                    // Use replacer for WS/DB string representation
-                    payloadStringForWs = JSON.stringify(decodedPayload, longReplacer, 2);
-                    payloadStringForDb = JSON.stringify(decodedPayload, longReplacer); // DB doesn't need pretty print
-                    payloadObjectForMapper = decodedPayload; // Pass the raw decoded object
-                } catch (decodeErr) {
-                    processingError = decodeErr;
-                    logger.error({ msg: "❌ Error decoding Sparkplug payload", topic: topic, error_message: decodeErr.message });
-                    payloadStringForWs = payload.toString('hex'); // Fallback hex string for WS
-                    payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeErr.message });
-                    payloadObjectForMapper = safeJsonParse(payloadStringForDb); // Pass error info to mapper
-                }
-            } else {
-                // Regular payload (try UTF-8)
-                let tempPayloadString = '';
-                try {
-                    tempPayloadString = payload.toString('utf-8');
-                    payloadStringForWs = tempPayloadString; // Assume UTF-8 for WS initially
-                     // Try to parse as JSON for DB and Mapper
-                    try {
-                        payloadObjectForMapper = JSON.parse(tempPayloadString);
-                        payloadStringForDb = tempPayloadString; // It's valid JSON, store as is
-                    } catch (parseError) {
-                         // Not JSON, treat as raw string
-                         logger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
-                         payloadObjectForMapper = { raw_payload: tempPayloadString }; // Wrap for mapper
-                         payloadStringForDb = JSON.stringify(payloadObjectForMapper); // Store wrapped object in DB
-                    }
-
-                } catch (utf8Err) {
-                    processingError = utf8Err;
-                    logger.error({ msg: "❌ Error converting payload to UTF-8", topic: topic, error_message: utf8Err.message });
-                    payloadStringForWs = payload.toString('hex'); // Fallback hex string
-                    payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: utf8Err.message });
-                    payloadObjectForMapper = safeJsonParse(payloadStringForDb);
-                }
-            }
-
-            // --- Safety Net (Should ideally not be needed now) ---
-             if (payloadObjectForMapper === null) {
-                 logger.error(`payloadObjectForMapper remained null for topic ${topic}. This should not happen.`);
-                 // Create a fallback object
-                 payloadObjectForMapper = { error: "Payload processing failed unexpectedly", raw_hex: payload.toString('hex')};
-                 payloadStringForDb = JSON.stringify(payloadObjectForMapper);
-                 payloadStringForWs = payloadStringForDb; // Send error via WS too
-             }
-             if (payloadStringForDb === null) payloadStringForDb = JSON.stringify({ error: "DB Payload string is null"});
-             if (payloadStringForWs === null) payloadStringForWs = JSON.stringify({ error: "WS Payload string is null"});
-
-
-            // --- 3. Broadcast WebSocket ---
-            const finalMessageObject = {
-                type: 'mqtt-message',
-                topic,
-                payload: payloadStringForWs, // Send string representation
-                timestamp: timestamp.toISOString()
-            };
-            broadcast(JSON.stringify(finalMessageObject));
-
-            // --- 4. [MODIFIED] Smart DB/Mapper Execution ---
-            if (config.DB_BATCH_INSERT_ENABLED) {
-                // --- BATCH MODE ---
-                // Check if any rule for this topic needs the DB
-                const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
-                
-                // Add all data to the queue.
-                dbWriteQueue.push({ 
-                    timestamp, 
-                    topic, 
-                    payloadStringForDb, 
-                    payloadObjectForMapper, // Store the object
-                    isSparkplugOrigin, 
-                    needsDb // <-- Tell the queue if this message needs deferred mapping
-                });
-                broadcastDbStatus();
-
-                if (!needsDb) {
-                    // This mapper is simple/stateless. Run it IMMEDIATELY for low latency.
-                    // It won't see its own message in the DB, but it doesn't care.
-                    await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
-                }
-                // If 'needsDb' is true, the mapper will be called inside 'processDbQueue'
-                
-            } else {
-                // --- NON-BATCH MODE ---
-                // Insert one-by-one
-                const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-                stmt.run(timestamp, topic, payloadStringForDb, (err) => { // Insert string representation
-                    if (err) {
-                        logger.error({ msg: "❌ DuckDB Insert Error", error: err, topic: topic, payloadAttempted: (payloadStringForDb || '').substring(0, 200) + '...' });
-                    } else {
-                        broadcastDbStatus();
-                    }
-                     // Call mapper *after* statement is finalized.
-                     // This ensures 'await db.all()' works even in non-batch mode.
-                     stmt.finalize(async () => {
-                         await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
-                     });
-                });
-            }
-            // --- 5. [END OF MODIFIED LOGIC] ---
-
-        } catch (err) { // Catch unexpected errors in this block's logic
-            logger.error({ msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`, topic: topic, error_message: err.message, error_stack: err.stack, rawPayloadStartHex: payload.slice(0, 30).toString('hex') });
-        }
-    });
+    // Attach the single handler function
+    mainConnection.on('message', handleMessage);
 
     // Disconnect handler
     mainConnection.on('close', () => {
         logger.info('✅ Disconnected from MQTT Broker.');
         const result = stopSimulator();
-        broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
+        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
     });
 });
 
@@ -701,18 +446,14 @@ process.on('SIGINT', () => {
         mcpProcess.kill('SIGINT');
     }*/
 
-    // [NEW] Stop the batch timer
     if (dbBatchTimer) {
         clearInterval(dbBatchTimer);
         logger.info("✅    -> Stopped DB batch timer.");
-        // Process any remaining items in the queue *before* closing DB
         logger.info("✅    -> Processing final DB write queue...");
-        // [MODIFIED] We must pass 'mapperEngine' to the final flush
         processDbQueue(); 
     }
     
     stopSimulator();
-    wss.clients.forEach(ws => ws.terminate());
     
     const finalShutdown = () => {
         logger.info("✅ Forcing final database checkpoint...");
@@ -728,10 +469,9 @@ process.on('SIGINT', () => {
         });
     };
     
-    // [MODIFIED] Wait a bit longer for the final batch + mappers to run
-    const shutdownDelay = config.DB_BATCH_INTERVAL_MS + 1000; // Wait for batch + 1s
+    const shutdownDelay = config.DB_BATCH_INTERVAL_MS + 1000;
     
-    wss.close(() => {
+    wsManager.close(() => {
         logger.info("✅ WebSocket server closed.");
         server.close(() => {
             logger.info("✅ HTTP server closed.");

@@ -24,11 +24,11 @@
 
 // Import shared utilities
 import { mqttPatternToClientRegex } from './utils.js';
+// [NEW] Import the reusable payload viewer
+import { createPayloadViewer } from './payload-viewer.js';
 
 // --- DOM Element Querying ---
-const mapperTreeContainer = document.getElementById('mapper-tree');
-const mapperPayloadTopic = document.getElementById('mapper-payload-topic');
-const mapperPayloadContent = document.getElementById('mapper-payload-content');
+// [REMOVED] mapper-tree, mapper-payload-topic, mapper-payload-content (handled by app.js and viewer)
 const mapperTransformPlaceholder = document.getElementById('mapper-transform-placeholder');
 const mapperTransformForm = document.getElementById('mapper-transform-form');
 const mapperVersionSelect = document.getElementById('mapper-version-select');
@@ -54,16 +54,24 @@ let mappedTargetTopics = new Set();
 let mapperSaveTimer = null;
 let currentEditingSourceTopic = null;
 let defaultJSCode = ''; // Will be set by initMapperView
-let selectedMapperNode = null;
+// [REMOVED] selectedMapperNode (managed by app.js)
 let deleteModalContext = null;
 
+// [NEW] Create an instance of the payload viewer for this view
+const payloadViewer = createPayloadViewer({
+    topicEl: document.getElementById('mapper-payload-topic'),
+    contentEl: document.getElementById('mapper-payload-content'),
+    historyLogEl: null, // Mapper doesn't show history
+    placeholderEl: null
+});
+
+
 // --- Callbacks from main app.js ---
-// These will be populated by initMapperView()
 let appCallbacks = {
     pruneTopicFromFrontend: () => console.error("pruneTopicFromFrontend callback not set"),
     getSubscribedTopics: () => ['#'], // Default fallback
     colorAllTrees: () => console.error("colorAllTrees callback not set"),
-    displayPayload: () => console.error("displayPayload callback not set"),
+    // [REMOVED] displayPayload (now handled by internal payloadViewer)
 };
 
 /**
@@ -72,7 +80,9 @@ let appCallbacks = {
  * @param {object} callbacks - An object containing callback functions from app.js
  */
 export function initMapperView(callbacks) {
-    appCallbacks = { ...appCallbacks, ...callbacks };
+    // [NEW] Separate appCallbacks from displayPayload (which is now internal)
+    const { displayPayload, ...otherCallbacks } = callbacks;
+    appCallbacks = { ...appCallbacks, ...otherCallbacks };
     
     // [MODIFIED] Set default JS code here
     defaultJSCode = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
@@ -144,32 +154,25 @@ export function updateMapperConfig(newConfig) {
  * Handles a click event on a node in the Mapper tree.
  * This function is exported and attached by app.js.
  * @param {Event} event - The click event.
+ * @param {HTMLElement} nodeContainer - The clicked node's container.
+ * @param {string} topic - The node's topic.
  */
-export function handleMapperNodeClick(event) {
-    const targetContainer = event.currentTarget;
-    const li = targetContainer.closest('li');
-
-    // Remove selection from old node
-    if (selectedMapperNode) {
-        selectedMapperNode.classList.remove('selected');
-    }
-    // Add selection to new node
-    selectedMapperNode = targetContainer;
-    selectedMapperNode.classList.add('selected');
-
-    const topic = targetContainer.dataset.topic;
-    const payload = targetContainer.dataset.payload; // Payload is stored on all nodes
+export function handleMapperNodeClick(event, nodeContainer, topic) {
+    const li = nodeContainer.closest('li');
+    const payload = nodeContainer.dataset.payload; // Payload is stored on all nodes
 
     // --- Check if it's a file or folder ---
     if (li.classList.contains('is-file')) {
         // It's a file node (object) - show payload and editor
         currentEditingSourceTopic = topic; // Store this
-        appCallbacks.displayPayload(topic, payload, mapperPayloadTopic, mapperPayloadContent);
+        // [NEW] Use the payload viewer
+        payloadViewer.display(topic, payload);
         renderTransformEditor(topic);
     } else {
         // It's a folder node - show placeholder, hide editor
         currentEditingSourceTopic = null; // Clear editing topic
-        appCallbacks.displayPayload(topic, "N/A (Folder selected)", mapperPayloadTopic, mapperPayloadContent); // Show folder info
+        // [NEW] Use the payload viewer
+        payloadViewer.display(topic, "N/A (Folder selected)"); // Show folder info
         mapperTransformPlaceholder.style.display = 'block'; // Show placeholder
         mapperTransformForm.style.display = 'none'; // Hide form
     }
@@ -715,6 +718,7 @@ function onDeleteRule() {
         currentEditingSourceTopic = null;
         mapperTransformPlaceholder.style.display = 'block';
         mapperTransformForm.style.display = 'none';
+        payloadViewer.clear(); // [NEW] Clear payload display
     } else {
         renderTransformEditor(rule.sourceTopic);
     }
@@ -770,6 +774,7 @@ async function onDeleteAndPrune() {
             currentEditingSourceTopic = null;
             mapperTransformPlaceholder.style.display = 'block';
             mapperTransformForm.style.display = 'none';
+            payloadViewer.clear(); // [NEW] Clear payload display
         } else {
             renderTransformEditor(rule.sourceTopic);
         }

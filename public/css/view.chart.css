@@ -51,9 +51,17 @@ main#chart-view {
 #chart-tree .selected .node-name::before { filter: brightness(0) invert(1); }
 body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) invert(0.2); }
 #chart-tree .selected .node-timestamp { color: var(--selected-text); opacity: 0.8; }
-#chart-tree .is-folder.collapsed > ul { display: block; } /* Always show */
+
+/* [MODIFIED] Added rules for collapse and filter */
+#chart-tree .is-folder.collapsed > ul { 
+    display: none; 
+}
+#chart-tree .filtered-out { 
+    display: none; 
+}
+
 #chart-tree .is-folder > .node-container { font-weight: 500; }
-#chart-tree .filtered-out { display: block; } /* No filtering */
+
 
 /* --- Chart Variable List (Top-right) --- */
 .chart-variable-list {

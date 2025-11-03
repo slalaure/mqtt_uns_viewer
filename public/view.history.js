@@ -24,6 +24,8 @@
 
 // Import shared utilities
 import { formatTimestampForLabel, highlightText } from './utils.js';
+// [NEW] Import the new time slider module
+import { createDualTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
 const historyLogContainer = document.getElementById('historical-log-container');
@@ -41,6 +43,7 @@ let minTimestamp = 0;
 let maxTimestamp = 0;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
+let historySlider = null; // [NEW] Module instance for the slider
 
 /**
  * Initializes the History View functionality.
@@ -49,9 +52,28 @@ let currentMaxTimestamp = 0;
 export function initHistoryView() {
     historySearchInput?.addEventListener('input', applyAndRenderFilters);
 
+    // [MODIFIED] Initialize the dual time slider
     if (handleMin && handleMax) {
-        makeDraggable(handleMin, true);
-        makeDraggable(handleMax, false);
+        historySlider = createDualTimeSlider({
+            containerEl: timeRangeSliderContainer,
+            handleMinEl: handleMin,
+            handleMaxEl: handleMax,
+            rangeEl: sliderRange,
+            labelMinEl: labelMin,
+            labelMaxEl: labelMax,
+            onDrag: (newMin, newMax) => {
+                // Update state continuously while dragging
+                currentMinTimestamp = newMin;
+                currentMaxTimestamp = newMax;
+                updateSliderUI(); // Update labels
+            },
+            onDragEnd: (newMin, newMax) => {
+                // Apply filter only on mouse up
+                currentMinTimestamp = newMin;
+                currentMaxTimestamp = newMax;
+                applyAndRenderFilters(); // Re-render log
+            }
+        });
     }
 }
 
@@ -129,74 +151,19 @@ function applyAndRenderFilters() {
 }
 
 /**
- * Updates the visual state of the time range slider.
+ * [MODIFIED] Updates the visual state of the time range slider
+ * by calling the slider module.
  */
 function updateSliderUI() {
-    if (!handleMin || !sliderRange || !labelMin) return;
-
-    const timeRange = maxTimestamp - minTimestamp;
-    if (timeRange <= 0) {
-        // Handle case with only one message
-        handleMin.style.left = '0%';
-        handleMax.style.left = '100%';
-        sliderRange.style.left = '0%';
-        sliderRange.style.width = '100%';
-        labelMin.textContent = formatTimestampForLabel(currentMinTimestamp);
-        labelMax.textContent = formatTimestampForLabel(currentMaxTimestamp);
-        return;
+    if (historySlider) {
+        historySlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     }
-
-    const minPercent = ((currentMinTimestamp - minTimestamp) / timeRange) * 100;
-    const maxPercent = ((currentMaxTimestamp - minTimestamp) / timeRange) * 100;
-    
-    handleMin.style.left = `${minPercent}%`;
-    handleMax.style.left = `${maxPercent}%`;
-    sliderRange.style.left = `${minPercent}%`;
-    sliderRange.style.width = `${maxPercent - minPercent}%`;
-    labelMin.textContent = formatTimestampForLabel(currentMinTimestamp);
-    labelMax.textContent = formatTimestampForLabel(currentMaxTimestamp);
 }
 
 /**
- * Makes a slider handle draggable.
- * @param {HTMLElement} handle - The handle element.
- * @param {boolean} isMin - True if this is the minimum handle.
+ * [REMOVED] makeDraggable(handle, isMin)
+ * This logic is now in public/time-slider.js
  */
-function makeDraggable(handle, isMin) {
-    if (!handle || !timeRangeSliderContainer) return;
-
-    handle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const sliderRect = timeRangeSliderContainer.getBoundingClientRect();
-
-        const onMouseMove = (moveEvent) => {
-            let x = moveEvent.clientX - sliderRect.left;
-            let percent = (x / sliderRect.width) * 100;
-            percent = Math.max(0, Math.min(100, percent));
-            
-            const timeRange = maxTimestamp - minTimestamp;
-            if (timeRange <= 0) return; // Don't drag if no range
-            
-            const newTimestamp = minTimestamp + (timeRange * percent / 100);
-
-            if (isMin) {
-                currentMinTimestamp = Math.min(newTimestamp, currentMaxTimestamp);
-            } else {
-                currentMaxTimestamp = Math.max(newTimestamp, currentMinTimestamp);
-            }
-            updateSliderUI();
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            applyAndRenderFilters(); // Re-render log with new time range
-        };
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-}
 
 /**
  * Creates and appends a single log entry to the history container.
