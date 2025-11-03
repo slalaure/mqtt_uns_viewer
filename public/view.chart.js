@@ -13,8 +13,8 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOTT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
@@ -82,6 +82,8 @@ let allChartConfigs = { configurations: [] }; // Holds all saved configs
 let currentConfigId = null; // ID of the currently loaded chart
 
 let chartSlider = null; // [NEW] Module instance for the slider
+let chartRefreshTimer = null; // [MODIFIÉ] Timer pour le "debounce" du graphique
+
 
 // [NEW] Create an instance of the payload viewer for this view
 const payloadViewer = createPayloadViewer({
@@ -267,9 +269,11 @@ export function updateChartSliderUI(min, max, isInitialLoad = false) {
     // [NEW] Call the slider's update method
     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     
-    // [NEW] Auto-refresh chart if in live mode
+    // [MODIFIÉ] Auto-refresh chart if in live mode (with debounce)
     if (isChartLive && !isInitialLoad && chartedVariables.size > 0) {
-        onGenerateChart();
+        clearTimeout(chartRefreshTimer);
+        // Rafraîchir le graphique après un court délai pour regrouper les mises à jour
+        chartRefreshTimer = setTimeout(onGenerateChart, 1500); 
     }
 }
 
@@ -484,6 +488,9 @@ function onChartVariableToggle(event) {
  * Added dynamic Y-axis generation.
  */
 function onGenerateChart() {
+    // [MODIFIÉ] Effacer le timer de debounce, puisque nous exécutons la fonction
+    clearTimeout(chartRefreshTimer);
+
     // 1. Check if we have any variables to plot
     if (chartedVariables.size === 0) {
         if (chartInstance) {
@@ -498,7 +505,7 @@ function onGenerateChart() {
     }
 
     // 2. Get history and filter by *time*
-    const allHistory = appCallbacks.getHistory();
+    const allHistory = appCallbacks.getHistory(); // This array is now capped at 5000
     const timeFilteredHistory = allHistory.filter(entry =>
         entry.timestampMs >= currentMinTimestamp &&
         entry.timestampMs <= currentMaxTimestamp

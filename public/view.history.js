@@ -46,11 +46,44 @@ let currentMaxTimestamp = 0;
 let historySlider = null; // [NEW] Module instance for the slider
 
 /**
+ * [MODIFIED] Applies current filters (time + search) and re-renders the log.
+ * This is now exported and named for clarity.
+ */
+export function renderFilteredHistory() {
+    if (!historyLogContainer) return;
+
+    const searchTerm = historySearchInput.value.trim().toLowerCase();
+    const searchActive = searchTerm.length >= 3;
+
+    // Filter entries based on the module's state
+    const filteredEntries = allHistoryEntries.filter(entry => {
+        const inTimeRange = entry.timestampMs >= currentMinTimestamp && entry.timestampMs <= currentMaxTimestamp;
+        if (!inTimeRange) return false;
+        
+        if (searchActive) {
+            const topicMatch = entry.topic.toLowerCase().includes(searchTerm);
+            const payloadMatch = entry.payload.toLowerCase().includes(searchTerm);
+            return topicMatch || payloadMatch;
+        }
+        return true;
+    });
+
+    historyLogContainer.innerHTML = ''; // Clear previous entries
+    
+    if (filteredEntries.length === 0) {
+        historyLogContainer.innerHTML = '<p class="history-placeholder">No log entries match the current filters.</p>';
+    } else {
+        filteredEntries.forEach(entry => addHistoryEntry(entry, searchActive ? searchTerm : null));
+    }
+}
+
+
+/**
  * Initializes the History View functionality.
  * This is called once by app.js when the app loads.
  */
 export function initHistoryView() {
-    historySearchInput?.addEventListener('input', applyAndRenderFilters);
+    historySearchInput?.addEventListener('input', renderFilteredHistory); // [MODIFIED]
 
     // [MODIFIED] Initialize the dual time slider
     if (handleMin && handleMax) {
@@ -71,31 +104,32 @@ export function initHistoryView() {
                 // Apply filter only on mouse up
                 currentMinTimestamp = newMin;
                 currentMaxTimestamp = newMax;
-                applyAndRenderFilters(); // Re-render log
+                renderFilteredHistory(); // [MODIFIED] Re-render log
             }
         });
     }
 }
 
 /**
- * Receives the full history log and timestamp data from the main app.
+ * [MODIFIED] Receives the full history log and timestamp data from the main app.
+ * This function NO LONGER re-renders the log unless it's the initial load.
  * @param {Array} entries - The complete list of history entries.
  * @param {boolean} isInitialLoad - True if this is the first batch of data.
  */
-export function setHistoryData(entries, isInitialLoad) { // [MODIFIED] Removed isLive
+export function setHistoryData(entries, isInitialLoad) { 
     allHistoryEntries = entries;
 
     if (allHistoryEntries.length === 0) {
         if(timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'none';
         minTimestamp = maxTimestamp = currentMinTimestamp = currentMaxTimestamp = 0;
-        applyAndRenderFilters(); // Render empty state
-        return { min: 0, max: 0 }; // [MODIFIED] Return state
+        if (isInitialLoad) renderFilteredHistory(); // Render empty state
+        return { min: 0, max: 0 }; 
     }
 
     if (timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'block';
 
-    // [MODIFIED] Check if the handle is at the live edge *before* updating maxTimestamp
-    const isLive = currentMaxTimestamp === maxTimestamp;
+    // Check if the handle is at the live edge *before* updating maxTimestamp
+    const isLive = (currentMaxTimestamp === maxTimestamp || isInitialLoad);
 
     // Update global timestamps
     minTimestamp = allHistoryEntries[allHistoryEntries.length - 1].timestampMs;
@@ -112,46 +146,23 @@ export function setHistoryData(entries, isInitialLoad) { // [MODIFIED] Removed i
     // If not initialLoad and not isLive, currentMin/MaxTimestamp are *not*
     // touched, preserving the user's selection.
 
-    // Re-render and update UI
-    applyAndRenderFilters();
+    // [MODIFIED] Only re-render if it's the initial load.
+    if (isInitialLoad) {
+        renderFilteredHistory();
+    }
+    
+    // Always update the slider's visual range
     updateSliderUI();
 
     // Return the new state to app.js
     return { 
         min: minTimestamp, 
         max: maxTimestamp
-        // [MODIFIED] Removed currentMin/Max from return
     };
 }
 
 /**
- * Applies current filters (time + search) and re-renders the log.
- */
-function applyAndRenderFilters() {
-    if (!historyLogContainer) return;
-
-    const searchTerm = historySearchInput.value.trim().toLowerCase();
-    const searchActive = searchTerm.length >= 3;
-
-    // Filter entries based on the module's state
-    const filteredEntries = allHistoryEntries.filter(entry => {
-        const inTimeRange = entry.timestampMs >= currentMinTimestamp && entry.timestampMs <= currentMaxTimestamp;
-        if (!inTimeRange) return false;
-        
-        if (searchActive) {
-            const topicMatch = entry.topic.toLowerCase().includes(searchTerm);
-            const payloadMatch = entry.payload.toLowerCase().includes(searchTerm);
-            return topicMatch || payloadMatch;
-        }
-        return true;
-    });
-
-    historyLogContainer.innerHTML = ''; // Clear previous entries
-    filteredEntries.forEach(entry => addHistoryEntry(entry, searchActive ? searchTerm : null));
-}
-
-/**
- * [MODIFIED] Updates the visual state of the time range slider
+ * Updates the visual state of the time range slider
  * by calling the slider module.
  */
 function updateSliderUI() {
@@ -159,11 +170,6 @@ function updateSliderUI() {
         historySlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     }
 }
-
-/**
- * [REMOVED] makeDraggable(handle, isMin)
- * This logic is now in public/time-slider.js
- */
 
 /**
  * Creates and appends a single log entry to the history container.

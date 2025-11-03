@@ -28,7 +28,8 @@ import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
 
 import { initSvgView, updateMap, updateSvgTimelineUI, setSvgHistoryData as setSvgHistoryModuleData } from './view.svg.js';
-import { initHistoryView, setHistoryData } from './view.history.js';
+// [MODIFIED] Import the new renderFilteredHistory function
+import { initHistoryView, setHistoryData, renderFilteredHistory } from './view.history.js';
 import {
     initMapperView,
     updateMapperMetrics,
@@ -52,6 +53,8 @@ import {
 document.addEventListener('DOMContentLoaded', () => {
     let recentlyPrunedPatterns = new Set();
     const PRUNE_IGNORE_DURATION_MS = 10000;
+    // [MODIFIÉ] Ajout d'une limite pour l'historique en mémoire
+    const MAX_HISTORY_ENTRIES = 5000;
     let subscribedTopicPatterns = ['#'];
     let appBasePath = '/';
     let ws; // WebSocket instance
@@ -154,6 +157,12 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.forEach(b => b?.classList.remove('active'));
         targetView?.classList.add('active');
         targetButton?.classList.add('active');
+
+        // [MODIFIED] Trigger a render if switching TO history view
+        if (viewToShow === 'history') {
+            // This will re-render the log with all new data
+            renderFilteredHistory();
+        }
     }
     btnTreeView?.addEventListener('click', () => switchView('tree'));
     btnMapView?.addEventListener('click', () => switchView('map'));
@@ -340,10 +349,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     // --- History Update ---
                     const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
                     allHistoryEntries.unshift(newEntry);
+
+                    // [MODIFIÉ] Plafonner le tableau d'historique pour éviter la fuite de mémoire
+                    if (allHistoryEntries.length > MAX_HISTORY_ENTRIES) {
+                        allHistoryEntries.pop(); // Retirer l'entrée la plus ancienne
+                    }
+                    
+                    // [MODIFIED] This call is now lightweight and fast.
+                    // It just updates timestamps and slider ranges, it does NOT re-render the log.
                     const newState = setHistoryData(allHistoryEntries, false);
+                    
                     minTimestamp = newState.min;
                     maxTimestamp = newState.max;
-                    setSvgHistoryModuleData(allHistoryEntries);
+                    setSvgHistoryModuleData(allHistoryEntries); // This just updates the array, which is fine
                     updateSvgTimelineUI(minTimestamp, maxTimestamp);
                     updateChartSliderUI(minTimestamp, maxTimestamp, false);
                     // --- End History Update ---
@@ -372,9 +390,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log(`[DEBUG] Received history-initial-data with ${message.data.length} entries.`); // [DEBUG LOG]
                     allHistoryEntries = message.data.map(entry => ({ ...entry, timestampMs: new Date(entry.timestamp).getTime() }));
                     setSvgHistoryModuleData(allHistoryEntries);
+                    
+                    // [MODIFIED] This call will now also trigger the initial render
                     const newState = setHistoryData(allHistoryEntries, true);
                     minTimestamp = newState.min;
                     maxTimestamp = newState.max;
+                    
                     updateSvgTimelineUI(minTimestamp, maxTimestamp);
                     updateChartSliderUI(minTimestamp, maxTimestamp, true);
                     
