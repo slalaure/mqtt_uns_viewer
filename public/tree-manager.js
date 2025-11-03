@@ -74,16 +74,28 @@ export function createTreeManager(rootElement, options = {}) {
                 nodeContainer.dataset.topic = currentTopicPath; // Store full path
                 li.appendChild(nodeContainer);
 
-                // Find parent <ul> and append
+                // --- [MODIFIED] Find parent <ul> and append ---
                 const parentTopic = parts.slice(0, index).join('/');
                 const parentLi = nodeMap.get(parentTopic);
-                let parentUl = parentLi ? parentLi.querySelector(':scope > ul') : rootNode;
-                if (!parentUl) {
-                    parentUl = document.createElement('ul');
-                    if(parentLi) parentLi.appendChild(parentUl);
-                    else rootNode.appendChild(parentUl);
+                let parentUl;
+                if (parentLi) {
+                    // This is a child node
+                    parentUl = parentLi.querySelector(':scope > ul');
+                    if (!parentUl) {
+                        parentUl = document.createElement('ul');
+                        parentLi.appendChild(parentUl);
+                    }
+                } else {
+                    // This is a top-level node. Find/create the root <ul> inside the container.
+                    parentUl = rootNode.querySelector(':scope > ul');
+                    if (!parentUl) {
+                        parentUl = document.createElement('ul');
+                        rootNode.appendChild(parentUl);
+                    }
                 }
                 parentUl.appendChild(li);
+                // --- [END MODIFIED] ---
+                
                 nodeMap.set(currentTopicPath, li);
                 
                 // Add listeners
@@ -111,8 +123,8 @@ export function createTreeManager(rootElement, options = {}) {
                 // [MODIFIED] Remove the separate click listener.
                 // The main onNodeClick in app.js will now handle this.
                 if (allowFolderCollapse && isNewNode) {
-                    // Start new folders as collapsed
-                    li.classList.add('collapsed');
+                    // [MODIFIED] Removed li.classList.add('collapsed')
+                    // Folders will now be expanded by default.
                 }
             }
 
@@ -140,7 +152,12 @@ export function createTreeManager(rootElement, options = {}) {
      */
     function rebuild(topicMap) {
         console.log(`[tree-manager ${treeId}] Rebuilding tree with ${topicMap.size} topics...`); // [DEBUG LOG]
-        rootNode.innerHTML = '';
+        
+        // [MODIFIED] Only clear the root <ul>, not the whole container
+        const rootUl = rootNode.querySelector(':scope > ul');
+        if (rootUl) {
+            rootUl.innerHTML = '';
+        }
         nodeMap.clear();
         
         // Sort topics to ensure parents are created before children
@@ -174,7 +191,10 @@ export function createTreeManager(rootElement, options = {}) {
      * @param {boolean} collapse - True to collapse, false to expand.
      */
     function toggleAllFolders(collapse) {
-        rootNode.querySelectorAll('.is-folder').forEach(folderLi => {
+        // [MODIFIED] Target the root <ul>
+        const rootUl = rootNode.querySelector(':scope > ul');
+        if (!rootUl) return;
+        rootUl.querySelectorAll('.is-folder').forEach(folderLi => {
             folderLi.classList.toggle('collapsed', collapse);
         });
     }
@@ -214,7 +234,11 @@ export function createTreeManager(rootElement, options = {}) {
      * @param {string} filterText - The text to filter by.
      */
     function applyFilter(filterText) {
-        const allNodes = rootNode.querySelectorAll(':scope > ul > li');
+        // [MODIFIED] Target the root <ul>
+        const rootUl = rootNode.querySelector(':scope > ul');
+        if (!rootUl) return; // No tree to filter
+        
+        const allNodes = rootUl.querySelectorAll(':scope > li');
         allNodes.forEach(node => filterNode(node, filterText.toLowerCase()));
     }
 
