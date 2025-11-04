@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -127,8 +127,10 @@ const config = {
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/',
-    // [MODIFIED] Add new config flag
-    VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false' // Default to true
+    VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false', // Default to true
+    // [NEW] Read demo limits
+    MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
+    MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0
 };
 
 
@@ -146,6 +148,9 @@ if (config.DB_BATCH_INSERT_ENABLED) {
 } else {
     logger.info("✅ 🐢 Database batch insert is DISABLED (writing message-by-message).");
 }
+// [NEW] Log demo limits
+if (config.MAX_SAVED_CHART_CONFIGS > 0) logger.info(`✅ 🔒 DEMO LIMIT: Max saved charts set to ${config.MAX_SAVED_CHART_CONFIGS}.`);
+if (config.MAX_SAVED_MAPPER_VERSIONS > 0) logger.info(`✅ 🔒 DEMO LIMIT: Max saved mapper versions set to ${config.MAX_SAVED_MAPPER_VERSIONS}.`);
 
 
 // --- Normalize Base Path ---
@@ -318,7 +323,7 @@ const { startSimulator, stopSimulator, getStatus } = require('./simulator')(logg
     if (mainConnection) {
         mainConnection.publish(topic, payload, { qos: 1, retain: false });
     }
-}, config.IS_SIMULATOR_ENABLED);
+}, config.IS_SPARKPLUG_ENABLED);
 
 
 // --- API Routes (Mounted on mainRouter) ---
@@ -343,7 +348,10 @@ mainRouter.get('/api/config', (req, res) => {
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
         basePath: basePath,
-        viewConfigEnabled: config.VIEW_CONFIG_ENABLED // [MODIFIED] Send new flag
+        viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
+        // [NEW] Send limits to frontend
+        maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
+        maxSavedMapperVersions: config.MAX_SAVED_MAPPER_VERSIONS
     });
 });
 

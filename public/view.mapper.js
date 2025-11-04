@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -56,6 +56,7 @@ let currentEditingSourceTopic = null;
 let defaultJSCode = ''; // Will be set by initMapperView
 // [REMOVED] selectedMapperNode (managed by app.js)
 let deleteModalContext = null;
+let maxMappersLimit = 0; // [NEW] To store the limit from config
 
 // [NEW] Ace Editor State
 let aceEditors = new Map(); // Stores Ace editor instances by target.id
@@ -100,8 +101,9 @@ export function setMapperTheme(isDark) {
  */
 export function initMapperView(callbacks) {
     // [NEW] Separate appCallbacks from displayPayload (which is now internal)
-    const { displayPayload, ...otherCallbacks } = callbacks;
+    const { displayPayload, maxSavedMapperVersions, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
+    maxMappersLimit = maxSavedMapperVersions || 0; // [NEW] Store the limit
     
     // [MODIFIED] Set default JS code here
     defaultJSCode = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
@@ -481,7 +483,22 @@ function createTargetEditor(rule, target) {
  */
 function onAddTarget() {
     if (!currentEditingSourceTopic) return;
-
+    // Check limit before creating a new rule
+    // 1. Find active version
+    const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+    if (!activeVersion) return; // Should not happen
+    
+    // 2. Check if rule already exists
+    const existingRule = activeVersion.rules.find(r => r.sourceTopic === currentEditingSourceTopic);
+    
+    // 3. If rule does NOT exist, we are creating a new one. Check limit.
+    if (!existingRule) {
+        if (maxMappersLimit > 0 && activeVersion.rules.length >= maxMappersLimit) {
+            alert(`Cannot add new mapping rule. You have reached the maximum limit of ${maxMappersLimit} mapping rules for this demo.
+Please ask an administrator to clean up old rules or versions.`);
+            return; // Stop execution
+        }
+    }
     const rule = getRuleForTopic(currentEditingSourceTopic, true); // Create rule if needed
 
     const defaultOutputTopic = currentEditingSourceTopic + Math.floor(Math.random() * 100);
@@ -653,9 +670,17 @@ async function onSave() {
 }
 
 /**
- * Event handler for the "Save as New..." button.
+ * [MODIFIED] Event handler for the "Save as New..." button.
+ * Now checks the limit before saving.
  */
 function onSaveAsNew() {
+    // [NEW] Check limit
+    if (maxMappersLimit > 0 && mapperConfig.versions.length >= maxMappersLimit) {
+        alert(`Cannot save new version. You have reached the maximum limit of ${maxMappersLimit} saved mapper versions.
+Please ask an administrator to clean up old versions.`); // User cannot delete versions from UI
+        return; // Stop execution
+    }
+
     const activeVersionName = mapperVersionSelect.options[mapperVersionSelect.selectedIndex]?.text || 'current';
     const newVersionName = prompt("Enter a name for the new version:", `Copy of ${activeVersionName}`);
     if (!newVersionName) return;

@@ -564,12 +564,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     recentlyPrunedPatterns.add(pattern);
                     setTimeout(() => recentlyPrunedPatterns.delete(pattern), PRUNE_IGNORE_DURATION_MS);
                 },
-                // Note: displayPayload is no longer needed here
+                // [NEW] Pass the limit
+                maxSavedMapperVersions: appConfig.maxSavedMapperVersions || 0
             });
             initChartView({
                 getHistory: () => allHistoryEntries,
-                colorChartTreeCallback: colorChartTree
-                // Note: displayPayload is no longer needed here
+                colorChartTreeCallback: colorChartTree,
+                // [NEW] Pass the limit
+                maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0
             });
             
             // --- Store subscribed topics ---

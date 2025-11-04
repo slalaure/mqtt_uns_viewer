@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOTT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -80,6 +80,7 @@ let isChartLive = true; // Default to live mode
 let chartSaveTimer = null;
 let allChartConfigs = { configurations: [] }; // Holds all saved configs
 let currentConfigId = null; // ID of the currently loaded chart
+let maxChartsLimit = 0; // [NEW] To store the limit from config
 
 let chartSlider = null; // [NEW] Module instance for the slider
 let chartRefreshTimer = null; // [MODIFIÉ] Timer pour le "debounce" du graphique
@@ -147,8 +148,9 @@ export function pruneChartedVariables(regex) {
  */
 export function initChartView(callbacks) {
     // [NEW] Separate appCallbacks from displayPayload
-    const { displayPayload, ...otherCallbacks } = callbacks;
+    const { displayPayload, maxSavedChartConfigs, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
+    maxChartsLimit = maxSavedChartConfigs || 0; // [NEW] Store the limit
 
     btnChartGenerate?.addEventListener('click', onGenerateChart);
     btnChartFullscreen?.addEventListener('click', toggleChartFullscreen);
@@ -1014,9 +1016,17 @@ async function onSaveCurrent() {
 }
 
 /**
- * [NEW] Handles the "Save As..." button click.
+ * [MODIFIED] Handles the "Save As..." button click.
+ * Now checks the limit before saving.
  */
 async function onSaveAsNew() {
+    // [NEW] Check limit
+    if (maxChartsLimit > 0 && allChartConfigs.configurations.length >= maxChartsLimit) {
+        alert(`Cannot save new chart. You have reached the maximum limit of ${maxChartsLimit} saved charts.
+Please delete an old chart configuration before saving a new one.`);
+        return; // Stop execution
+    }
+
     const name = prompt("Enter a name for this new chart configuration:");
     if (!name || name.trim().length === 0) {
         return; // User cancelled

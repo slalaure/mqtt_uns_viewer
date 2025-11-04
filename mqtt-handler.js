@@ -41,6 +41,7 @@ let broadcastDbStatus;
  */
 async function handleMessage(topic, payload) {
     const timestamp = new Date();
+   
     let payloadObjectForMapper = null; // Object to pass to mapper
     let payloadStringForWs = null;     // String to broadcast via WS
     let payloadStringForDb = null;     // String to insert into DB
