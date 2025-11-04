@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Element Querying ---
     const datetimeContainer = document.getElementById('current-datetime');
     const darkModeToggle = document.getElementById('dark-mode-toggle');
+    const btnConfigView = document.getElementById('btn-config-view'); // [MODIFIED] Added config button
 
     // --- Tree View Elements ---
     const treeViewWrapper = document.querySelector('.tree-view-wrapper');
@@ -490,6 +491,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!defaultViewActivated) {
                 switchView('tree'); // Fallback
             }
+
+            // [MODIFIED] Hide config button if disabled
+            if (btnConfigView) {
+                btnConfigView.style.display = appConfig.viewConfigEnabled ? 'block' : 'none';
+            }
+            // --- [END MODIFIED] ---
 
             // --- [NEW] Initialize Modules & Managers ---
             

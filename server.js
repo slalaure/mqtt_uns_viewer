@@ -126,7 +126,9 @@ const config = {
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
-    BASE_PATH: process.env.BASE_PATH?.trim() || '/'
+    BASE_PATH: process.env.BASE_PATH?.trim() || '/',
+    // [MODIFIED] Add new config flag
+    VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false' // Default to true
 };
 
 
@@ -340,7 +342,8 @@ mainRouter.get('/api/config', (req, res) => {
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
-        basePath: basePath
+        basePath: basePath,
+        viewConfigEnabled: config.VIEW_CONFIG_ENABLED // [MODIFIED] Send new flag
     });
 });
 
@@ -365,9 +368,19 @@ if (config.IS_SIMULATOR_ENABLED) {
 const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, getStatus, getDbStatus, config);
 mainRouter.use('/api/context', ipFilterMiddleware, mcpRouter);
 
-// Configuration API Router
-const configRouter = require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger);
-mainRouter.use('/api/env', ipFilterMiddleware, configRouter);
+// --- [MODIFIED] Configuration API Router (Conditional) ---
+if (config.VIEW_CONFIG_ENABLED) {
+    logger.info("✅ Configuration editor UI is ENABLED.");
+    const configRouter = require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger);
+    mainRouter.use('/api/env', ipFilterMiddleware, configRouter);
+} else {
+    logger.info("✅ 🔒 Configuration editor UI is DISABLED by .env settings.");
+    // Block the API if the UI is disabled
+    mainRouter.use('/api/env', (req, res) => {
+        res.status(403).json({ error: "Configuration API is disabled by server settings." });
+    });
+}
+// --- [END MODIFIED] ---
 
 // Mapper API Router
 const mapperRouter = require('./routes/mapperApi')(mapperEngine);
@@ -378,8 +391,20 @@ const chartRouter = require('./routes/chartApi')(CHART_CONFIG_PATH, logger);
 mainRouter.use('/api/chart', ipFilterMiddleware, chartRouter);
 
 
-// --- Static Assets ---
+// --- [MODIFIED] Static Assets (with conditional block) ---
+
+// Conditionally block config page if disabled in .env
+if (!config.VIEW_CONFIG_ENABLED) {
+    mainRouter.get('/config.html', (req, res) => {
+        res.status(403).send('Access to the configuration page is disabled by server settings.');
+    });
+    mainRouter.get('/config.js', (req, res) => {
+        res.status(403).send('Access to configuration scripts is disabled.');
+    });
+}
+
 mainRouter.use(express.static(path.join(__dirname, 'public')));
+// --- [END MODIFIED] ---
 
 // --- Mount Everything ---
 app.use(authMiddleware);
