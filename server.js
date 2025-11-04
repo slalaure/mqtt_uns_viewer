@@ -112,6 +112,7 @@ const config = {
     IS_SIMULATOR_ENABLED: process.env.SIMULATOR_ENABLED === 'true',
     IS_SPARKPLUG_ENABLED: process.env.SPARKPLUG_ENABLED === 'true',
     MQTT_ALPN_PROTOCOL: process.env.MQTT_ALPN_PROTOCOL?.trim() || null,
+    MQTT_REJECT_UNAUTHORIZED: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false', // Default to true
     PORT: process.env.PORT || 8080,
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
@@ -125,7 +126,6 @@ const config = {
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
-    SVG_DEFAULT_FULLSCREEN: process.env.SVG_DEFAULT_FULLSCREEN === 'true',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/'
 };
 
@@ -138,7 +138,7 @@ if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
 logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}]`);
-logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] Fullscreen[${config.SVG_DEFAULT_FULLSCREEN}]`);
+logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] `);
 if (config.DB_BATCH_INSERT_ENABLED) {
     logger.info(`✅ ⚡ Database batch insert is ENABLED (Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
 } else {
@@ -340,7 +340,6 @@ mainRouter.get('/api/config', (req, res) => {
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
-        svgDefaultFullscreen: config.SVG_DEFAULT_FULLSCREEN,
         basePath: basePath
     });
 });

@@ -8,6 +8,7 @@
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
+
  * furnished to do so, subject to the following conditions:
  *
  * The above copyright notice and this permission notice shall be included in all
@@ -34,11 +35,22 @@ function connectToMqttBroker(config, logger, certsPath, onConnectCallback) {
         clean: true,
         reconnectPeriod: 1000,
         servername: config.MQTT_BROKER_HOST,
-        rejectUnauthorized: true
+        rejectUnauthorized: config.MQTT_REJECT_UNAUTHORIZED // Use config value
     };
+
+    if (!config.MQTT_REJECT_UNAUTHORIZED) {
+        logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        logger.warn("SECURITY WARNING: MQTT_REJECT_UNAUTHORIZED is false.");
+        logger.warn("Certificate verification is DISABLED. This is insecure.");
+        logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    }
 
     if (config.MQTT_USERNAME) options.username = config.MQTT_USERNAME;
     if (config.MQTT_PASSWORD) options.password = config.MQTT_PASSWORD;
+
+    // --- [MODIFIED] Certificate Logic ---
+    
+    // Case 1: MTLS (Client Cert + Key + CA) - e.g., AWS IoT
     if (config.CERT_FILENAME && config.KEY_FILENAME && config.CA_FILENAME) {
         try {
             options.key = fs.readFileSync(path.join(certsPath, config.KEY_FILENAME));
@@ -46,10 +58,27 @@ function connectToMqttBroker(config, logger, certsPath, onConnectCallback) {
             options.ca = fs.readFileSync(path.join(certsPath, config.CA_FILENAME));
             logger.info("✅ Using certificate-based (MTLS) authentication.");
         } catch (err) {
-            logger.error({ err }, "FATAL ERROR: Could not read certificate files.");
+            logger.error({ err }, "FATAL ERROR: Could not read MTLS certificate files (key, cert, or ca).");
+            process.exit(1);
+        }
+    } 
+    // Case 2: Standard TLS (Server verification only) - e.g., demo.flashmq.org
+    else if (config.CA_FILENAME) {
+         try {
+            options.ca = fs.readFileSync(path.join(certsPath, config.CA_FILENAME));
+            logger.info("✅ Using standard TLS authentication (verifying server with provided CA).");
+        } catch (err) {
+            logger.error({ err }, "FATAL ERROR: Could not read CA certificate file.");
             process.exit(1);
         }
     }
+    // Case 3: No certs provided (using system CAs or rejectUnauthorized:false)
+    else if (config.CERT_FILENAME || config.KEY_FILENAME) {
+        logger.warn("Incomplete certificate configuration. Both CERT_FILENAME and KEY_FILENAME (and often CA_FILENAME) are required for MTLS. Ignoring partial certs.");
+    }
+    // --- [END MODIFIED] ---
+
+
     if (config.MQTT_ALPN_PROTOCOL) options.ALPNProtocols = [config.MQTT_ALPN_PROTOCOL];
 
     const connection = mqtt.connect(options);

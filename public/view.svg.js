@@ -78,17 +78,7 @@ export function initSvgView(appConfig) {
             },
             onDragEnd: null // No action needed on mouse up
         });
-    }
-
-    // --- Handle SVG Default Fullscreen ---
-    if (appConfig.svgDefaultFullscreen && appConfig.viewSvgEnabled && mapView.classList.contains('active')) {
-        console.log("Attempting to open SVG view in fullscreen by default...");
-        try {
-            toggleFullscreen();
-        } catch (err) {
-            console.warn("Default fullscreen request was blocked by the browser.", err);
-        }
-    }
+    }  
 }
 
 /**
