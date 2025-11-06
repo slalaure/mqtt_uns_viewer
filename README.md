@@ -1,283 +1,396 @@
 # MQTT UNS Viewer
+![](https://img.shields.io/badge/version-1.2.0-blue.svg) ![](https://img.shields.io/badge/license-MIT-green.svg)
 
-![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![Version: 1.1.0](https://img.shields.io/badge/version-1.1.0-blue.svg)
+**A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages.**
 
-A lightweight, real-time web application to visualize MQTT topic trees, dynamic SVG graphics, and historical data, designed for Unified Namespace (UNS) and Sparkplug B architectures.
-
-## 🌟 Key Features
-
-* **Real-time Topic Tree:** Automatically builds a collapsible tree of all MQTT topics as they arrive.
-* **Live Payload Viewer:** Inspect any topic's payload in real-time or pause to view its recent history.
-* **Dynamic SVG View:** Binds MQTT data to any SVG element (`<text>`, `<tspan>`) by adding a `data-key` attribute. Includes a time-scrubbing "History Mode".
-* **Persistent History:** Automatically records all messages into an embedded **DuckDB** database for historical analysis.
-* **History View:** A dedicated tab to search the entire message history with time-range sliders and full-text search.
-* **Topic Mapper Engine:** A powerful UI to create real-time data transformations.
-    * Create rules to map/transform data from a source topic (e.g., raw sensor data) to a new destination topic (e.g., a clean UNS topic).
-    * Use **JavaScript** for complex transformations.
-    * Rule-sets are versioned, allowing you to activate, edit, and save new versions.
-* **Charting View:**
-    * Dynamically plot data from *any* numeric variable in *any* topic.
-    * Supports multi-topic and multi-variable charting on the same timeline.
-    * Time-range selection, PNG/CSV export, and chart type selection (line, bar).
-* **Sparkplug B Support:** Natively decodes `spBv1.0` Protobuf payloads (NBIRTH, DDATA) into JSON for visualization and mapping.
-* **Built-in Simulator:** Includes a data simulator that generates realistic JSON UNS data (ERP, MES, WMS) *and* Sparkplug B data (DDATA).
-* **MCP Server (AI Agent):** Includes a **Model-Context Protocol** server (`mcp_server.mjs`) that allows an AI agent (like a GPT) to interact with the application to perform:
-    * Semantic search (e.g., "Find all high-priority maintenance requests").
-    * Schema inference for unknown topics.
-    * Administrative tasks (e.g., "Prune all data from the R&D lab").
-* **Admin & Security:**
-    * Web-based configuration editor for the `.env` file.
-    * Optional HTTP Basic Authentication.
+### [**View the Live Demo at mqttunsviewer.com**](https://www.mqttunsviewer.com)
 
 ---
 
-## Architecture
+This tool provides a simple, broker-agnostic web UI to monitor an MQTT broker. It's built with vanilla JavaScript, Node.js, and Docker, making it lightweight and easy to deploy. It receives all messages via a single WebSocket, ensuring high performance.
 
-The application runs as a single Docker container that internally manages two Node.js processes:
+![Demo Video](httpsfs://slalaure/mqtt_uns_viewer/main/assets/mqtt_uns_viewer.mp4)
 
-1.  **Web Server (`server.js`):** The core application.
-    -   Connects to the MQTT broker.
-    -   Serves the frontend web application and the configuration API.
-    -   Broadcasts MQTT messages to the UI via WebSockets.
-    -   Manages the DuckDB database.
-    -   Runs the advanced, dual-loop data simulator.
-    -   Launches and manages the MCP Server as a child process.
-
-2.  **MCP Server (`mcp_server.mjs`):** The AI Agent interface.
-    -   Defines structured tools for an LLM to interact with the application.
-    -   Communicates with the Web Server via its internal REST API.
-
-**Data Persistence** is achieved by mounting a local `data` directory as a Docker volume. This ensures that your configuration, SVG plan, and database are saved on your host machine.
-
----
-
-## Advanced Data Simulator
-
-The built-in simulator is a sophisticated, event-driven engine designed for realistic UNS and IIoT demonstrations.
-
-### Key Simulation Concepts
-
--   **Dual-Loop Engine:**
-    -   **Fast Loop (Sensor Telemetry):** Every 5 seconds, all OT assets (robots, CNCs, power meters, gas tanks) publish their telemetry.
-    -   **Slow Loop (Narrative Events):** Every 40 seconds, a new "story" event occurs, simulating the IT/business layer (ERP, MES, WMS, etc.).
-
--   **Data Correlation:** The two loops are linked via a shared state. A narrative event (e.g., MES `status: 'running'`) will cause the sensor loop to start publishing "running" data (high temperature, high power draw). An injected fault (e.g., `status: 'error'`) will instantly cause the sensor loop to publish abnormal data (high vibration), which is then followed by a correlated CMMS maintenance request.
-
--   **Sparkplug B + UNS Twinning:** When `SPARKPLUG_ENABLED` is true, the simulator models a complete edge-to-enterprise data flow:
-    1.  **OT (Sparkplug B):** It publishes `spBv1.0/.../DDATA` (Protobuf) messages as if from the machine itself. `NBIRTH` messages are sent on startup, correctly using `seq=0`.
-    2.  **UNS (JSON):** It *also* publishes the same data as a structured JSON message (e.g., `stark_industries/.../vibration`) to simulate an IIoT Gateway "twinning" the data into the Unified Namespace.
-
--   **Simulated Systems & Events:**
-    -   **ERP:** `workorder` (Start/Complete)
-    -   **MES:** `operation` (Start/Stop/Pause)
-    -   **WMS:** `stock_movement` (Pick, Putaway, Receipt)
-    -   **CMMS:** `maintenance_request` (Triggered by faults)
-    -   **FMS:** `fire_alarm` (Alarm/Clear)
-    -   **Safety:** `atmosphere_alert` (Anoxia/Gas leak)
-    -   **OT/Assets (Sparkplug):** Robots, CNCs, Power Meters, Gas Tanks (Argon, Nitrogen, Oxygen)
+## Table of Contents
+1.  [✨ Key Features](#-key-features)
+2.  [🚀 Installation](#-installation)
+    * [Prerequisites](#prerequisites)
+    * [Docker (Recommended)](#docker-recommended)
+    * [Local Development](#local-development)
+3.  [🔧 Configuration (`.env`)](#-configuration-env)
+    * [Main Configuration Options](#main-configuration-options)
+4.  [🧭 User Guide](#-user-guide)
+    * [Tree View](#tree-view)
+    * [SVG View](#svg-view)
+    * [History View](#history-view)
+    * [Mapper View](#mapper-view)
+    * [Chart View](#chart-view)
+    * [MCP Server (for LLMs)](#mcp-server-for-llms)
+5.  [🛠️ For Developers](#-for-developers)
+    * [Project Structure](#project-structure)
+    * [Backend Architecture](#backend-architecture)
+    * [Frontend Architecture](#frontend-architecture)
+    * [Customizing the SVG](#customizing-the-svg)
 
 ---
 
-## Getting Started
+## ✨ Key Features
+
+* **Real-time Topic Tree:** Automatically builds a hierarchical tree of all MQTT topics as messages arrive.
+* **Dynamic SVG Dashboard:** Updates text and elements in a custom SVG file (`view.svg`) in real-time based on message payloads.
+* **Persistent History:** Uses an embedded **DuckDB** database to store all message history, allowing for search and time-range filtering.
+* **Topic & Payload Mapper:** A powerful real-time transformation engine.
+    * Create new topics from existing ones.
+    * Use `async/await` JavaScript to transform payloads.
+    * **Query the database** directly within your mapping logic (e.g., `await db.get(...)`).
+    * Includes versioning, metrics, and live-logging.
+* **Dynamic Charting:**
+    * Build charts (line, bar, pie) by selecting numeric values from any topic payload.
+    * Save, load, and manage multiple chart configurations.
+    * Export charts to PNG or CSV.
+* **Sparkplug B Support:** Natively decodes `spBv1.0` Protobuf payloads for easy viewing.
+* **Built-in Data Simulator:** A "Stark Industries" demo simulator to generate complex UNS and Sparkplug data for testing.
+* **MCP Server Interface:** An optional JSON-RPC server (`mcp_server.mjs`) that allows external tools (like LLMs) to query the application's status, history, and model.
+* **Secure & Lightweight:** Runs in a minimal Node.js container, with security options for HTTP Basic Auth and API IP whitelisting.
+
+---
+
+## 🚀 Installation
 
 ### Prerequisites
+* **Docker** and **Docker Compose** (for the recommended install method).
+* **Node.js v20+** (for local development).
+* **Git**
 
--   [Docker](https://www.docker.com/get-started) must be installed.
--   [Docker Compose](https://docs.docker.com/compose/install/) is required for Method 1.
--   [Git](https://git-scm.com/) for cloning the repository.
+### Docker (Recommended)
 
-### First-Time Setup (Required for both methods)
+This method runs the application in a self-contained Docker container.
 
-1.  **Clone the Repository:**
+1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/slalaure/mqtt_uns_viewer.git](https://github.com/slalaure/mqtt_uns_viewer.git)
+    git clone https://github.com/slalaure/mqtt_uns_viewer.git
     cd mqtt_uns_viewer
     ```
 
-2.  **Prepare the Data Directory:**
-    The application reads all user-specific files from a `data` directory.
-    -   **Configuration:** Copy the example config file into the `data` directory: `cp .env.example data/.env`.
-    -   **SVG Plan:** Place your custom `view.svg` file inside the `data` directory. An example is already there.
-    -   **(Optional) Certificates:** If using MTLS, place your `certs` folder inside the `data` directory.
-
-3.  **Edit Your Configuration:**
-    Open `data/.env` with a text editor and fill in your MQTT broker details. See the **Configuration** section below for all available options. **To see the full simulation, set `SIMULATOR_ENABLED=true` and `SPARKPLUG_ENABLED=true`.**
-
-### Method 1: Using Docker Compose (Recommended)
-
-This is the simplest way to run the application.
-
-1.  **Build and Run:**
-    From the project's root directory, run the following command. This will build the image and start the container in the background.
+2.  **Create the configuration file:**
+    Copy the example `.env` file into the `data` directory. This directory is mounted as a volume and persists your database and settings.
     ```bash
-    docker-compose up --build -d
+    # On Linux/macOS
+    cp .env.example data/.env
+    
+    # On Windows (Command Prompt)
+    copy .env.example data\.env
     ```
 
-2.  **Access the Application:**
-    The application will now be available at http://localhost:8080.
-
-3.  **To Stop the Application:**
+3.  **Edit the configuration:**
+    **This is the most important step.** Open `data/.env` with a text editor and fill in your MQTT broker details (host, port, credentials, etc.).
     ```bash
-    docker-compose down
+    nano data/.env
+    ```
+    *(See the [Configuration](#-configuration-env) section below for details on all options.)*
+
+4.  **Build and run the container:**
+    ```bash
+    docker compose build
+    docker compose up -d
     ```
 
-### Method 2: Using Docker CLI Commands
+The application will be running at **`http://localhost:8080`**.
 
-This method gives you more granular control without using Docker Compose.
+### Local Development
 
-1.  **Build the Docker Image:**
-    From the project's root directory, build the image and give it a name (e.g., `mqtt-uns-viewer`).
+This method is for developers who want to modify the code.
+
+1.  **Clone the repository:**
     ```bash
-    docker build -t mqtt-uns-viewer .
+    git clone https://github.com/slalaure/mqtt_uns_viewer.git
+    cd mqtt_uns_viewer
     ```
 
-2.  **Run the Docker Container:**
-    This command starts a container from the image you just built. It maps the port, mounts the `data` directory for persistence, names the container, and sets it to restart automatically.
+2.  **Install dependencies:**
     ```bash
-    docker run \
-      -d \
-      -p 8080:8080 \
-      -v "$(pwd)/data":/usr/src/app/data \
-      --name mqtt-viewer-container \
-      --restart always \
-      mqtt-uns-viewer
+    npm install
     ```
-    > **Note for Windows Users:** Use `"%cd%/data"` instead of `"$(pwd)/data"` for the volume mount.
 
-3.  **Access the Application:**
-    The application will now be available at http://localhost:8080.
+3.  **Create and edit the configuration:**
+    ```bash
+    cp .env.example data/.env
+    nano data/.env
+    ```
+    *(Fill in your broker details as described in the Docker steps.)*
 
-4.  **Managing the Container:**
-    -   **To stop the container:**
-        ```bash
-        docker stop mqtt-viewer-container
-        ```
-    -   **To start it again:**
-        ```bash
-        docker start mqtt-viewer-container
-        ```
-    -   **To view logs:**
-        ```bash
-        docker logs -f mqtt-viewer-container
-        ```
-    -   **To stop and remove the container completely:**
-        ```bash
-        docker stop mqtt-viewer-container
-        docker rm mqtt-viewer-container
-        ```
+4.  **Run the server:**
+    ```bash
+    node server.js
+    ```
+    
+The application will be running at **`http://localhost:8080`**. The server will automatically restart if you modify any backend files (thanks to `nodemon`, which is not a dependency but you can use it).
 
 ---
 
-## Configuration & Customization
+## 🔧 Configuration (`.env`)
 
-### Web Configuration
+All configuration is handled in the `data/.env` file.
 
-Navigate to **http://localhost:8080/config.html** to access the web-based configuration editor.
+### Main Configuration Options
 
--   All settings from your `data/.env` file are displayed here.
--   After saving, you will be prompted to restart the server. If you confirm, the Docker container will gracefully restart to apply the new settings.
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| **MQTT Broker** | | |
+| `MQTT_BROKER_HOST` | `(required)` | The full hostname of your broker (e.Example: `a1b2c3d4.iot.aws-region.amazonaws.com`). |
+| `MQTT_PORT` | `(required)` | The port for the connection (e.g., `8883` for MQTTS, `1883` for MQTT). |
+| `MQTT_PROTOCOL` | `mqtts` | `mqtts` or `mqtt`. |
+| `CLIENT_ID` | `(required)` | A unique client ID for this application. |
+| `MQTT_TOPIC` | `(required)` | Topic(s) to subscribe to. Use commas for multiple. Example: `stark_industries/#,spBv1.0/stark_industries/#`. |
+| **MQTT Auth: User/Pass** | | |
+| `MQTT_USERNAME` | | Username for the broker. Leave empty if using certificates. |
+| `MQTT_PASSWORD` | | Password for the broker. Leave empty if using certificates. |
+| **MQTT Auth: Certificates** | | |
+| `CERT_FILENAME` | | Filename of the client certificate (e.g., `certificate.pem.crt`). |
+| `KEY_FILENAME` | | Filename of the client private key (e.g., `private.pem.key`). |
+| `CA_FILENAME` | | Filename of the root CA (e.g., `AmazonRootCA1.pem`). |
+| **Application** | | |
+| `PORT` | `8080` | The port the web server will run on inside the container. |
+| `BASE_PATH` | `/` | The base path if serving behind a reverse proxy (e.g., `/myapp`). **Must start with `/`**, **must NOT end with `/`** (unless it's just `/`). |
+| `SIMULATOR_ENABLED`| `true` | `true` or `false`. Enables the built-in "Stark Industries" data simulator. |
+| `SPARKPLUG_ENABLED`| `false` | `true` or `false`. Enables decoding of `spBv1.0/` Protobuf payloads. |
+| **Database (DuckDB)** | | |
+| `DUCKDB_MAX_SIZE_MB` | `100` | Max database size in MB. If exceeded, old data is pruned. Leave empty to disable. |
+| `DUCKDB_PRUNE_CHUNK_SIZE` | `500` | Number of old messages to delete when the limit is reached. |
+| `DB_BATCH_INSERT_ENABLED` | `true` | `true` or `false`. Improves performance by batching DB writes. |
+| `DB_BATCH_INTERVAL_MS` | `2000` | How often (in ms) to run the batch insert. |
+| **Security** | | |
+| `HTTP_USER` | | Username for HTTP Basic Auth to protect the *entire* application. Leave empty to disable. |
+| `HTTP_PASSWORD` | | Password for HTTP Basic Auth. |
+| `API_ALLOWED_IPS` | `127.0.0.1,::1` | **(Optional)** Comma-separated list of IPs allowed to use the APIs (Mapper, Chart, Config). If empty, filtering is disabled. |
+| `VIEW_CONFIG_ENABLED` | `true` | `true` or `false`. Set to `false` to disable the web-based configuration editor for security. |
+| **Demo Limits** | | |
+| `MAX_SAVED_CHART_CONFIGS` | `10` | Max number of charts users can save. `0` = unlimited. |
+| `MAX_SAVED_MAPPER_VERSIONS`| `10` | Max number of mapper versions users can save. `0` = unlimited. |
+| **UI Views** | | |
+| `VIEW_TREE_ENABLED`| `true` | `true` or `false`. Show or hide the "Tree View" tab. |
+| `VIEW_SVG_ENABLED` | `true` | `true` or `false`. Show or hide the "SVG View" tab. |
+| `VIEW_HISTORY_ENABLED` | `true` | `true` or `false`. Show or hide the "History" tab. |
+| `VIEW_MAPPER_ENABLED` | `true` | `true` or `false`. Show or hide the "Mapper" tab. |
+| `VIEW_CHART_ENABLED` | `true` | `true` or `false`. Show or hide the "Chart" tab. |
+| `SVG_FILE_PATH` | `view.svg` | Path to the SVG file to load, relative to the `data` directory. |
 
-## 🔧 Configuration (`data/.env`)
+---
 
-The application is configured using the `.env` file located in the `data/` directory.
+## 🧭 User Guide
 
-| Variable | Description |
-| :--- | :--- |
-| **Broker Settings** | |
-| `MQTT_BROKER_HOST` | Full URL of your broker (e.g., `mqtts://your-broker.com`). |
-| `MQTT_PORT` | The port for your broker (e.g., `8883`). |
-| `MQTT_TOPIC` | The topic(s) to subscribe to. Use commas for multiple (e.g., `stark_industries/#,spBv1.0/#`). |
-| `MQTT_USERNAME` | Username for the broker. |
-| `MQTT_PASSWORD` | Password for the broker. |
-| **Certificates (for MTLS)** | |
-| `CERT_FILENAME` | Filename of your certificate (`.crt`) located in `data/certs/`. |
-| `KEY_FILENAME` | Filename of your private key (`.key`) located in `data/certs/`. |
-| `CA_FILENAME` | Filename of your CA cert (`.pem`) located in `data/certs/`. |
-| **Application Settings** | |
-| `PORT` | The port for the web server to run on (e.g., `8080`). |
-| `SPARKPLUG_ENABLED`| Set to `true` to enable Sparkplug B decoding. |
-| `SIMULATOR_ENABLED`| Set to `true` to enable the built-in data simulator and its API endpoints. |
-| `HTTP_USER` | Set a username to enable HTTP Basic Auth for the website. |
-| `HTTP_PASSWORD` | Set a password to enable HTTP Basic Auth. |
-| `BASE_PATH` | The base path for reverse proxy (e.g., `/myapp`). Defaults to `/`. |
-| **Database Settings** | |
-| `DUCKDB_MAX_SIZE_MB`| Max size of the DB file before old data is pruned (e.g., `100`). |
-| `DB_BATCH_INSERT_ENABLED` | Set to `true` for high-performance batch inserts into the database. |
-| **View Settings** | |
-| `VIEW_TREE_ENABLED` | `true`/`false` to show or hide the Tree View tab. |
-| `VIEW_SVG_ENABLED` | `true`/`false` to show or hide the SVG View tab. |
-| `VIEW_HISTORY_ENABLED`| `true`/`false` to show or hide the History View tab. |
-| `VIEW_MAPPER_ENABLED`| `true`/`false` to show or hide the Mapper View tab. |
-| `VIEW_CHART_ENABLED` | `true`/`false` to show or hide the Chart View tab. |
-| `SVG_FILE_PATH` | Path to your SVG file, relative to the `data` directory (e.g., `my_plant_layout.svg`). |
+### Tree View
+This is the main view, showing all topics in a hierarchical structure.
+* **Live Update:** Topics appear and update in real-time. Folders and topics will pulse green on new messages.
+* **Payload:** Click a topic (file icon) to view its latest payload and recent history in the right-hand panel.
+* **Filtering:** Use the filter box to show only topics that match your search.
+* **Checkboxes:** Use the checkboxes to filter which topics are processed by the other views (like the History View).
 
-### Customizing the SVG Plan
+### SVG View
+This view loads a custom SVG file from your `data` directory (specified by `SVG_FILE_PATH` in `.env`). It links MQTT data directly to elements in your SVG.
 
-1.  **Edit the SVG File:** Modify the `data/view.svg` file in a vector editor (like Inkscape) or a text editor.
-2.  **Link Topics to Zones:** To link an MQTT topic to an area, create a group `<g>` element. The `id` of the group **must** match the MQTT topic, with slashes (`/`) replaced by dashes (`-`).
-    -   **Topic:** `stark_industries/malibu_facility/lab/zone-a`
-    -   **SVG Group ID:** `<g id="stark_industries-malibu_facility-lab-zone-a">`
-3.  **Link Payload to Text:** To display a value from a JSON payload, add a `data-key` attribute to any `<tspan>` or `<text>` element inside the corresponding group.
-    -   **Payload:** `{"value": 21.5, "unit": "°C"}`
-    -   **SVG Code:**
-        ```xml
-        <g id="stark_industries-malibu_facility-lab-zone-a">
-            <text>Temp: <tspan data-key="value">--</tspan> °C</text>
-        </g>
-        ```
-### Advanced: Adding Client-Side Alarm Logic
+* **How it Works:** The application looks for elements in your SVG with a `data-key` attribute. When a message arrives, it finds elements whose `id` matches the topic (with `/` replaced by `-`) and updates the element with the matching `data-key`.
+* **Example:** See [Customizing the SVG](#customizing-the-svg) for details.
+* **History Slider:** Check the "History Mode" box to activate the timeline slider. Drag the handle to see the state of the SVG at any point in time.
 
-You can make your SVG view smarter by adding client-side alarm logic. This allows you to show or hide elements (like an alarm warning) based on a value comparison, rather than just displaying the value.
+### History View
+This view shows the raw, filterable log of all messages stored in the database.
+* **Search:** The filter box searches both topics and payload content.
+* **Time Range:** Drag the dual handles on the time slider to narrow the visible time window. This affects the log display *and* the exported data.
 
-1.  **Create a Parent Group:** In your SVG, create a parent group (`<g>`) for the entire alarm line. Give it a class like `alarm-line` and hide it by default.
-    ```xml
-    <g class="alarm-line" style="display: none;">
-        </g>
+### Mapper View
+This is the most powerful feature. It allows you to create new, virtual topics by transforming existing ones.
+
+1.  **Select a Source:** Click a topic in the Mapper tree.
+2.  **Create a Rule:** The editor on the right will show. If no rule exists, click "Add Target".
+3.  **Define a Target Topic:** In the "Target Topic" box, define the new topic you want to create. You can use variables from the payload with Mustache syntax (e.g., `UNS/Site/Area/{{id}}`).
+4.  **Write Transform Code:** In the JavaScript editor, you write code to transform the message.
+    * You have an `msg` object (with `msg.topic` and `msg.payload`).
+    * Return the modified `msg` object to publish it.
+    * Return `null` to skip publishing.
+    * You can use `await`, as the code runs in an async context.
+
+**Basic Example: Convert Fahrenheit to Celsius**
+* **Source Topic:** `stark_industries/lab/sensor/temp_f`
+* **Target Topic:** `stark_industries/lab/sensor/temp_c`
+* **Code:**
+    ```javascript
+    // msg.payload is { "value": 77 }
+    msg.payload.value = (msg.payload.value - 32) * 5 / 9;
+    msg.payload.unit = "C";
+    return msg;
     ```
 
-2.  **Add Alarm Attributes:** Find the `<tspan>` element that displays your value (the one with the `data-key`). Add two new attributes to it:
-    * `data-alarm-type`: The comparison type. Can be `H` (High), `HH` (High-High), `L` (Low), or `LL` (Low-Low).
-    * `data-alarm-value`: The numerical threshold for the alarm.
+**Advanced Example: Add 5-minute average to payload**
+* **Source Topic:** `stark_industries/lab/sensor/pressure`
+* **Target Topic:** `stark_industries/lab/sensor/pressure_avg`
+* **Code:**
+    ```javascript
+    // 'db' is available to query the database
+    // Note: Use SQL-native time functions for performance.
+    try {
+        const sql = `
+            SELECT AVG(CAST(payload->>'value' AS DOUBLE)) as avg_val 
+            FROM mqtt_events 
+            WHERE topic = '${msg.topic}' 
+            AND timestamp >= (now() - INTERVAL '5 minute')
+        `;
+        const result = await db.get(sql);
+        
+        if (result && result.avg_val) {
+            msg.payload.average_5_min = result.avg_val;
+        }
+    } catch (e) {
+        console.error("DB query failed: " + e.message);
+    }
+    
+    return msg;
+    ```
 
-3.  **Example:**
-    This example will only show the text "P. Aspiration Biogaz (HH: 450)" if the value from `variables.AI_PT0101` is **greater than 450**.
+### Chart View
+This view allows you to build persistent charts from any numeric data in your payloads.
 
+1.  **Find Data:** Select a topic in the Chart tree.
+2.  **Select Variables:** The "Payload & Variables" panel will show all numeric properties found in the payload (including nested ones and Sparkplug metrics). Check the boxes next to the variables you want to plot.
+3.  **Repeat:** Select other topics and add more variables.
+4.  **Time Range:** Use the time slider to select the window for your data.
+5.  **Refresh:** Click the "Refresh" button (green checkmark) to generate the chart.
+6.  **Save:** Click "Save" or "Save As..." to store this chart configuration for later. Use the dropdown to load saved charts.
+
+### MCP Server (for LLMs)
+This project includes an optional **MCP (Model Context Protocol) Server** (`mcp_server.mjs`). This server runs as a separate process and exposes a JSON-RPC API that allows external tools (like Large Language Models) to interact with your application.
+
+It provides tools to:
+* Search history (`search_data_fulltext`)
+* Query the UNS model (`get_model_definition`, `search_uns_concept`)
+* Get application status (`get_application_status`)
+* Control the simulator (`start_simulator`, `stop_simulator`)
+* Modify mapper rules (`update_mapper_rule`)
+
+**How to Run It:**
+The MCP server is *not* started by default. To run it alongside the web app, you must use a Docker Compose configuration that starts both services.
+
+1.  Create/edit `docker-compose.yml` with the following content:
+    ```yml
+    version: '3.8'
+
+    services:
+      app:
+        image: slalaure/mqtt_uns_viewer:latest # Or build locally
+        # build: .
+        container_name: mqtt_viewer_app
+        restart: always
+        ports:
+          - "8080:8080" 
+        volumes:
+          - ./data:/usr/src/app/data
+        environment:
+          - NODE_ENV=production
+          - PORT=8080
+          - BASE_PATH=/
+
+      mcp:
+        image: slalaure/mqtt_uns_viewer:latest # Or build locally
+        # build: .
+        container_name: mqtt_viewer_mcp
+        restart: always
+        ports:
+          - "3000:3000"
+        volumes:
+          - ./data:/usr/src/app/data
+        environment:
+          - NODE_ENV=production
+          - MCP_TRANSPORT=http
+          - MCP_PORT=3000
+          - MAIN_APP_HOST=app # Tells MCP to find the API at the 'app' service name
+          - PORT=8080 
+          - BASE_PATH=/
+        command: node mcp_server.mjs # Overrides the default command
+        depends_on:
+          - app
+    ```
+2.  Run `docker compose up -d`.
+3.  The MCP server will be available at `http://localhost:3000/mcp`.
+
+---
+
+## 🛠️ For Developers
+
+### Project Structure
+```
+📦 mqtt_uns_viewer
+ ├── 📂 data/                # Persistent data (DB, config, SVGs). Mounted as volume.
+ │   ├── 📄 .env              # User configuration (SECRET)
+ │   ├── 📄 charts.json        # Saved chart configurations
+ │   ├── 📄 mappings.json      # Saved mapper configurations
+ │   ├── 📄 mqtt_events.duckdb # DuckDB database file
+ │   └── 📄 view.svg           # User's custom SVG file
+ ├── 📂 public/              # Static frontend (HTML, CSS, JS)
+ │   ├── 📂 css/              # Stylesheets per view
+ │   ├── 📂 libs/             # Minified third-party libs (Chart.js, Ace) to run the app without public internet access
+ │   ├── 📄 app.js            # Main frontend logic (WebSocket, state)
+ │   ├── 📄 index.html         # Main SPA shell
+ │   ├── 📄 tree-manager.js    # Reusable tree view component
+ │   ├── 📄 payload-viewer.js  # Reusable payload component
+ │   ├── 📄 view.chart.js      # Logic for the Chart view
+ │   ├── 📄 view.mapper.js     # Logic for the Mapper view
+ │   └── ... (other view logic files)
+ ├── 📂 routes/              # Backend API routes (Express)
+ │   ├── 📄 chartApi.js        # API for /api/chart
+ │   ├── 📄 mapperApi.js       # API for /api/mapper
+ │   └── ... (other API files)
+ ├── 📄 .env.example        # Template for configuration
+ ├── 📄 Dockerfile           # Builds the production Docker image
+ ├── 📄 docker-compose.yml   # Simple Docker run config
+ ├── 📄 server.js            # Main Node.js backend server
+ ├── 📄 mcp_server.mjs       # Optional MCP/JSON-RPC server
+ ├── 📄 mqtt_client.js       # Logic for connecting to the MQTT broker
+ ├── 📄 mqtt-handler.js      # Core logic for processing each message
+ ├── 📄 mapper_engine.js     # Backend logic for the Mapper
+ ├── 📄 simulator.js         # Built-in data simulator
+ └── 📄 package.json         # Dependencies
+```
+
+### Backend Architecture
+* **`server.js`:** The main entry point. It starts an Express server, connects to DuckDB, and initializes the MQTT connection.
+* **`mqtt_client.js`:** Handles the complex logic of connecting to the MQTT broker (handles MQTTS, ALPN, certificates, etc.).
+* **`mqtt-handler.js`:** Receives *every* message from the broker. It decodes Sparkplug (if enabled), broadcasts the message to all WebSocket clients, and queues it for database insertion.
+* **`websocket-manager.js`:** Manages all connected browser clients. On new connection, it sends the full topic tree state and recent history.
+* **`mapper_engine.js`:** Subscribes to message events. When a message matches a 'source' rule, it executes the user's JS code (with DB access) and publishes the result.
+* **`routes/`:** A standard Express API for saving/loading charts and mapper configs.
+
+### Frontend Architecture
+The frontend is vanilla JavaScript (ES6 Modules) with no framework.
+* **`app.js`:** The main entry point. It establishes the WebSocket connection and holds the central data store (`allHistoryEntries`). It receives all messages and *delegates* updates to the different views and managers.
+* **`tree-manager.js`:** A reusable class to manage a `<ul>`-based tree. `app.js` creates three instances (one for Tree, Mapper, and Chart views).
+* **`payload-viewer.js`:** A reusable class to manage a payload display panel.
+* **`view.*.js` files:** Each file manages the specific logic for its own tab (e.g., `view.chart.js` handles chart generation, saving, loading, etc.).
+
+### Customizing the SVG
+The **SVG View** is a powerful way to create a custom dashboard.
+
+1.  Open `data/view.svg` in a text editor (like VS Code) or a vector editor (like Inkscape or Figma).
+2.  Find or create a `<text>` element you want to update.
+3.  To link it to a simple payload (e.g., `{"value": 123}`), add a `data-key` attribute:
     ```xml
-    <g class="alarm-line" style="display: none;">
-        <text x="860" y="420" class="alarm-label">P. Aspiration Biogaz (HH: 450):</text>
-        <text x="1080" y="420" class="alarm-label">
-            <tspan 
-                class="alarm-value" 
-                data-key="variables.AI_PT0101" 
-                data-alarm-type="HH" 
-                data-alarm-value="450"
-            >0.00</tspan>
-            <tspan class="unit-label"> mbar</tspan>
-        </text>
+    <text data-key="value">0.0</text>
+    ```
+4.  To link to a nested JSON payload (e.g., `{"metrics": {"temp": 25}}`), use dot notation:
+    ```xml
+    <text data-key="metrics.temp">0.0</text>
+    ```
+5.  To link to a Sparkplug payload, use the metric name (e.g., `metrics: [{ "name": "Level", "value": 80 }]`):
+    ```xml
+    <text data-key="metrics.Level">0.0</text>
+    ```
+6.  Finally, give the *parent group* (`<g>`) of your text element an `id` that matches the **full MQTT topic**, replacing `/` with `-`:
+    ```xml
+    <g id="stark_industries-lab-sensor-temp_c">
+        <text data-key="value">0.0</text>
+        <text>°C</text>
     </g>
     ```
-
-4.  **Add a Placeholder (Optional):**
-    If you have a list of alarms, you can add a placeholder text that will be shown when no alarms are active. Simply add an element with the `id="no-alarms-text"`.
-
-    ```xml
-    <text id="no-alarms-text" x="1010" y="490" text-anchor="middle" class="instrument-label">
-        (Aucune alarme active)
-    </text>
-    ```
-
-### 📊 Chart View
-
-The Chart View allows you to plot time-series data from one or more MQTT topics on a single graph.
-
-* **Multi-Topic Plotting:** Select numeric variables (including numbers sent as strings) from different topics. The chart will display them all at once.
-* **Dynamic Multi-Axis:** To compare data of different scales (e.g., temperature and pressure), the chart automatically generates a new, independent Y-axis for each variable.
-* **Smart Axis Display:** Axes are automatically positioned on the left and right sides to prevent clutter, and their color matches the data line for easy identification.
-* **Chart Types:** Supports **Line**, **Bar**, and **Pie** charts.
-* **Time Slider:** Uses the same time-range slider as the History view to select your desired data window.
-* **Export:** Export the chart view as a **PNG** or the raw dataset as a **CSV**.
----
+When a message arrives on `stark_industries/lab/sensor/temp_c`, the application will find the group `#stark_industries-lab-sensor-temp_c`, then find the element `[data-key="value"]` inside it, and update its content.
 
 ## License
 
