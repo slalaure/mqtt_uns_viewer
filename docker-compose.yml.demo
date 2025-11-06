@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # --- 1. Instance DEMO (Publique) ---
+  demo-app:
+    # Remplacez par votre image Docker Hub si vous l'utilisez
+    # image: votre-username/mqtt-viewer:latest
+    build:
+      context: .
+    container_name: mqtt_viewer_demo
+    restart: always
+    ports:
+      # Expose le port 8080 (pour Nginx)
+      - "8080:8080" 
+    volumes:
+      # Monte le dossier de données de la démo
+      - ./data-demo:/usr/src/app/data
+    environment:
+      - NODE_ENV=production
+      # Force le port interne et le base path
+      - PORT=8080
+      - BASE_PATH=/
+    # La commande par défaut (node server.js) est utilisée
+
+  # --- 2. Instance ADMIN (Privée) ---
+  admin-app:
+    # Utilise la MÊME image
+    # image: votre-username/mqtt-viewer:latest
+    build:
+      context: .
+    container_name: mqtt_viewer_admin
+    restart: always
+    ports:
+      # Expose le port 8081 (pour Nginx)
+      - "8081:8081"
+    volumes:
+      # Monte le dossier de données de l'admin
+      - ./data-admin:/usr/src/app/data
+    environment:
+      - NODE_ENV=production
+      # Force le port interne et le base path
+      - PORT=8081
+      - BASE_PATH=/admin
+    # La commande par défaut (node server.js) est utilisée
+
+  # --- 3. Serveur MCP (Lié à l'instance ADMIN) ---
+  mcp-server:
+    # Utilise la MÊME image
+    # image: votre-username/mqtt-viewer:latest
+    build:
+      context: .
+    container_name: mqtt_viewer_mcp
+    restart: always
+    ports:
+      # Expose le port 3000 (pour Nginx)
+      - "3000:3000"
+    volumes:
+      # Doit accéder aux données de l'admin (pour uns_model.json)
+      - ./data-admin:/usr/src/app/data
+    environment:
+      - NODE_ENV=production
+      # Configuration du MCP
+      - MCP_TRANSPORT=http
+      - MCP_PORT=3000
+      # [IMPORTANT] Cible l'API de 'admin-app'
+      - MAIN_APP_HOST=admin-app 
+      - PORT=8081 # Le port sur lequel 'admin-app' tourne
+      - BASE_PATH=/admin # Le base path de 'admin-app'
+    command: node mcp_server.mjs # Lance le serveur MCP
+    depends_on:
+      - admin-app # S'assure que l'app admin démarre avant

@@ -1,17 +1,41 @@
 version: '3.8'
 
 services:
-  mqtt-viewer:
+  # Service 1: L'application web principale (server.js)
+  app:
     build:
       context: .
-    container_name: mqtt_uns_viewer
+    container_name: mqtt_uns_viewer_app
     restart: always
     ports:
-      - "8080:8080"
+      - "8080:8080" # Expose l'application web sur le port 8080 de la VM
     volumes:
-      # Monte le dossier local 'data' dans le conteneur
-      # Vos modifications sur .env, view.svg et les certificats seront persistantes
+      # Monte le dossier 'data' pour la persistance
       - ./data:/usr/src/app/data
     environment:
-      # Assure que Node.js gère correctement les signaux d'arrêt
       - NODE_ENV=production
+      - PORT=8080
+      - BASE_PATH=/
+    # Le CMD par défaut du Dockerfile ["node", "server.js"] est utilisé
+
+  # Service 2: Le serveur MCP (mcp_server.mjs)
+  mcp:
+    build:
+      context: . # Utilise la même image que 'app'
+    container_name: mqtt_uns_viewer_mcp
+    restart: always
+    ports:
+      - "3000:3000" # Expose le serveur MCP sur le port 3000 de la VM
+    volumes:
+      - ./data:/usr/src/app/data # Requis pour lire data/uns_model.json
+    environment:
+      - NODE_ENV=production
+      # --- Configuration critique du MCP ---
+      - MCP_TRANSPORT=http    # Force le mode HTTP
+      - MCP_PORT=3000         # Définit le port d'écoute
+      - MAIN_APP_HOST=app     # [IMPORTANT] C'est le nom du service 'app' ci-dessus (DNS Docker)
+      - PORT=8080             # Le port sur lequel 'app' écoute
+      - BASE_PATH=/
+    command: node mcp_server.mjs # Remplace le CMD du Dockerfile
+    depends_on:
+      - app # S'assure que 'app' démarre en premier

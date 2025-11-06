@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -34,8 +34,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // --- [MODIFIED] Configuration ---
-// Read main server port and base path from environment variables
-// These are inherited from the parent process (server.js)
+// [NEW] Read the main app host from environment (for Docker networking)
+const MAIN_APP_HOST = process.env.MAIN_APP_HOST || 'localhost';
 const MAIN_SERVER_PORT = process.env.PORT || 8080;
 let BASE_PATH = process.env.BASE_PATH || '/';
 
@@ -52,10 +52,8 @@ if (BASE_PATH === '/') {
 }
 // --- [END FIXED] ---
 
-// Construct the API URL dynamically
-// This will now be http://localhost:8080/api (if BASE_PATH was '/')
-// or http://localhost:8080/myapp/api (if BASE_PATH was '/myapp')
-const API_BASE_URL = `http://localhost:${MAIN_SERVER_PORT}${BASE_PATH}/api`;
+// [MODIFIED] Construct the API URL dynamically using MAIN_APP_HOST
+const API_BASE_URL = `http://${MAIN_APP_HOST}:${MAIN_SERVER_PORT}${BASE_PATH}/api`;
 
 const HTTP_PORT = process.env.MCP_PORT || 3000;
 const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http'

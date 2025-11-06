@@ -41,7 +41,6 @@ const { connectToMqttBroker } = require('./mqtt_client');
 
 
 // --- Constants & Paths ---
-const ALLOWED_IPS = ["127.0.0.1", "::1", "172.17.0.1", "172.18.0.1", "::ffff:172.18.0.1","::ffff:172.21.0.1"];
 const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
 const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
@@ -128,9 +127,9 @@ const config = {
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/',
     VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false', // Default to true
-    // [NEW] Read demo limits
     MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
-    MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0
+    MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0,
+    API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null
 };
 
 
@@ -302,15 +301,28 @@ const authMiddleware = (req, res, next) => {
     return next();
 };
 
+// --- IP Filter Middleware (Configurable) ---
+let ALLOWED_IPS = [];
+if (config.API_ALLOWED_IPS) {
+    ALLOWED_IPS = config.API_ALLOWED_IPS.split(',').map(ip => ip.trim());
+    logger.info(`✅ 🔒 API IP Filtering is ENABLED. Allowed IPs: [${ALLOWED_IPS.join(', ')}]`);
+} else {
+    logger.info("✅ 🔓 API IP Filtering is DISABLED (API_ALLOWED_IPS is not set in .env).");
+}
+
+
 const ipFilterMiddleware = (req, res, next) => {
-    if (ALLOWED_IPS.length === 0) return next();
+    if (ALLOWED_IPS.length === 0) {
+        return next(); // Filtre désactivé
+    }
+
     const clientIp = req.ip;
     if (ALLOWED_IPS.includes(clientIp)) {
-        next();
-    } else {
-        logger.warn(`[SECURITY] Denied access to API from IP: ${clientIp}`);
-        res.status(403).json({ error: `Access denied. Your IP (${clientIp}) is not allowed.` });
+        return next(); // IP autorisée
     }
+
+    logger.warn(`[SECURITY] Denied API access from IP: ${clientIp} (Not in ALLOWED_IPS list)`);
+    res.status(403).json({ error: `Access denied. Your IP (${clientIp}) is not allowed.` });
 };
 
 // --- Main Router for Base Path ---
