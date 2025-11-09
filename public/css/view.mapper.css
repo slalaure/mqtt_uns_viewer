@@ -358,3 +358,49 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-danger) 25%, transparent);
     background-color: color-mix(in srgb, var(--color-danger) 10%, transparent);
 }
+
+
+/* --- [NEW] Mobile Responsive Styles --- */
+@media (max-width: 768px) {
+    main#mapper-view {
+        flex-direction: column; /* Stack panels vertically */
+        height: auto;
+    }
+
+    .mapper-tree-wrapper {
+        flex: 0 0 40vh; /* Tree takes 40% of viewport height */
+        min-width: 100%; /* Full width */
+        min-height: 200px;
+        height: 40vh;
+        border-right: none;
+    }
+    
+    #mapper-payload-container {
+        flex-grow: 1; /* Payload/Editor area takes remaining space */
+        min-height: 500px; /* Ensure it's usable */
+        border-top: 1px solid var(--color-border);
+    }
+    
+    /* Re-enable and re-style the horizontal resizer for mobile */
+    #drag-handle-horizontal-mapper {
+        display: flex; /* Show it */
+        flex: 0 0 10px; /* Make it a bit thicker for touch */
+    }
+
+    #mapper-payload-area {
+        flex: 0 0 40%; /* Start at 40% */
+        min-height: 150px;
+    }
+    
+    #mapper-transform-area {
+        padding: 10px; /* Reduce padding */
+    }
+    
+    .mapper-controls {
+        flex-wrap: wrap; /* Allow controls to wrap */
+    }
+    
+    .mapper-transform-header {
+        flex-wrap: wrap;
+    }
+}

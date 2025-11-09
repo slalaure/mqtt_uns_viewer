@@ -271,3 +271,53 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 #chart-save-status.error {
     color: var(--color-danger);
 }
+
+
+/* --- [NEW] Mobile Responsive Styles --- */
+@media (max-width: 768px) {
+    main#chart-view {
+        flex-direction: column; /* Stack panels vertically */
+        height: auto;
+    }
+
+    .chart-tree-wrapper {
+        flex: 0 0 40vh; /* Tree takes 40% of viewport height */
+        min-width: 100%; /* Full width */
+        min-height: 200px;
+        height: 40vh;
+        border-right: none;
+    }
+    
+    #chart-payload-container {
+        flex-grow: 1; /* Payload/Chart area takes remaining space */
+        min-height: 500px; /* Ensure it's usable */
+        border-top: 1px solid var(--color-border);
+    }
+    
+    /* Re-enable and re-style the horizontal resizer for mobile */
+    #drag-handle-horizontal-chart {
+        display: flex; /* Show it */
+        flex: 0 0 10px; /* Make it a bit thicker for touch */
+    }
+
+    #chart-payload-area {
+        flex: 0 0 40%; /* Start at 40% */
+        min-height: 150px;
+        padding: 10px;
+    }
+
+    #chart-main-area {
+        padding: 10px;
+    }
+    
+    .chart-config-bar {
+        gap: 8px; /* Reduce gap */
+    }
+    
+    /* Make slider take full width on its own row */
+    #chart-time-range-slider-container {
+        flex-basis: 100%;
+        min-width: 100%;
+        margin: 5px 0;
+    }
+}

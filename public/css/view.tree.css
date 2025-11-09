@@ -168,3 +168,37 @@ body.dark-mode #mqtt-tree .selected .node-name::before {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
+
+
+/* --- [NEW] Mobile Responsive Styles --- */
+@media (max-width: 768px) {
+    main#tree-view {
+        flex-direction: column; /* Stack panels vertically */
+        height: auto; /* Allow content to define height */
+    }
+
+    .tree-view-wrapper {
+        flex: 0 0 40vh; /* Tree takes 40% of viewport height */
+        min-width: 100%; /* Full width */
+        min-height: 200px; /* Minimum height */
+        height: 40vh;
+        border-right: none; /* No vertical border */
+    }
+    
+    #payload-display {
+        flex-grow: 1; /* Payload area takes remaining space */
+        min-height: 300px; /* Ensure it's usable */
+        border-top: 1px solid var(--color-border);
+    }
+    
+    /* Re-enable and re-style the horizontal resizer for mobile */
+    #drag-handle-horizontal {
+        display: flex; /* Show it */
+        flex: 0 0 10px; /* Make it a bit thicker for touch */
+    }
+
+    #payload-main-area {
+        flex: 0 0 50%; /* Start at 50% */
+        min-height: 150px;
+    }
+}

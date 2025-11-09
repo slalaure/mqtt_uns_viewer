@@ -87,7 +87,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    overflow: hidden;
+    /* [MODIFIED] Removed overflow: hidden; */
 }
 
 /* --- Header [MODIFIED] --- */
@@ -284,14 +284,16 @@ body.dark-mode .nav-button {
 /* --- View Container --- */
 .view-container {
     flex-grow: 1;
-    overflow: hidden;
+    overflow: hidden; /* [MODIFIED] Keep this, but we'll manage children */
     position: relative;
+    display: flex; /* [NEW] Make this a flex container */
 }
 .view {
     display: none;
     width: 100%;
     height: 100%;
-    position: absolute;
+    /* [MODIFIED] Was position: absolute, now let it be a flex item */
+    flex-direction: column; /* [NEW] Default to column for mobile */
 }
 .view.active {
     display: flex;
@@ -335,7 +337,7 @@ body.dark-mode .nav-button {
     border-top: 1px solid var(--color-border);
     border-bottom: 1px solid var(--color-border);
     width: 100%;
-    margin: 10px 0;
+    margin: 0; /* [MODIFIED] Remove margin */
     transition: background-color 0.2s ease;
     z-index: 5;
 }
@@ -347,7 +349,7 @@ body.dark-mode .nav-button {
 /* (Used by Tree, Mapper, Chart) */
 .payload-container {
     flex-grow: 1;
-    min-width: 300px;
+    min-width: 0; /* [MODIFIED] Allow shrinking */
     padding: 20px;
     box-sizing: border-box;
     height: 100%;
@@ -362,7 +364,7 @@ body.dark-mode .nav-button {
     flex: 0 0 60%;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 0; /* [MODIFIED] Was 0, changed to 150px for safety */
 }
 
 .payload-header {
@@ -691,4 +693,97 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     font-weight: 500;
     cursor: pointer;
     user-select: none;
+}
+
+
+/* --- [NEW] Mobile Responsive Styles --- */
+@media (max-width: 768px) {
+    /* --- Base Layout --- */
+    body {
+        height: auto; /* Allow scrolling on mobile */
+        min-height: 100vh;
+    }
+    .view-container {
+        /* Allow view-container to grow and enable scrolling */
+        overflow: auto; 
+        height: auto;
+    }
+    .view.active {
+        /* Views are already flex-direction: column by default now */
+        height: auto; /* Allow view to grow with content */
+    }
+
+    /* --- Header --- */
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 15px;
+    }
+    header h1 { font-size: 1.1em; }
+    header p { display: none; } /* Hide subtitle */
+
+    .datetime-container {
+        font-size: 0.9em;
+        align-self: flex-end; /* Move to the right on its own line */
+        margin-top: -30px; /* Pull it up next to title */
+    }
+    
+    .header-content {
+        max-width: calc(100% - 100px); /* Don't overlap datetime */
+    }
+
+    /* Stack theme switcher and config button */
+    .theme-switch-wrapper {
+        align-self: flex-start;
+        padding: 5px 0;
+    }
+    #btn-config-view {
+        align-self: flex-start;
+        margin-left: 0;
+        margin-top: 5px;
+    }
+    
+    .simulator-controls {
+        flex-wrap: wrap;
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* --- Tab Navigation --- */
+    .tab-nav {
+        padding: 0 5px;
+        /* Allow tabs to scroll horizontally if they don't fit */
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    .tab-button {
+        font-size: 14px;
+        padding: 8px 10px;
+    }
+
+    /* --- Resizers --- */
+    /* Hide all resizers on mobile, as we force a column layout */
+    .resizer, .resizer-horizontal {
+        display: none;
+    }
+    
+    /* --- Shared Panels --- */
+    .payload-container {
+        padding: 10px;
+        min-height: 300px; /* Give payload area a min height */
+        height: auto;
+        flex-grow: 1;
+    }
+    #payload-main-area,
+    #mapper-payload-area,
+    #chart-payload-area {
+        flex-basis: auto !important; /* Ignore JS-set flex-basis */
+        flex-grow: 1;
+        min-height: 200px; /* Ensure it's visible */
+    }
+
+    .tree-container {
+        padding: 10px;
+    }
 }

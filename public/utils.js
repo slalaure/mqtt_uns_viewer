@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -80,7 +80,7 @@ export function mqttPatternToRegex(pattern) {
 
 
 /**
- * Makes a panel resizable.
+ * Makes a panel resizable, now with touch support.
  * @param {object} options
  * @param {HTMLElement} options.resizerEl - The drag handle element.
  * @param {string} options.direction - 'vertical' or 'horizontal'.
@@ -91,41 +91,65 @@ export function makeResizable(options) {
     const { resizerEl, direction, panelA, containerEl } = options;
     if (!resizerEl || !panelA) return;
 
-    resizerEl.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        
-        const mouseMoveHandler = (ev) => {
-            if (direction === 'vertical') {
-                const minWidth = 200;
-                const containerRect = panelA.parentElement.getBoundingClientRect();
-                let panelWidth = ev.pageX - panelA.getBoundingClientRect().left;
+    const onDragMove = (ev) => {
+        // Get coordinates for both mouse and touch events
+        const pageX = ev.pageX ?? ev.touches?.[0]?.pageX;
+        const pageY = ev.pageY ?? ev.touches?.[0]?.pageY;
 
-                if (panelWidth < minWidth) panelWidth = minWidth;
-                if (containerRect.width - panelWidth < minWidth) {
-                    panelWidth = containerRect.width - minWidth;
-                }
-                panelA.style.flexBasis = `${panelWidth}px`;
-                
-            } else if (direction === 'horizontal' && containerEl) {
-                const minHeight = 100;
-                const containerRect = containerEl.getBoundingClientRect();
-                let panelHeight = ev.pageY - containerRect.top;
+        // If no coordinates (e.g., touch end), just return
+        if (pageX === undefined || pageY === undefined) return;
 
-                if (panelHeight < minHeight) panelHeight = minHeight;
-                if (containerRect.height - panelHeight < minHeight) {
-                    panelHeight = containerRect.height - minHeight;
-                }
-                panelA.style.flexBasis = `${panelHeight}px`;
+        // Prevent default touch behavior (like scrolling) while dragging
+        if (ev.touches) {
+            ev.preventDefault();
+        }
+
+        if (direction === 'vertical') {
+            const minWidth = 200;
+            const containerRect = panelA.parentElement.getBoundingClientRect();
+            let panelWidth = pageX - panelA.getBoundingClientRect().left;
+
+            if (panelWidth < minWidth) panelWidth = minWidth;
+            if (containerRect.width - panelWidth < minWidth) {
+                panelWidth = containerRect.width - minWidth;
             }
-        };
+            panelA.style.flexBasis = `${panelWidth}px`;
+            
+        } else if (direction === 'horizontal' && containerEl) {
+            const minHeight = 100;
+            const containerRect = containerEl.getBoundingClientRect();
+            let panelHeight = pageY - containerRect.top;
+
+            if (panelHeight < minHeight) panelHeight = minHeight;
+            if (containerRect.height - panelHeight < minHeight) {
+                panelHeight = containerRect.height - minHeight;
+            }
+            panelA.style.flexBasis = `${panelHeight}px`;
+        }
+    };
+    
+    const onDragEnd = () => {
+        document.removeEventListener('mousemove', onDragMove);
+        document.removeEventListener('mouseup', onDragEnd);
+        document.removeEventListener('touchmove', onDragMove);
+        document.removeEventListener('touchend', onDragEnd);
+        document.removeEventListener('touchcancel', onDragEnd);
+    };
+
+    const onDragStart = (e) => {
+        // Prevent default on mousedown (e.g., text selection)
+        // and on touchstart (e.g., page scrolling)
+        e.preventDefault(); 
         
-        const mouseUpHandler = () => {
-            document.removeEventListener('mousemove', mouseMoveHandler);
-        };
-        
-        document.addEventListener('mousemove', mouseMoveHandler);
-        document.addEventListener('mouseup', mouseUpHandler, { once: true });
-    });
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd, { once: true });
+        document.addEventListener('touchmove', onDragMove, { passive: false }); // passive: false to allow preventDefault
+        document.addEventListener('touchend', onDragEnd, { once: true });
+        document.addEventListener('touchcancel', onDragEnd, { once: true });
+    };
+
+    resizerEl.addEventListener('mousedown', onDragStart);
+    resizerEl.addEventListener('touchstart', onDragStart, { passive: false }); // passive: false to allow preventDefault
 }
 
 /**
