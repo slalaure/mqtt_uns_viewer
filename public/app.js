@@ -23,7 +23,7 @@
  */
 
 // --- [NEW] Module Imports ---
-import { mqttPatternToRegex, makeResizable } from './utils.js';
+import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js'; // [MODIFIED] Import trackEvent
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
 
@@ -161,6 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.forEach(b => b?.classList.remove('active'));
         targetView?.classList.add('active');
         targetButton?.classList.add('active');
+        
+        // [NEW] Track the view change event
+        trackEvent(`view_switch_${viewToShow || 'tree'}`);
 
         // [MODIFIED] Trigger a render if switching TO history view
         if (viewToShow === 'history') {
@@ -199,8 +202,14 @@ document.addEventListener('DOMContentLoaded', () => {
             btnStopSim?.setAttribute('disabled', true);  // Disable Stop button
         }
     }
-    btnStartSim?.addEventListener('click', () => fetch('api/simulator/start', { method: 'POST' }));
-    btnStopSim?.addEventListener('click', () => fetch('api/simulator/stop', { method: 'POST' }));
+    btnStartSim?.addEventListener('click', () => {
+        fetch('api/simulator/start', { method: 'POST' });
+        trackEvent('simulator_start'); // [NEW]
+    });
+    btnStopSim?.addEventListener('click', () => {
+        fetch('api/simulator/stop', { method: 'POST' });
+        trackEvent('simulator_stop'); // [NEW]
+    });
 
     // --- [NEW] Tree Click Handlers ---
     

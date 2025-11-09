@@ -127,3 +127,24 @@ export function makeResizable(options) {
         document.addEventListener('mouseup', mouseUpHandler, { once: true });
     });
 }
+
+/**
+ * Sends a custom event to analytics services if they are loaded.
+ * @param {string} eventName - The name of the event (e.g., 'view_changed', 'simulator_start').
+ */
+export function trackEvent(eventName) {
+    // Hotjar Tracking
+    if (typeof window.hj === 'function') {
+        window.hj('event', eventName);
+    }
+
+    // Microsoft Clarity Tracking
+    if (typeof window.clarity === 'function') {
+        window.clarity('event', eventName);
+    }
+    
+    // Log to console for debugging if no service is found
+    if (typeof window.hj !== 'function' && typeof window.clarity !== 'function') {
+        console.log(`[Analytics Event]: ${eventName}`);
+    }
+}

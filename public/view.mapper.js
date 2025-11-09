@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -23,7 +23,7 @@
  */
 
 // Import shared utilities
-import { mqttPatternToClientRegex } from './utils.js';
+import { mqttPatternToClientRegex, trackEvent } from './utils.js'; // [MODIFIED] Import trackEvent
 // [NEW] Import the reusable payload viewer
 import { createPayloadViewer } from './payload-viewer.js';
 
@@ -120,14 +120,14 @@ try {
             WHERE topic = '\${msg.topic}' 
             ORDER BY timestamp DESC 
             LIMIT 5
-        )
+        )\
     \`;
     const result = await db.get(sql);
     if (result && result.avg_val) {
         msg.payload.average_5 = result.avg_val;
     }
 } catch (e) {
-    console.error("DB query failed: " + e.message);
+    console.error(\"DB query failed: \" + e.message);
 }
 */
 
@@ -395,6 +395,7 @@ function createTargetEditor(rule, target) {
     enabledToggle.checked = target.enabled;
     enabledToggle.addEventListener('change', () => {
         target.enabled = enabledToggle.checked;
+        trackEvent('mapper_target_toggle'); // [NEW]
     });
 
     const deleteButton = editorDiv.querySelector('.target-delete-button');
@@ -482,6 +483,7 @@ function createTargetEditor(rule, target) {
  * Event handler for the "Add Target" button.
  */
 function onAddTarget() {
+    trackEvent('mapper_add_target'); // [NEW]
     if (!currentEditingSourceTopic) return;
     // Check limit before creating a new rule
     // 1. Find active version
@@ -620,6 +622,7 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
  * Event handler for the "Save" button.
  */
 async function onSave() {
+    trackEvent('mapper_save'); // [NEW]
     let hasInvalidMapping = false;
     const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
     if (activeVersion && activeVersion.rules) {
@@ -674,6 +677,7 @@ async function onSave() {
  * Now checks the limit before saving.
  */
 function onSaveAsNew() {
+    trackEvent('mapper_save_as_new'); // [NEW]
     // [NEW] Check limit
     if (maxMappersLimit > 0 && mapperConfig.versions.length >= maxMappersLimit) {
         alert(`Cannot save new version. You have reached the maximum limit of ${maxMappersLimit} saved mapper versions.
@@ -705,6 +709,7 @@ Please ask an administrator to clean up old versions.`); // User cannot delete v
  * Event handler for changing the active version.
  */
 function onVersionChange() {
+    trackEvent('mapper_version_change'); // [NEW]
     mapperConfig.activeVersionId = mapperVersionSelect.value;
 
     if (currentEditingSourceTopic) {
@@ -769,6 +774,7 @@ function hidePruneModal() {
  * Event handler for "Delete rule only" button.
  */
 function onDeleteRule() {
+    trackEvent('mapper_delete_rule_only'); // [NEW]
     if (!deleteModalContext) return;
     const { rule, target } = deleteModalContext;
 
@@ -803,6 +809,7 @@ function onDeleteRule() {
  * Event handler for "Delete AND Prune history" button.
  */
 async function onDeleteAndPrune() {
+    trackEvent('mapper_delete_and_prune'); // [NEW]
     if (!deleteModalContext) return;
     const { rule, target } = deleteModalContext;
     const topicPattern = deleteModalPattern.value;

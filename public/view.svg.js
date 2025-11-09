@@ -18,12 +18,12 @@
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF OTHER DEALINGS IN THE
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
 
 // Import shared utilities
-import { formatTimestampForLabel } from './utils.js';
+import { formatTimestampForLabel, trackEvent } from './utils.js'; // [MODIFIED] Import trackEvent
 // [NEW] Import the new time slider module
 import { createSingleTimeSlider } from './time-slider.js';
 
@@ -58,6 +58,9 @@ export function initSvgView(appConfig) {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
         
+        // [NEW] Track event
+        trackEvent(isSvgHistoryMode ? 'svg_history_on' : 'svg_history_off');
+
         // When toggling, replay state up to the end to get in sync
         replaySvgHistory(currentMaxTimestamp);
 
@@ -76,7 +79,9 @@ export function initSvgView(appConfig) {
             onDrag: (newTime) => {
                 replaySvgHistory(newTime); // Replay history while dragging
             },
-            onDragEnd: null // No action needed on mouse up
+            onDragEnd: (newTime) => { // [MODIFIED] Added onDragEnd
+                trackEvent('svg_slider_drag_end');
+            }
         });
     }  
 }
@@ -118,6 +123,7 @@ async function loadSvgPlan() {
  * Toggles fullscreen mode for the SVG map view.
  */
 function toggleFullscreen() {
+    trackEvent('svg_fullscreen_toggle'); // [NEW]
     if (!mapView) return; // Make sure the view element exists
     
     if (!document.fullscreenElement) {

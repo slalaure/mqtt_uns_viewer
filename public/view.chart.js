@@ -23,7 +23,7 @@
  */
 
 // Import shared utilities
-import { formatTimestampForLabel } from './utils.js';
+import { formatTimestampForLabel, trackEvent } from './utils.js'; // [MODIFIED] Import trackEvent
 // [NEW] Import the reusable payload viewer
 import { createPayloadViewer } from './payload-viewer.js';
 // [NEW] Import the new time slider module
@@ -439,6 +439,7 @@ function populateChartVariables(payloadString) {
  * Resets the UI to the "New Chart" state without saving.
  */
 function onClearAll() {
+    trackEvent('chart_clear_all'); // [NEW]
     chartedVariables.clear();
     
     // Uncheck any visible checkboxes
@@ -472,9 +473,11 @@ function onChartVariableToggle(event) {
             topic: checkbox.dataset.topic,
             path: checkbox.dataset.path // e.g., "metrics[Level]"
         });
+        trackEvent('chart_add_variable'); // [NEW]
     } else {
         // Remove from map
         chartedVariables.delete(varId);
+        trackEvent('chart_remove_variable'); // [NEW]
     }
     
     // Regenerate the chart
@@ -490,6 +493,7 @@ function onChartVariableToggle(event) {
  * Added dynamic Y-axis generation.
  */
 function onGenerateChart() {
+    trackEvent('chart_generate_refresh'); // [NEW]
     // [MODIFIÉ] Effacer le timer de debounce, puisque nous exécutons la fonction
     clearTimeout(chartRefreshTimer);
 
@@ -726,6 +730,7 @@ function onGenerateChart() {
  * Toggles fullscreen mode for the chart area.
  */
 function toggleChartFullscreen() {
+    trackEvent('chart_fullscreen'); // [NEW]
     if (!chartMainArea) return;
     
     if (!document.fullscreenElement) {
@@ -743,6 +748,7 @@ function toggleChartFullscreen() {
  * Exports the current chart as a PNG.
  */
 function onExportPNG() {
+    trackEvent('chart_export_png'); // [NEW]
     if (!chartInstance) {
         alert("Please generate a chart first.");
         return;
@@ -758,6 +764,7 @@ function onExportPNG() {
  * This now uses the chart's data model (labels + datasets).
  */
 function onExportCSV() {
+    trackEvent('chart_export_csv'); // [NEW]
     const { labels, datasets } = lastGeneratedData;
 
     if (!labels || labels.length === 0 || !datasets || datasets.length === 0) {
@@ -991,6 +998,7 @@ async function saveAllChartConfigs(configObject, showStatus = true) {
  * [NEW] Handles the "Save" button click. Saves over the current config or triggers "Save As".
  */
 async function onSaveCurrent() {
+    trackEvent('chart_save_current'); // [NEW]
     if (!currentConfigId) {
         // No config is loaded, so this is a "Save As"
         onSaveAsNew();
@@ -1020,6 +1028,7 @@ async function onSaveCurrent() {
  * Now checks the limit before saving.
  */
 async function onSaveAsNew() {
+    trackEvent('chart_save_as_new'); // [NEW]
     // [NEW] Check limit
     if (maxChartsLimit > 0 && allChartConfigs.configurations.length >= maxChartsLimit) {
         alert(`Cannot save new chart. You have reached the maximum limit of ${maxChartsLimit} saved charts.
@@ -1057,6 +1066,7 @@ Please delete an old chart configuration before saving a new one.`);
  * [NEW] Handles the "Delete" button click.
  */
 async function onDeleteConfig() {
+    trackEvent('chart_delete_config'); // [NEW]
     if (!currentConfigId) {
         alert("No chart configuration is selected to delete.");
         return;

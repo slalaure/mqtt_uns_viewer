@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -23,7 +23,7 @@
  */
 
 // Import shared utilities
-import { formatTimestampForLabel, highlightText } from './utils.js';
+import { formatTimestampForLabel, highlightText, trackEvent } from './utils.js'; // [MODIFIED]
 // [NEW] Import the new time slider module
 import { createDualTimeSlider } from './time-slider.js';
 
@@ -84,6 +84,14 @@ export function renderFilteredHistory() {
  */
 export function initHistoryView() {
     historySearchInput?.addEventListener('input', renderFilteredHistory); // [MODIFIED]
+    
+    // [NEW] Track when a search is "committed" (on blur or Enter)
+    historySearchInput?.addEventListener('change', () => {
+        if (historySearchInput.value.trim().length > 0) {
+            trackEvent('history_search_submit');
+        }
+    });
+
 
     // [MODIFIED] Initialize the dual time slider
     if (handleMin && handleMax) {
@@ -105,6 +113,7 @@ export function initHistoryView() {
                 currentMinTimestamp = newMin;
                 currentMaxTimestamp = newMax;
                 renderFilteredHistory(); // [MODIFIED] Re-render log
+                trackEvent('history_slider_drag_end'); // [NEW]
             }
         });
     }
