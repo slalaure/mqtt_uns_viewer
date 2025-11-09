@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -32,6 +32,7 @@ const mqtt = require('mqtt');
 const duckdb = require('duckdb');
 const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
+const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); // [NEW] For manual publish
 
 // --- Module Imports [MODIFIED] ---
 const wsManager = require('./websocket-manager');
@@ -124,6 +125,7 @@ const config = {
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
+    VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false', // [NEW] Default to true
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/',
     VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false', // Default to true
@@ -140,7 +142,8 @@ if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
 }
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
-logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}]`);
+// [MODIFIED] Added Publish view to log
+logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}] Publish[${config.VIEW_PUBLISH_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] `);
 if (config.DB_BATCH_INSERT_ENABLED) {
     logger.info(`✅ ⚡ Database batch insert is ENABLED (Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
@@ -359,6 +362,7 @@ mainRouter.get('/api/config', (req, res) => {
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
+        viewPublishEnabled: config.VIEW_PUBLISH_ENABLED, // [NEW]
         basePath: basePath,
         viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
         // [NEW] Send limits to frontend
@@ -409,6 +413,77 @@ mainRouter.use('/api/mapper', ipFilterMiddleware, mapperRouter);
 // Chart API Router
 const chartRouter = require('./routes/chartApi')(CHART_CONFIG_PATH, logger);
 mainRouter.use('/api/chart', ipFilterMiddleware, chartRouter);
+
+
+// [NEW] API Route for Manual Publishing
+mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
+    if (!mainConnection || !mainConnection.connected) {
+        return res.status(503).json({ error: "MQTT client is not connected." });
+    }
+
+    const { topic, payload, format, qos, retain } = req.body;
+
+    // --- Validation ---
+    if (!topic || topic.trim() === '') {
+        return res.status(400).json({ error: "Topic is required." });
+    }
+    const qosLevel = parseInt(qos, 10);
+    if (isNaN(qosLevel) || qosLevel < 0 || qosLevel > 2) {
+        return res.status(400).json({ error: "Invalid QoS. Must be 0, 1, or 2." });
+    }
+    const retainFlag = retain === true;
+
+    let finalPayload;
+
+    try {
+        switch (format) {
+            case 'json':
+                // Client sends payload as a string from a textarea.
+                // We parse it to validate, then re-stringify for the broker.
+                finalPayload = JSON.stringify(JSON.parse(payload));
+                break;
+            case 'sparkplugb':
+                // Assume payload is JSON text representing a Sparkplug payload object
+                const spPayloadObj = JSON.parse(payload);
+                
+                // Add timestamp if not present
+                if (!spPayloadObj.timestamp) {
+                    spPayloadObj.timestamp = Date.now();
+                }
+                // Add seq if not present
+                if (spPayloadObj.seq === undefined) {
+                    spPayloadObj.seq = 0;
+                }
+                // Handle BigInts in metrics (e.g., if user types "10n")
+                if (spPayloadObj.metrics) {
+                    spPayloadObj.metrics.forEach(m => {
+                        if (typeof m.value === 'string' && /^\d+n$/.test(m.value)) {
+                            m.value = BigInt(m.value.slice(0, -1));
+                        }
+                    });
+                }
+                finalPayload = spBv10Codec.encodePayload(spPayloadObj);
+                break;
+            case 'string':
+            default:
+                finalPayload = payload; // Send as raw string
+                break;
+        }
+    } catch (err) {
+        logger.error({ err, topic: topic }, "❌ Error processing manual publish payload:");
+        return res.status(400).json({ error: `Invalid payload format for '${format}'. ${err.message}` });
+    }
+
+    // --- Publish ---
+    mainConnection.publish(topic, finalPayload, { qos: qosLevel, retain: retainFlag }, (err) => {
+        if (err) {
+            logger.error({ err, topic: topic }, "❌ Error manually publishing message:");
+            return res.status(500).json({ error: `Failed to publish. ${err.message}` });
+        }
+        logger.info(`✅ Manually published to '${topic}' (QoS: ${qosLevel}, Retain: ${retainFlag})`);
+        res.status(200).json({ success: true, message: `Published to ${topic}` });
+    });
+});
 
 
 // --- [MODIFIED] Static Assets (with conditional block) ---

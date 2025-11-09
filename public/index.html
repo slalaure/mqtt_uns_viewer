@@ -59,8 +59,7 @@
     <link rel="stylesheet" href="css/view.history.css">
     <link rel="stylesheet" href="css/view.mapper.css">
     <link rel="stylesheet" href="css/view.chart.css">
-    
-    <script src="libs/chart-min.js"></script>
+    <link rel="stylesheet" href="css/view.publish.css"> <script src="libs/chart-min.js"></script>
     <script src="libs/chartjs-adapter-date-fns-min.js"></script>
     <script src="libs/ace-min.js"></script>
 </head>
@@ -69,8 +68,7 @@
     <header>
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
-            <p>v1.2.0</p>
-        </div>
+            <p>v1.3.0</p> </div>
         <div id="current-datetime" class="datetime-container"></div>
         <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">&#9881;</a>
 
@@ -82,12 +80,7 @@
             <span class="theme-label">Dark Mode</span>
         </div>
 
-        <div class="simulator-controls">
-            <span id="sim-status" class="status-indicator stopped">Stopped</span>
-            <button id="btn-start-sim">Start Simulator</button>
-            <button id="btn-stop-sim" disabled>Stop Simulator</button>
-        </div>
-    </header>
+        </header>
 
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
@@ -95,7 +88,7 @@
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
-    </nav>
+        <button id="btn-publish-view" class="tab-button">Publish</button> </nav>
 
     <div class="view-container">
         <main id="tree-view" class="view active">
@@ -353,8 +346,66 @@
                 </div>
             </div>
         </main>
+        
+        <main id="publish-view" class="view">
+            <div class="publish-panel-wrapper">
+                <h2>Manual Publish</h2>
+                <form id="publish-form">
+                    <div class="form-group">
+                        <label for="publish-topic">Topic</label>
+                        <input type="text" id="publish-topic" placeholder="e.g., stark_industries/malibu_facility/bms/main_power_feed" required>
+                    </div>
+                    
+                    <div class="publish-options-row">
+                        <div class="form-group">
+                            <label for="publish-format">Payload Format</label>
+                            <select id="publish-format">
+                                <option value="json">JSON</option>
+                                <option value="string">String</option>
+                                <option value="sparkplugb">Sparkplug B (JSON input)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="publish-qos">QoS</label>
+                            <select id="publish-qos">
+                                <option value="0">0 - At most once</option>
+                                <option value="1">1 - At least once</option>
+                                <option value="2">2 - Exactly once</option>
+                            </select>
+                        </div>
+                        <div class="form-group form-group-checkbox">
+                            <input type="checkbox" id="publish-retain">
+                            <label for="publish-retain" class="checkbox-label">Retain Message</label>
+                        </div>
+                    </div>
 
-    </div>
+                    <div class="form-group">
+                        <label for="publish-payload-editor">Payload</label>
+                        <div id="publish-payload-editor" spellcheck="false"></div>
+                    </div>
+                    
+                    <div class="publish-actions">
+                        <button type="submit" id="publish-button">Publish Message</button>
+                        <span id="publish-status"></span>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="resizer" id="drag-handle-vertical-publish"></div>
+
+            <div class="simulator-panel-wrapper">
+                <h2>Simulator</h2>
+                <div class="simulator-controls-container">
+                    <p>Control the built-in "Stark Industries" data simulator.</p>
+                    <div class="simulator-controls">
+                        <span id="sim-status" class="status-indicator stopped">Stopped</span>
+                        <button id="btn-start-sim">Start Simulator</button>
+                        <button id="btn-stop-sim" disabled>Stop Simulator</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        </div>
     
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
@@ -383,6 +434,6 @@
 
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
-</body>
+    <script src="view.publish.js" type="module"></script> </body>
 
 </html>

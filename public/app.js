@@ -39,7 +39,7 @@ import {
     getMappedTargetTopics,
     getTopicMappingStatus,
     addMappedTargetTopic,
-    setMapperTheme // [MODIFIED] Import new theme switcher
+    setMapperTheme
 } from './view.mapper.js';
 import { 
     initChartView, 
@@ -48,6 +48,8 @@ import {
     getChartedTopics,
     pruneChartedVariables
 } from './view.chart.js';
+// [NEW] Import publish view modules
+import { initPublishView, setPublishTheme } from './view.publish.js';
 // --- [END NEW] ---
 
 
@@ -96,11 +98,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnHistoryView = document.getElementById('btn-history-view');
     const btnMapperView = document.getElementById('btn-mapper-view');
     const btnChartView = document.getElementById('btn-chart-view');
+    const btnPublishView = document.getElementById('btn-publish-view'); // [NEW]
     const treeView = document.getElementById('tree-view');
     const mapView = document.getElementById('map-view');
     const historyView = document.getElementById('history-view');
     const mapperView = document.getElementById('mapper-view');
     const chartView = document.getElementById('chart-view');
+    const publishView = document.getElementById('publish-view'); // [NEW]
 
     // --- History View Elements (Shared) ---
     const historyTotalMessages = document.getElementById('history-total-messages');
@@ -108,11 +112,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyDbLimit = document.getElementById('history-db-limit');
     const pruningIndicator = document.getElementById('pruning-indicator');
 
-    // --- Simulator UI Elements ---
+    // --- Simulator UI Elements (Now in Publish View) ---
     const btnStartSim = document.getElementById('btn-start-sim');
     const btnStopSim = document.getElementById('btn-stop-sim');
     const simStatusIndicator = document.getElementById('sim-status');
-    const simulatorControls = document.querySelector('.simulator-controls');
+    const simulatorControls = document.querySelector('.simulator-controls'); // [MODIFIED] This query is still valid
 
     // --- [NEW] Mapper View Elements ---
     const mapperFilterInput = document.getElementById('mapper-filter-input');
@@ -130,13 +134,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('dark-mode');
         localStorage.setItem('theme', 'dark');
         if (darkModeToggle) darkModeToggle.checked = true;
-        setMapperTheme(true); // [MODIFIED] Update Ace Editor theme
+        setMapperTheme(true);
+        setPublishTheme(true); // [NEW]
     };
     const disableDarkMode = () => {
         document.body.classList.remove('dark-mode');
         localStorage.setItem('theme', 'light');
         if (darkModeToggle) darkModeToggle.checked = false;
-        setMapperTheme(false); // [MODIFIED] Update Ace Editor theme
+        setMapperTheme(false);
+        setPublishTheme(false); // [NEW]
     };
     if (localStorage.getItem('theme') === 'dark') {
         enableDarkMode();
@@ -147,14 +153,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Tab Switching Logic ---
     function switchView(viewToShow) {
-        const views = [treeView, mapView, historyView, mapperView, chartView];
-        const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView, btnChartView];
+        const views = [treeView, mapView, historyView, mapperView, chartView, publishView]; // [MODIFIED]
+        const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView, btnChartView, btnPublishView]; // [MODIFIED]
         let targetView, targetButton;
 
         if (viewToShow === 'map') { targetView = mapView; targetButton = btnMapView; }
         else if (viewToShow === 'history') { targetView = historyView; targetButton = btnHistoryView; }
         else if (viewToShow === 'mapper') { targetView = mapperView; targetButton = btnMapperView; }
         else if (viewToShow === 'chart') { targetView = chartView; targetButton = btnChartView; }
+        else if (viewToShow === 'publish') { targetView = publishView; targetButton = btnPublishView; } // [NEW]
         else { targetView = treeView; targetButton = btnTreeView; }
 
         views.forEach(v => v?.classList.remove('active'));
@@ -176,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnHistoryView?.addEventListener('click', () => switchView('history'));
     btnMapperView?.addEventListener('click', () => switchView('mapper'));
     btnChartView?.addEventListener('click', () => switchView('chart'));
+    btnPublishView?.addEventListener('click', () => switchView('publish')); // [NEW]
 
     // --- Real-Time Clock ---
     function updateClock() {
@@ -186,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
 
     // --- Simulator UI Logic [MODIFIED] ---
+    // This logic remains valid as IDs are the same
     function updateSimulatorStatusUI(status) {
         if (!simStatusIndicator) return;
         if (status === 'running') {
@@ -306,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             appBasePath = appConfig.basePath || '/';
             
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsProtocol = window.location.protocol === 'https:?' ? 'wss:' : 'ws:';
             const wsUrl = `${wsProtocol}//${window.location.host}${appBasePath}`;
             
             console.log(`[DEBUG] Connecting to WebSocket at: ${wsUrl}`);
@@ -472,6 +481,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function finishInitialization(appConfig) {
         try {
             console.log("[DEBUG] finishInitialization() called."); // [DEBUG LOG]
+            
+            // --- Store subscribed topics (needed for publish view) ---
+            if (appConfig.subscribedTopics) {
+                subscribedTopicPatterns = appConfig.subscribedTopics.split(',').map(t => t.trim());
+            }
+
             // --- Hide/Show tabs based on config ---
             btnTreeView?.classList.remove('active');
             treeView?.classList.remove('active');
@@ -482,7 +497,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 { enabled: appConfig.viewSvgEnabled, btn: btnMapView, view: 'map' },
                 { enabled: appConfig.viewHistoryEnabled, btn: btnHistoryView, view: 'history' },
                 { enabled: appConfig.viewMapperEnabled, btn: btnMapperView, view: 'mapper' },
-                { enabled: appConfig.viewChartEnabled, btn: btnChartView, view: 'chart' }
+                { enabled: appConfig.viewChartEnabled, btn: btnChartView, view: 'chart' },
+                { enabled: appConfig.viewPublishEnabled, btn: btnPublishView, view: 'publish' } // [NEW]
             ];
 
             views.forEach(v => {
@@ -582,15 +598,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // [NEW] Pass the limit
                 maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0
             });
+            // [NEW] Init Publish View
+            initPublishView({
+                subscribedTopics: subscribedTopicPatterns
+            });
             
-            // --- Store subscribed topics ---
-            if (appConfig.subscribedTopics) {
-                subscribedTopicPatterns = appConfig.subscribedTopics.split(',').map(t => t.trim());
-            }
-
-            // --- Simulator Status ---
+            // --- Simulator Status (UI is now in publish view) ---
             if (appConfig.isSimulatorEnabled && simulatorControls) {
-                simulatorControls.style.display = 'flex';
+                simulatorControls.style.display = 'flex'; // This is the .simulator-controls container
                 fetch('api/simulator/status')
                     .then(res => res.json())
                     .then(data => updateSimulatorStatusUI(data.status));
@@ -630,6 +645,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 panelA: document.getElementById('chart-payload-area'),
                 containerEl: document.getElementById('chart-payload-container')
             });
+            // [NEW] Resizer for publish view
+            makeResizable({
+                resizerEl: document.getElementById('drag-handle-vertical-publish'),
+                direction: 'vertical',
+                panelA: document.querySelector('.publish-panel-wrapper')
+            });
+
 
             // --- [NEW] Init Tree View Controls ---
             livePayloadToggle?.addEventListener('change', (event) => {
@@ -688,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         console.log(`[DEBUG] Found ${uniqueTopics.size} unique topics from history.`); // [DEBUG LOG]
 
-        // [FIX] Check if trees are initialized before rebuilding
+        // [FIXJ] Check if trees are initialized before rebuilding
         if (mainTree) {
             console.log("[DEBUG] Rebuilding mainTree..."); // [DEBUG LOG]
             mainTree.rebuild(uniqueTopics);
