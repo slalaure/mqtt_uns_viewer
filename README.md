@@ -179,6 +179,10 @@ All configuration is handled in the `data/.env` file.
 | `VIEW_MAPPER_ENABLED` | `true` | `true` or `false`. Show or hide the "Mapper" tab. |
 | `VIEW_CHART_ENABLED` | `true` | `true` or `false`. Show or hide the "Chart" tab. |
 | `SVG_FILE_PATH` | `view.svg` | Path to the SVG file to load, relative to the `data` directory. |
+| **MCP Server & Security Configuration** | | |
+| `MCP_TRANSPORT` | `stdio` |  Sets the transport mode. Use `http` for access via an API (like your AI provider) or `stdio` (default) for local CLI tools.
+| `MCP_PORT` | `3000` | The port to run the `http` transport on.
+| `MCP_API_KEY` | `` | **(Recommended for public deployment)** A secret key to protect the MCP `http` endpoint. If set, all requests to `/mcp` must include an `Authorization: Bearer <key>` or `x-api-key: <key>` header. If left empty, the endpoint is unsecured.
 
 ---
 
