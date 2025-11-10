@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -346,15 +346,39 @@ simulatorManager.init(logger, (topic, payload, isBinary) => {
 
 // --- API Routes (Mounted on mainRouter) ---
 
-mainRouter.get('/view.svg', (req, res) => {
-    const configuredSvgPath = path.join(DATA_PATH, config.SVG_FILE_PATH);
+// [MODIFIED] This route is now dynamic based on a query parameter
+mainRouter.get('/api/svg/file', (req, res) => {
+    const filename = req.query.name;
+
+    // Security: Validate and sanitize the filename
+    if (!filename || !filename.endsWith('.svg')) {
+        return res.status(400).json({ error: 'Invalid or missing SVG file name.' });
+    }
+    // Prevent directory traversal: path.basename strips directory info
+    const sanitizedName = path.basename(filename);
+    
+    const configuredSvgPath = path.join(DATA_PATH, sanitizedName);
+    
     if (fs.existsSync(configuredSvgPath)) {
         res.sendFile(configuredSvgPath);
     } else {
-        logger.error(`Configured SVG file not found at: ${configuredSvgPath}`);
-        res.status(444).send(`SVG file not found. Checked path: ${configuredSvgPath}`);
+        logger.error(`Requested SVG file not found at: ${configuredSvgPath}`);
+        res.status(404).send(`SVG file not found. Checked path: ${configuredSvgPath}`);
     }
 });
+
+// [NEW] API endpoint to list available SVG files
+mainRouter.get('/api/svg/list', (req, res) => {
+    try {
+        const files = fs.readdirSync(DATA_PATH);
+        const svgFiles = files.filter(file => file.endsWith('.svg'));
+        res.json(svgFiles);
+    } catch (err) {
+        logger.error({ err }, "❌ Failed to read data directory to list SVGs.");
+        res.status(500).json({ error: "Could not list SVG files." });
+    }
+});
+
 
 mainRouter.get('/api/config', (req, res) => {
     res.json({
@@ -365,12 +389,12 @@ mainRouter.get('/api/config', (req, res) => {
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
-        viewPublishEnabled: config.VIEW_PUBLISH_ENABLED, // [NEW]
+        viewPublishEnabled: config.VIEW_PUBLISH_ENABLED,
         basePath: basePath,
         viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
-        // [NEW] Send limits to frontend
         maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
-        maxSavedMapperVersions: config.MAX_SAVED_MAPPER_VERSIONS
+        maxSavedMapperVersions: config.MAX_SAVED_MAPPER_VERSIONS,
+        svgFilePath: config.SVG_FILE_PATH // [NEW] Pass default SVG path
     });
 });
 

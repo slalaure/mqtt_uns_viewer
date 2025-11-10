@@ -35,6 +35,7 @@ const svgHandle = document.getElementById('svg-handle');
 const svgLabel = document.getElementById('svg-label');
 const btnSvgFullscreen = document.getElementById('btn-svg-fullscreen');
 const mapView = document.getElementById('map-view');
+const svgSelectDropdown = document.getElementById('svg-select-dropdown'); // [NEW]
 
 // --- Module-level State ---
 let svgInitialTextValues = new Map();
@@ -50,7 +51,8 @@ let svgSlider = null; // [NEW] Module instance for the slider
  * @param {object} appConfig - The main application config object.
  */
 export function initSvgView(appConfig) {
-    loadSvgPlan();
+    // [MODIFIED] Populate list and load the default SVG
+    populateSvgListAndLoadDefault(appConfig.svgFilePath);
     
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
 
@@ -95,27 +97,106 @@ export function setSvgHistoryData(entries) {
 }
 
 /**
- * Loads the view.svg file from the server and populates the content.
+ * [NEW] Fetches the list of SVGs, populates the dropdown, and loads the default.
+ * @param {string} defaultSvgFile - The filename of the default SVG to load.
  */
-async function loadSvgPlan() {
+async function populateSvgListAndLoadDefault(defaultSvgFile) {
+    if (!svgSelectDropdown) return;
+    
+    let defaultFileFound = false;
     try {
-        // This fetch is relative ('view.svg') and will correctly resolve
-        const response = await fetch('view.svg'); 
+        const response = await fetch('api/svg/list');
+        if (!response.ok) throw new Error('Failed to fetch SVG list');
+        
+        const svgFiles = await response.json();
+        
+        svgSelectDropdown.innerHTML = ''; // Clear any existing options
+        
+        if (svgFiles.length === 0) {
+            svgSelectDropdown.innerHTML = '<option value="">No SVGs found</option>';
+        }
+
+        svgFiles.forEach(filename => {
+            const option = document.createElement('option');
+            option.value = filename;
+            option.textContent = filename;
+            if (filename === defaultSvgFile) {
+                option.selected = true;
+                defaultFileFound = true;
+            }
+            svgSelectDropdown.appendChild(option);
+        });
+        
+        // If default from .env wasn't in the list, use the first file
+        if (!defaultFileFound && svgFiles.length > 0) {
+            svgSelectDropdown.value = svgFiles[0];
+            defaultSvgFile = svgFiles[0];
+        }
+
+    } catch (error) {
+        console.error("Could not populate SVG list:", error);
+        svgSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
+    }
+
+    // Add listener *after* populating
+    svgSelectDropdown.addEventListener('change', onSvgFileChange);
+    
+    // Finally, load the determined default SVG
+    if (defaultSvgFile) {
+        await loadSvgPlan(defaultSvgFile);
+    } else {
+        svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No SVG files found in the /data directory.</p>`;
+    }
+}
+
+/**
+ * [NEW] Handles the change event when a new SVG is selected.
+ * @param {Event} event
+ */
+async function onSvgFileChange(event) {
+    const filename = event.target.value;
+    if (!filename) return;
+    
+    trackEvent('svg_file_change');
+    await loadSvgPlan(filename);
+}
+
+
+/**
+ * [MODIFIED] Loads a specific view.svg file from the server.
+ * @param {string} filename - The name of the SVG file to load (e.g., "view.svg").
+ */
+async function loadSvgPlan(filename) {
+    if (!filename) {
+        svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No SVG file selected.</p>`;
+        return;
+    }
+    
+    try {
+        // [MODIFIED] Fetch from the new dynamic API endpoint
+        const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
         const svgText = await response.text();
         if (svgContent) {
             svgContent.innerHTML = svgText;
-            // Store initial values of all data-keyed elements
+            
+            // Clear and store initial values for the new SVG
+            svgInitialTextValues.clear();
             const textElements = svgContent.querySelectorAll('[data-key]');
             textElements.forEach(el => {
                 svgInitialTextValues.set(el, el.textContent);
             });
-            // Ensure placeholder is correct on load
-            updateAlarmPlaceholder(); 
+            
+            // [MODIFIED] Re-apply current state to the new SVG
+            const replayTime = isSvgHistoryMode 
+                ? parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp) 
+                : currentMaxTimestamp;
+            replaySvgHistory(replayTime);
         }
     } catch (error) {
-        console.error("Could not load the SVG file:", error);
-        if (svgContent) svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG plan file could not be loaded.</p>`;
+        console.error(`Could not load the SVG file '${filename}':`, error);
+        if (svgContent) svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG file '${filename}' could not be loaded.</p>`;
     }
 }
 
@@ -350,8 +431,3 @@ function replaySvgHistory(replayUntilTimestamp) {
     // After all states are replayed, check the global alarm visibility
     updateAlarmPlaceholder();
 }
-
-/**
- * [REMOVED] makeSvgSliderDraggable(handle)
- * This logic is now in public/time-slider.js
- */
