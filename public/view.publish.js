@@ -19,11 +19,17 @@ const publishButton = document.getElementById('publish-button');
 const publishStatus = document.getElementById('publish-status');
 const payloadEditorDiv = document.getElementById('publish-payload-editor');
 
+// [NEW] Simulator controls
+const simulatorListContainer = document.getElementById('simulator-list-container');
+const simulatorControlTemplate = document.getElementById('simulator-control-template');
+
+
 // --- Module-level State ---
 let aceEditor = null;
 let isDarkTheme = localStorage.getItem('theme') === 'dark';
 let publishStatusTimer = null;
 let subscribedTopics = []; // [NEW] Store subscribed topics
+let simControlsContainer = null; // [NEW] Store reference to simulator list container
 
 // --- Payload Templates ---
 const PAYLOAD_TEMPLATES = {
@@ -48,26 +54,41 @@ const PAYLOAD_TEMPLATES = {
  * Initializes the Publish View functionality.
  * @param {object} options
  * @param {string[]} options.subscribedTopics - List of subscribed topic patterns for datalist.
+ * @param {HTMLElement} options.simulatorListContainer - The container for dynamic sim controls.
  */
 export function initPublishView(options) {
-    if (!payloadEditorDiv) return;
+    if (payloadEditorDiv) {
+        // --- Initialize Ace Editor ---
+        aceEditor = ace.edit(payloadEditorDiv);
+        aceEditor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+        aceEditor.session.setMode('ace/mode/json'); // Default to JSON
+        aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); // -1 moves cursor to start, 1 to end
+        aceEditor.setOptions({
+            fontSize: "14px",
+            fontFamily: "monospace",
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true,
+            enableSnippets: true,
+            useWorker: true
+        });
+
+        // --- Add Event Listeners ---
+        publishForm.addEventListener('submit', onPublishSubmit);
+        publishFormatSelect.addEventListener('change', onFormatChange);
+
+        // [NEW] Add listener to clear validation error on input
+        publishTopicInput.addEventListener('input', () => {
+            if (publishTopicInput.classList.contains('input-error')) {
+                publishTopicInput.classList.remove('input-error');
+            }
+        });
+    }
 
     // [NEW] Store subscribed topics for validation
     subscribedTopics = options.subscribedTopics || [];
 
-    // --- Initialize Ace Editor ---
-    aceEditor = ace.edit(payloadEditorDiv);
-    aceEditor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-    aceEditor.session.setMode('ace/mode/json'); // Default to JSON
-    aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); // -1 moves cursor to start, 1 to end
-    aceEditor.setOptions({
-        fontSize: "14px",
-        fontFamily: "monospace",
-        enableBasicAutocompletion: true,
-        enableLiveAutocompletion: true,
-        enableSnippets: true,
-        useWorker: true
-    });
+    // [NEW] Store simulator container
+    simControlsContainer = options.simulatorListContainer;
     
     // --- Populate Topic Datalist ---
     if (options.subscribedTopics) {
@@ -81,17 +102,6 @@ export function initPublishView(options) {
         document.body.appendChild(datalist); // Add to body
         publishTopicInput.setAttribute('list', datalist.id);
     }
-
-    // --- Add Event Listeners ---
-    publishForm.addEventListener('submit', onPublishSubmit);
-    publishFormatSelect.addEventListener('change', onFormatChange);
-
-    // [NEW] Add listener to clear validation error on input
-    publishTopicInput.addEventListener('input', () => {
-        if (publishTopicInput.classList.contains('input-error')) {
-            publishTopicInput.classList.remove('input-error');
-        }
-    });
 }
 
 /**
@@ -229,4 +239,87 @@ function showPublishStatus(message, type = 'success') {
         publishStatus.textContent = '';
         publishStatus.className = '';
     }, 4000);
+}
+
+
+// --- [NEW] Simulator Logic ---
+
+/**
+ * Helper to format snake_case names to Title Case.
+ * @param {string} name - e.g., 'stark_industries'
+ * @returns {string} e.g., 'Stark Industries'
+ */
+function formatSimName(name) {
+    return name.split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+/**
+ * Helper to update the UI of a single simulator control block.
+ * @param {HTMLElement} controlEl - The .simulator-instance-controls element.
+ * @param {string} status - 'running' or 'stopped'.
+ */
+function updateControlUI(controlEl, status) {
+    const statusEl = controlEl.querySelector('.status-indicator');
+    const startBtn = controlEl.querySelector('.btn-start-sim');
+    const stopBtn = controlEl.querySelector('.btn-stop-sim');
+    
+    if (status === 'running') {
+        statusEl.textContent = 'Running';
+        statusEl.classList.add('running');
+        statusEl.classList.remove('stopped');
+        startBtn.setAttribute('disabled', true);
+        stopBtn.removeAttribute('disabled');
+    } else {
+        statusEl.textContent = 'Stopped';
+        statusEl.classList.add('stopped');
+        statusEl.classList.remove('running');
+        startBtn.removeAttribute('disabled');
+        stopBtn.setAttribute('disabled', true);
+    }
+}
+
+/**
+ * [NEW] Receives the full map of simulator statuses and updates the UI.
+ * @param {object} statuses - e.g., { stark_industries: 'running', death_star: 'stopped' }
+ */
+export function updateSimulatorStatuses(statuses) {
+    if (!simControlsContainer || !simulatorControlTemplate) return;
+
+    // We can just rebuild the list, it's simpler than merging
+    simControlsContainer.innerHTML = '';
+    
+    if (Object.keys(statuses).length === 0) {
+        simControlsContainer.innerHTML = '<p class="history-placeholder">No simulators are available.</p>';
+        return;
+    }
+
+    for (const [name, status] of Object.entries(statuses)) {
+        // 1. Clone template
+        const controlEl = simulatorControlTemplate.content.cloneNode(true).firstElementChild;
+
+        // 2. Find elements inside the clone
+        const nameEl = controlEl.querySelector('.simulator-name');
+        const startBtn = controlEl.querySelector('.btn-start-sim');
+        const stopBtn = controlEl.querySelector('.btn-stop-sim');
+        
+        // 3. Populate
+        nameEl.textContent = formatSimName(name);
+        updateControlUI(controlEl, status); // Set initial UI state
+
+        // 4. Add event listeners
+        startBtn.addEventListener('click', () => {
+            fetch(`api/simulator/start/${name}`, { method: 'POST' });
+            trackEvent(`simulator_start_${name}`);
+        });
+        
+        stopBtn.addEventListener('click', () => {
+            fetch(`api/simulator/stop/${name}`, { method: 'POST' });
+            trackEvent(`simulator_stop_${name}`);
+        });
+
+        // 5. Append to list
+        simControlsContainer.appendChild(controlEl);
+    }
 }

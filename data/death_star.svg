@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="font-family: 'Arial', sans-serif; background-color: #1a1a1a; color: #e0e0e0;">
+    
+    <defs>
+        <style type="text/css">
+            @keyframes pulse-red {
+                0% { fill: #e0e0e0; }
+                50% { fill: #dc3545; }
+                100% { fill: #e0e0e0; }
+            }
+            .highlight-svg {
+                animation: pulse-red 0.5s ease-out;
+            }
+            .label { font-size: 14px; fill: #a0a0a0; }
+            .value { font-size: 18px; fill: #ffffff; font-weight: bold; }
+            .title { font-size: 20px; fill: #3391ff; font-weight: bold; }
+            .alarm-text { font-size: 16px; fill: #dc3545; font-weight: bold; animation: pulse-red 1.5s infinite; }
+            .placeholder { font-size: 16px; fill: #4CAF50; font-style: italic; }
+        </style>
+    </defs>
+
+    <title>Death Star Systems Monitor</title>
+
+    <path d="M 400 20 A 380 380 0 0 1 400 780" fill="none" stroke="#555" stroke-width="40"/>
+    <circle cx="400" cy="400" r="100" fill="#2c2c2c" stroke="#555" stroke-width="2"/>
+    <rect x="395" y="20" width="10" height="380" fill="#2c2c2c" />
+    <rect x="150" y="395" width="500" height="10" fill="#2c2c2c" />
+
+    <text x="400" y="50" class="title" text-anchor="middle">DEATH STAR - BATTLE STATION MONITOR</text>
+
+    <g id="galactic_empire-death_star-weapon_systems-superlaser-charge" transform="translate(320, 100)">
+        <text x="80" y="0" class="label" text-anchor="middle">SUPERLASER</text>
+        <text x="80" y="25" class="value" text-anchor="middle">
+            <tspan data-key="value">0.00</tspan>%
+        </text>
+        <text x="80" y="45" class="label" text-anchor="middle" data-key="status">STANDBY</text>
+    </g>
+
+    <g id="galactic_empire-death_star-power_systems-main_reactor-output" transform="translate(320, 380)">
+        <text x="80" y="0" class="label" text-anchor="middle">MAIN REACTOR</text>
+        <text x="80" y="25" class="value" text-anchor="middle">
+            <tspan data-key="value">100.0</tspan>%
+        </text>
+    </g>
+
+    <g id="galactic_empire-death_star-life_support-sector_01-telemetry" transform="translate(50, 100)">
+        <text x="0" y="0" class="title">LIFE SUPPORT (S-01)</text>
+        <text x="0" y="25" class="label">O² Level:</text>
+        <text x="100" y="25" class="value">
+            <tspan data-key="o2_level">20.9</tspan>%
+        </text>
+        <text x="0" y="50" class="label">CO² Level:</text>
+        <text x="100" y="50" class="value">
+            <tspan data-key="co2_level">410</tspan> ppm
+        </text>
+        <text x="0" y="75" class="label">Pressure:</text>
+        <text x="100" y="75" class="value">
+            <tspan data-key="pressure">101.2</tspan> kPa
+        </text>
+    </g>
+
+    <g transform="translate(550, 100)">
+        <text x="0" y="0" class="title">DEFENSE SYSTEMS</text>
+        
+        <g id="galactic_empire-death_star-defense_systems-main_shield-status" transform="translate(0, 25)">
+            <text x="0" y="0" class="label">Main Shield:</text>
+            <text x="120" y="0" class="value">
+                <tspan data-key="status">ONLINE</tspan> (<tspan data-key="power">100</tspan>%)
+            </text>
+            <g class="alarm-line" style="display: none;" transform="translate(0, 20)">
+                 <text class="alarm-text" data-key="power" data-alarm-type="L" data-alarm-value="95">! SHIELD POWER LOW !</text>
+            </g>
+        </g>
+        
+        <g id="galactic_empire-death_star-defense_systems-tractor_beam_01-status" transform="translate(0, 65)">
+            <text x="0" y="0" class="label">Tractor Beam:</text>
+            <text x="120" y="0" class="value">
+                <tspan data-key="status">INACTIVE</tspan>
+            </text>
+        </g>
+        
+        <g id="galactic_empire-death_star-defense_systems-turbolaser_battery_01-turbolaser_01-telemetry" transform="translate(0, 90)">
+            <text x="0" y="0" class="label">Turbolaser 01:</text>
+            <text x="120" y="0" class="value" data-key="status">standby</text>
+            <text x="0" y="20" class="label" style="font-size: 12px;">Target:</text>
+            <text x="120" y="20" class="label" style="font-size: 12px; fill: #e0e0e0;" data-key="target">none</text>
+            <text x="0" y="40" class="label" style="font-size: 12px;">Temp:</text>
+            <text x="120" y="40" class="label" style="font-size: 12px; fill: #e0e0e0;">
+                <tspan data-key="temp">150</tspan> C
+            </text>
+        </g>
+    </g>
+    
+    <g transform="translate(50, 450)">
+        <text x="0" y="0" class="title">LOGISTICS</text>
+        <g id="galactic_empire-death_star-logistics-droid_pool-R5-J4-status" transform="translate(0, 25)">
+            <text x="0" y="0" class="label">Droid R5-J4:</text>
+            <text x="100" y="0" class="value" data-key="status">patrol</text>
+            <text x="0" y="20" class="label" style="font-size: 12px;">Battery:</text>
+            <text x="100" y="20" class="label" style="font-size: 12px; fill: #e0e0e0;">
+                <tspan data-key="battery">85.0</tspan>%
+            </text>
+            <text x="0" y="40" class="label" style="font-size: 12px;">Task:</text>
+            <text x="10" y="55" class="label" style="font-size: 12px; fill: #e0e0e0;" data-key="task">sector patrol</text>
+        </g>
+    </g>
+
+    <g transform="translate(50, 250)">
+        <text x="0" y="0" class="title">COMMAND ALERTS</text>
+        <g id="galactic_empire-death_star-command-tactical_alert" transform="translate(0, 25)">
+            <text x="0" y="0" class="label">Tactical:</text>
+            <text x="10" y="40" class="value" data-key="status" style="font-size: 16px;">All systems nominal.</text>
+            <text x="10" y="20" class="label" data-key="level" style="font-weight: bold; fill: #4CAF50;">GREEN</text>
+        </g>
+    </g>
+    
+    <g transform="translate(550, 400)">
+        <text x="0" y="0" class="title">DAMAGE CONTROL</text>
+        
+        <g id="galactic_empire-death_star-command-damage_control" transform="translate(0, 25)">
+            <text data-key="status" style="display: none;"></text>
+            
+            <text id="no-alarms-text" x="0" y="0" class="placeholder">NO ACTIVE ALARMS</text>
+        </g>
+    </g>
+
+</svg>

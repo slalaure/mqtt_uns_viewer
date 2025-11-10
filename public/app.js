@@ -48,8 +48,8 @@ import {
     getChartedTopics,
     pruneChartedVariables
 } from './view.chart.js';
-// [NEW] Import publish view modules
-import { initPublishView, setPublishTheme } from './view.publish.js';
+// [MODIFIED] Import publish view modules
+import { initPublishView, setPublishTheme, updateSimulatorStatuses } from './view.publish.js';
 // --- [END NEW] ---
 
 
@@ -113,10 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pruningIndicator = document.getElementById('pruning-indicator');
 
     // --- Simulator UI Elements (Now in Publish View) ---
-    const btnStartSim = document.getElementById('btn-start-sim');
-    const btnStopSim = document.getElementById('btn-stop-sim');
-    const simStatusIndicator = document.getElementById('sim-status');
-    const simulatorControls = document.querySelector('.simulator-controls'); // [MODIFIED] This query is still valid
+    // [MODIFIED] This query now targets the dynamic list container
+    const simulatorControls = document.getElementById('simulator-list-container'); 
 
     // --- [NEW] Mapper View Elements ---
     const mapperFilterInput = document.getElementById('mapper-filter-input');
@@ -193,32 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- Simulator UI Logic [MODIFIED] ---
-    // This logic remains valid as IDs are the same
-    function updateSimulatorStatusUI(status) {
-        if (!simStatusIndicator) return;
-        if (status === 'running') {
-            simStatusIndicator.textContent = 'Running';
-            simStatusIndicator.classList.add('running');
-            simStatusIndicator.classList.remove('stopped');
-            btnStartSim?.setAttribute('disabled', true); // Disable Start button
-            btnStopSim?.removeAttribute('disabled');     // Enable Stop button
-        } else {
-            simStatusIndicator.textContent = 'Stopped';
-            simStatusIndicator.classList.add('stopped');
-            simStatusIndicator.classList.remove('running');
-            btnStartSim?.removeAttribute('disabled'); // Enable Start button
-            btnStopSim?.setAttribute('disabled', true);  // Disable Stop button
-        }
-    }
-    btnStartSim?.addEventListener('click', () => {
-        fetch('api/simulator/start', { method: 'POST' });
-        trackEvent('simulator_start'); // [NEW]
-    });
-    btnStopSim?.addEventListener('click', () => {
-        fetch('api/simulator/stop', { method: 'POST' });
-        trackEvent('simulator_stop'); // [NEW]
-    });
+    // --- [REMOVED] Simulator UI Logic ---
+    // The old `updateSimulatorStatusUI` function is gone.
+    // The old `btnStartSim` and `btnStopSim` listeners are gone.
+    // This is all now handled inside view.publish.js
 
     // --- [NEW] Tree Click Handlers ---
     
@@ -315,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             appBasePath = appConfig.basePath || '/';
             
-            const wsProtocol = window.location.protocol === 'https:?' ? 'wss:' : 'ws:';
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${wsProtocol}//${window.location.host}${appBasePath}`;
             
             console.log(`[DEBUG] Connecting to WebSocket at: ${wsUrl}`);
@@ -410,7 +386,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 }
                 case 'simulator-status':
-                    updateSimulatorStatusUI(message.status);
+                    // [MODIFIED] Call the new handler from view.publish.js
+                    updateSimulatorStatuses(message.statuses);
                     break;
                 case 'history-initial-data':
                     console.log(`[DEBUG] Received history-initial-data with ${message.data.length} entries.`); // [DEBUG LOG]
@@ -598,17 +575,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 // [NEW] Pass the limit
                 maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0
             });
-            // [NEW] Init Publish View
+            // [MODIFIED] Init Publish View
             initPublishView({
-                subscribedTopics: subscribedTopicPatterns
+                subscribedTopics: subscribedTopicPatterns,
+                simulatorListContainer: simulatorControls // Pass the container
             });
             
-            // --- Simulator Status (UI is now in publish view) ---
-            if (appConfig.isSimulatorEnabled && simulatorControls) {
-                simulatorControls.style.display = 'flex'; // This is the .simulator-controls container
+            // --- [MODIFIED] Simulator Status (UI is now in publish view) ---
+            if (appConfig.isSimulatorEnabled) {
                 fetch('api/simulator/status')
                     .then(res => res.json())
-                    .then(data => updateSimulatorStatusUI(data.status));
+                    .then(data => {
+                        // data.statuses is { stark_industries: 'stopped', ... }
+                        updateSimulatorStatuses(data.statuses);
+                    });
             }
             
             // --- [NEW] Init Resizers ---
@@ -710,7 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         console.log(`[DEBUG] Found ${uniqueTopics.size} unique topics from history.`); // [DEBUG LOG]
 
-        // [FIXJ] Check if trees are initialized before rebuilding
+        // [FIX] Check if trees are initialized before rebuilding
         if (mainTree) {
             console.log("[DEBUG] Rebuilding mainTree..."); // [DEBUG LOG]
             mainTree.rebuild(uniqueTopics);

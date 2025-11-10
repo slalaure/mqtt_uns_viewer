@@ -289,7 +289,7 @@
                     <div id="chart-payload-topic" class="payload-topic-display">Select a topic from the Chart tree.
                     </div>
                     <div id="chart-variable-list" class="chart-variable-list">
-                        <p class="history-placeholder">Numeric variables will appear here.</p>
+                        <p class="history-placeholder">No numeric properties found in this payload.</p>
                     </div>
                 </div>
 
@@ -396,12 +396,17 @@
             <div class="simulator-panel-wrapper">
                 <h2>Simulator</h2>
                 <div class="simulator-controls-container">
-                    <p>Control the built-in "Stark Industries" data simulator.</p>
-                    <div class="simulator-controls">
-                        <span id="sim-status" class="status-indicator stopped">Stopped</span>
-                        <button id="btn-start-sim">Start Simulator</button>
-                        <button id="btn-stop-sim" disabled>Stop Simulator</button>
-                    </div>
+                    <p>Control the built-in data simulators.</p> <div id="simulator-list-container" class="simulator-controls">
+                        </div>
+
+                    <template id="simulator-control-template">
+                        <div class="simulator-instance-controls">
+                            <h3 class="simulator-name"></h3>
+                            <span class="status-indicator stopped">Stopped</span>
+                            <button class="btn-start-sim">Start</button>
+                            <button class="btn-stop-sim" disabled>Stop</button>
+                        </div>
+                    </template>
                 </div>
             </div>
         </main>

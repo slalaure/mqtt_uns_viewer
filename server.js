@@ -38,6 +38,7 @@ const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); // [NEW] For ma
 const wsManager = require('./websocket-manager');
 const mqttHandler = require('./mqtt-handler');
 const { connectToMqttBroker } = require('./mqtt_client');
+const simulatorManager = require('./simulator'); // [MODIFIED] Import the manager
 // --- [END MODIFIED] ---
 
 
@@ -333,12 +334,14 @@ const mainRouter = express.Router();
 mainRouter.use(express.json());
 app.set('trust proxy', true);
 
-// --- Simulator Logic ---
-const { startSimulator, stopSimulator, getStatus } = require('./simulator')(logger, (topic, payload, isBinary) => {
+// --- Simulator Logic [MODIFIED] ---
+// Initialize the Simulator Manager
+simulatorManager.init(logger, (topic, payload, isBinary) => {
     if (mainConnection) {
         mainConnection.publish(topic, payload, { qos: 1, retain: false });
     }
 }, config.IS_SPARKPLUG_ENABLED);
+// --- [END MODIFIED] ---
 
 
 // --- API Routes (Mounted on mainRouter) ---
@@ -371,25 +374,39 @@ mainRouter.get('/api/config', (req, res) => {
     });
 });
 
+// --- [MODIFIED] Simulator API Routes ---
 if (config.IS_SIMULATOR_ENABLED) {
     logger.info("✅ Simulator is ENABLED. Creating API endpoints at /api/simulator/*");
+    
+    // GET /api/simulator/status
+    // Returns the status of all available simulators
     mainRouter.get('/api/simulator/status', (req, res) => {
-        res.json({ status: getStatus() });
+        res.json({ statuses: simulatorManager.getStatuses() });
     });
-    mainRouter.post('/api/simulator/start', (req, res) => {
-        const result = startSimulator();
-        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
+
+    // POST /api/simulator/start/:name
+    // Starts a specific simulator by name
+    mainRouter.post('/api/simulator/start/:name', (req, res) => {
+        const name = req.params.name;
+        const result = simulatorManager.startSimulator(name);
+        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
         res.status(200).json(result);
     });
-    mainRouter.post('/api/simulator/stop', (req, res) => {
-        const result = stopSimulator();
-        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
+
+    // POST /api/simulator/stop/:name
+    // Stops a specific simulator by name
+    mainRouter.post('/api/simulator/stop/:name', (req, res) => {
+        const name = req.params.name;
+        const result = simulatorManager.stopSimulator(name);
+        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
         res.status(200).json(result);
     });
 }
+// --- [END MODIFIED] ---
 
 // MCP Context API Router
-const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, getStatus, getDbStatus, config);
+// [MODIFIED] Pass getStatuses function from the manager
+const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, simulatorManager.getStatuses, getDbStatus, config);
 mainRouter.use('/api/context', ipFilterMiddleware, mcpRouter);
 
 // --- [MODIFIED] Configuration API Router (Conditional) ---
@@ -530,12 +547,18 @@ connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
     // Attach the single handler function
     mainConnection.on('message', handleMessage);
 
-    // Disconnect handler
+    // --- [MODIFIED] Disconnect handler to stop all sims ---
     mainConnection.on('close', () => {
-        logger.info('✅ Disconnected from MQTT Broker.');
-        const result = stopSimulator();
-        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', status: result.status }));
+        logger.info('✅ Disconnected from MQTT Broker. Stopping all running simulators...');
+        const statuses = simulatorManager.getStatuses();
+        for (const name in statuses) {
+            if (statuses[name] === 'running') {
+                simulatorManager.stopSimulator(name);
+            }
+        }
+        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
     });
+    // --- [END MODIFIED] ---
 });
 
 // --- Child Process Management (MCP) ---
@@ -572,7 +595,15 @@ process.on('SIGINT', () => {
         processDbQueue(); 
     }
     
-    stopSimulator();
+    // --- [MODIFIED] Stop all running simulators ---
+    const statuses = simulatorManager.getStatuses();
+    for (const name in statuses) {
+        if (statuses[name] === 'running') {
+            logger.info(`✅    -> Stopping simulator [${name}]...`);
+            simulatorManager.stopSimulator(name);
+        }
+    }
+    // --- [END MODIFIED] ---
     
     const finalShutdown = () => {
         logger.info("✅ Forcing final database checkpoint...");

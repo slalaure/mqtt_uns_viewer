@@ -27,6 +27,8 @@ main#publish-view {
 .simulator-panel-wrapper {
     flex: 1; /* Simulator panel takes 1/3 width */
     min-width: 250px;
+    /* [NEW] Allow simulator panel to scroll if many simulators are added */
+    overflow-y: auto;
 }
 
 #publish-form {
@@ -110,52 +112,46 @@ main#publish-view {
     margin-top: 0;
 }
 
-/* [MOVED] Simulator controls styles are now here */
+/* [MOVED] This is now the main list container */
 .simulator-controls {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch; /* Make items stretch to full width */
     gap: 15px;
+    /* Remove background and padding, it's just a list now */
+}
+
+/* [NEW] Styles for each individual simulator block */
+.simulator-instance-controls {
     background-color: var(--color-bg-accent);
     padding: 15px;
     border-radius: 8px;
-}
-
-.simulator-controls button {
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 8px 12px;
-    cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.2s;
-    width: 100%;
+    display: grid; /* Use grid for layout */
+    grid-template-columns: 1fr 1fr; /* 2 columns */
+    grid-template-rows: auto auto auto; /* 3 rows */
+    gap: 10px;
 }
 
-.simulator-controls button:hover {
-    background-color: var(--color-bg-tertiary);
+.simulator-name {
+    grid-column: 1 / 3; /* Span both columns */
+    grid-row: 1;
+    margin: 0 0 5px 0;
+    font-size: 1.2em;
+    color: var(--color-text);
 }
 
-.simulator-controls button:disabled {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-muted);
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-.simulator-controls button:disabled:hover {
-    background-color: var(--color-bg-tertiary);
-}
-
-/* [MOVED] Status indicator styles */
-.simulator-controls .status-indicator {
+.simulator-instance-controls .status-indicator {
+    grid-column: 1 / 3; /* Span both columns */
+    grid-row: 2;
     font-weight: bold;
     font-size: 1.1em;
     padding-left: 20px;
     position: relative;
     color: var(--color-text); /* Use body text color */
 }
-.simulator-controls .status-indicator::before {
+
+.simulator-instance-controls .status-indicator::before {
     content: '';
     position: absolute;
     left: 0;
@@ -166,14 +162,50 @@ main#publish-view {
     border-radius: 50%;
     background-color: grey;
 }
-.simulator-controls .status-indicator.stopped::before {
+.simulator-instance-controls .status-indicator.stopped::before {
     background-color: var(--color-danger);
 }
-.simulator-controls .status-indicator.running::before {
+.simulator-instance-controls .status-indicator.running::before {
     background-color: var(--color-success);
     animation: pulse-green 2s infinite;
 }
 /* Keyframes already in base.css */
+
+
+.simulator-instance-controls button {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+    width: 100%; /* Buttons take full column width */
+}
+.simulator-instance-controls .btn-start-sim {
+    grid-column: 1;
+    grid-row: 3;
+}
+.simulator-instance-controls .btn-stop-sim {
+    grid-column: 2;
+    grid-row: 3;
+}
+
+
+.simulator-instance-controls button:hover {
+    background-color: var(--color-bg-tertiary);
+}
+
+.simulator-instance-controls button:disabled {
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.simulator-instance-controls button:disabled:hover {
+    background-color: var(--color-bg-tertiary);
+}
 
 
 /* --- Mobile Responsive --- */
@@ -195,6 +227,7 @@ main#publish-view {
         flex: 1; /* Reset flex */
         min-width: 100%;
         padding: 15px;
+        overflow-y: visible; /* [MODIFIED] Allow panel to grow */
     }
     
     .publish-options-row {
