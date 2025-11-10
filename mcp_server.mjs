@@ -57,6 +57,8 @@ const API_BASE_URL = `http://${MAIN_APP_HOST}:${MAIN_SERVER_PORT}${BASE_PATH}/ap
 
 const HTTP_PORT = process.env.MCP_PORT || 3000;
 const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http'
+// [NEW] Read API Key from environment
+const MCP_API_KEY = process.env.MCP_API_KEY || null;
 // --- [END MODIFIED] ---
 
 
@@ -646,7 +648,38 @@ async function main() {
     const app = express();
     app.use(express.json());
 
-    app.post("/mcp", async (req, res) => {
+    // [NEW] Log API Key status
+    if (MCP_API_KEY) {
+      console.error("✅ MCP Server API Key protection is ENABLED.");
+    } else {
+      console.error("❌ WARNING: MCP_API_KEY is not set. The MCP server HTTP transport is UNPROTECTED.");
+    }
+
+    // [NEW] API Key Authentication Middleware
+    const mcpAuthMiddleware = (req, res, next) => {
+        if (!MCP_API_KEY) {
+            return next(); // No key set, allow request
+        }
+
+        const authHeader = req.headers['authorization'];
+        const keyHeader = req.headers['x-api-key'];
+        let providedKey = null;
+
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            providedKey = authHeader.substring(7);
+        } else if (keyHeader) {
+            providedKey = keyHeader;
+        }
+
+        if (providedKey && providedKey === MCP_API_KEY) {
+            return next(); // Key is valid
+        }
+
+        console.error(`[MCP Auth] FAILED auth attempt. IP: ${req.ip}`);
+        res.status(401).json({ error: "Unauthorized" });
+    };
+
+    app.post("/mcp", mcpAuthMiddleware, async (req, res) => { // [MODIFIED] Added middleware
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
