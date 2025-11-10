@@ -1,5 +1,5 @@
 # MQTT UNS Viewer
-![](https://img.shields.io/badge/version-1.2.0-blue.svg) ![](https://img.shields.io/badge/license-MIT-green.svg)
+![](https://img.shields.io/badge/version-1.3.0-blue.svg) ![](https://img.shields.io/badge/license-MIT-green.svg)
 
 **A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages.**
 
@@ -48,9 +48,14 @@ This tool provides a simple, broker-agnostic web UI to monitor an MQTT broker. I
     * Build charts (line, bar, pie) by selecting numeric values from any topic payload.
     * Save, load, and manage multiple chart configurations.
     * Export charts to PNG or CSV.
+* **Publish View & Manual Publishing**:
+    * Users can manually publish messages directly to the MQTT broker.
+    * Supports **String**, **JSON**, and **Sparkplug B** (via JSON input) payload formats.
+    * Allows configuration of **QoS (0, 1, 2)** and the **Retain** flag.
+    * Includes client-side validation: the publish button is disabled if the topic does not match one of the `MQTT_TOPIC` subscription patterns from the `.env` file.
 * **Sparkplug B Support:** Natively decodes `spBv1.0` Protobuf payloads for easy viewing.
-* **Built-in Data Simulator:** A "Stark Industries" demo simulator to generate complex UNS and Sparkplug data for testing.
-* **MCP Server Interface:** An optional JSON-RPC server (`mcp_server.mjs`) that allows external tools (like LLMs) to query the application's status, history, and model.
+* **Built-in Data Simulator:** A "Stark Industries" and "Death Star" demo simulator to generate complex UNS and Sparkplug data for testing.
+* **MCP Server Interface:** An optional stdio and JSON-RPC server (`mcp_server.mjs`) that allows external tools (like LLMs) to query the application's status, history, and model.
 * **Secure & Lightweight:** Runs in a minimal Node.js container, with security options for HTTP Basic Auth and API IP whitelisting.
 
 ---

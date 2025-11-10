@@ -1,6 +1,6 @@
 {
   "name": "mqtt_uns_viewer",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages.",
   "main": "server.js",
   "scripts": {
