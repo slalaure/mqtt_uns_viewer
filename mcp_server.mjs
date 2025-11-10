@@ -119,8 +119,8 @@ const saveMapperConfigInternal = async (config) => {
 async function createMcpServer() {
   const server = new McpServer({
     name: "MQTT UNS Viewer Controller",
-    version: "1.6.0", // Incremented version
-    description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search capabilities.",
+    version: "1.7.0", // Incremented version
+    description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search and simulation controls.",
   });
 
   // --- [NEW] Model-Querying Tools ---
@@ -338,7 +338,7 @@ async function createMcpServer() {
     }
   );
 
-  // --- [NEW] Admin & Simulator Tools ---
+  // --- [MODIFIED] Admin, Simulator & Publish Tools ---
 
   server.registerTool(
     "get_application_status",
@@ -366,14 +366,14 @@ async function createMcpServer() {
     "get_simulator_status",
     {
       title: "Get Simulator Status",
-      description: "Gets the current status of the MQTT data simulator (running or stopped).",
+      description: "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
       inputSchema: {}, // No input
-      outputSchema: { status: z.any() }
+      outputSchema: { statuses: z.record(z.string()) }
     },
     async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/simulator/status`);
-        const output = { status: response.data };
+        const output = response.data; // { "statuses": { "stark_industries": "running", ... } }
          return {
           content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
           structuredContent: output
@@ -388,16 +388,18 @@ async function createMcpServer() {
     "start_simulator",
     {
       title: "Start Simulator",
-      description: "Starts the MQTT data simulator.",
-      inputSchema: {},
+      description: "Starts a specific MQTT data simulator by name.",
+      inputSchema: {
+        scenario_name: z.string().describe("The name of the scenario to start (e.g., 'stark_industries', 'death_star').")
+      },
       outputSchema: { status: z.any() }
     },
-    async () => {
+    async ({ scenario_name }) => {
       try {
-        const response = await axios.post(`${API_BASE_URL}/simulator/start`);
+        const response = await axios.post(`${API_BASE_URL}/simulator/start/${scenario_name}`);
         const output = { status: response.data };
         return { 
-          content: [{ type: "text", text: "Simulator started: " + JSON.stringify(output) }],
+          content: [{ type: "text", text: `Simulator [${scenario_name}] started: ` + JSON.stringify(output) }],
           structuredContent: output
         };
       } catch (error) {
@@ -410,16 +412,18 @@ async function createMcpServer() {
     "stop_simulator",
      {
       title: "Stop Simulator",
-      description: "Stops the MQTT data simulator.",
-      inputSchema: {},
+      description: "Stops a specific MQTT data simulator by name.",
+      inputSchema: {
+        scenario_name: z.string().describe("The name of the scenario to stop (e.g., 'stark_industries', 'death_star').")
+      },
       outputSchema: { status: z.any() }
     },
-    async () => {
+    async ({ scenario_name }) => {
       try {
-        const response = await axios.post(`${API_BASE_URL}/simulator/stop`);
+        const response = await axios.post(`${API_BASE_URL}/simulator/stop/${scenario_name}`);
         const output = { status: response.data };
         return { 
-          content: [{ type: "text", text: "Simulator stopped: " + JSON.stringify(output) }],
+          content: [{ type: "text", text: `Simulator [${scenario_name}] stopped: ` + JSON.stringify(output) }],
           structuredContent: output
         };
       } catch (error) {
@@ -427,6 +431,61 @@ async function createMcpServer() {
       }
     }
   );
+
+  // [NEW] Tool to publish a message
+  server.registerTool(
+    "publish_message",
+    {
+      title: "Publish MQTT Message",
+      description: "Publishes a message to the MQTT broker. This is the same as using the 'Publish' tab in the UI.",
+      inputSchema: { 
+        topic: z.string().describe("The full MQTT topic name to publish to."),
+        payload: z.string().describe("The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."),
+        format: z.enum(['string', 'json', 'sparkplugb']).describe("The format of the payload."),
+        qos: z.number().min(0).max(2).optional().default(0).describe("The QoS level (0, 1, or 2)."),
+        retain: z.boolean().optional().default(false).describe("Whether to set the retain flag.")
+      },
+      outputSchema: { success: z.boolean(), message: z.string() }
+    },
+    async ({ topic, payload, format, qos, retain }) => {
+      try {
+        const body = { topic, payload, format, qos, retain };
+        const response = await axios.post(`${API_BASE_URL}/publish/message`, body);
+        const output = response.data;
+        return {
+          content: [{ type: "text", text: `Publish successful: ${output.message}` }],
+          structuredContent: output
+        };
+      } catch (error) {
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+      }
+    }
+  );
+
+  // [NEW] Tool to list available SVG files
+  server.registerTool(
+    "get_available_svg_views",
+    {
+      title: "Get Available SVG Views",
+      description: "Lists all .svg files available in the /data directory that can be displayed in the 'SVG View' tab.",
+      inputSchema: {},
+      outputSchema: { svg_files: z.array(z.string()) }
+    },
+    async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/svg/list`);
+        const output = { svg_files: response.data };
+         return {
+          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+          structuredContent: output
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+      }
+    }
+  );
+
   
   server.registerTool(
     "prune_topic_history",
