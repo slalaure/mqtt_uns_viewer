@@ -11,7 +11,8 @@
 
 // --- Import Scenario Definitions ---
 const starkIndustriesScenario = require('./simulator-stark');
-const deathStarScenario = require('./simulator-deathstar'); // [NEW] Import Death Star scenario
+const deathStarScenario = require('./simulator-deathstar'); // [MODIFIED]
+const parisMetroScenario = require('./simulator-paris-metro'); // [NEW] Import Paris Métro scenario
 
 // --- Module-level State ---
 let mainLogger = null;
@@ -41,7 +42,8 @@ function init(logger, publishCallback, isSparkplugEnabled) {
 
     // --- Register all available scenarios ---
     registerScenario('stark_industries', starkIndustriesScenario);
-    registerScenario('death_star', deathStarScenario); // [NEW] Register Death Star scenario
+    registerScenario('death_star', deathStarScenario); // [MODIFIED]
+    registerScenario('paris_metro', parisMetroScenario); // [NEW] Register Paris Métro scenario
 }
 
 /**

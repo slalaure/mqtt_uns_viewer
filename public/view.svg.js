@@ -23,8 +23,7 @@
  */
 
 // Import shared utilities
-import { formatTimestampForLabel, trackEvent } from './utils.js'; // [MODIFIED] Import trackEvent
-// [NEW] Import the new time slider module
+import { formatTimestampForLabel, trackEvent } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
@@ -35,23 +34,28 @@ const svgHandle = document.getElementById('svg-handle');
 const svgLabel = document.getElementById('svg-label');
 const btnSvgFullscreen = document.getElementById('btn-svg-fullscreen');
 const mapView = document.getElementById('map-view');
-const svgSelectDropdown = document.getElementById('svg-select-dropdown'); // [NEW]
+const svgSelectDropdown = document.getElementById('svg-select-dropdown');
 
 // --- Module-level State ---
 let svgInitialTextValues = new Map();
-let allHistoryEntries = []; // Local cache of history, synced from app.js
+let allHistoryEntries = [];
 let isSvgHistoryMode = false;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
-let svgSlider = null; // [NEW] Module instance for the slider
+let svgSlider = null; 
+
+// [NEW] State for Paris Métro SVG
+let stationCoords = new Map(); // Stores {x, y} for each station_id
+let trainElements = new Map(); // Stores SVG <g> elements for trains
+let stationTextElements = new Map(); // Stores SVG <text> elements for station alerts
+let stationTelemetryElements = new Map(); // Stores SVG <g> for dynamic station KPIs
+let currentSvgId = ""; // ID of the currently loaded SVG
+// ---
 
 /**
  * Initializes the SVG View functionality.
- * This is called once by app.js when the app loads.
- * @param {object} appConfig - The main application config object.
  */
 export function initSvgView(appConfig) {
-    // [MODIFIED] Populate list and load the default SVG
     populateSvgListAndLoadDefault(appConfig.svgFilePath);
     
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
@@ -60,28 +64,23 @@ export function initSvgView(appConfig) {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
         
-        // [NEW] Track event
         trackEvent(isSvgHistoryMode ? 'svg_history_on' : 'svg_history_off');
-
-        // When toggling, replay state up to the end to get in sync
         replaySvgHistory(currentMaxTimestamp);
 
-        // [NEW] Also update the slider's UI to the max time
         if (svgSlider) {
             svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
         }
     });
 
-    // [MODIFIED] Initialize the single time slider
     if (svgHandle) {
         svgSlider = createSingleTimeSlider({
             containerEl: svgTimelineSlider,
             handleEl: svgHandle,
             labelEl: svgLabel,
             onDrag: (newTime) => {
-                replaySvgHistory(newTime); // Replay history while dragging
+                replaySvgHistory(newTime);
             },
-            onDragEnd: (newTime) => { // [MODIFIED] Added onDragEnd
+            onDragEnd: (newTime) => {
                 trackEvent('svg_slider_drag_end');
             }
         });
@@ -90,15 +89,13 @@ export function initSvgView(appConfig) {
 
 /**
  * Receives the full history log from the main app.
- * @param {Array} entries - The complete list of history entries.
  */
 export function setSvgHistoryData(entries) {
     allHistoryEntries = entries;
 }
 
 /**
- * [NEW] Fetches the list of SVGs, populates the dropdown, and loads the default.
- * @param {string} defaultSvgFile - The filename of the default SVG to load.
+ * Fetches the list of SVGs, populates the dropdown, and loads the default.
  */
 async function populateSvgListAndLoadDefault(defaultSvgFile) {
     if (!svgSelectDropdown) return;
@@ -110,8 +107,7 @@ async function populateSvgListAndLoadDefault(defaultSvgFile) {
         
         const svgFiles = await response.json();
         
-        svgSelectDropdown.innerHTML = ''; // Clear any existing options
-        
+        svgSelectDropdown.innerHTML = '';
         if (svgFiles.length === 0) {
             svgSelectDropdown.innerHTML = '<option value="">No SVGs found</option>';
         }
@@ -127,7 +123,6 @@ async function populateSvgListAndLoadDefault(defaultSvgFile) {
             svgSelectDropdown.appendChild(option);
         });
         
-        // If default from .env wasn't in the list, use the first file
         if (!defaultFileFound && svgFiles.length > 0) {
             svgSelectDropdown.value = svgFiles[0];
             defaultSvgFile = svgFiles[0];
@@ -138,10 +133,8 @@ async function populateSvgListAndLoadDefault(defaultSvgFile) {
         svgSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
     }
 
-    // Add listener *after* populating
     svgSelectDropdown.addEventListener('change', onSvgFileChange);
     
-    // Finally, load the determined default SVG
     if (defaultSvgFile) {
         await loadSvgPlan(defaultSvgFile);
     } else {
@@ -150,8 +143,7 @@ async function populateSvgListAndLoadDefault(defaultSvgFile) {
 }
 
 /**
- * [NEW] Handles the change event when a new SVG is selected.
- * @param {Event} event
+ * Handles the change event when a new SVG is selected.
  */
 async function onSvgFileChange(event) {
     const filename = event.target.value;
@@ -164,7 +156,7 @@ async function onSvgFileChange(event) {
 
 /**
  * [MODIFIED] Loads a specific view.svg file from the server.
- * @param {string} filename - The name of the SVG file to load (e.g., "view.svg").
+ * Now resets and scans the SVG.
  */
 async function loadSvgPlan(filename) {
     if (!filename) {
@@ -173,7 +165,6 @@ async function loadSvgPlan(filename) {
     }
     
     try {
-        // [MODIFIED] Fetch from the new dynamic API endpoint
         const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
@@ -181,12 +172,20 @@ async function loadSvgPlan(filename) {
         if (svgContent) {
             svgContent.innerHTML = svgText;
             
-            // Clear and store initial values for the new SVG
+            // --- [MODIFIED] Clear state and scan new SVG ---
             svgInitialTextValues.clear();
+            stationCoords.clear();
+            trainElements.clear();
+            stationTextElements.clear();
+            stationTelemetryElements.clear();
+
+            const svgRoot = svgContent.querySelector('svg');
+            currentSvgId = svgRoot ? svgRoot.id : "";
+
+            // Scan for data-keys and static elements
             const dataElements = svgContent.querySelectorAll('[data-key]');
             
             dataElements.forEach(el => {
-                // [MODIFIED] Store attribute state for visuals too
                 if (el.tagName === 'text' || el.tagName === 'tspan') {
                     svgInitialTextValues.set(el, { type: 'text', value: el.textContent });
                 } else if (el.id === 'shield-visual-effect') {
@@ -194,16 +193,19 @@ async function loadSvgPlan(filename) {
                     svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-width', value: el.getAttribute('stroke-width') });
                 } else if (el.id === 'laser-charge-visual') {
                     svgInitialTextValues.set(el, { type: 'attr', attr: 'width', value: el.getAttribute('width') });
-                } else if (el.tagName === 'path' && el.dataset.key === 'status') {
-                    // [NEW] Store initial class for metro lines
+                } else if (el.tagName === 'path' && (el.dataset.key === 'status')) {
+                    // [MODIFIED] Save class for metro lines
                     svgInitialTextValues.set(el, { type: 'attr', attr: 'class', value: el.getAttribute('class') });
                 } else if (el.tagName === 'circle' && el.dataset.key === 'occupancy_percent') {
-                    // [NEW] Store initial opacity for station occupancy
                     svgInitialTextValues.set(el, { type: 'attr', attr: 'fill-opacity', value: el.getAttribute('fill-opacity') });
                 }
             });
+
+            // Special logic for Paris Métro map
+            if (currentSvgId === 'ParisMetroTacticalMap') {
+                scanParisMetroSVG();
+            }
             
-            // [MODIFIED] Re-apply current state to the new SVG
             const replayTime = isSvgHistoryMode 
                 ? parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp) 
                 : currentMaxTimestamp;
@@ -216,11 +218,70 @@ async function loadSvgPlan(filename) {
 }
 
 /**
+ * [NEW] Scans the loaded Paris Métro SVG to find station coordinates and text elements.
+ */
+function scanParisMetroSVG() {
+    // 1. Scan for station coordinates using the <path> elements
+    const stationPaths = svgContent.querySelectorAll('path[id*="_gare_"]');
+    stationCoords.clear();
+    
+    stationPaths.forEach(path => {
+        const id = path.id; // e.g., "line1_gare_chatelet"
+        const d = path.getAttribute('d');
+        if (!d) return;
+
+        // Extract the first 'm' (moveto) coordinate.
+        const match = d.match(/m\s*([\d\.-]+)\s*,\s*([\d\.-]+)/);
+        if (match && match[1] && match[2]) {
+            let x = parseFloat(match[1]);
+            let y = parseFloat(match[2]);
+            
+            // Account for the <g transform="..."> parent
+            const parentGroup = path.closest('g');
+            if (parentGroup) {
+                const transform = parentGroup.getAttribute('transform');
+                if (transform) {
+                    const translateMatch = transform.match(/translate\(\s*([\d\.-]+)\s*,?\s*([\d\.-]+)\s*\)/);
+                    if (translateMatch) {
+                        x += parseFloat(translateMatch[1]);
+                        y += parseFloat(translateMatch[2]);
+                    }
+                }
+            }
+            stationCoords.set(id, { x, y });
+        }
+    });
+    console.log(`[SVG] Scanned ${stationCoords.size} metro stations for coordinates.`);
+
+    // 2. Scan for station text elements
+    const stationTexts = svgContent.querySelectorAll('text[id*="ratp-uns-station-"]');
+    stationTextElements.clear();
+    stationTexts.forEach(textEl => {
+        // e.g., "ratp-uns-station-chatelet-alert"
+        const stationId = textEl.id.split('-')[3]; // "chatelet"
+        if(stationId) {
+            // Store the element itself
+            stationTextElements.set(stationId, textEl);
+            // Save its initial class
+            svgInitialTextValues.set(textEl, { type: 'attr', attr: 'class', value: textEl.getAttribute('class') || '' });
+        }
+    });
+    console.log(`[SVG] Scanned ${stationTextElements.size} metro station alert texts.`);
+    
+    // 3. Scan for line path elements (now by data-key)
+    const linePaths = svgContent.querySelectorAll('path[data-key="status"]');
+    linePaths.forEach(pathEl => {
+         svgInitialTextValues.set(pathEl, { type: 'attr', attr: 'class', value: pathEl.getAttribute('class') || '' });
+    });
+}
+
+
+/**
  * Toggles fullscreen mode for the SVG map view.
  */
 function toggleFullscreen() {
-    trackEvent('svg_fullscreen_toggle'); // [NEW]
-    if (!mapView) return; // Make sure the view element exists
+    trackEvent('svg_fullscreen_toggle');
+    if (!mapView) return;
     
     if (!document.fullscreenElement) {
         mapView.requestFullscreen().catch(err => {
@@ -234,26 +295,17 @@ function toggleFullscreen() {
 }
 
 /**
- * [HELPER] Safely gets a nested value from an object using a dot-notation string.
- * @param {object} obj - The object to search.
- * @param {string} path - The dot-notation path (e.g., "variables.STORAGE_LEVEL").
- * @returns {*} The value, or null if not found.
+ * [HELPER] Safely gets a nested value from an object.
  */
 function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return null;
-    // This handles keys like 'variables.6000_CPT_CH4_J' or 'air_quality.co2'
     return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
 }
 
 /**
  * [MODIFIED] Checks if a value triggers an alarm. Now supports 'EQ' (equals).
- * @param {*} currentValue - The value from the payload (usually a string).
- * @param {string} alarmType - The type of alarm (e.g., "H", "L", "EQ").
- * @param {string} alarmThreshold - The threshold value (as a string).
- * @returns {boolean} True if in alarm, false otherwise.
  */
 function checkAlarm(currentValue, alarmType, alarmThreshold) {
-    // [NEW] Handle string equality checks
     if (alarmType === 'EQ') {
         return String(currentValue) === String(alarmThreshold);
     }
@@ -261,50 +313,23 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
         return String(currentValue) !== String(alarmThreshold);
     }
 
-    // Original numeric logic
     const value = parseFloat(currentValue);
     const threshold = parseFloat(alarmThreshold);
-
-    if (isNaN(value) || isNaN(threshold)) {
-        return false;
-    }
+    if (isNaN(value) || isNaN(threshold)) return false;
 
     switch (alarmType) {
-        case 'HH': // High-High
-        case 'H':  // High
-            return value > threshold;
-        case 'LL': // Low-Low
-        case 'L':  // Low
-            return value < threshold;
-        default:
-            return false;
+        case 'H': return value > threshold;
+        case 'L': return value < threshold;
+        default: return false;
     }
 }
 
-/**
- * [NEW HELPER] Updates the visibility of the "(Aucune alarme active)" placeholder.
- * This checks the *entire SVG* for any visible alarm lines.
- */
 function updateAlarmPlaceholder() {
-    if (!svgContent) return;
-    const noAlarmsEl = svgContent.querySelector('#no-alarms-text');
-    if (!noAlarmsEl) return; // Placeholder not found
-
-    const visibleAlarms = svgContent.querySelectorAll('.alarm-line[style*="block"]');
-    
-    if (visibleAlarms.length > 0) {
-        noAlarmsEl.style.display = 'none'; // Hide placeholder
-    } else {
-        noAlarmsEl.style.display = 'block'; // Show placeholder
-    }
+    // This function is not used in the metro map
 }
 
 /**
  * [MODIFIED] Updates a single SVG element with a new value.
- * This now handles text, colors, and visual attributes.
- * @param {SVGElement} el - The SVG element to update.
- * @param {string} keyPath - The data-key (e.g., "power" or "metrics[Status]").
- * @param {*} value - The new value from the payload.
  */
 function updateSvgElement(el, keyPath, value) {
     // --- 1. SPECIAL VISUALS (by ID or data-key) ---
@@ -327,20 +352,20 @@ function updateSvgElement(el, keyPath, value) {
         return; // Handled
     }
     
-    // C. [NEW] Paris Métro Line Status (Path)
+    // C. Paris Métro Line Status (Path)
     if (el.tagName === 'path' && keyPath === 'status') {
-        const baseClass = el.getAttribute('class').split(' ')[0] + ' ' + el.getAttribute('class').split(' ')[1]; // e.g., "line-path line-1"
+        // Find the base classes (e.g., "line-path line-1")
+        const baseClass = Array.from(el.classList).filter(c => !c.startsWith('line-status-')).join(' ');
         if (value === 'OK') el.setAttribute('class', baseClass + ' line-status-OK');
         else if (value === 'PERTURBED') el.setAttribute('class', baseClass + ' line-status-PERTURBED');
         else if (value === 'INTERRUPTED') el.setAttribute('class', baseClass + ' line-status-INTERRUPTED');
         return; // Handled
     }
     
-    // D. [NEW] Paris Métro Station Occupancy (Circle)
+    // D. Paris Métro Station Occupancy (Circle)
     if (el.tagName === 'circle' && keyPath === 'occupancy_percent' && !isNaN(numericValue)) {
         const opacity = Math.max(0.1, Math.min(1, (numericValue / 100.0) * 0.8 + 0.1));
         el.setAttribute('fill-opacity', opacity.toFixed(2));
-        // We still want the text to update, so we *don't* return here.
     }
     
     
@@ -359,17 +384,17 @@ function updateSvgElement(el, keyPath, value) {
         else if (keyPath.includes('status') || keyPath === 'metrics[Status]') {
             isStatus = true;
             const v = String(value).toLowerCase();
-            if (v === 'damaged' || v === 'offline' || v === 'breached' || v === 'error' || v === 'stopped' || v.includes('ALERT_')) {
+            if (v === 'damaged' || v === 'offline' || v === 'breached' || v === 'error' || v === 'stopped_emergency' || v === 'cancelled' || v.includes('interrupted')) {
                 el.setAttribute('fill', '#f85149'); // Red
             } else if (v === 'online' || v === 'empty' || v === 'green' || v === 'clear' || v === 'patrol' || v === 'ok' || v === 'running') {
                 el.setAttribute('fill', '#3fb950'); // Green
             } else {
-                el.setAttribute('fill', '#d29922'); // Yellow for 'standby', 'charging', 'transit' etc.
+                el.setAttribute('fill', '#d29922'); // Yellow for 'standby', 'charging', 'transit', 'perturbed', 'stopped_station' etc.
             }
         }
         
         // Animate red status text
-        if (el.getAttribute('fill') === '#f85149') {
+        if (el.getAttribute('fill') === '#f85149' && !el.classList.contains('text-data')) {
             el.classList.add('alarm-text'); 
         } else {
             el.classList.remove('alarm-text');
@@ -391,10 +416,8 @@ function updateSvgElement(el, keyPath, value) {
         const alarmLineGroup = el.closest('.alarm-line');
         if (alarmLineGroup) {
             const isAlarm = checkAlarm(value, alarmType, alarmValue);
-            // [MODIFIED] Use visibility instead of display for <g> elements
             alarmLineGroup.style.visibility = isAlarm ? 'visible' : 'hidden';
         } else {
-             // [NEW] Handle alarm text directly
              const isAlarm = checkAlarm(value, alarmType, alarmValue);
              el.style.visibility = isAlarm ? 'visible' : 'hidden';
         }
@@ -403,39 +426,40 @@ function updateSvgElement(el, keyPath, value) {
 
 
 /**
- * [MODIFIED] Updates the SVG map with new data from an MQTT message.
- * Will not update if the history toggle is checked.
+ * [MODIFIED] Main update router function.
  * @param {string} topic - The MQTT topic.
  * @param {string} payload - The message payload.
  */
 export function updateMap(topic, payload) {
-    if (svgHistoryToggle?.checked) return; // Do not update if in history mode
+    if (svgHistoryToggle?.checked) return;
+    if (!svgContent) return;
 
     try {
         const data = JSON.parse(payload); 
+        
+        // --- [NEW] Paris Métro Logic ---
+        if (currentSvgId === 'ParisMetroTacticalMap' && topic.startsWith('ratp/uns/')) {
+            
+            if (topic.includes('/train/')) {
+                updateMetroTrain(topic, data); // Handles train logic
+            } else if (topic.includes('/station/') && topic.endsWith('/alert')) {
+                updateMetroStationAlert(topic, data); // Handles station alerts
+            } else if (topic.includes('/station/') && topic.endsWith('/telemetry')) {
+                updateMetroStationTelemetry(topic, data); // Handles station KPIs
+            } else if (topic.includes('/line/') && topic.endsWith('/status')) {
+                updateMetroLineStatus(topic, data); // Handles line status
+            } else {
+                // Handle other ratp/uns/ topics if needed (e.g., global status)
+                 const svgId = topic.replace(/\//g, '-').replace(/_/g, '-');
+                 defaultUpdateLogic(svgId, data);
+            }
+            return; // Handled
+        }
+        // --- [End New Logic] ---
+        
+        // --- Default Logic (Death Star, etc.) ---
         const svgId = topic.replace(/\//g, '-');
-        
-        const groupElements = svgContent?.querySelectorAll(`[id="${svgId}"]`);
-        if (groupElements.length === 0) return;
-
-        groupElements.forEach(groupElement => {
-            const dataElements = groupElement.querySelectorAll('[data-key]');
-            
-            dataElements.forEach(el => {
-                const keyPath = el.dataset.key; 
-                const value = getNestedValue(data, keyPath);
-                
-                if (value !== null && value !== undefined) {
-                    updateSvgElement(el, keyPath, value);
-                }
-            });
-            
-             // Add a visual highlight pulse to the <g> element
-            groupElement.classList.add('highlight-svg');
-            setTimeout(() => groupElement.classList.remove('highlight-svg'), 500);
-        });
-        
-        updateAlarmPlaceholder();
+        defaultUpdateLogic(svgId, data);
 
     } catch (e) { 
         console.warn("SVG updateMap error:", e);
@@ -443,10 +467,176 @@ export function updateMap(topic, payload) {
 }
 
 /**
+ * [NEW] Default handler for simple id-to-data-key mapping.
+ * @param {string} svgId - The SVG element ID (topic with dashes).
+ * @param {object} data - The parsed payload.
+ */
+function defaultUpdateLogic(svgId, data) {
+    const groupElements = svgContent.querySelectorAll(`[id="${svgId}"]`);
+    if (groupElements.length === 0) return;
+
+    groupElements.forEach(groupElement => {
+        const dataElements = groupElement.querySelectorAll('[data-key]');
+        
+        dataElements.forEach(el => {
+            const keyPath = el.dataset.key; 
+            const value = getNestedValue(data, keyPath);
+            
+            if (value !== null && value !== undefined) {
+                updateSvgElement(el, keyPath, value);
+            }
+        });
+        
+        groupElement.classList.add('highlight-svg');
+        setTimeout(() => groupElement.classList.remove('highlight-svg'), 500);
+    });
+    
+    // updateAlarmPlaceholder(); // Not used by Metro
+}
+
+
+/**
+ * [NEW] Updates a single train element on the Paris Métro map.
+ */
+function updateMetroTrain(topic, data) {
+    const parts = topic.split('/');
+    const trainId = parts[parts.length - 2]; // e.g., "MP05-01"
+    const trainG_Id = `train-g-${trainId}`;
+    const stationId = data.position_station_id; // e.g., "line1_gare_chatelet"
+    const trainContainer = svgContent.querySelector('#train-container');
+    if (!trainContainer) {
+        console.warn("#train-container not found in SVG");
+        return;
+    }
+
+    let trainG = trainElements.get(trainG_Id);
+    
+    // 1. Create train element if it doesn't exist
+    if (!trainG) {
+        const linePath = svgContent.querySelector(`path[id="line${data.line}_path"]`);
+        const trainColor = linePath ? linePath.getAttribute('stroke') : '#fff';
+
+        trainG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        trainG.id = trainG_Id;
+        trainG.setAttribute('style', 'transition: transform 0.8s ease-in-out;'); // CSS transition
+        
+        // [MODIFIED] Scaled up elements for large viewBox
+        trainG.innerHTML = `
+            <rect class="train-box" x="-150" y="-50" width="300" height="100" rx="3" style="stroke: ${trainColor};" />
+            <text class="train-text train-text-id" x="0" y="-25" text-anchor="middle" style="fill: ${trainColor};">${trainId}</text>
+            <text class="train-text train-text-label" x="-140" y="5">Driver:</text>
+            <text class="train-text train-text-data train-driver" x="-60" y="5">${data.driver}</text>
+            <text class="train-text train-text-label" x="-140" y="35">Pax:</text>
+            <text class="train-text train-text-data train-passengers" x="-60" y="35">${data.passengers}</text>
+            <circle class="train-status-light" cx="135" y="-25" r="8" fill="#fff"/>
+        `;
+        trainContainer.appendChild(trainG);
+        trainElements.set(trainG_Id, trainG);
+    }
+
+    // 2. Update position
+    const coords = stationCoords.get(stationId);
+    if (coords) {
+        // [MODIFIED] Scaled up offset
+        const x = coords.x;
+        const y = coords.y - 70; // 70px above the station circle
+        trainG.setAttribute('transform', `translate(${x}, ${y})`);
+    } else {
+        console.warn(`[SVG] No coordinates found for station ID: ${stationId}`);
+    }
+
+    // 3. Update data
+    trainG.querySelector('.train-driver').textContent = data.driver;
+    trainG.querySelector('.train-passengers').textContent = `${data.passengers} (${data.occupancy_percent}%)`;
+    
+    // 4. Update status light
+    const statusLight = trainG.querySelector('.train-status-light');
+    statusLight.setAttribute('class', `train-status-light train-status-${data.status}`);
+}
+
+/**
+ * [NEW] Updates a metro line's visual status.
+ */
+function updateMetroLineStatus(topic, data) {
+    const parts = topic.split('/');
+    const lineNum = parts[parts.length - 2]; // e.g., "1"
+    const linePath = svgContent.querySelector(`path[id="line${lineNum}_path"]`);
+    if (linePath) {
+        updateSvgElement(linePath, 'status', data.status);
+    }
+}
+
+/**
+ * [NEW] Updates a station's alert status.
+ */
+function updateMetroStationAlert(topic, data) {
+    const parts = topic.split('/');
+    const stationId = parts[parts.length - 2]; // e.g., "chatelet"
+    const textEl = stationTextElements.get(stationId);
+    if (textEl) {
+        if (data.type === "NONE" || data.status === "CLEAR") {
+            textEl.classList.remove('alarm-text');
+        } else {
+            textEl.classList.add('alarm-text');
+        }
+    }
+}
+
+/**
+ * [NEW] Updates a station's telemetry data (occupancy, air).
+ */
+function updateMetroStationTelemetry(topic, data) {
+    const parts = topic.split('/');
+    const stationId = parts[parts.length - 2]; // e.g., "chatelet"
+    const kpiId = `station-kpi-${stationId}`;
+    
+    let kpiG = stationTelemetryElements.get(kpiId);
+    const telemetryContainer = svgContent.querySelector('#station-telemetry-container');
+    if (!telemetryContainer) {
+        console.warn("#station-telemetry-container not found in SVG");
+        return;
+    }
+    
+    // 1. Create KPI box if it doesn't exist
+    if (!kpiG) {
+        // Find the station's <text> element to base coordinates on
+        const stationTextEl = stationTextElements.get(stationId);
+        if (!stationTextEl) {
+             console.warn(`[SVG] No text element found for station: ${stationId}`);
+             return; // Can't place it
+        }
+        
+        const bbox = stationTextEl.getBBox();
+        const x = bbox.x + (bbox.width / 2); // Center of the text
+        const y = bbox.y + bbox.height + 20; // 20px below the text
+
+        kpiG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        kpiG.id = kpiId;
+        kpiG.setAttribute('transform', `translate(${x}, ${y})`);
+        
+        // [MODIFIED] Scaled up elements
+        kpiG.innerHTML = `
+            <rect class="kpi-box" x="-100" y="0" width="200" height="90" />
+            <text class="train-text train-text-label" x="-90" y="25">Pax:</text>
+            <text class="train-text train-text-data kpi-pax" x="0" y="25">0</text>
+            <text class="train-text train-text-label" x="-90" y="50">CO2:</text>
+            <text class="train-text train-text-data kpi-co2" x="0" y="50">0</text>
+            <text class="train-text train-text-label" x="-90" y="75">PM2.5:</text>
+            <text class="train-text train-text-data kpi-pm25" x="0" y="75">0</text>
+        `;
+        telemetryContainer.appendChild(kpiG);
+        stationTelemetryElements.set(kpiId, kpiG);
+    }
+    
+    // 2. Update data
+    kpiG.querySelector('.kpi-pax').textContent = `${data.passengers} (${data.occupancy_percent}%)`;
+    kpiG.querySelector('.kpi-co2').textContent = data.air_quality.co2;
+    kpiG.querySelector('.kpi-pm25').textContent = data.air_quality.pm2_5;
+}
+
+
+/**
  * [MODIFIED] Updates the UI of the SVG timeline slider
- * by calling the slider module.
- * @param {number} min - The minimum timestamp of all history.
- * @param {number} max - The maximum timestamp of all history.
  */
 export function updateSvgTimelineUI(min, max) {
     if (!svgSlider) return;
@@ -476,21 +666,46 @@ function replaySvgHistory(replayUntilTimestamp) {
         }
         // Reset dynamic styles
         element.classList.remove('alarm-text');
-        if (element.tagName === 'text' || element.tagName === 'tspan') {
-            element.setAttribute('fill', '#aaa'); // Default text color
+        
+        // [MODIFIED] Reset fill color for station text
+        if (element.tagName === 'text' && element.id.includes('_station_')) {
+             const lineNum = element.id.match(/line(\d+)/);
+             if(lineNum) {
+                 if (lineNum[1] === '1') element.setAttribute('fill', '#f7bf0f');
+                 else if (lineNum[1] === '2') element.setAttribute('fill', '#1c4b9c');
+                 else if (lineNum[1] === '6') element.setAttribute('fill', '#6db76e');
+                 else element.setAttribute('fill', '#aaa');
+            } else if (element.id.startsWith('ratp-uns-station-')) {
+                // Handle alert-texts (e.g. ratp-uns-station-nation-alert)
+                const gParent = element.closest('g[id*="ratp-uns-line-"]');
+                if(gParent) {
+                     if (gParent.id.includes('-1-')) element.setAttribute('fill', '#f7bf0f');
+                     else if (gParent.id.includes('-2-')) element.setAttribute('fill', '#1c4b9c');
+                     else if (gParent.id.includes('-6-')) element.setAttribute('fill', '#6db76e');
+                     else element.setAttribute('fill', '#aaa');
+                } else {
+                    element.setAttribute('fill', '#aaa');
+                }
+            }
         }
     });
-    // Also reset all alarm lines to hidden
     svgContent.querySelectorAll('.alarm-line').forEach(el => el.style.visibility = 'hidden');
-    // [NEW] Reset direct alarm texts
     svgContent.querySelectorAll('.alarm-text').forEach(el => {
-        if (!el.closest('.alarm-line')) { // Only hide if NOT in an alarm-line group
+        if (!el.closest('.alarm-line')) { 
             el.style.visibility = 'hidden';
+            el.classList.remove('alarm-text'); // Remove class too
         }
     });
+    
+    // [NEW] Clear all dynamically created elements
+    trainElements.forEach(trainG => trainG.remove());
+    trainElements.clear();
+    stationTelemetryElements.forEach(kpiG => kpiG.remove());
+    stationTelemetryElements.clear();
 
     // 2. Filter messages up to the replay timestamp
     const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
+    
     
     // 3. Determine the final state of each topic at that point in time
     const finalState = new Map();
@@ -505,26 +720,30 @@ function replaySvgHistory(replayUntilTimestamp) {
     finalState.forEach((payload, topic) => {
         try {
             const data = JSON.parse(payload); 
+            
+            // --- [NEW] Paris Métro Logic ---
+            if (currentSvgId === 'ParisMetroTacticalMap' && topic.startsWith('ratp/uns/')) {
+                 if (topic.includes('/train/')) {
+                    updateMetroTrain(topic, data); // Create and place train
+                } else if (topic.includes('/station/') && topic.endsWith('/alert')) {
+                    updateMetroStationAlert(topic, data); // Handle station alerts
+                } else if (topic.includes('/station/') && topic.endsWith('/telemetry')) {
+                    updateMetroStationTelemetry(topic, data); // Handles station KPIs
+                } else if (topic.includes('/line/') && topic.endsWith('/status')) {
+                    updateMetroLineStatus(topic, data); // Handles line status
+                } else {
+                     const svgId = topic.replace(/\//g, '-');
+                     defaultUpdateLogic(svgId, data);
+                }
+                return; // Handled
+            }
+            // --- [End New Logic] ---
+
             const svgId = topic.replace(/\//g, '-');
+            defaultUpdateLogic(svgId, data);
 
-            const groupElements = svgContent?.querySelectorAll(`[id="${svgId}"]`);
-            if (groupElements.length === 0) return;
-
-            groupElements.forEach(groupElement => {
-                const dataElements = groupElement.querySelectorAll('[data-key]');
-                
-                dataElements.forEach(el => {
-                    const keyPath = el.dataset.key; 
-                    const value = getNestedValue(data, keyPath);
-                    
-                    if (value !== null && value !== undefined) {
-                        updateSvgElement(el, keyPath, value);
-                    }
-                });
-            });
         } catch (e) { /* Payload is not JSON, ignore */ }
     });
     
-    // 5. --- UPDATE PLACEHOLDER ---
     updateAlarmPlaceholder();
 }

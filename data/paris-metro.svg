@@ -1,0 +1,1214 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="ParisMetroTacticalMap"
+   width="100%"
+   height="100%"
+   version="1.1"
+   viewBox="0 0 7529.1 5257.1"
+   xml:space="preserve"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  
+  <defs id="defs1">
+    <style>
+      /* --- Statuts des lignes (contrôlés par JS) --- */
+      .line-status-OK { opacity: 1; }
+      .line-status-PERTURBED { opacity: 0.6; stroke-dasharray: 15 5; animation: dash-flow 0.5s linear infinite; }
+      .line-status-INTERRUPTED { opacity: 0.2; }
+      @keyframes dash-flow {
+        from { stroke-dashoffset: 20; }
+        to { stroke-dashoffset: 0; }
+      }
+
+      /* --- Alertes (contrôlées par JS) --- */
+      .alarm-text {
+        animation: blink-animation 1s steps(2, start) infinite;
+        /* [MODIFIED] Augmentation de la taille de l'alerte */
+        font-size: 36px !important; 
+        font-weight: bold;
+      }
+      @keyframes blink-animation {
+        /* [MODIFIED] Faire clignoter la couleur de remplissage */
+        50% { fill: #f85149; }
+        100% { fill: inherit; }
+      }
+      
+      /* --- Trains (créés par JS) --- */
+      .train-box {
+        fill: rgba(10, 20, 30, 0.8);
+        stroke: #58a6ff;
+        stroke-width: 1.5;
+        rx: 3;
+        transition: transform 0.5s ease-in-out;
+      }
+      .train-text { font-family: 'Consolas', 'Lucida Console', monospace; }
+      /* [MODIFIED] Augmentation des tailles de police */
+      .train-text-id { font-size: 36px; font-weight: bold; }
+      .train-text-label { font-size: 28px; fill: #8b949e; }
+      .train-text-data { font-size: 28px; fill: #c9d1d9; }
+      
+      .train-status-RUNNING { fill: #3fb950; }
+      .train-status-STOPPED_STATION { fill: #d29922; }
+      .train-status-CANCELLED, .train-status-STOPPED_EMERGENCY { fill: #f85149; }
+
+    </style>
+  </defs>
+
+  <sodipodi:namedview
+   id="namedview1"
+   pagecolor="#ffffff"
+   bordercolor="#000000"
+   borderopacity="0.25" />
+<path
+   id="river"
+   d="m7490.8 4201h-1577.2c-25.741-28.207-55.749-57.039-98.96-70.823-26.047-8.3087-51.795-20.728-79.055-33.875-12.323-5.9431-25.066-12.09-37.95-17.883-45.508-20.459-98.735-45.326-148.47-74.631-31.36-18.477-63.507-34.866-94.596-50.715-39.134-19.952-76.098-38.797-111.36-61.335-30.441-19.46-61.433-38.225-91.403-56.371-70.681-42.795-137.44-83.218-199.68-133.15-60.426-48.483-115.1-92.147-172.29-135.55-14.19-10.768-27.476-23.868-41.542-37.738-17.504-17.26-35.546-33.261-54.619-48.738-7.522-6.104-14.068-8.899-22.316-13.444-10.42-5.743-18.117-15.682-27.115-23.298-12.758-10.797-24.41-24.369-39.073-32.679-11.702-6.632-18.434-8.508-25.896-20.874-15.866-26.29-22.602-58.117-30.023-87.543-7.7907-30.888-15.848-62.827-29.33-93.087-19.48-43.721-57.961-77.378-96.169-104.63-17.292-12.336-36.229-22.377-52.913-35.213-9.7968-7.537-21.274-13.009-32.093-18.775-14.091-7.512-28.085-16.352-42.487-22.976-22.687-10.434-46.997-12.767-70.596-19.897-18.021-5.445-33.574-13.448-52.694-17.216-46.285-9.117-93.548-13.124-140.63-15.037-33.909-1.378-67.862-1.559-101.79-0.858-28.241 0.583-58.912 2.206-85.98-7.692-20.305-7.426-29.189-22.563-39.318-39.625-49.675-83.673-168.14-96.518-254.87-99.243-21.112-0.663-42.824 0.271-64.177 0.271-33.466 0-66.44-0.5809-98.954 4.9521-30.238 5.146-61.87 6.689-90.519 18.572-20.528 8.515-35.528 27.137-52.779 41.172-37.653 30.635-73.597 63.373-109.44 96.085-37.067 33.829-73.869 67.95-110.72 102.02l-44 40.685c-195.72 180.86-300.99 301.84-377.86 390.18-34.382 39.515-61.54 70.725-88.071 97.256l-7.272 7.243c-22.406 22.265-43.569 43.296-62.516 74.121-20.405 33.198-23.045 61.089-34.049 113.52-23.211 110.59-33.115 291-33.115 603.24 0 142.09-51.584 273.98-126.5 358.72-32.747 37.046-70.932 65.792-113.5 85.438-40.965 18.908-83.951 28.496-127.76 28.496-90.155 0-173.75-41.021-235.39-115.51-73.717-89.081-112.68-220.88-112.68-381.15v-1931.6c0-101.61 15.716-183.38 49.458-257.31 32.176-70.499 81.154-136.33 158.81-213.44 112.8-112.02 183.42-204.63 243.75-319.67 53.684-102.37 67.763-188.32 83.115-307.77 12.859-100.06 14.721-192.75 5.532-275.49-4.725-42.544-3.017-83.557-1.209-126.98 0.627-15.071 1.276-30.655 1.667-46.603 1.586-64.838 19.784-73.918 28.529-78.281 25.902-12.923 78.022-12.923 133.2-12.923 52.499 0 131.41-3.675 222.77-7.93 135.05-6.29 303.13-14.117 467.56-14.117 124.95 0 187.97-15.635 224.78-55.765 19.853-21.644 30.701-49.782 33.166-86.024 1.83-26.914-0.7599-56.859-3.758-91.526-2.922-33.791-6.235-72.089-6.235-116.14v-452.32h-100v452.33c0 48.368 3.663 90.724 6.606 124.76 4.137 47.834 7.71 89.146-3.474 101.34-3.124 3.406-11.997 9.891-36.328 15.063-26.264 5.583-63.802 8.297-114.76 8.297-166.76 0-336.12 7.887-472.21 14.225-90.12 4.197-167.95 7.821-218.12 7.821-70.218 0-130.86 0-177.84 23.442-28.346 14.142-49.728 35.934-63.551 64.769-12.653 26.395-19.295 59.285-20.304 100.55-0.3689 15.09-1 30.238-1.61 44.888-1.884 45.256-3.833 92.054 1.734 142.18 8.312 74.838 6.519 159.52-5.328 251.7-14.389 111.96-26.449 186.28-72.491 274.07-55.242 105.34-120.62 190.85-225.65 295.15-85.431 84.836-142.41 162.01-179.32 242.88-39.901 87.425-58.485 182.38-58.485 298.83v1931.6c0 183.83 46.903 337.68 135.64 444.91 40.965 49.503 89.604 87.824 144.57 113.9 52.945 25.118 109.42 37.854 167.87 37.854 58.389 0 115.48-12.685 169.67-37.702 55.23-25.493 104.52-62.504 146.51-110 43.889-49.651 78.141-109.05 101.81-176.55 25.067-71.501 49.765-163.03 49.765-248.4 0-300.9 9.555-480.61 30.982-582.7 18.185-86.64 29.906-98.212 69.186-137.25l7.495-7.4639c28.983-28.983 58.557-62.971 92.8-102.32 75.357-86.604 178.56-205.21 370.29-382.38 0 0 44.035-40.716 44.036-40.717 35.813-33.125 71.595-66.285 107.61-99.189 32.423-29.623 66.069-59.526 91.686-95.529 8.727-12.264 14.349-21.53 25.002-32.493 21.034-21.646 37.388-41.683 68.176-46 21.452-3.008 44.372-1 66.082-1 32.18 0 64.034 4.408 95.778 8.781 11.05 1.522 21.85 3.661 31.977 8.695 10.669 5.305 19.556 13.523 29.941 19.549 14.214 8.246 31.502 10.3 46.958 15.283 16.807 5.42 33.334 11.722 49.413 19.03 32.224 14.647 62.619 33.379 89.552 56.396 14.145 12.088 28.812 21.354 42.368 34.041 22.774 21.314 42.652 46.951 66.749 66.495 19.581 15.881 40.468 31.924 59.726 48.726 15.989 13.95 29.236 30.092 45.721 43.729 87.21 72.152 174.07 143.36 272.7 199.66 45.664 26.065 93.781 47.78 143.79 64.077 25.659 8.361 51.772 15.314 78.173 20.904 13.647 2.891 27.372 5.417 41.152 7.599 25.638 4.059 54.81 17.522 71.653 37.635 18.494 22.082 41.563 38.839 62.178 59.167 15.713 15.494 31.961 31.515 51.305 46.194 56.199 42.647 110.31 85.867 170.16 133.89 67.383 54.063 140.12 98.105 210.47 140.7 29.458 17.837 59.92 36.28 89.337 55.085 39.36 25.161 80.252 46.008 119.8 66.169 31.122 15.866 60.519 30.854 89.252 47.783 53.915 31.766 110.24 58.104 158.23 79.68 11.658 5.2399 23.246 10.83 35.514 16.747 29.179 14.073 59.352 28.625 92.105 39.073 24.161 7.7079 43.984 29.951 66.937 55.707 5.998 6.7298 12.2 13.69 18.643 20.537 62.391 66.308 88.114 125.11 98.707 162.77 11.236 39.948 8.2767 65.151 8.2097 65.692l-0.4438 2.956-0.079 4.261v720.27h100v-717.35c0.4341-4.202 0.9062-10.75 0.9062-19.376 0-17.484-1.9452-43.431-10.114-75.301-15.311-59.728-45.974-118.29-91.348-174.62h1515.1v-69.998zm-3101.8-849.16c-84.123-49.93-168.07-119.29-280.7-231.92-35.724-35.724-69.875-67.175-102.99-94.828 33.637-1.002 73.929-1.31 115.45 0.393 177.22 7.265 229.73 43.748 245.26 64.85 59.508 80.868 138.95 256.78 170.23 328.38-50.751-16.284-99.236-38.378-147.25-66.877zm284.03 156.94c-1.7103-0.157-3.1461-0.431-4.2931-0.717 1.4328 0.1671 2.8768 0.32 4.3138 0.481l-0.038 0.236zm-28.664-74.59c-2.0543 1.963-4.7513 3.709-8.2071 5.167-8.5862 3.622-16.675 1.635-24.894-3.903-7.4858-5.046-12.962-13.313-19.569-19.387-11.344-10.427-10.336-19.167-16.426-32.979-24.662-55.937-49.564-111.81-77.126-166.39-12.615-24.981-24.548-52.89-41.447-75.175-5.413-7.138-29.795-29.356-24.803-39.44 8.861-17.883 73.712 33.565 82.556 40.534 27.075 21.334 53.786 46.859 68.036 78.845 12.429 27.896 20.163 58.56 27.644 88.214 6.5511 25.971 9.6372 57.939 26.091 79.962 9.0229 12.077 20.81 32.445 8.145 44.551z"
+   fill="#cff" />
+<g
+   id="ratp-uns-line-1-status"
+   transform="translate(-519.51001)"
+   stroke-width="8">
+  <path
+   id="line1_path"
+   data-key="status"
+   data-line-id="1"
+   d="m 6741.2,3557.6 -314,-314 c -114,-114 -114,-114 -306,-114 h -258.36 c -113.64,0 -113.64,0 -213.64,100 l -239,239 c -46.5,46.5 -48.5,44.5 -93,0 l -135.5,-135.5 c -44.951,-44.951 -44.951,-47 -44.951,-127.5 0,-73.333 0,-73.333 -25.549,-73.333 h -54 c -194,0 -194,-2.667 -258,-66.667 l -74,-74 c -101.75,-101.75 -101.75,-101.75 -178,-101.75 h -529 c -117,0 -117,-119.45 -212,-119.45 h -703.23 c -112.5,0 -113.32,0 -195.4,-82.08 -54.747,-54.746 -155.99,-155.99 -155.99,-155.99 L 1815.1,1595.85"
+   stroke="#f7bf0f"
+   transform="translate(1.8520003e-6)"
+   style="fill:none;stroke-width:30.1164;stroke-dasharray:none" />
+  <path
+   id="line1_number_start"
+   d="m 1810.2743,1527.9404 c 0,-19.053 15.445,-34.499 34.498,-34.499 19.053,0 34.498,15.445 34.498,34.499 0,19.053 -15.445,34.498 -34.498,34.498 -19.053,0 -34.498,-15.445 -34.498,-34.498 z"
+   fill="#f7bf0f"
+   transform="translate(1.8520003e-6)" />
+  <text
+   id="ratp-uns-station-chatelet-alert"
+   x="4466.438"
+   y="2857.3784"
+   stroke="#ffffff"
+   stroke-width="1.8823"
+   text-anchor="end"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Châtelet</text>
+  <text
+   id="line1_station_esplanade_de_la_defense"
+   x="1454.4176"
+   y="1810.5846"
+   fill="#f7bf0f"
+   text-anchor="end"
+   transform="translate(519.51)"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Esplanade de la Défense</text>
+  <text
+   id="line1_station_la_defense"
+   x="1777.0807"
+   y="1615.4788"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">La Défense</text>
+  <text
+   id="line1_station_bastille"
+   x="5165.7598"
+   y="3130.9797"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Bastille</text>
+  <path
+   id="line1_terminus_chateau_de_vincennes"
+   d="m 6236.1,3557.6 c 0,7.9528 -6.4468,14.4 -14.4,14.4 -7.953,0 -14.4,-6.4472 -14.4,-14.4 0,-7.953 6.4472,-14.4 14.4,-14.4 7.9529,0 14.4,6.447 14.4,14.4 z"
+   fill="#f7bf0f"
+   transform="translate(519.51001)" />
+  <text
+   id="line1_station_pont_de_neuilly"
+   x="2136.3289"
+   y="1983.1947"
+   text-align="end"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Pont de Neuilly</text>
+  <text
+   id="line1_station_les_sablons"
+   x="2303.7205"
+   y="2145.4358"
+   text-align="end"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Les Sablons</text>
+  <text
+   id="line1_station_porte_maillot"
+   x="2472.2898"
+   y="2314.9927"
+   text-align="end"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Porte Maillot</text>
+  <text
+   id="line1_station_argentine"
+   x="2645.449"
+   y="2482.4402"
+   text-align="end"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Argentine</text>
+  <text
+   id="line1_station_george_v"
+   x="3057.9805"
+   y="2817.6826"
+   text-align="end"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">George V</text>
+  <text
+   id="ratp-uns-station-charles_de_gaulle_etoile-alert"
+   x="693.43762"
+   y="3892.7732"
+   text-align="end"
+   transform="rotate(-45.037168)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Charles de Gaulle - Etoile</text>
+  <text
+   id="line1_station_tuileries"
+   x="3873.6538"
+   y="2857.7295"
+   text-align="end"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Tuileries</text>
+  <text
+   id="line1_station_louvre_rivoli"
+   x="848.01282"
+   y="4890.4883"
+   text-align="center"
+   text-anchor="middle"
+   transform="rotate(-43.130176)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Louvre Rivoli</text>
+  <text
+   id="line1_station_saint-paul"
+   x="4813.6333"
+   y="3051.9175"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Saint-Paul</text>
+  <text
+   id="line1_station_porte_de_vincennes"
+   x="6196.3105"
+   y="3110.0066"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Porte de Vincennes</text>
+  <text
+   id="line1_station_saint-mandé"
+   x="6433.2827"
+   y="3219.1733"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Saint-Mandé</text>
+  <text
+   id="line1_station_berault"
+   x="6596.5679"
+   y="3391.4402"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Bérault</text>
+  <text
+   id="line1_station_chateau_de_vincennes"
+   x="6778.4058"
+   y="3568.4773"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Château de vincennes</text>
+  <path
+   id="line1_number_background_start"
+   d="m 1845.3943,1549.4607 v -31.006 l -8.75,5.256 v -7.313 c 5.61,-2.711 10.048,-6.064 13.313,-10.063 h 3.063 v 43.125 h -7.626 z" />
+  <path
+   id="line1_number_end"
+   d="m 6742.4915,3627.3751 c 0,-19.053 15.445,-34.498 34.498,-34.498 19.053,0 34.498,15.445 34.498,34.498 0,19.053 -15.445,34.498 -34.498,34.498 -19.053,0 -34.498,-15.445 -34.498,-34.498 z"
+   fill="#f7bf0f" />
+  <path
+   id="line1_number_background_end"
+   d="m 6777.6015,3648.8954 v -31.006 l -8.75,5.256 v -7.313 c 5.61,-2.711 10.048,-6.064 13.313,-10.063 h 3.063 v 43.125 h -7.626 z" />
+  <path
+   id="line1_gare_reuilly_diderot"
+   d="m 5580.7,3285.6 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1"
+   transform="translate(1.8520003e-6)" />
+  <path
+   id="line1_gare_nation"
+   d="m 5799.8165,3133.3701 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_gare_de_lyon"
+   d="m 5277.328,3441.0048 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.9029 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_bastille"
+   d="m 5120.8569,3143.1504 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <text
+   id="line1_station_franklin_d_roosevelt"
+   x="552.97607"
+   y="4222.4268"
+   text-align="end"
+   transform="rotate(-42.450521)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Franklin D.Roosevelt</text>
+  <text
+   id="line1_station_champs-elyses_clemenceau"
+   transform="rotate(-45)"
+   x="-139.51483"
+   y="4437.4395"
+   text-align="end"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Champs-ElyséesClémenceau</text>
+  <text
+   id="line1_station_concorde"
+   x="437.68253"
+   y="4583.1289"
+   text-align="end"
+   text-anchor="end"
+   transform="rotate(-46.966161)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Concorde</text>
+  <text
+   id="line1_station_palais_royal_musee_du_louvre"
+   x="520.25244"
+   y="5062.2979"
+   text-align="center"
+   text-anchor="middle"
+   transform="rotate(-46.024945)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Palais RoyalMusée du Louvre</text>
+  <text
+   id="line1_station_hotel_de_ville"
+   x="4932.1807"
+   y="2908.6929"
+   text-align="end"
+   text-anchor="end"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Hôtel de Ville</text>
+  <text
+   id="line1_station_reuilly_diderot"
+   x="5614.8628"
+   y="3319.1108"
+   transform="translate(1.8520003e-6)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">ReuillyDiderot</text>
+  <path
+   id="line1_gare_saint-paul"
+   d="m 4792.7076,3070.324 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_hotel_de_ville"
+   d="m 4628.3341,2915.8777 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.9029 -5.5959,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_palais_royal_musee_du_louvre"
+   d="m 4217.9191,2891.0132 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_chatelet"
+   d="m 4386.2138,2889.8537 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.9029 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_louvre_rivoli"
+   d="m 4030.1855,2892.9951 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.5959,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_tuileries"
+   d="m 3877.3277,2813.4703 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_concorde"
+   d="m 3634.2474,2770.0091 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_georges_v"
+   d="m 3017.7668,2770.1559 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_garefranklin_d_roosevelt"
+   d="m 3232.3846,2772.4908 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9041,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9039,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_argentine"
+   d="m 2658.4472,2450.0664 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_porte_maillot"
+   d="m 2491.8706,2286.164 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_les_sablons"
+   d="m 2359.3182,2148.129 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_pont_de_neuilly"
+   d="m 2175.0119,1969.3348 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_esplanade_de_la_defense"
+   d="m 1999.3214,1789.8358 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_porte_de_vincennes"
+   d="m 6196.7168,3131.3699 c 0,-6.9031 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5969 12.5,12.5 0,6.9029 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5961 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_saint_mandé"
+   d="m 6398.7368,3224.889 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.9029 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_berault"
+   d="m 6558.7137,3387.4357 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_chateau_de_vincennes"
+   d="m 6731.5559,3557.9107 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.9029 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_la_defense"
+   d="m 1799.957,1593.6876 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <text
+   id="ratp-uns-station-nation-alert"
+   x="2097.2065"
+   y="6266.9521"
+   text-align="end"
+   text-anchor="end"
+   fill="#000000"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold"
+   transform="rotate(-42.867887)"><tspan
+     style="fill:#f7bf0f;fill-opacity:1"
+     id="tspan1">Nation</tspan></text>
+  <text
+   id="line1_station_gare_de_lyon"
+   x="4851.9546"
+   y="3338.1187"
+   text-align="center"
+   text-anchor="middle"
+   transform="translate(519.51001)"
+   fill="#f7bf0f"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Gare de Lyon</text>
+  <path
+   id="line1_gare_charles_de_gaulle_etoile"
+   d="m 2812.997,2603.7296 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line1_gare_champs-elysees_clemenceau"
+   d="m 3444.4035,2770.8852 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.903 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.596 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+</g>
+<g
+   id="ratp-uns-line-2-status">
+  <path
+   id="line2_path"
+   data-key="status"
+   data-line-id="2"
+   d="m 2075.2,2727 h 542 c 74,0 74.498,0 117.74,-43.247 43.242,-43.247 102.17,-102.17 102.17,-102.17 l 339,-339 c 105.08,-105.08 105.08,-106.92 105.08,-200.92 v -184 c 0,-76 0,-76 194,-270 77,-77 79,-77 223,-77 h 1669.7 c 39.365,0 43.375,0 100.75,57.376 23.104,23.104 75.071,75.07 100.67,100.67 25.6,25.601 25.6,31.096 25.6,70.461 v 220.67 c 0,58.322 0.083,58.404 78.582,136.9 52.869,52.869 43.046,43.044 126.01,126 68.048,68.049 63.2276,63.0224 63.475,140.02 l 2.4599,765.7184"
+   stroke="#1c4b9c"
+   transform="translate(-519.51001)"
+   style="fill:none;stroke-width:30.1164;stroke-dasharray:none" />
+  <text
+   id="line2_station_place_de_clichy"
+   transform="rotate(-0.7011209)"
+   x="2960.1445"
+   y="1566.6272"
+   text-anchor="end"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Place de Clichy</text>
+  <text
+   id="line2_station_pigalle"
+   x="4113.186"
+   y="1563.4961"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Pigalle</text>
+  <text
+   id="line2_station_villiers"
+   x="3270.8743"
+   y="1783.6459"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Villiers</text>
+  <text
+   id="line2_station_stalingrad"
+   x="5504.2778"
+   y="1485.3269"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Stalingrad</text>
+  <text
+   id="ratp-uns-station-barbes-rochechouart-alert"
+   transform="rotate(-33.46488)"
+   x="3137.3147"
+   y="3559.606"
+   text-anchor="end"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Barbès-Rochechouart</text>
+  <text
+   id="line2_station_jaures"
+   transform="rotate(1.2746003)"
+   x="5135.2769"
+   y="1582.772"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Jaurès</text>
+  <text
+   id="line2_station_belleville"
+   x="5566.7476"
+   y="2003.7955"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Belleville</text>
+  <text
+   id="line2_station_victor_hugo"
+   x="2433.7144"
+   y="2696.5667"
+   text-anchor="middle"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Victor Hugo</text>
+  <text
+   id="line2_station_porte_dauphine"
+   x="1576.0527"
+   y="2697.384"
+   text-anchor="middle"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Porte Dauphine</text>
+  <text
+   id="line2_station_ternes"
+   x="2975.6965"
+   y="2412.6045"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Ternes</text>
+  <text
+   id="line2_station_courcelles"
+   x="3190.8542"
+   y="2198.1418"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Courcelles</text>
+  <text
+   id="line2_station_monceau"
+   x="3260.1873"
+   y="1989.0991"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Monceau</text>
+  <text
+   id="line2_station_rome"
+   transform="rotate(1.1217482)"
+   x="2889.0647"
+   y="1588.1721"
+   text-align="end"
+   fill="#1c4b9c"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Rome</text>
+  <text
+   id="line2_station_blanche"
+   x="3229.0278"
+   y="1565.8884"
+   text-anchor="middle"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Blanche</text>
+  <text
+   id="line2_station_anvers"
+   x="4308.3076"
+   y="1567.1426"
+   text-anchor="middle"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Anvers</text>
+  <text
+   id="line2_station_la_chapelle"
+   transform="rotate(-36.745941)"
+   x="2359.9734"
+   y="3846.2175"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">La Chapelle</text>
+  <text
+   id="line2_station_colonel_fabien"
+   x="5621.1978"
+   y="1878.9448"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Colonel Fabien</text>
+  <text
+   id="line2_station_couronnes"
+   x="5721.167"
+   y="2126.1382"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Couronnes</text>
+  <text
+   id="line2_station_menilmontant"
+   x="5827.1021"
+   y="2229.1111"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Ménilmontant</text>
+  <text
+   id="line2_station_philippe_auguste"
+   x="5876.7305"
+   y="2561.2566"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Philippe Auguste</text>
+  <text
+   id="line2_alexandre_dumas"
+   x="5886.7959"
+   y="2749.3953"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Alexandre Dumas</text>
+  <text
+   id="line2_station_avron"
+   x="5883.0391"
+   y="2943.7275"
+   transform="translate(-519.51001)"
+   fill="#1c4b9c"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Avron</text>
+  <path
+   id="line2_number2"
+   d="m 1512.6873,2794.3199 c 0,-19.053 15.445,-34.498 34.498,-34.498 19.053,0 34.498,15.445 34.498,34.498 0,19.053 -15.445,34.498 -34.498,34.498 -19.053,0 -34.498,-15.446 -34.498,-34.498 z"
+   fill="#1c4b9c" />
+  <path
+   id="line2_number_background_start"
+   d="m 1533.4073,2816.1402 v -2.227 l 13.563,-20 c 2.707,-4 4.063,-7.367 4.063,-10.102 0,-3.24 -1.943,-4.859 -5.826,-4.859 -2.969,0 -5.359,1.563 -7.174,4.688 l -5.125,-4.043 c 1.016,-2.049 2.613,-3.752 4.793,-5.109 2.18,-1.357 4.588,-2.035 7.227,-2.035 4.396,0 7.836,1.002 10.318,3.004 2.482,2.004 3.725,4.783 3.725,8.34 0,3.266 -1.592,7.33 -4.775,12.195 l -8.787,13.398 h 16.125 v 6.75 z"
+   fill="#ffffff" />
+  <path
+   id="line2_number_background_end"
+   d="m 5374.6877,3074.0273 c 0,-19.053 15.445,-34.498 34.498,-34.498 19.053,0 34.498,15.445 34.498,34.498 0,19.053 -15.445,34.498 -34.498,34.498 -19.053,0 -34.498,-15.445 -34.498,-34.498 z"
+   fill="#1c4b9c" />
+  <path
+   id="line2_number"
+   d="m 5395.3977,3095.8476 v -2.227 l 13.563,-20 c 2.707,-4 4.063,-7.367 4.063,-10.102 0,-3.24 -1.943,-4.859 -5.826,-4.859 -2.969,0 -5.359,1.563 -7.174,4.688 l -5.125,-4.043 c 1.016,-2.049 2.613,-3.752 4.793,-5.109 2.18,-1.357 4.588,-2.035 7.227,-2.035 4.396,0 7.836,1.002 10.318,3.004 2.482,2.004 3.725,4.783 3.725,8.34 0,3.266 -1.592,7.33 -4.775,12.195 l -8.787,13.398 h 16.125 v 6.75 z"
+   fill="#ffffff" />
+  <path
+   id="line2_gare_porte_dauphine"
+   d="m 1537.4988,2727.2779 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_victor_hugo"
+   d="m 1882.8054,2726.8171 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5958 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_ternes"
+   d="m 2447.5727,2441.0326 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_courcelles"
+   d="m 2681.5446,2203.5689 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_monceau"
+   d="m 2749.5611,1978.9811 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_villiers"
+   d="m 2757.6176,1793.5968 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_rome"
+   d="m 2884.2362,1648.8222 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_place_de_clichy"
+   d="m 2995.1722,1539.6745 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_blanche"
+   d="m 3217.9961,1511.2798 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_pigalle"
+   d="m 3512.3645,1511.3706 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_anvers"
+   d="m 3786.1218,1511.2555 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_barbes-rochechouart"
+   d="m 4152.15,1510.7948 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_la_chapelle"
+   d="m 4352.5259,1510.2007 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_stallingrad"
+   d="m 4825.871,1511.1403 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_jaures"
+   d="m 5059.3459,1695.6517 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_colonnel_fabien"
+   d="m 5063.5651,1869.0756 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_belleville"
+   d="m 5063.7712,1987.6802 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_couronnes"
+   d="m 5166.0992,2120.0093 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_menilmontant"
+   d="m 5266.275,2222.0704 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_philippe_auguste"
+   d="m 5332.5516,2549.4953 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_alexandre_dumas"
+   d="m 5333.5095,2735.9588 c 0,-6.903 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.597 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_avron"
+   d="m 5333.6974,2933.3824 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <path
+   id="line2_gare_nation"
+   d="m 5331.1029,3112.651 c 0,-6.9029 5.596,-12.5 12.5,-12.5 6.9042,0 12.5,5.5971 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9038,0 -12.5,-5.5959 -12.5,-12.5 z"
+   style="fill:#fff9f9;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+  <text
+   id="line2_station_nation"
+   x="5319.4629"
+   y="3090.4897"
+   text-anchor="end"
+   fill="#000000"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold"
+   transform="rotate(0.11725552)"><tspan
+     style="fill:#1c4b9c;fill-opacity:1"
+     id="tspan2">Nation</tspan></text>
+</g>
+<g
+   id="ratp-uns-line-6-status"
+   style="display:inline">
+  <path
+   id="line6_path"
+   data-key="status"
+   data-line-id="6"
+   d="m 2833.2,2613.6 -130,130 c -146,146 -146,146 -146,248 v 417 c 0,164 0,164 82,246 l 154,154 c 49.87,49.87 49.87,49.87 139.43,49.87 h 264.03 c 51.684,0 50.372,0 141.99,91.614 l 115.51,115.51 c 50.807,50.807 51.295,50.807 138.8,50.807 h 346.98 c 16.067,0 16.067,0 47.267,31.199 6.333,6.3338 7.5001,7.4997 29.75,29.75 22.25,19.25 26.917,21.65 61.756,21.65 h 1010.2 c 89.31,0 90.54,-1.2291 218.98,-129.67 l 643.56,-643.56 c 52.47,-52.47 49.464,-115.7 0,-165.16 l -107.2866,-113.2175"
+   stroke="#6db76e"
+   style="display:inline;fill:none;stroke-width:30.1164;stroke-dasharray:none"
+   transform="translate(-519.51001)"
+   sodipodi:nodetypes="cssssssscsssscsscscc" />
+  <text
+   id="line6_station_tracadero"
+   transform="rotate(-0.95962409)"
+   x="1957.0989"
+   y="3340.0913"
+   text-align="end"
+   text-anchor="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Trocadero</text>
+  <text
+   id="ratp-uns-station-montparnasse_bienvenue-alert"
+   transform="rotate(43.168676)"
+   x="5138.0288"
+   y="875.04138"
+   text-align="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Montparnasse Bienvenüe</text>
+  <text
+   id="line6_station_pasteur"
+   x="3420.8313"
+   y="4076.8728"
+   text-align="end"
+   transform="translate(-519.51001)"
+   text-anchor="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Pasteur</text>
+  <text
+   id="line6_station_la_motte_piquet_grenelle"
+   transform="rotate(-41.665147)"
+   x="-710.28613"
+   y="4503.9536"
+   text-align="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">La MottePiquetGrenelle</text>
+  <text
+   id="line6_station_raspail"
+   transform="rotate(45,-259.75498,-627.10406)"
+   x="5705.8428"
+   y="168.8772"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Raspail</text>
+  <text
+   id="line6_station_denfert_rochereau"
+   transform="rotate(45)"
+   x="5496.7178"
+   y="413.61298"
+   text-align="end"
+   text-anchor="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Denfert Rochereau</text>
+  <text
+   id="line6_stataion_daumesnil"
+   x="5228.9351"
+   y="3678.2866"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Daumesnil</text>
+  <text
+   id="line6_station_kleber"
+   x="2612.7344"
+   y="2807.55"
+   text-align="end"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Kléber</text>
+  <text
+   id="line6_station_charles_de_gaule_etoile"
+   x="2179.8401"
+   y="2615.4961"
+   text-align="end"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Charles de Gaulle - Etoile</text>
+  <text
+   id="line6_station_boissiere"
+   x="2010.1506"
+   y="3073.6411"
+   text-align="end"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Boissière</text>
+  <text
+   id="line6_station_dupleix"
+   x="2760.2788"
+   y="3820.9075"
+   text-align="end"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Dupleix</text>
+  <text
+   id="line6_station_bir-hakeim_tour_eiffel"
+   x="1815.5771"
+   y="3712.2241"
+   text-align="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Bir-HakeimTour Eiffel</text>
+  <text
+   id="line6_station_passy"
+   x="2555.7981"
+   y="3599.7317"
+   text-align="end"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Passy</text>
+  <path
+   id="line6_numbers_charles_de_gaulle_etoile"
+   d="m 2185.9,2596 c 0,-19.053 15.445,-34.498 34.498,-34.498 19.053,0 34.498,15.445 34.498,34.498 0,19.053 -15.445,34.498 -34.498,34.498 -19.053,0 -34.498,-15.446 -34.498,-34.498 z"
+   fill="#6db76e" />
+  <path
+   id="line6_number6"
+   d="m 2782.5,2574.3 4.053,4.25 c -2.918,1.518 -5.572,3.512 -7.961,5.982 -2.389,2.473 -4.035,4.916 -4.936,7.332 2.033,-0.918 3.793,-1.377 5.279,-1.377 4.047,0 7.297,1.256 9.75,3.768 2.453,2.514 3.68,5.91 3.68,10.191 0,4.225 -1.256,7.641 -3.77,10.25 -2.514,2.611 -5.688,3.916 -9.521,3.916 -10.014,0 -15.021,-6.234 -15.021,-18.703 0,-5.229 1.934,-10.521 5.801,-15.879 3.867,-5.355 8.084,-8.599 12.646,-9.73 z m -10.51,30 c 0,5.209 2.223,7.813 6.666,7.813 1.82,0 3.268,-0.648 4.344,-1.945 1.076,-1.297 1.615,-3.105 1.615,-5.428 0,-2.379 -0.563,-4.266 -1.688,-5.66 -1.125,-1.394 -2.578,-2.092 -4.359,-2.092 -4.384,0 -6.578,2.437 -6.578,7.312 z"
+   transform="translate(-557.78999,-0.47968001)" />
+  <path
+   id="line6_number_background"
+   d="m 5406.5393,3187.9081 c 0,-19.053 15.445,-34.498 34.498,-34.498 19.053,0 34.498,15.445 34.498,34.498 0,19.053 -15.445,34.498 -34.498,34.498 -19.053,0 -34.498,-15.445 -34.498,-34.498 z"
+   fill="#6db76e" />
+  <path
+   id="line6_number"
+   d="m 5445.3493,3165.7284 4.053,4.25 c -2.918,1.518 -5.572,3.512 -7.961,5.982 -2.389,2.473 -4.035,4.916 -4.936,7.332 2.033,-0.918 3.793,-1.377 5.279,-1.377 4.047,0 7.297,1.256 9.75,3.768 2.453,2.514 3.68,5.91 3.68,10.191 0,4.225 -1.256,7.641 -3.77,10.25 -2.514,2.611 -5.688,3.916 -9.521,3.916 -10.014,0 -15.021,-6.234 -15.021,-18.703 0,-5.229 1.934,-10.521 5.801,-15.879 3.867,-5.355 8.084,-8.599 12.646,-9.73 z m -10.51,30 c 0,5.209 2.223,7.813 6.666,7.813 1.82,0 3.268,-0.648 4.344,-1.945 1.076,-1.297 1.615,-3.105 1.615,-5.428 0,-2.379 -0.563,-4.266 -1.688,-5.66 -1.125,-1.394 -2.578,-2.092 -4.359,-2.092 -4.384,0 -6.578,2.437 -6.578,7.312 z"
+   style="display:inline" />
+  <text
+   id="line6_station_corvisart"
+   transform="rotate(45,-259.75498,-627.10406)"
+   x="6219.4058"
+   y="-301.14493"
+   text-align="end"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Corvisart</text>
+  <text
+   id="line6_station_glaciere"
+   transform="rotate(45,-259.75498,-627.10406)"
+   x="6111.7896"
+   y="-196.21333"
+   text-align="end"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Glacière</text>
+  <text
+   id="line6_station_saint-jacques"
+   transform="rotate(45,-259.75498,-627.10406)"
+   x="6000.6909"
+   y="-91.314873"
+   text-align="end"
+   fill="#6db76e"
+   text-anchor="end"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Saint-Jacques</text>
+  <text
+   id="line6_station_picpus"
+   x="5491.1538"
+   y="3359.7019"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Picpus</text>
+  <text
+   id="line6_station_bel-air"
+   x="5406.2666"
+   y="3497.9802"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Bel-Air</text>
+  <text
+   id="line6_station_dugommier"
+   transform="rotate(0.05946425)"
+   x="5400.9126"
+   y="3744.5813"
+   text-align="end"
+   text-anchor="end"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Dugommier</text>
+  <text
+   id="line6_station_quai_de_la_gare"
+   x="5326.8848"
+   y="4094.0925"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Quai de la Gare</text>
+  <text
+   id="line6_station_chevaleret"
+   x="5202.3467"
+   y="4211.7974"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Chevaleret</text>
+  <text
+   id="line6_station_nationale"
+   x="4999.5337"
+   y="4177.3071"
+   text-anchor="middle"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Nationale</text>
+  <text
+   id="line6_station_edgar_quinet"
+   transform="rotate(45,-259.75498,-627.10406)"
+   x="5635.8911"
+   y="233.36536"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Edgar Quinet</text>
+  <text
+   id="line6_station_cambronne"
+   x="2777.1382"
+   y="3884.8801"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Cambronne</text>
+  <text
+   id="line6_station_sevres_lecourbe"
+   x="3343.0593"
+   y="3994.2979"
+   text-align="end"
+   text-anchor="end"
+   transform="translate(-519.51001)"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Sèvres Lecourbe</text>
+  <path
+   id="line6_gare_daumesnil"
+   d="m 5703.9,3660.8 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1"
+   transform="translate(-519.51001)" />
+  <path
+   id="line6_gare_dugommier"
+   d="m 5117.497,3729.0676 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <text
+   id="line6_station_bercy"
+   x="5020.498"
+   y="3809.9475"
+   text-align="end"
+   text-anchor="end"
+   style="display:inline;fill:#6db76e;fill-opacity:1"
+   fill="#6db76e"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold">Bercy</text>
+  <path
+   id="line6_gare_bel-air"
+   d="m 5361.5628,3482.6477 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_picpus"
+   d="m 5457.072,3345.4632 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+   <path
+   id="line6_gare_nation"
+   d="m 5323.4084,3159.591 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1"/>
+  <path
+   id="line6_gare_bercy"
+   d="m 5041.2324,3803.364 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_quai_de_la_gare"
+   d="m 4790.3669,4055.2663 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_chevaleret"
+   d="m 4652.7604,4182.3025 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_nationale"
+   d="m 4446.6053,4198.3915 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_corvisart"
+   d="m 4085.3442,4198.5994 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_glaciere"
+   d="m 3928.3212,4198.6417 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_saint-jaques"
+   d="m 3775.5631,4198.8707 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_raspail"
+   d="m 5703.9,3660.8 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1"
+   transform="translate(-2309.2709,455.68763)" />
+  <path
+   id="line6_gare_denfert_rochereau"
+   d="m 3602.0079,4199.2716 c 0,-6.9031 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5967 12.5,12.5 0,6.9031 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5973 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_edgar_quinet"
+   d="m 3288.8631,4113.2807 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_montparnasse_bienvenue"
+   d="m 3144.0138,4113.3381 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_pasteur"
+   d="m 2918.0263,4063.2324 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_sevres_lecourbe"
+   d="m 2840.0588,3978.2724 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_cambronne"
+   d="m 2731.4595,3877.0876 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_la_motte_piquet_grenelle"
+   d="m 2431.9412,3858.6085 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_dupleix"
+   d="m 2245.3956,3795.9494 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_bir-hakeim_tour_eiffel"
+   d="m 2145.2416,3694.4783 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_passy"
+   d="m 2048.6805,3588.5555 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_trocadero"
+   d="m 2028.2542,3300.6895 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_boissiere"
+   d="m 2025.7495,3068.9904 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5967 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5973 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_kleber"
+   d="m 2098.5569,2818.2544 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <path
+   id="line6_gare_charles_de_gaule_etoile"
+   d="m 2295.7803,2619.3788 c 0,-6.903 5.5971,-12.5 12.5,-12.5 6.9038,0 12.5,5.5968 12.5,12.5 0,6.9032 -5.596,12.5 -12.5,12.5 -6.9031,0 -12.5,-5.5972 -12.5,-12.5 z"
+   style="display:inline;fill:#fff9f9;fill-opacity:1;stroke:#030303;stroke-opacity:1" />
+  <text
+   id="line6_station_nation"
+   x="1568.4219"
+   y="6011.6768"
+   text-align="end"
+   text-anchor="end"
+   fill="#000000"
+   font-family="sans-serif"
+   font-size="36px"
+   font-weight="bold"
+   transform="rotate(-44.515179)"><tspan
+     style="fill:#6db76e;fill-opacity:1"
+     id="tspan3">Nation</tspan></text>
+</g>
+
+<g id="station-telemetry-container"></g>
+<g id="train-container"></g>
+
+</svg>
