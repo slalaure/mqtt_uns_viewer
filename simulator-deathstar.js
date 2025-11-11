@@ -21,7 +21,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     
     let narrativeInterval = null;
     let sensorInterval = null;
-    const NARRATIVE_INTERVAL_MS = 25000; // Loop for business/command events
+    const NARRATIVE_INTERVAL_MS = 15000; // [MODIFIED] Faster narrative loop
     const SENSOR_INTERVAL_MS = 7000;    // Loop for sensor/telemetry data
     
     const randomBetween = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
@@ -32,7 +32,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         superlaserCharge: 0.0,
         reactorOutput: 100.0,
         rebelActivity: false,
-        commanders: ["Lord Vader", "Grand Moff Tarkin", "Admiral Motti", "General Tagge"],
+        commanders: ["Lord Vader", "Grand Moff Tarkin", "Admiral Motti", "General Tagge", "Officer TK-421"],
         
         equipmentStatus: {
             // Sparkplug B Devices
@@ -40,11 +40,15 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             turbolaser_02: { status: 'standby', temp: 155, power: 10, target: 'none', spSeq: 0, bdSeq: 0 },
             droid_r5_j4:   { status: 'patrol', battery: 85.0, task: 'sector 1138 patrol', spSeq: 0, bdSeq: 0 },
             droid_mse_6:   { status: 'transit', battery: 95.0, task: 'deliver datapad to command', spSeq: 0, bdSeq: 0 },
+            interrogator_IT_O: { status: 'idle', subject: 'none', spSeq: 0, bdSeq: 0 }, // [NEW]
 
             // JSON UNS Devices
             life_support_s01: { o2: 20.9, co2: 410, pressure: 101.2 },
             shield_gen_main:  { power: 100, status: 'online' },
-            tractor_beam_01:  { status: 'inactive', power: 0.0 }
+            tractor_beam_01:  { status: 'inactive', power: 0.0 },
+            detention_AA23:   { prisoner: 'none', status: 'empty', guard: 'TK-421' }, // [NEW]
+            trash_compactor_3263827: { status: 'idle', pressure: 10.0, walls_active: false }, // [NEW]
+            bridge_status:    { alert_level: 'green', commander: 'Admiral Motti' } // [NEW]
         }
     };
 
@@ -103,6 +107,17 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         ];
         let payloadMSE = spBv10Codec.encodePayload({ timestamp: now_ts, metrics: metricsMSE, seq: sessionSeqNum, bdSeq: stateMSE.bdSeq });
         publish('spBv1.0/galactic_empire/NBIRTH/droid_mse_6', payloadMSE, true);
+        
+        // --- 5. Interrogation Droid IT-O NBIRTH --- [NEW]
+        let stateITO = simState.equipmentStatus["interrogator_IT_O"];
+        stateITO.bdSeq = (stateITO.bdSeq + 1) % 256;
+        let metricsITO = [
+            { name: "Status", value: stateITO.status, type: "String" },
+            { name: "Subject/ID", value: stateITO.subject, type: "String" }
+        ];
+        let payloadITO = spBv10Codec.encodePayload({ timestamp: now_ts, metrics: metricsITO, seq: sessionSeqNum, bdSeq: stateITO.bdSeq });
+        publish('spBv1.0/galactic_empire/NBIRTH/interrogator_IT_O', payloadITO, true);
+
         
         logger.info("[DeathStarSim]    -> NBIRTH messages published (seq=0).");
     }
@@ -204,6 +219,38 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
                 status: stateR5.status, battery: parseFloat(stateR5.battery.toFixed(1)), task: stateR5.task, emitted_at: now_iso
             }), false);
         }
+
+        // --- 7. Trash Compactor (JSON UNS) --- [NEW]
+        let stateCompactor = equipmentStatus.trash_compactor_3263827;
+        if (stateCompactor.walls_active) {
+            stateCompactor.pressure += randomBetween(10, 25);
+            stateCompactor.status = 'compacting';
+        } else if (stateCompactor.pressure > 10) {
+            stateCompactor.pressure -= randomBetween(5, 10);
+            stateCompactor.status = 'idle';
+        }
+        stateCompactor.pressure = Math.max(10, stateCompactor.pressure);
+        publish('galactic_empire/death_star/waste_management/trash_compactor_3263827/status', JSON.stringify({
+            status: stateCompactor.status,
+            pressure: parseFloat(stateCompactor.pressure.toFixed(1)),
+            unit: "PSI",
+            walls_active: stateCompactor.walls_active,
+            emitted_at: now_iso
+        }), false);
+        
+        // --- 8. Interrogation Droid (SPARKPLUG B) --- [NEW]
+        if (isSparkplugEnabled) {
+            let stateITO = equipmentStatus["interrogator_IT_O"];
+            // Logic is in narrative, just publish status
+            stateITO.spSeq = (stateITO.spSeq + 1) % 256;
+            const metrics = [
+                { name: "Status", value: stateITO.status, type: "String" },
+                { name: "Subject/ID", value: stateITO.subject, type: "String" }
+            ];
+            const payloadObject = { timestamp: now_ts, metrics: metrics, seq: stateITO.spSeq };
+            const payloadBuffer = spBv10Codec.encodePayload(payloadObject);
+            publish('spBv1.0/galactic_empire/DDATA/interrogator_IT_O', payloadBuffer, true);
+        }
     }
     
 
@@ -216,11 +263,14 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             simState.rebelActivity = false; 
             simState.equipmentStatus.turbolaser_01.status = 'standby';
             simState.equipmentStatus.turbolaser_01.target = 'none';
-            return { topic: 'galactic_empire/death_star/command/fleet_status', payload: { commander: simState.commanders[1], status: "All systems nominal. Awaiting arrival at Alderaan." } }; 
+            simState.equipmentStatus.bridge_status.alert_level = 'green';
+            simState.equipmentStatus.bridge_status.commander = simState.commanders[2]; // Motti
+            return { topic: 'galactic_empire/death_star/command/bridge/status', payload: { ...simState.equipmentStatus.bridge_status, status: "All systems nominal. Awaiting arrival at Alderaan." } }; 
         },
         // 2. Start Superlaser charging
         () => { 
             simState.superlaserCharge = 0; 
+            simState.equipmentStatus.bridge_status.commander = simState.commanders[1]; // Tarkin
             return { topic: 'galactic_empire/death_star/command/weapon_control', payload: { order: "Commence primary ignition.", target: "Alderaan", commander: simState.commanders[1] } }; 
         },
         // 3. Logistics order for Droid
@@ -229,44 +279,87 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             simState.equipmentStatus.droid_mse_6.task = 'Deliver tactical plans to Lord Vader';
             return { topic: 'galactic_empire/death_star/logistics/droid_dispatch', payload: { droidId: "MSE-6-881", task: "Deliver datapad to Lord Vader", destination: "Command Center" } };
         },
-        // 4. Rebel fleet detected!
+        // [NEW] 4. Prisoner transfer
+        () => {
+            logger.info("[DeathStarSim] Prisoner Arrived: Leia Organa");
+            simState.equipmentStatus.detention_AA23.prisoner = "Leia Organa (ID: 2187)";
+            simState.equipmentStatus.detention_AA23.status = "detained";
+            return { topic: 'galactic_empire/death_star/security/detention_block_AA23/status', payload: { ...simState.equipmentStatus.detention_AA23 } };
+        },
+        // [NEW] 5. Interrogation
+        () => {
+            simState.equipmentStatus.bridge_status.commander = simState.commanders[0]; // Vader
+            simState.equipmentStatus["interrogator_IT_O"].status = "active";
+            simState.equipmentStatus["interrogator_IT_O"].subject = "Leia Organa (ID: 2187)";
+            return { topic: 'galactic_empire/death_star/command/bridge/status', payload: { ...simState.equipmentStatus.bridge_status, status: "Commencing interrogation of prisoner 2187." } };
+        },
+        // 6. Rebel fleet detected!
         () => { 
             logger.warn("[DeathStarSim] Rebel fleet detected! Simulating attack...");
             simState.rebelActivity = true; 
-            return { topic: 'galactic_empire/death_star/command/tactical_alert', payload: { level: "RED", status: "Rebel fleet detected. All batteries fire at will.", commander: simState.commanders[0] } }; 
+            simState.equipmentStatus.bridge_status.alert_level = 'red';
+            return { topic: 'galactic_empire/death_star/command/bridge/status', payload: { ...simState.equipmentStatus.bridge_status, status: "Rebel fleet detected. All batteries fire at will." } }; 
         },
-        // 5. Turbolasers engage
+        // 7. Turbolasers engage
         () => { 
             simState.equipmentStatus.turbolaser_01.status = 'firing';
             simState.equipmentStatus.turbolaser_01.target = 'X-Wing (Red-5)';
             return { topic: 'galactic_empire/death_star/defense_systems/turbolaser_battery_01/command', payload: { target: "X-Wing squadron", action: "FIRE" } };
         },
-        // 6. Tractor beam engages
+        // 8. Tractor beam engages
         () => {
             simState.equipmentStatus.tractor_beam_01.status = 'active';
             simState.equipmentStatus.tractor_beam_01.power = 100;
             return { topic: 'galactic_empire/death_star/defense_systems/tractor_beam_01/status', payload: { status: 'active', power: 100, target: "Millennium Falcon", emitted_at: new Date().toISOString() } };
         },
-        // 7. Rebel hit! Shield generator damaged.
+        // [NEW] 9. Guard post abandoned
+        () => {
+            simState.equipmentStatus.detention_AA23.guard = "none (post abandoned)";
+            return { topic: 'galactic_empire/death_star/security/detention_block_AA23/status', payload: { ...simState.equipmentStatus.detention_AA23 } };
+        },
+        // [NEW] 10. Prisoner escape!
+        () => {
+            logger.warn("[DeathStarSim] Prisoner Escape!");
+            simState.equipmentStatus.detention_AA23.prisoner = "none";
+            simState.equipmentStatus.detention_AA23.status = "breached";
+            simState.equipmentStatus["interrogator_IT_O"].status = "idle";
+            simState.equipmentStatus["interrogator_IT_O"].subject = "none";
+            simState.equipmentStatus.bridge_status.commander = simState.commanders[0]; // Vader
+            return { topic: 'galactic_empire/death_star/command/bridge/status', payload: { ...simState.equipmentStatus.bridge_status, status: "Security breach in detention block AA-23! Prisoner has escaped!" } };
+        },
+        // [NEW] 11. Trash compactor activated
+        () => {
+            logger.warn("[DeathStarSim] Activating trash compactor!");
+            simState.equipmentStatus.trash_compactor_3263827.walls_active = true;
+            return { topic: 'galactic_empire/death_star/waste_management/trash_compactor_3263827/command', payload: { command: "ACTIVATE" } };
+        },
+        // [NEW] 12. Trash compactor shut down
+        () => {
+            logger.info("[DeathStarSim] Shutting down all trash compactors.");
+            simState.equipmentStatus.trash_compactor_3263827.walls_active = false;
+            simState.equipmentStatus.trash_compactor_3263827.status = "shutdown";
+            return { topic: 'galactic_empire/death_star/waste_management/command', payload: { command: "SHUTDOWN_ALL_COMPACTORS", reason: "Emergency override", commander: simState.commanders[1] } };
+        },
+        // 13. Rebel hit! Shield generator damaged.
         () => { 
             logger.warn("[DeathStarSim] Shield generator hit!");
             simState.equipmentStatus.shield_gen_main.status = 'damaged';
             simState.equipmentStatus.shield_gen_main.power = 25;
             return { topic: 'galactic_empire/death_star/command/damage_control', payload: { system: "Main Shield Generator", status: "DAMAGED", details: "Rebel torpedo hit. Power at 25%." } };
         },
-        // 8. Droid R5 dispatched for repair
+        // 14. Droid R5 dispatched for repair
         () => {
             simState.equipmentStatus.droid_r5_j4.status = 'maintenance';
             simState.equipmentStatus.droid_r5_j4.task = 'Repair shield generator power coupling';
             return { topic: 'galactic_empire/death_star/logistics/droid_dispatch', payload: { droidId: "R5-J4", task: "Repair main shield generator", destination: "Shield Generator Room" } };
         },
-        // 9. Superlaser fires!
+        // 15. Superlaser fires!
         () => { 
             logger.info("[DeathStarSim] Superlaser FIRE!");
             simState.superlaserCharge = 0.0; // Reset charge
             return { topic: 'galactic_empire/death_star/weapon_systems/superlaser/status', payload: { status: "DISCHARGED", target: "Alderaan", result: "Target destroyed.", commander: simState.commanders[1], emitted_at: new Date().toISOString() } }; 
         },
-        // 10. Repair complete
+        // 16. Repair complete
         () => { 
             logger.info("[DeathStarSim] Shield generator repaired.");
             simState.equipmentStatus.shield_gen_main.status = 'online';
@@ -275,19 +368,21 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             simState.equipmentStatus.droid_r5_j4.task = 'Returning to duty';
             return { topic: 'galactic_empire/death_star/command/damage_control', payload: { system: "Main Shield Generator", status: "ONLINE", details: "Repairs complete by unit R5-J4." } };
         },
-        // 11. Tractor beam disabled
+        // 17. Tractor beam disabled
         () => {
             simState.equipmentStatus.tractor_beam_01.status = 'offline';
             simState.equipmentStatus.tractor_beam_01.power = 0;
             return { topic: 'galactic_empire/death_star/defense_systems/tractor_beam_01/status', payload: { status: 'offline', power: 0, reason: "Manual override by unauthorized personnel.", emitted_at: new Date().toISOString() } };
         },
-        // 12. Battle over
+        // 18. Battle over
         () => { 
             logger.info("[DeathStarSim] Battle simulation over. Returning to nominal.");
             simState.rebelActivity = false; 
             simState.equipmentStatus.turbolaser_01.status = 'standby';
             simState.equipmentStatus.turbolaser_01.target = 'none';
-            return { topic: 'galactic_empire/death_star/command/tactical_alert', payload: { level: "GREEN", status: "Rebel fleet has retreated." } }; 
+            simState.equipmentStatus.bridge_status.alert_level = 'green';
+            simState.equipmentStatus.detention_AA23.guard = 'TK-421'; // He's back
+            return { topic: 'galactic_empire/death_star/command/bridge/status', payload: { ...simState.equipmentStatus.bridge_status, status: "Rebel fleet has retreated." } }; 
         },
     ];
     
@@ -342,6 +437,15 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
                     simState.equipmentStatus[key].status = 'patrol';
                 } else if (key.includes('turbolaser')) {
                     simState.equipmentStatus[key].status = 'standby';
+                } else if (key.includes('interrogator')) {
+                    simState.equipmentStatus[key].status = 'idle';
+                    simState.equipmentStatus[key].subject = 'none';
+                } else if (key.includes('detention')) {
+                    simState.equipmentStatus[key].status = 'empty';
+                    simState.equipmentStatus[key].prisoner = 'none';
+                } else if (key.includes('trash')) {
+                    simState.equipmentStatus[key].status = 'idle';
+                    simState.equipmentStatus[key].walls_active = false;
                 } else {
                     simState.equipmentStatus[key].status = 'online';
                 }
@@ -349,6 +453,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         });
         simState.superlaserCharge = 0.0;
         simState.rebelActivity = false;
+        simState.equipmentStatus.bridge_status.alert_level = 'green';
         logger.info("[DeathStarSim] All equipment statuses reset.");
         return stopped;
     }
