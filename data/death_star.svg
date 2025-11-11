@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg
    version="1.1"
    id="DeathStarTacticalMap"
@@ -6,23 +6,68 @@
    width="100%"
    height="100%"
    style="background-color: #0d1117; color: #c9d1d9; font-family: 'Consolas', 'Lucida Console', monospace;"
-   xmlns="http://www.w3.org/2000/svg">
-
-  <defs>
-    <radialGradient id="dsGradient" cx="0.3" cy="0.3" r="0.7">
-      <stop offset="0%" style="stop-color:#3a4a5a;" />
-      <stop offset="100%" style="stop-color:#1a2a3a;" />
+   sodipodi:docname="death_star.svg"
+   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview44"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3149712"
+     inkscape:cx="846.87639"
+     inkscape:cy="157.72043"
+     inkscape:window-width="1360"
+     inkscape:window-height="753"
+     inkscape:window-x="0"
+     inkscape:window-y="34"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="DeathStarTacticalMap" />
+  <defs
+     id="defs3">
+    <radialGradient
+       id="dsGradient"
+       cx="0.3"
+       cy="0.3"
+       r="0.7">
+      <stop
+         offset="0%"
+         style="stop-color:#3a4a5a;"
+         id="stop1" />
+      <stop
+         offset="100%"
+         style="stop-color:#1a2a3a;"
+         id="stop2" />
     </radialGradient>
-    
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
+    <filter
+       id="glow"
+       x="-0.022807018"
+       y="-0.022807018"
+       width="1.045614"
+       height="1.045614">
+      <feGaussianBlur
+         stdDeviation="5"
+         result="coloredBlur"
+         id="feGaussianBlur2" />
+      <feMerge
+         id="feMerge3">
+        <feMergeNode
+           in="coloredBlur"
+           id="feMergeNode2" />
+        <feMergeNode
+           in="SourceGraphic"
+           id="feMergeNode3" />
       </feMerge>
     </filter>
-
-    <style>
+    <style
+       id="style3">
       /* --- Structure --- */
       .ds-body { fill: url(#dsGradient); stroke: #555; stroke-width: 1; }
       .ds-trench { fill: #111; }
@@ -58,107 +103,454 @@
       }
     </style>
   </defs>
-
-  <g transform="translate(500, 300)">
-    <g id="galactic_empire-death_star-defense_systems-main_shield-status">
-       <circle id="shield-visual-effect"
-         data-key="power" 
-         cx="0" cy="0" r="285" 
-         fill="none" 
-         stroke="#00ffff" 
-         stroke-width="2" 
-         stroke-opacity="0.1" 
-         style="filter: url(#glow);" />
+  <g
+     transform="translate(500,300)"
+     id="g8"
+     style="display:inline"
+     inkscape:label="vessel">
+    <g
+       id="galactic_empire-death_star-defense_systems-main_shield-status"
+       style="display:inline">
+      <circle
+         id="shield-visual-effect"
+         data-key="power"
+         cx="0"
+         cy="0"
+         r="285"
+         fill="none"
+         stroke="#00ffff"
+         stroke-width="2"
+         stroke-opacity="0.1"
+         style="filter:url(#glow)" />
     </g>
-
-    <circle cx="0" cy="0" r="280" class="ds-body" />
-    
-    <line x1="-280" y1="0" x2="280" y2="0" class="ds-trench" stroke-width="8" />
-    <line x1="0" y1="-280" x2="0" y2="280" class="ds-panel-lines" />
-    <line x1="-198" y1="-198" x2="198" y2="198" class="ds-panel-lines" />
-    <line x1="-198" y1="198" x2="198" y2="-198" class="ds-panel-lines" />
-    <circle cx="0" cy="0" r="180" class="ds-panel-lines" fill="none" />
-
-    <circle cx="0" cy="-120" r="70" class="ds-dish-bg" />
-    <circle cx="0" cy="-120" r="15" class="ds-dish-focus" />
+    <circle
+       cx="0"
+       cy="0"
+       r="280"
+       class="ds-body"
+       id="circle3" />
+    <line
+       x1="-280"
+       y1="0"
+       x2="280"
+       y2="0"
+       class="ds-trench"
+       stroke-width="8"
+       id="line3"
+       style="stroke:#7493ae;stroke-opacity:1" />
+    <line
+       x1="0"
+       y1="-280"
+       x2="0"
+       y2="280"
+       class="ds-panel-lines"
+       id="line4"
+       style="stroke:#567797;stroke-opacity:1" />
+    <line
+       x1="-198"
+       y1="-198"
+       x2="198"
+       y2="198"
+       class="ds-panel-lines"
+       id="line5"
+       style="stroke:#567695;stroke-opacity:1" />
+    <line
+       x1="-198"
+       y1="198"
+       x2="198"
+       y2="-198"
+       class="ds-panel-lines"
+       id="line6"
+       style="stroke:#597a99;stroke-opacity:1" />
+    <circle
+       cx="0"
+       cy="0"
+       r="180"
+       class="ds-panel-lines"
+       fill="none"
+       id="circle6"
+       style="opacity:1;stroke:#6586ab;stroke-opacity:1" />
+    <circle
+       cx="0"
+       cy="-120"
+       r="70"
+       class="ds-dish-bg"
+       id="circle7"
+       style="fill:#05081a;fill-opacity:1" />
+    <circle
+       cx="0"
+       cy="-120"
+       r="15"
+       class="ds-dish-focus"
+       id="circle8" />
   </g>
-  
-  <g id="galactic_empire-death_star-command-bridge-status" transform="translate(410, 25)">
-    <rect class="kpi-box" width="180" height="70" />
-    <text x="90" y="18" class="text-title" text-anchor="middle">COMMAND BRIDGE</text>
-    <text x="10" y="38" class="text-label">Alert:</text>
-    <text data-key="alert_level" x="50" y="38" class="text-status">green</text>
-    <text x="10" y="58" class="text-label">CO:</text>
-    <text data-key="commander" x="50" y="58" class="text-data" style="font-size: 11px;">Tarkin</text>
+  <g
+     id="galactic_empire-death_star-command-bridge-status"
+     transform="translate(12.061927,10.685681)">
+    <rect
+       class="kpi-box"
+       width="217.57727"
+       height="70"
+       id="rect8"
+       x="0"
+       y="0" />
+    <text
+       x="90"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       id="text8">COMMAND BRIDGE</text>
+    <text
+       x="10"
+       y="38"
+       class="text-label"
+       id="text9">Alert:</text>
+    <text
+       data-key="alert_level"
+       x="50"
+       y="38"
+       class="text-status"
+       id="text10">green</text>
+    <text
+       x="10"
+       y="58"
+       class="text-label"
+       id="text11">CO:</text>
+    <text
+       data-key="commander"
+       x="50"
+       y="58"
+       class="text-data"
+       style="font-size:11px"
+       id="text12">Tarkin</text>
   </g>
-
-  <g id="galactic_empire-death_star-weapon_systems-superlaser-charge" transform="translate(600, 150)">
-    <rect class="kpi-box" width="180" height="75" />
-    <text x="90" y="18" class="text-title" text-anchor="middle">SUPERLASER</text>
-    <rect x="20" y="30" width="140" height="10" fill="#222" stroke="#555" rx="2" />
-    <rect id="laser-charge-visual" 
-          data-key="value" 
-          x="20" y="30" width="0" height="10" 
-          fill="#4CAF50" rx="2" style="filter: url(#glow);" />
-          
-    <text x="10" y="60" class="text-label">Charge:</text>
-    <text data-key="value" x="65" y="60" class="text-data">0.00</text>
-    <text data-key="unit" x="110" y="60" class="text-data">%</text>
-    <text data-key="status" x="170" y="60" class="text-status" text-anchor="end">idle</text>
+  <g
+     id="galactic_empire-death_star-weapon_systems-superlaser-charge"
+     transform="translate(806.12619,108.48848)">
+    <rect
+       class="kpi-box"
+       width="207.51193"
+       height="75"
+       id="rect12"
+       x="-27.511929"
+       y="0" />
+    <text
+       x="72.553413"
+       y="18.671022"
+       class="text-title"
+       text-anchor="middle"
+       id="text13">SUPERLASER</text>
+    <rect
+       x="-9.4775629"
+       y="30.047434"
+       width="169.43013"
+       height="9.9051332"
+       fill="#222222"
+       stroke="#555555"
+       rx="2.4204304"
+       id="rect13"
+       style="stroke-width:1.09487" />
+    <rect
+       id="laser-charge-visual"
+       data-key="value"
+       x="-8.0286312"
+       y="30"
+       width="0"
+       height="10"
+       fill="#4caf50"
+       rx="2"
+       style="filter:url(#glow)" />
+    <text
+       x="-18.182951"
+       y="58.657955"
+       class="text-label"
+       id="text14">Charge:</text>
+    <text
+       data-key="value"
+       x="50.237503"
+       y="60"
+       class="text-data"
+       id="text15">0.00</text>
+    <text
+       data-key="unit"
+       x="91.211365"
+       y="60"
+       class="text-data"
+       id="text16">%</text>
+    <text
+       data-key="status"
+       x="170"
+       y="60"
+       class="text-status"
+       text-anchor="end"
+       id="text17">idle</text>
   </g>
-
-  <g id="galactic_empire-death_star-power_systems-main_reactor-output" transform="translate(250, 275)">
-    <rect class="kpi-box" width="150" height="50" style="stroke: #f44336;" />
-    <text x="75" y="18" class="text-title" text-anchor="middle" style="fill: #f44336;">REACTOR CORE</text>
-    <text x="10" y="40" class="text-label">Output:</text>
-    <text data-key="value" x="65" y="40" class="text-data">100.0</text>
-    <text data-key="unit" x="115" y="40" class="text-data">%</text>
+  <g
+     id="galactic_empire-death_star-power_systems-main_reactor-output"
+     transform="matrix(1.4941146,0,0,1.4566835,761.05892,20.023106)">
+    <rect
+       class="kpi-box"
+       width="150"
+       height="50"
+       style="stroke:#f44336"
+       id="rect17"
+       x="0"
+       y="0" />
+    <text
+       x="75"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       style="fill:#f44336"
+       id="text18">REACTOR CORE</text>
+    <text
+       x="10"
+       y="40"
+       class="text-label"
+       id="text19">Output:</text>
+    <text
+       data-key="value"
+       x="65"
+       y="40"
+       class="text-data"
+       id="text20">100.0</text>
+    <text
+       data-key="unit"
+       x="115"
+       y="40"
+       class="text-data"
+       id="text21">%</text>
   </g>
-
-  <g id="galactic_empire-death_star-security-detention_block_AA23-status" transform="translate(150, 100)">
-    <rect class="kpi-box" width="220" height="75" />
-    <text x="110" y="18" class="text-title" text-anchor="middle">DETENTION BLOCK AA-23</text>
-    <text x="10" y="40" class="text-label">Status:</text>
-    <text data-key="status" x="65" y="40" class="text-status">empty</text>
-    <text x="10" y="60" class="text-label">Prisoner:</text>
-    <text data-key="prisoner" x="65" y="60" class="text-data" style="font-size: 11px;">none</text>
+  <g
+     id="galactic_empire-death_star-security-detention_block_AA23-status"
+     transform="translate(3.6463113,139.12921)">
+    <rect
+       class="kpi-box"
+       width="215.37283"
+       height="76.735191"
+       id="rect21"
+       x="4.627172"
+       y="-1.7351894" />
+    <text
+       x="110"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       id="text22">DETENTION BLOCK AA-23</text>
+    <text
+       x="10"
+       y="40"
+       class="text-label"
+       id="text23">Status:</text>
+    <text
+       data-key="status"
+       x="65"
+       y="40"
+       class="text-status"
+       id="text24">empty</text>
+    <text
+       x="10"
+       y="60"
+       class="text-label"
+       id="text25">Prisoner:</text>
+    <text
+       data-key="prisoner"
+       x="65"
+       y="60"
+       class="text-data"
+       style="font-size:11px"
+       id="text26">none</text>
   </g>
-  
-  <g id="galactic_empire-death_star-waste_management-trash_compactor_3263827-status" transform="translate(150, 200)">
-    <rect class="kpi-box" width="220" height="75" />
-    <text x="110" y="18" class="text-title" text-anchor="middle">TRASH COMPACTOR 3263827</text>
-    <text x="10" y="40" class="text-label">Status:</text>
-    <text data-key="status" x="65" y="40" class="text-status">idle</text>
-    <text x="10" y="60" class="text-label">Pressure:</text>
-    <text data-key="pressure" x="65" y="60" class="text-data">10.0</text>
-    <text data-key="unit" x="105" y="60" class="text-data">PSI</text>
-    
-    <g data-key="walls_active" data-alarm-type="H" data-alarm-value="0.5" class="alarm-line" style="display: none;">
-      <text x="110" y="90" class="alarm-text" text-anchor="middle" style="font-size: 12px; animation: none;">WALLS ACTIVE!</text>
+  <g
+     id="galactic_empire-death_star-waste_management-trash_compactor_3263827-status"
+     transform="translate(6.8568084,378.92899)">
+    <rect
+       class="kpi-box"
+       width="220"
+       height="75"
+       id="rect26"
+       x="0"
+       y="0" />
+    <text
+       x="110"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       id="text27">TRASH COMPACTOR 3263827</text>
+    <text
+       x="10"
+       y="40"
+       class="text-label"
+       id="text28">Status:</text>
+    <text
+       data-key="status"
+       x="65"
+       y="40"
+       class="text-status"
+       id="text29">idle</text>
+    <text
+       x="10"
+       y="60"
+       class="text-label"
+       id="text30">Pressure:</text>
+    <text
+       data-key="pressure"
+       x="87.814766"
+       y="60.671024"
+       class="text-data"
+       id="text31">10.0</text>
+    <text
+       data-key="unit"
+       x="153.98465"
+       y="60.671024"
+       class="text-data"
+       id="text32">PSI</text>
+    <g
+       data-key="walls_active"
+       data-alarm-type="H"
+       data-alarm-value="0.5"
+       class="alarm-line"
+       style="display:none"
+       id="g33">
+      <text
+         x="110"
+         y="90"
+         class="alarm-text"
+         text-anchor="middle"
+         style="font-size:12px"
+         id="text33">WALLS ACTIVE!</text>
     </g>
   </g>
-  
-  <g id="galactic_empire-death_star-defense_systems-main_shield-status" transform="translate(700, 350)">
-    <rect class="kpi-box" width="160" height="60" />
-    <text x="80" y="18" class="text-title" text-anchor="middle">SHIELD GENERATOR</text>
-    <text x="10" y="45" class="text-label">Power:</text>
-    <text data-key="power" x="65" y="45" class="text-data">100</text>
-    <text data-key="unit" x="95" y="45" class="text-data">%</text>
-    <text data-key="status" x="150" y="45" class="text-status" text-anchor="end">online</text>
+  <g
+     id="g38"
+     transform="translate(828.56291,411.24669)">
+    <rect
+       class="kpi-box"
+       width="160"
+       height="60"
+       id="rect33"
+       x="0"
+       y="0" />
+    <text
+       x="80"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       id="text34">SHIELD GENERATOR</text>
+    <text
+       x="10"
+       y="45"
+       class="text-label"
+       id="text35">Power:</text>
+    <text
+       data-key="power"
+       x="65"
+       y="45"
+       class="text-data"
+       id="text36">100</text>
+    <text
+       data-key="unit"
+       x="95"
+       y="45"
+       class="text-data"
+       id="text37">%</text>
+    <text
+       data-key="status"
+       x="150"
+       y="45"
+       class="text-status"
+       text-anchor="end"
+       id="text38">online</text>
   </g>
-  
-  <g id="spBv1-0-galactic_empire-DDATA-turbolaser_01" transform="translate(140, 350)">
-    <rect class="kpi-box" width="160" height="60" />
-    <text x="80" y="18" class="text-title" text-anchor="middle">TURBOLASER TL-01</text>
-    <text x="10" y="45" class="text-label">Status:</text>
-    <text data-key="metrics[Status]" x="65" y="45" class="text-status">standby</text>
+  <g
+     id="spBv1-0-galactic_empire-DDATA-turbolaser_01"
+     transform="translate(817.693,203.05475)">
+    <rect
+       class="kpi-box"
+       width="185.49887"
+       height="60.671024"
+       id="rect38"
+       x="-15.43352"
+       y="-4.0261359" />
+    <text
+       x="80"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       id="text39">TURBOLASER TL-01</text>
+    <text
+       x="-4.7624979"
+       y="44.328976"
+       class="text-label"
+       id="text40">Status:</text>
+    <text
+       data-key="metrics[Status]"
+       x="96.538063"
+       y="42.31591"
+       class="text-status"
+       id="text41">standby</text>
   </g>
-
-  <g id="spBv1-0-galactic_empire-DDATA-interrogator_IT_O" transform="translate(150, 450)">
-    <rect class="kpi-box" width="220" height="60" />
-    <text x="110" y="18" class="text-title" text-anchor="middle">INTERROGATOR IT-O</text>
-    <text x="10" y="45" class="text-label">Status:</text>
-    <text data-key="metrics[Status]" x="65" y="45" class="text-status">idle</text>
+  <g
+     id="spBv1-0-galactic_empire-DDATA-interrogator_IT_O"
+     transform="translate(61.251221,514.41444)">
+    <rect
+       class="kpi-box"
+       width="220"
+       height="60"
+       id="rect41"
+       x="0"
+       y="0" />
+    <text
+       x="110"
+       y="18"
+       class="text-title"
+       text-anchor="middle"
+       id="text42">INTERROGATOR IT-O</text>
+    <text
+       x="10"
+       y="45"
+       class="text-label"
+       id="text43">Status:</text>
+    <text
+       data-key="metrics[Status]"
+       x="65"
+       y="45"
+       class="text-status"
+       id="text44">idle</text>
   </g>
-
+  <path
+     style="fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:2;stroke-opacity:1"
+     d="m 226.8648,416.90108 271.13104,-2.10256"
+     id="path44"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="color:#c9d1d9;font-family:Consolas, 'Lucida Console', monospace;fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:2;stroke-opacity:1"
+     d="m 280.53342,538.25857 250.78391,-0.4192"
+     id="path44-6"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="color:#c9d1d9;font-family:Consolas, 'Lucida Console', monospace;fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:1.14256;stroke-opacity:1"
+     d="m 748.01228,439.50543 80.63726,-0.42548"
+     id="path44-6-7"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="color:#c9d1d9;font-family:Consolas, 'Lucida Console', monospace;fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:1.10725;stroke-opacity:1"
+     d="m 223.81002,179.18992 138.90615,82.75512"
+     id="path44-6-7-8"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="color:#c9d1d9;font-family:Consolas, 'Lucida Console', monospace;fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:1.14256;stroke-opacity:1"
+     d="m 229.48253,45.644558 271.2344,17.417657"
+     id="path44-6-7-7"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="color:#c9d1d9;font-family:Consolas, 'Lucida Console', monospace;fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:1.14256;stroke-opacity:1"
+     d="m 502.91081,177.37611 275.952,-31.01048"
+     id="path44-6-7-1"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="color:#c9d1d9;font-family:Consolas, 'Lucida Console', monospace;fill:#0b0c36;fill-opacity:1;stroke:#036cce;stroke-width:1.14256;stroke-opacity:1"
+     d="m 715.99263,230.69017 c 2.85718,-0.14183 35.10282,-0.32609 86.1857,-0.46792"
+     id="path44-6-7-82"
+     sodipodi:nodetypes="cc" />
 </svg>
