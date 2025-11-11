@@ -13,7 +13,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -376,6 +376,29 @@ mainRouter.get('/api/svg/list', (req, res) => {
     } catch (err) {
         logger.error({ err }, "❌ Failed to read data directory to list SVGs.");
         res.status(500).json({ error: "Could not list SVG files." });
+    }
+});
+
+// [MODIFIED] API endpoint to serve custom SVG bindings by name
+mainRouter.get('/api/svg/bindings.js', (req, res) => {
+    const filename = req.query.name;
+
+    // Security: Validate and sanitize the filename
+    if (!filename || !filename.endsWith('.svg.js')) {
+        return res.status(400).json({ error: 'Invalid or missing binding file name. Must end with .svg.js' });
+    }
+    // Prevent directory traversal: path.basename strips directory info
+    const sanitizedName = path.basename(filename);
+
+    const bindingsPath = path.join(DATA_PATH, sanitizedName);
+
+    if (fs.existsSync(bindingsPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(bindingsPath);
+    } else {
+        // Send an empty, valid JS file to avoid 404 errors in the browser console
+        res.setHeader('Content-Type', 'application/javascript');
+        res.send(`// No custom binding file found at /data/${sanitizedName}. Using default logic.`);
     }
 });
 

@@ -6,18 +6,23 @@
  * Simulator Manager
  *
  * This module manages multiple, parallel simulation scenarios.
- * It loads scenario definitions and provides controls to start/stop them.
+ * It dynamically loads all scenarios from the /data directory.
  */
 
-// --- Import Scenario Definitions ---
-const starkIndustriesScenario = require('./simulator-stark');
-const deathStarScenario = require('./simulator-deathstar'); // [MODIFIED]
-const parisMetroScenario = require('./simulator-paris-metro'); // [NEW] Import Paris Métro scenario
+// --- [NEW] Node.js Core Imports ---
+const fs = require('fs');
+const path = require('path');
+
+// --- [REMOVED] Built-in scenario imports ---
+// const starkIndustriesScenario = require('./simulator-stark');
+// const deathStarScenario = require('./simulator-deathstar');
+// const parisMetroScenario = require('./simulator-paris-metro');
 
 // --- Module-level State ---
 let mainLogger = null;
 let mainPublish = null;
 let mainSparkplugEnabled = false;
+const DATA_PATH = path.join(__dirname, 'data'); // [NEW] Define data path
 
 // Map of all available scenario "factories"
 const availableScenarios = new Map();
@@ -40,10 +45,48 @@ function init(logger, publishCallback, isSparkplugEnabled) {
 
     mainLogger.info("Simulator Manager initialized.");
 
-    // --- Register all available scenarios ---
-    registerScenario('stark_industries', starkIndustriesScenario);
-    registerScenario('death_star', deathStarScenario); // [MODIFIED]
-    registerScenario('paris_metro', parisMetroScenario); // [NEW] Register Paris Métro scenario
+    // --- 1. [REMOVED] Register all DEFAULT (built-in) scenarios ---
+    
+    // --- 2. [MODIFIED] Scan /data for ALL scenarios ---
+    mainLogger.info(`Scanning ${DATA_PATH} for all simulators (simulator-*.js)...`);
+    try {
+        if (fs.existsSync(DATA_PATH)) {
+            const files = fs.readdirSync(DATA_PATH);
+            const simFiles = files.filter(f => f.startsWith('simulator-') && f.endsWith('.js'));
+
+            if (simFiles.length > 0) {
+                mainLogger.info(`Found ${simFiles.length} simulator file(s).`);
+                simFiles.forEach(filename => {
+                    // Extract name: "simulator-my-sim.js" -> "my_sim"
+                    const scenarioName = filename.replace(/^simulator-/, '').replace(/\.js$/, '').replace(/-/g, '_');
+                    
+                    if (availableScenarios.has(scenarioName)) {
+                        mainLogger.warn(`Simulator ${filename} is skipped: a scenario named '${scenarioName}' is already registered.`);
+                        return;
+                    }
+
+                    try {
+                        const customScenarioPath = path.join(DATA_PATH, filename);
+                        const customScenarioModule = require(customScenarioPath);
+                        
+                        if (typeof customScenarioModule === 'function') {
+                            registerScenario(scenarioName, customScenarioModule);
+                        } else {
+                            mainLogger.error(`Failed to load ${filename}: module.exports is not a function.`);
+                        }
+                    } catch (loadErr) {
+                        mainLogger.error({ err: loadErr, file: filename }, `❌ Error loading simulator file.`);
+                    }
+                });
+            } else {
+                 mainLogger.info("No simulators found in /data. The 'Publish' tab simulator list will be empty.");
+            }
+        } else {
+            mainLogger.warn("The /data directory does not exist. Skipping simulator scan.");
+        }
+    } catch (err) {
+        mainLogger.error({ err }, "❌ Error scanning /data directory for simulators.");
+    }
 }
 
 /**

@@ -42,20 +42,37 @@ let allHistoryEntries = [];
 let isSvgHistoryMode = false;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
-let svgSlider = null; 
+let svgSlider = null;
+let appBasePath = '/'; // [NEW] Will be set on init
+const BINDINGS_SCRIPT_ID = 'custom-svg-bindings-script';
 
-// [NEW] State for Paris Métro SVG
-let stationCoords = new Map(); // Stores {x, y} for each station_id
-let trainElements = new Map(); // Stores SVG <g> elements for trains
-let stationTextElements = new Map(); // Stores SVG <text> elements for station alerts
-let stationTelemetryElements = new Map(); // Stores SVG <g> for dynamic station KPIs
-let currentSvgId = ""; // ID of the currently loaded SVG
-// ---
+// [NEW] API for custom bindings
+let customSvgBindings = {
+    isLoaded: false,
+    initialize: (svgRoot) => {},
+    update: (topic, payloadObject, svgRoot) => {},
+    reset: (svgRoot) => {}
+};
+
+/**
+ * [NEW] Allows an external script (svg-bindings.js) to register its logic.
+ * This function is exposed on the window object.
+ */
+window.registerSvgBindings = function(bindings) {
+    if (!bindings) return;
+    
+    customSvgBindings.isLoaded = true;
+    if (bindings.initialize) customSvgBindings.initialize = bindings.initialize;
+    if (bindings.update) customSvgBindings.update = bindings.update;
+    if (bindings.reset) customSvgBindings.reset = bindings.reset;
+    console.log("Custom SVG bindings registered.");
+}
 
 /**
  * Initializes the SVG View functionality.
  */
 export function initSvgView(appConfig) {
+    appBasePath = appConfig.basePath; // [NEW] Store base path
     populateSvgListAndLoadDefault(appConfig.svgFilePath);
     
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
@@ -65,6 +82,8 @@ export function initSvgView(appConfig) {
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
         
         trackEvent(isSvgHistoryMode ? 'svg_history_on' : 'svg_history_off');
+        
+        // Replay history at the current max time when toggling on
         replaySvgHistory(currentMaxTimestamp);
 
         if (svgSlider) {
@@ -155,8 +174,78 @@ async function onSvgFileChange(event) {
 
 
 /**
+ * [MODIFIED] Dynamically loads the custom svg-bindings.js script *by name*.
+ * @param {string} bindingFilename - The name of the .js file to load (e.g., "my-plan.svg.js").
+ */
+async function loadCustomBindingsScript(bindingFilename) {
+    // 1. Reset bindings to default
+    customSvgBindings = {
+        isLoaded: false,
+        initialize: (svgRoot) => {},
+        update: (topic, payloadObject, svgRoot) => {},
+        reset: (svgRoot) => {}
+    };
+    
+    // 2. Remove old script tag if it exists
+    const oldScript = document.getElementById(BINDINGS_SCRIPT_ID);
+    if (oldScript) {
+        oldScript.remove();
+    }
+    
+    // 3. Create new script tag
+    const script = document.createElement('script');
+    script.id = BINDINGS_SCRIPT_ID;
+    script.type = 'module';
+    
+    // 4. [MODIFIED] Set src to the new API endpoint with the 'name' param
+    const apiBasePath = (appBasePath === '/') ? '' : appBasePath;
+    script.src = `${apiBasePath}/api/svg/bindings.js?name=${encodeURIComponent(bindingFilename)}&v=${Date.now()}`;
+    
+    // 5. Add to head and await load
+    return new Promise((resolve) => {
+        script.onload = () => {
+            // Note: window.registerSvgBindings() will be called by the script itself
+            console.log(`Custom SVG bindings script loaded: ${bindingFilename}`);
+            resolve();
+        };
+        script.onerror = (err) => {
+            console.log(`No custom SVG bindings script found at /data/${bindingFilename}. Using default logic.`);
+            resolve(); // Resolve anyway, don't break the app
+        };
+        document.head.appendChild(script);
+    });
+}
+
+/**
+ * [NEW] Scans the SVG for [data-key] elements to use with default logic.
+ */
+function scanForDataKeys() {
+    const dataElements = svgContent.querySelectorAll('[data-key]');
+    
+    dataElements.forEach(el => {
+        const keyPath = el.dataset.key;
+        
+        if (el.tagName === 'text' || el.tagName === 'tspan') {
+            svgInitialTextValues.set(el, { type: 'text', value: el.textContent });
+        } else if (el.tagName === 'path' && (keyPath === 'status')) {
+            svgInitialTextValues.set(el, { type: 'attr', attr: 'class', value: el.getAttribute('class') });
+        } else if (el.tagName === 'circle' && keyPath === 'occupancy_percent') {
+            svgInitialTextValues.set(el, { type: 'attr', attr: 'fill-opacity', value: el.getAttribute('fill-opacity') });
+        } else if (el.id === 'shield-visual-effect' && keyPath === 'power') {
+            // Specific example for default logic
+            svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-opacity', value: el.getAttribute('stroke-opacity') });
+            svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-width', value: el.getAttribute('stroke-width') });
+        } else if (el.id === 'laser-charge-visual' && keyPath === 'value') {
+            // Specific example for default logic
+            svgInitialTextValues.set(el, { type: 'attr', attr: 'width', value: el.getAttribute('width') });
+        }
+        // Add more default savers here if needed
+    });
+}
+
+/**
  * [MODIFIED] Loads a specific view.svg file from the server.
- * Now resets and scans the SVG.
+ * Now resets state, dynamically loads bindings, and scans the SVG.
  */
 async function loadSvgPlan(filename) {
     if (!filename) {
@@ -172,40 +261,25 @@ async function loadSvgPlan(filename) {
         if (svgContent) {
             svgContent.innerHTML = svgText;
             
-            // --- [MODIFIED] Clear state and scan new SVG ---
+            // Clear all old state
             svgInitialTextValues.clear();
-            stationCoords.clear();
-            trainElements.clear();
-            stationTextElements.clear();
-            stationTelemetryElements.clear();
 
-            const svgRoot = svgContent.querySelector('svg');
-            currentSvgId = svgRoot ? svgRoot.id : "";
-
-            // Scan for data-keys and static elements
-            const dataElements = svgContent.querySelectorAll('[data-key]');
+            // [MODIFIED] Dynamically load/reload the custom bindings script
+            const bindingFilename = filename + '.js'; // e.g., "paris-metro.svg" -> "paris-metro.svg.js"
+            await loadCustomBindingsScript(bindingFilename);
             
-            dataElements.forEach(el => {
-                if (el.tagName === 'text' || el.tagName === 'tspan') {
-                    svgInitialTextValues.set(el, { type: 'text', value: el.textContent });
-                } else if (el.id === 'shield-visual-effect') {
-                    svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-opacity', value: el.getAttribute('stroke-opacity') });
-                    svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-width', value: el.getAttribute('stroke-width') });
-                } else if (el.id === 'laser-charge-visual') {
-                    svgInitialTextValues.set(el, { type: 'attr', attr: 'width', value: el.getAttribute('width') });
-                } else if (el.tagName === 'path' && (el.dataset.key === 'status')) {
-                    // [MODIFIED] Save class for metro lines
-                    svgInitialTextValues.set(el, { type: 'attr', attr: 'class', value: el.getAttribute('class') });
-                } else if (el.tagName === 'circle' && el.dataset.key === 'occupancy_percent') {
-                    svgInitialTextValues.set(el, { type: 'attr', attr: 'fill-opacity', value: el.getAttribute('fill-opacity') });
-                }
-            });
+            const svgRoot = svgContent.querySelector('svg');
+            if (!svgRoot) return;
 
-            // Special logic for Paris Métro map
-            if (currentSvgId === 'ParisMetroTacticalMap') {
-                scanParisMetroSVG();
+            // Call the *newly loaded* initialize function (if it exists)
+            if (customSvgBindings.isLoaded) {
+                customSvgBindings.initialize(svgRoot);
             }
             
+            // Scan for data-keys for the default logic
+            scanForDataKeys();
+            
+            // Replay history on the newly loaded SVG + bindings
             const replayTime = isSvgHistoryMode 
                 ? parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp) 
                 : currentMaxTimestamp;
@@ -216,65 +290,6 @@ async function loadSvgPlan(filename) {
         if (svgContent) svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG file '${filename}' could not be loaded.</p>`;
     }
 }
-
-/**
- * [NEW] Scans the loaded Paris Métro SVG to find station coordinates and text elements.
- */
-function scanParisMetroSVG() {
-    // 1. Scan for station coordinates using the <path> elements
-    const stationPaths = svgContent.querySelectorAll('path[id*="_gare_"]');
-    stationCoords.clear();
-    
-    stationPaths.forEach(path => {
-        const id = path.id; // e.g., "line1_gare_chatelet"
-        const d = path.getAttribute('d');
-        if (!d) return;
-
-        // Extract the first 'm' (moveto) coordinate.
-        const match = d.match(/m\s*([\d\.-]+)\s*,\s*([\d\.-]+)/);
-        if (match && match[1] && match[2]) {
-            let x = parseFloat(match[1]);
-            let y = parseFloat(match[2]);
-            
-            // Account for the <g transform="..."> parent
-            const parentGroup = path.closest('g');
-            if (parentGroup) {
-                const transform = parentGroup.getAttribute('transform');
-                if (transform) {
-                    const translateMatch = transform.match(/translate\(\s*([\d\.-]+)\s*,?\s*([\d\.-]+)\s*\)/);
-                    if (translateMatch) {
-                        x += parseFloat(translateMatch[1]);
-                        y += parseFloat(translateMatch[2]);
-                    }
-                }
-            }
-            stationCoords.set(id, { x, y });
-        }
-    });
-    console.log(`[SVG] Scanned ${stationCoords.size} metro stations for coordinates.`);
-
-    // 2. Scan for station text elements
-    const stationTexts = svgContent.querySelectorAll('text[id*="ratp-uns-station-"]');
-    stationTextElements.clear();
-    stationTexts.forEach(textEl => {
-        // e.g., "ratp-uns-station-chatelet-alert"
-        const stationId = textEl.id.split('-')[3]; // "chatelet"
-        if(stationId) {
-            // Store the element itself
-            stationTextElements.set(stationId, textEl);
-            // Save its initial class
-            svgInitialTextValues.set(textEl, { type: 'attr', attr: 'class', value: textEl.getAttribute('class') || '' });
-        }
-    });
-    console.log(`[SVG] Scanned ${stationTextElements.size} metro station alert texts.`);
-    
-    // 3. Scan for line path elements (now by data-key)
-    const linePaths = svgContent.querySelectorAll('path[data-key="status"]');
-    linePaths.forEach(pathEl => {
-         svgInitialTextValues.set(pathEl, { type: 'attr', attr: 'class', value: pathEl.getAttribute('class') || '' });
-    });
-}
-
 
 /**
  * Toggles fullscreen mode for the SVG map view.
@@ -325,17 +340,18 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
 }
 
 function updateAlarmPlaceholder() {
-    // This function is not used in the metro map
+    // This function is no longer needed as logic is generic
 }
 
 /**
  * [MODIFIED] Updates a single SVG element with a new value.
+ * This is now the "default" logic, used when no custom bindings.js is found.
  */
 function updateSvgElement(el, keyPath, value) {
     // --- 1. SPECIAL VISUALS (by ID or data-key) ---
     const numericValue = parseFloat(value);
     
-    // A. Death Star Shield Effect
+    // A. Death Star Shield Effect (Example)
     if (el.id === 'shield-visual-effect' && keyPath === 'power' && !isNaN(numericValue)) {
         const opacity = Math.max(0, Math.min(1, (numericValue / 100.0) * 0.7 + 0.1));
         const width = 2 + (numericValue / 100.0) * 8;
@@ -344,7 +360,7 @@ function updateSvgElement(el, keyPath, value) {
         return; // Handled
     }
     
-    // B. Death Star Laser Charge Effect
+    // B. Death Star Laser Charge Effect (Example)
     if (el.id === 'laser-charge-visual' && keyPath === 'value' && !isNaN(numericValue)) {
         const maxWidth = 140; // Max width in SVG
         const chargeWidth = Math.max(0, (numericValue / 100.0) * maxWidth);
@@ -352,22 +368,7 @@ function updateSvgElement(el, keyPath, value) {
         return; // Handled
     }
     
-    // C. Paris Métro Line Status (Path)
-    if (el.tagName === 'path' && keyPath === 'status') {
-        // Find the base classes (e.g., "line-path line-1")
-        const baseClass = Array.from(el.classList).filter(c => !c.startsWith('line-status-')).join(' ');
-        if (value === 'OK') el.setAttribute('class', baseClass + ' line-status-OK');
-        else if (value === 'PERTURBED') el.setAttribute('class', baseClass + ' line-status-PERTURBED');
-        else if (value === 'INTERRUPTED') el.setAttribute('class', baseClass + ' line-status-INTERRUPTED');
-        return; // Handled
-    }
-    
-    // D. Paris Métro Station Occupancy (Circle)
-    if (el.tagName === 'circle' && keyPath === 'occupancy_percent' && !isNaN(numericValue)) {
-        const opacity = Math.max(0.1, Math.min(1, (numericValue / 100.0) * 0.8 + 0.1));
-        el.setAttribute('fill-opacity', opacity.toFixed(2));
-    }
-    
+    // --- [REMOVED] Paris Métro specific logic ---
     
     // --- 2. TEXT COLOR (by keyPath or value) ---
     if (el.tagName === 'text' || el.tagName === 'tspan') {
@@ -427,42 +428,39 @@ function updateSvgElement(el, keyPath, value) {
 
 /**
  * [MODIFIED] Main update router function.
+ * Now routes to custom bindings or default logic.
  * @param {string} topic - The MQTT topic.
  * @param {string} payload - The message payload.
  */
 export function updateMap(topic, payload) {
     if (svgHistoryToggle?.checked) return;
     if (!svgContent) return;
+    const svgRoot = svgContent.querySelector('svg');
+    if (!svgRoot) return;
 
+    let payloadObject;
+    let isJson = false;
     try {
-        const data = JSON.parse(payload); 
-        
-        // --- [NEW] Paris Métro Logic ---
-        if (currentSvgId === 'ParisMetroTacticalMap' && topic.startsWith('ratp/uns/')) {
-            
-            if (topic.includes('/train/')) {
-                updateMetroTrain(topic, data); // Handles train logic
-            } else if (topic.includes('/station/') && topic.endsWith('/alert')) {
-                updateMetroStationAlert(topic, data); // Handles station alerts
-            } else if (topic.includes('/station/') && topic.endsWith('/telemetry')) {
-                updateMetroStationTelemetry(topic, data); // Handles station KPIs
-            } else if (topic.includes('/line/') && topic.endsWith('/status')) {
-                updateMetroLineStatus(topic, data); // Handles line status
-            } else {
-                // Handle other ratp/uns/ topics if needed (e.g., global status)
-                 const svgId = topic.replace(/\//g, '-').replace(/_/g, '-');
-                 defaultUpdateLogic(svgId, data);
-            }
-            return; // Handled
-        }
-        // --- [End New Logic] ---
-        
-        // --- Default Logic (Death Star, etc.) ---
-        const svgId = topic.replace(/\//g, '-');
-        defaultUpdateLogic(svgId, data);
-
+        payloadObject = JSON.parse(payload); 
+        isJson = true;
     } catch (e) { 
-        console.warn("SVG updateMap error:", e);
+        payloadObject = payload; // It's a raw string
+    }
+    
+    if (customSvgBindings.isLoaded) {
+        // If custom logic is registered, *only* use that.
+        try {
+            customSvgBindings.update(topic, payloadObject, svgRoot);
+        } catch (err) {
+            console.error(`Error in custom SVG binding 'update' function for topic ${topic}:`, err);
+        }
+    } else {
+        // Otherwise, use the generic default logic
+        if(isJson) {
+            const svgId = topic.replace(/\//g, '-');
+            defaultUpdateLogic(svgId, payloadObject);
+        }
+        // (If not JSON and no custom logic, do nothing)
     }
 }
 
@@ -487,153 +485,11 @@ function defaultUpdateLogic(svgId, data) {
             }
         });
         
-        groupElement.classList.add('highlight-svg');
-        setTimeout(() => groupElement.classList.remove('highlight-svg'), 500);
+        // [MODIFIED] Use a generic highlight class
+        groupElement.classList.add('highlight-svg-default');
+        setTimeout(() => groupElement.classList.remove('highlight-svg-default'), 500);
     });
-    
-    // updateAlarmPlaceholder(); // Not used by Metro
 }
-
-
-/**
- * [NEW] Updates a single train element on the Paris Métro map.
- */
-function updateMetroTrain(topic, data) {
-    const parts = topic.split('/');
-    const trainId = parts[parts.length - 2]; // e.g., "MP05-01"
-    const trainG_Id = `train-g-${trainId}`;
-    const stationId = data.position_station_id; // e.g., "line1_gare_chatelet"
-    const trainContainer = svgContent.querySelector('#train-container');
-    if (!trainContainer) {
-        console.warn("#train-container not found in SVG");
-        return;
-    }
-
-    let trainG = trainElements.get(trainG_Id);
-    
-    // 1. Create train element if it doesn't exist
-    if (!trainG) {
-        const linePath = svgContent.querySelector(`path[id="line${data.line}_path"]`);
-        const trainColor = linePath ? linePath.getAttribute('stroke') : '#fff';
-
-        trainG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        trainG.id = trainG_Id;
-        trainG.setAttribute('style', 'transition: transform 0.8s ease-in-out;'); // CSS transition
-        
-        // [MODIFIED] Scaled up elements for large viewBox
-        trainG.innerHTML = `
-            <rect class="train-box" x="-150" y="-50" width="300" height="100" rx="3" style="stroke: ${trainColor};" />
-            <text class="train-text train-text-id" x="0" y="-25" text-anchor="middle" style="fill: ${trainColor};">${trainId}</text>
-            <text class="train-text train-text-label" x="-140" y="5">Driver:</text>
-            <text class="train-text train-text-data train-driver" x="-60" y="5">${data.driver}</text>
-            <text class="train-text train-text-label" x="-140" y="35">Pax:</text>
-            <text class="train-text train-text-data train-passengers" x="-60" y="35">${data.passengers}</text>
-            <circle class="train-status-light" cx="135" y="-25" r="8" fill="#fff"/>
-        `;
-        trainContainer.appendChild(trainG);
-        trainElements.set(trainG_Id, trainG);
-    }
-
-    // 2. Update position
-    const coords = stationCoords.get(stationId);
-    if (coords) {
-        // [MODIFIED] Scaled up offset
-        const x = coords.x;
-        const y = coords.y - 70; // 70px above the station circle
-        trainG.setAttribute('transform', `translate(${x}, ${y})`);
-    } else {
-        console.warn(`[SVG] No coordinates found for station ID: ${stationId}`);
-    }
-
-    // 3. Update data
-    trainG.querySelector('.train-driver').textContent = data.driver;
-    trainG.querySelector('.train-passengers').textContent = `${data.passengers} (${data.occupancy_percent}%)`;
-    
-    // 4. Update status light
-    const statusLight = trainG.querySelector('.train-status-light');
-    statusLight.setAttribute('class', `train-status-light train-status-${data.status}`);
-}
-
-/**
- * [NEW] Updates a metro line's visual status.
- */
-function updateMetroLineStatus(topic, data) {
-    const parts = topic.split('/');
-    const lineNum = parts[parts.length - 2]; // e.g., "1"
-    const linePath = svgContent.querySelector(`path[id="line${lineNum}_path"]`);
-    if (linePath) {
-        updateSvgElement(linePath, 'status', data.status);
-    }
-}
-
-/**
- * [NEW] Updates a station's alert status.
- */
-function updateMetroStationAlert(topic, data) {
-    const parts = topic.split('/');
-    const stationId = parts[parts.length - 2]; // e.g., "chatelet"
-    const textEl = stationTextElements.get(stationId);
-    if (textEl) {
-        if (data.type === "NONE" || data.status === "CLEAR") {
-            textEl.classList.remove('alarm-text');
-        } else {
-            textEl.classList.add('alarm-text');
-        }
-    }
-}
-
-/**
- * [NEW] Updates a station's telemetry data (occupancy, air).
- */
-function updateMetroStationTelemetry(topic, data) {
-    const parts = topic.split('/');
-    const stationId = parts[parts.length - 2]; // e.g., "chatelet"
-    const kpiId = `station-kpi-${stationId}`;
-    
-    let kpiG = stationTelemetryElements.get(kpiId);
-    const telemetryContainer = svgContent.querySelector('#station-telemetry-container');
-    if (!telemetryContainer) {
-        console.warn("#station-telemetry-container not found in SVG");
-        return;
-    }
-    
-    // 1. Create KPI box if it doesn't exist
-    if (!kpiG) {
-        // Find the station's <text> element to base coordinates on
-        const stationTextEl = stationTextElements.get(stationId);
-        if (!stationTextEl) {
-             console.warn(`[SVG] No text element found for station: ${stationId}`);
-             return; // Can't place it
-        }
-        
-        const bbox = stationTextEl.getBBox();
-        const x = bbox.x + (bbox.width / 2); // Center of the text
-        const y = bbox.y + bbox.height + 20; // 20px below the text
-
-        kpiG = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        kpiG.id = kpiId;
-        kpiG.setAttribute('transform', `translate(${x}, ${y})`);
-        
-        // [MODIFIED] Scaled up elements
-        kpiG.innerHTML = `
-            <rect class="kpi-box" x="-100" y="0" width="200" height="90" />
-            <text class="train-text train-text-label" x="-90" y="25">Pax:</text>
-            <text class="train-text train-text-data kpi-pax" x="0" y="25">0</text>
-            <text class="train-text train-text-label" x="-90" y="50">CO2:</text>
-            <text class="train-text train-text-data kpi-co2" x="0" y="50">0</text>
-            <text class="train-text train-text-label" x="-90" y="75">PM2.5:</text>
-            <text class="train-text train-text-data kpi-pm25" x="0" y="75">0</text>
-        `;
-        telemetryContainer.appendChild(kpiG);
-        stationTelemetryElements.set(kpiId, kpiG);
-    }
-    
-    // 2. Update data
-    kpiG.querySelector('.kpi-pax').textContent = `${data.passengers} (${data.occupancy_percent}%)`;
-    kpiG.querySelector('.kpi-co2').textContent = data.air_quality.co2;
-    kpiG.querySelector('.kpi-pm25').textContent = data.air_quality.pm2_5;
-}
-
 
 /**
  * [MODIFIED] Updates the UI of the SVG timeline slider
@@ -644,7 +500,8 @@ export function updateSvgTimelineUI(min, max) {
     currentMinTimestamp = min;
     currentMaxTimestamp = max;
 
-    if (!svgHistoryToggle?.checked) return;
+    // Don't update/show if not in history mode
+    if (!isSvgHistoryMode) return; 
 
     const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
     
@@ -653,11 +510,15 @@ export function updateSvgTimelineUI(min, max) {
 
 /**
  * [MODIFIED] Replays the SVG state up to a specific point in time.
+ * Now uses custom bindings or default logic.
  */
 function replaySvgHistory(replayUntilTimestamp) {
     if (!svgContent) return;
 
-    // 1. Reset SVG to its initial state
+    const svgRoot = svgContent.querySelector('svg');
+    if (!svgRoot) return;
+
+    // 1. Reset SVG to its initial state (using default logic)
     svgInitialTextValues.forEach((state, element) => {
         if (state.type === 'text') {
             element.textContent = state.value;
@@ -665,43 +526,21 @@ function replaySvgHistory(replayUntilTimestamp) {
             element.setAttribute(state.attr, state.value);
         }
         // Reset dynamic styles
-        element.classList.remove('alarm-text');
-        
-        // [MODIFIED] Reset fill color for station text
-        if (element.tagName === 'text' && element.id.includes('_station_')) {
-             const lineNum = element.id.match(/line(\d+)/);
-             if(lineNum) {
-                 if (lineNum[1] === '1') element.setAttribute('fill', '#f7bf0f');
-                 else if (lineNum[1] === '2') element.setAttribute('fill', '#1c4b9c');
-                 else if (lineNum[1] === '6') element.setAttribute('fill', '#6db76e');
-                 else element.setAttribute('fill', '#aaa');
-            } else if (element.id.startsWith('ratp-uns-station-')) {
-                // Handle alert-texts (e.g. ratp-uns-station-nation-alert)
-                const gParent = element.closest('g[id*="ratp-uns-line-"]');
-                if(gParent) {
-                     if (gParent.id.includes('-1-')) element.setAttribute('fill', '#f7bf0f');
-                     else if (gParent.id.includes('-2-')) element.setAttribute('fill', '#1c4b9c');
-                     else if (gParent.id.includes('-6-')) element.setAttribute('fill', '#6db76e');
-                     else element.setAttribute('fill', '#aaa');
-                } else {
-                    element.setAttribute('fill', '#aaa');
-                }
-            }
+        element.classList.remove('alarm-text', 'highlight-svg-default');
+        if (element.getAttribute('fill') === '#f85149' || element.getAttribute('fill') === '#d29922' || element.getAttribute('fill') === '#3fb950' || element.getAttribute('fill') === '#58a6ff') {
+            element.removeAttribute('fill');
         }
     });
     svgContent.querySelectorAll('.alarm-line').forEach(el => el.style.visibility = 'hidden');
-    svgContent.querySelectorAll('.alarm-text').forEach(el => {
-        if (!el.closest('.alarm-line')) { 
-            el.style.visibility = 'hidden';
-            el.classList.remove('alarm-text'); // Remove class too
-        }
-    });
     
-    // [NEW] Clear all dynamically created elements
-    trainElements.forEach(trainG => trainG.remove());
-    trainElements.clear();
-    stationTelemetryElements.forEach(kpiG => kpiG.remove());
-    stationTelemetryElements.clear();
+    // [NEW] Call the custom reset function
+    if (customSvgBindings.isLoaded) {
+        try {
+            customSvgBindings.reset(svgRoot);
+        } catch (err) {
+            console.error("Error in custom SVG binding 'reset' function:", err);
+        }
+    }
 
     // 2. Filter messages up to the replay timestamp
     const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
@@ -718,32 +557,27 @@ function replaySvgHistory(replayUntilTimestamp) {
 
     // 4. Apply the final state to the SVG view
     finalState.forEach((payload, topic) => {
+        let payloadObject;
+        let isJson = false;
         try {
-            const data = JSON.parse(payload); 
-            
-            // --- [NEW] Paris Métro Logic ---
-            if (currentSvgId === 'ParisMetroTacticalMap' && topic.startsWith('ratp/uns/')) {
-                 if (topic.includes('/train/')) {
-                    updateMetroTrain(topic, data); // Create and place train
-                } else if (topic.includes('/station/') && topic.endsWith('/alert')) {
-                    updateMetroStationAlert(topic, data); // Handle station alerts
-                } else if (topic.includes('/station/') && topic.endsWith('/telemetry')) {
-                    updateMetroStationTelemetry(topic, data); // Handles station KPIs
-                } else if (topic.includes('/line/') && topic.endsWith('/status')) {
-                    updateMetroLineStatus(topic, data); // Handles line status
-                } else {
-                     const svgId = topic.replace(/\//g, '-');
-                     defaultUpdateLogic(svgId, data);
-                }
-                return; // Handled
+            payloadObject = JSON.parse(payload);
+            isJson = true;
+        } catch (e) { 
+            payloadObject = payload;
+        }
+        
+        // [MODIFIED] Route to custom or default logic
+        if (customSvgBindings.isLoaded) {
+            try {
+                customSvgBindings.update(topic, payloadObject, svgRoot);
+            } catch (err) {
+                console.error(`Error in custom SVG binding 'update' function during replay for topic ${topic}:`, err);
             }
-            // --- [End New Logic] ---
-
-            const svgId = topic.replace(/\//g, '-');
-            defaultUpdateLogic(svgId, data);
-
-        } catch (e) { /* Payload is not JSON, ignore */ }
+        } else {
+            if (isJson) {
+                const svgId = topic.replace(/\//g, '-');
+                defaultUpdateLogic(svgId, payloadObject);
+            }
+        }
     });
-    
-    updateAlarmPlaceholder();
 }
