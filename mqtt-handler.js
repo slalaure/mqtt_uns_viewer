@@ -31,8 +31,7 @@ let logger;
 let config;
 let wsManager;
 let mapperEngine;
-let db;
-let dbWriteQueue; // This will be the array from server.js
+let dataManager; // [MODIFIED] No longer holds 'db' or 'dbWriteQueue'
 let broadcastDbStatus;
 
 /**
@@ -113,28 +112,29 @@ async function handleMessage(topic, payload) {
         wsManager.broadcast(JSON.stringify(finalMessageObject));
 
         // --- 4. Smart DB/Mapper Execution ---
-        // [MODIFIED] Removed the if/else for batch mode. We *always* use the batch queue now.
+        // [MODIFIED] This is now a "fire-and-forget" operation
         
         // Check if any rule for this topic needs the DB
         const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
         
-        // Add all data to the queue.
-        dbWriteQueue.push({ 
+        // 4a. Push to DataManager for asynchronous database writing
+        // This is fast and non-blocking.
+        dataManager.insertMessage({ 
             timestamp, 
             topic, 
             payloadStringForDb, 
-            payloadObjectForMapper, // Store the object
+            // payloadObjectForMapper, // No longer needed, will be parsed from payloadStringForDb
             isSparkplugOrigin, 
-            needsDb // <-- Tell the queue if this message needs deferred mapping
+            needsDb
         });
-        broadcastDbStatus();
 
+        // 4b. Run stateless mappers immediately for low latency
         if (!needsDb) {
-            // This mapper is simple/stateless. Run it IMMEDIATELY for low latency.
+            // This mapper is simple/stateless. Run it IMMEDIATELY.
             // It won't see its own message in the DB, but it doesn't care.
             await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
         }
-        // If 'needsDb' is true, the mapper will be called inside 'processDbQueue'
+        // If 'needsDb' is true, the mapper will be called *by the repository* after write.
             
     } catch (err) { // Catch unexpected errors in this block's logic
         logger.error({ msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`, topic: topic, error_message: err.message, error_stack: err.stack, rawPayloadStartHex: payload.slice(0, 30).toString('hex') });
@@ -147,18 +147,16 @@ async function handleMessage(topic, payload) {
  * @param {object} appConfig - The application config object.
  * @param {object} appWsManager - The WebSocket Manager instance.
  * @param {object} appMapperEngine - The Mapper Engine instance.
- * @param {duckdb.Database} appDb - The DuckDB instance.
- *Ai @param {Array} appDbWriteQueue - The reference to the server's write queue.
+ * @param {object} appDataManager - [MODIFIED] The Data Manager instance.
  * @param {function} appBroadcastDbStatus - The function to broadcast DB status.
  * @returns {function} The async handleMessage function.
  */
-function init(appLogger, appConfig, appWsManager, appMapperEngine, appDb, appDbWriteQueue, appBroadcastDbStatus) {
+function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManager, appBroadcastDbStatus) {
     logger = appLogger.child({ component: 'MQTTHandler' });
     config = appConfig;
     wsManager = appWsManager;
     mapperEngine = appMapperEngine;
-    db = appDb;
-    dbWriteQueue = appDbWriteQueue;
+    dataManager = appDataManager; // [MODIFIED]
     broadcastDbStatus = appBroadcastDbStatus;
 
     logger.info("✅ MQTT Message Handler initialized.");

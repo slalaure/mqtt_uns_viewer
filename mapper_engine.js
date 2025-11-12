@@ -11,7 +11,7 @@ const path = require('path');
 const vm = require('vm');
 const mustache = require('mustache');
 const mqttMatch = require('mqtt-match');
-const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); // <-- Import Sparkplug codec
+const spBv10Codec = require('sparkplug-payload').get("spBv10"); // <-- Import Sparkplug codec
 
 const MAPPINGS_FILE_PATH = path.join(__dirname, 'data', 'mappings.json');
 
@@ -26,7 +26,7 @@ let publishCallback = (topic, payload) => {};
 let broadcastCallback = (message) => {};
 let engineLogger = null;
 let payloadReplacer = null; 
-let internalDb = null; // <-- [NEW] To store the DB connection
+let internalDb = null; // <-- [MODIFIED] Will be injected by server.js
 
 // [MODIFIED] Updated default code to show new async DB capability
 const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
@@ -281,7 +281,7 @@ const processMessage = async (topic, payloadObject, isSparkplugOrigin = false) =
                     let resultMsg = null;
                     const context = vm.createContext(createSandbox(msgForSandbox));
                     
-                    // [FIX] Sanitize code to remove non-breaking spaces (U+00A0)
+                    // [FIX] Sanitize code to remove non-breaking spaces (U+000A)
                     const cleanCode = target.code.replace(/\u00A0/g, " ");
 
                     // [MODIFIED] Wrap code in an async IIFE to allow 'await'
@@ -361,12 +361,12 @@ const processMessage = async (topic, payloadObject, isSparkplugOrigin = false) =
 };
 
 
-// [MODIFIED] Accept 'db' as the first argument
-module.exports = (db, publisher, broadcaster, logger, longReplacer) => {
-    if (!db || !publisher || !broadcaster || !logger || !longReplacer) {
-        throw new Error("Mapper Engine V2 requires a db, publisher, broadcaster, logger, and longReplacer function.");
+// [MODIFIED] Constructor now accepts publisher, broadcaster, logger, longReplacer
+module.exports = (publisher, broadcaster, logger, longReplacer) => {
+    if (!publisher || !broadcaster || !logger || !longReplacer) {
+        throw new Error("Mapper Engine V2 requires a publisher, broadcaster, logger, and longReplacer function.");
     }
-    internalDb = db; // <-- [NEW] Store DB connection
+    // [REMOVED] DB connection - will be injected
     publishCallback = publisher;
     broadcastCallback = broadcaster;
     engineLogger = logger.child({ component: 'MapperEngineV2' });
@@ -375,11 +375,16 @@ module.exports = (db, publisher, broadcaster, logger, longReplacer) => {
     loadMappings();
 
     return {
+        // [NEW] Function to inject the DB connection post-init
+        setDb: (dbConnection) => {
+            internalDb = dbConnection;
+            logger.info("✅ Database connection injected into Mapper Engine.");
+        },
         saveMappings,
         getMappings,
         getMetrics,
         processMessage,
-        rulesForTopicRequireDb, // <-- [NEW] Export this function
+        rulesForTopicRequireDb,
         DEFAULT_JS_CODE
     };
 };

@@ -32,13 +32,14 @@ const mqtt = require('mqtt');
 const duckdb = require('duckdb');
 const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
-const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); // [NEW] For manual publish
+const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 
 // --- Module Imports [MODIFIED] ---
 const wsManager = require('./websocket-manager');
 const mqttHandler = require('./mqtt-handler');
 const { connectToMqttBroker } = require('./mqtt_client');
-const simulatorManager = require('./simulator'); // [MODIFIED] Import the manager
+const simulatorManager = require('./simulator');
+const dataManager = require('./database/dataManager'); // [NEW] Import Data Manager
 // --- [END MODIFIED] ---
 
 
@@ -75,7 +76,7 @@ require('dotenv').config({ path: ENV_PATH });
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
     logger.info("✅ No 'charts.json' file found in 'data' directory. Creating one...");
     try {
-        fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify([], null, 2)); // Default to empty array
+        fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2)); // [MODIFIED] Default to new object format
         logger.info("✅ charts.json file created successfully in ./data/");
     } catch (err) {
         logger.error({ err }, "❌ FATAL ERROR: Could not create charts.json file.");
@@ -95,8 +96,7 @@ function longReplacer(key, value) {
 let mcpProcess = null;
 let mainConnection = null;
 let isPruning = false;
-let dbWriteQueue = []; // Queue for batch inserts
-let dbBatchTimer = null; // Timer for batch processor
+// [REMOVED] dbWriteQueue and dbBatchTimer are now managed by duckdb_repository.js
 
 // --- Configuration from Environment ---
 const config = {
@@ -117,20 +117,30 @@ const config = {
     PORT: process.env.PORT || 8080,
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
-    // [REMOVED] DB_BATCH_INSERT_ENABLED: process.env.DB_BATCH_INSERT_ENABLED === 'true',
-    DB_INSERT_BATCH_SIZE: process.env.DB_INSERT_BATCH_SIZE ? parseInt(process.env.DB_INSERT_BATCH_SIZE, 10) : 5000, // [NEW]
+    DB_INSERT_BATCH_SIZE: process.env.DB_INSERT_BATCH_SIZE ? parseInt(process.env.DB_INSERT_BATCH_SIZE, 10) : 5000,
     DB_BATCH_INTERVAL_MS: process.env.DB_BATCH_INTERVAL_MS ? parseInt(process.env.DB_BATCH_INTERVAL_MS, 10) : 2000,
+    // [NEW] Perennial Storage Config
+    PERENNIAL_DRIVER: process.env.PERENNIAL_DRIVER?.trim() || 'none',
+    PG_HOST: process.env.PG_HOST?.trim() || 'localhost',
+    PG_PORT: process.env.PG_PORT ? parseInt(process.env.PG_PORT, 10) : 5432,
+    PG_USER: process.env.PG_USER?.trim() || 'postgres',
+    PG_PASSWORD: process.env.PG_PASSWORD?.trim() || 'password',
+    PG_DATABASE: process.env.PG_DATABASE?.trim() || 'mqtt_uns_viewer',
+    PG_TABLE_NAME: process.env.PG_TABLE_NAME?.trim() || 'mqtt_events',
+    PG_INSERT_BATCH_SIZE: process.env.PG_INSERT_BATCH_SIZE ? parseInt(process.env.PG_INSERT_BATCH_SIZE, 10) : 1000,
+    PG_BATCH_INTERVAL_MS: process.env.PG_BATCH_INTERVAL_MS ? parseInt(process.env.PG_BATCH_INTERVAL_MS, 10) : 5000,
+    // [END NEW]
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
-    VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false', // Default to true
-    VIEW_SVG_ENABLED: process.env.VIEW_SVG_ENABLED !== 'false', // Default to true
-    VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false', // Default to true
-    VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false', // Default to true
-    VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false', // Default to true
-    VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false', // [NEW] Default to true
+    VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false',
+    VIEW_SVG_ENABLED: process.env.VIEW_SVG_ENABLED !== 'false',
+    VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false',
+    VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false',
+    VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
+    VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/',
-    VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false', // Default to true
+    VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false',
     MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
     MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0,
     API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null
@@ -144,12 +154,9 @@ if (!config.MQTT_BROKER_HOST || !config.CLIENT_ID || !config.MQTT_TOPIC) {
 }
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic Authentication is ENABLED.");
-// [MODIFIED] Added Publish view to log
 logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}] Publish[${config.VIEW_PUBLISH_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] `);
-// [MODIFIED] Log new batch config
-logger.info(`✅ ⚡ Database batch insert is ENABLED (Size: ${config.DB_INSERT_BATCH_SIZE}, Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
-// [NEW] Log demo limits
+logger.info(`✅ ⚡ DuckDB batch insert is ENABLED (Size: ${config.DB_INSERT_BATCH_SIZE}, Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
 if (config.MAX_SAVED_CHART_CONFIGS > 0) logger.info(`✅ 🔒 DEMO LIMIT: Max saved charts set to ${config.MAX_SAVED_CHART_CONFIGS}.`);
 if (config.MAX_SAVED_MAPPER_VERSIONS > 0) logger.info(`✅ 🔒 DEMO LIMIT: Max saved mapper versions set to ${config.MAX_SAVED_MAPPER_VERSIONS}.`);
 
@@ -168,115 +175,8 @@ logger.info(`✅ Application base path set to: ${basePath}`);
 const app = express();
 const server = http.createServer(app);
 
-// --- DuckDB Setup ---
-const dbFile = DB_PATH;
-const dbWalFile = dbFile + '.wal';
-const db = new duckdb.Database(dbFile, (err) => {
-    if (err) {
-        logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
-        process.exit(1);
-    }
-    logger.info("✅ 🦆 DuckDB database connected successfully at: %s", dbFile);
-    startDbBatchProcessor();
-});
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS mqtt_events (
-      timestamp TIMESTAMPTZ,
-      topic VARCHAR,
-      payload JSON
-  );`, (err) => {
-    if (err) {
-        logger.error({ err }, "❌ Failed to create table in DuckDB.");
-    } else {
-        logger.info("✅    -> Table 'mqtt_events' is ready.");
-    }
-});
-
-// --- Database Maintenance ---
-const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
-
-// --- Initialize WebSocket Manager ---
-wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer);
-
-// --- DB Batch Insert Processor ---
-function processDbQueue() {
-    // [MODIFIED] Process a fixed-size chunk, not the whole queue
-    const batch = dbWriteQueue.splice(0, config.DB_INSERT_BATCH_SIZE);
-    if (batch.length === 0) {
-        return;
-    }
-
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION;', (err) => {
-            if (err) return logger.error({ err }, "DB Batch: Failed to BEGIN TRANSACTION");
-        });
-
-        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-        let errorCount = 0;
-
-        for (const msg of batch) {
-            stmt.run(msg.timestamp, msg.topic, msg.payloadStringForDb, (runErr) => {
-                if (runErr) {
-                    logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
-                    errorCount++;
-                }
-            });
-        }
-
-        stmt.finalize((finalizeErr) => {
-            if (finalizeErr) {
-                 logger.error({ err: finalizeErr }, "DB Batch: Failed to finalize statement");
-                 db.run('ROLLBACK;'); 
-                 return;
-            }
-
-            if (errorCount > 0) {
-                logger.warn(`DB Batch: ${errorCount} errors, rolling back transaction.`);
-                db.run('ROLLBACK;');
-            } else {
-                db.run('COMMIT;', (commitErr) => {
-                    if (commitErr) {
-                        logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
-                    } else {
-                        // [MODIFIED] Log with chunk size
-                        logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
-                        broadcastDbStatus();
-                        
-                        (async () => {
-                            for (const msg of batch) {
-                                if (msg.needsDb) { 
-                                    try {
-                                        // [MODIFIED] Parse from payloadStringForDb to ensure correct object
-                                        const payloadObject = JSON.parse(msg.payloadStringForDb);
-                                        await mapperEngine.processMessage(
-                                            msg.topic, 
-                                            payloadObject,
-                                            msg.isSparkplugOrigin
-                                        );
-                                    } catch (mapperErr) {
-                                        logger.error({ err: mapperErr, topic: msg.topic }, "Mapper trigger failed after batch.");
-                                    }
-                                }
-                            }
-                        })();
-                    }
-                });
-            }
-        });
-    });
-}
-
-function startDbBatchProcessor() {
-    // [MODIFIED] This logic is no longer conditional
-    logger.info(`Starting DB batch processor (interval: ${config.DB_BATCH_INTERVAL_MS}ms)`);
-    if (dbBatchTimer) clearInterval(dbBatchTimer);
-    dbBatchTimer = setInterval(processDbQueue, config.DB_BATCH_INTERVAL_MS);
-}
-
-// --- Mapper Engine Setup ---
+// --- [MODIFIED] Mapper Engine Setup (Must be initialized before DB logic) ---
 const mapperEngine = require('./mapper_engine')(
-    db, 
     (topic, payload) => {
         if (mainConnection) {
             mainConnection.publish(topic, payload, { qos: 1, retain: false });
@@ -286,6 +186,84 @@ const mapperEngine = require('./mapper_engine')(
     logger,
     longReplacer
 );
+
+// --- [MODIFIED] DuckDB Setup (Centralized Initialization) ---
+const dbFile = DB_PATH;
+const dbWalFile = dbFile + '.wal';
+let db; // db connection is now top-level
+db = new duckdb.Database(dbFile, (err) => {
+    if (err) {
+        logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
+        process.exit(1);
+    }
+    logger.info("✅ 🦆 DuckDB database connected successfully at: %s", dbFile);
+    
+    // --- Post-Connection Initializations ---
+    
+    // 1. Create table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS mqtt_events (
+          timestamp TIMESTAMPTZ,
+          topic VARCHAR,
+          payload JSON
+      );`, (err) => {
+        if (err) {
+            logger.error({ err }, "❌ Failed to create table in DuckDB.");
+        } else {
+            logger.info("✅    -> Table 'mqtt_events' is ready.");
+        }
+    });
+
+    // 2. Give the DB connection to the Mapper Engine
+    mapperEngine.setDb(db);
+    
+    // 3. Initialize DB Maintenance
+    const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
+
+    // 4. Initialize Data Manager
+    // This manager will orchestrate all writes
+    dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
+
+    // 5. Initialize WebSocket Manager (passes DB for READS)
+    wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer);
+
+    // 6. Start DB Maintenance Interval
+    setInterval(performMaintenance, 15000);
+
+    // 7. Connect to MQTT Broker (now that all DB/Data logic is ready)
+    connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
+        mainConnection = connection;
+
+        // Initialize the message handler
+        const handleMessage = mqttHandler.init(
+            logger,
+            config,
+            wsManager,
+            mapperEngine,
+            dataManager, // [MODIFIED] Pass dataManager
+            broadcastDbStatus
+        );
+
+        // Attach the single handler function
+        mainConnection.on('message', handleMessage);
+
+        mainConnection.on('close', () => {
+            logger.info('✅ Disconnected from MQTT Broker. Stopping all running simulators...');
+            const statuses = simulatorManager.getStatuses();
+            for (const name in statuses) {
+                if (statuses[name] === 'running') {
+                    simulatorManager.stopSimulator(name);
+                }
+            }
+            wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
+        });
+    });
+});
+// --- [END] DuckDB Init Block ---
+
+// [REMOVED] Old DB exec, db_manager.js init, wsManager.init (moved up)
+// [REMOVED] All batch processing logic (processDbQueue, startDbBatchProcessor)
+// [REMOVED] Old Mapper Engine init (moved up)
 
 // --- Middleware ---
 const authMiddleware = (req, res, next) => {
@@ -330,29 +308,22 @@ const mainRouter = express.Router();
 mainRouter.use(express.json());
 app.set('trust proxy', true);
 
-// --- Simulator Logic [MODIFIED] ---
-// Initialize the Simulator Manager
+// --- Simulator Logic ---
 simulatorManager.init(logger, (topic, payload, isBinary) => {
     if (mainConnection) {
         mainConnection.publish(topic, payload, { qos: 1, retain: false });
     }
 }, config.IS_SPARKPLUG_ENABLED);
-// --- [END MODIFIED] ---
 
 
 // --- API Routes (Mounted on mainRouter) ---
 
-// [MODIFIED] This route is now dynamic based on a query parameter
 mainRouter.get('/api/svg/file', (req, res) => {
     const filename = req.query.name;
-
-    // Security: Validate and sanitize the filename
     if (!filename || !filename.endsWith('.svg')) {
         return res.status(400).json({ error: 'Invalid or missing SVG file name.' });
     }
-    // Prevent directory traversal: path.basename strips directory info
     const sanitizedName = path.basename(filename);
-    
     const configuredSvgPath = path.join(DATA_PATH, sanitizedName);
     
     if (fs.existsSync(configuredSvgPath)) {
@@ -363,7 +334,6 @@ mainRouter.get('/api/svg/file', (req, res) => {
     }
 });
 
-// [NEW] API endpoint to list available SVG files
 mainRouter.get('/api/svg/list', (req, res) => {
     try {
         const files = fs.readdirSync(DATA_PATH);
@@ -372,6 +342,23 @@ mainRouter.get('/api/svg/list', (req, res) => {
     } catch (err) {
         logger.error({ err }, "❌ Failed to read data directory to list SVGs.");
         res.status(500).json({ error: "Could not list SVG files." });
+    }
+});
+
+mainRouter.get('/api/svg/bindings.js', (req, res) => {
+    const filename = req.query.name;
+    if (!filename || !filename.endsWith('.svg.js')) {
+        return res.status(400).json({ error: 'Invalid or missing binding file name. Must end with .svg.js' });
+    }
+    const sanitizedName = path.basename(filename);
+    const bindingsPath = path.join(DATA_PATH, sanitizedName);
+
+    if (fs.existsSync(bindingsPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(bindingsPath);
+    } else {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.send(`// No custom binding file found at /data/${sanitizedName}. Using default logic.`);
     }
 });
 
@@ -390,31 +377,21 @@ mainRouter.get('/api/config', (req, res) => {
         viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
         maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
         maxSavedMapperVersions: config.MAX_SAVED_MAPPER_VERSIONS,
-        svgFilePath: config.SVG_FILE_PATH // [NEW] Pass default SVG path
+        svgFilePath: config.SVG_FILE_PATH
     });
 });
 
-// --- [MODIFIED] Simulator API Routes ---
 if (config.IS_SIMULATOR_ENABLED) {
     logger.info("✅ Simulator is ENABLED. Creating API endpoints at /api/simulator/*");
-    
-    // GET /api/simulator/status
-    // Returns the status of all available simulators
     mainRouter.get('/api/simulator/status', (req, res) => {
         res.json({ statuses: simulatorManager.getStatuses() });
     });
-
-    // POST /api/simulator/start/:name
-    // Starts a specific simulator by name
     mainRouter.post('/api/simulator/start/:name', (req, res) => {
         const name = req.params.name;
         const result = simulatorManager.startSimulator(name);
         wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
         res.status(200).json(result);
     });
-
-    // POST /api/simulator/stop/:name
-    // Stops a specific simulator by name
     mainRouter.post('/api/simulator/stop/:name', (req, res) => {
         const name = req.params.name;
         const result = simulatorManager.stopSimulator(name);
@@ -422,45 +399,50 @@ if (config.IS_SIMULATOR_ENABLED) {
         res.status(200).json(result);
     });
 }
-// --- [END MODIFIED] ---
 
-// MCP Context API Router
-// [MODIFIED] Pass getStatuses function from the manager
-const mcpRouter = require('./routes/mcpApi')(db, () => mainConnection, simulatorManager.getStatuses, getDbStatus, config);
-mainRouter.use('/api/context', ipFilterMiddleware, mcpRouter);
+// [MODIFIED] MCP Context API Router
+// We must delay its requirement until *after* db is initialized
+mainRouter.use('/api/context', (req, res, next) => {
+    if (!db) {
+        return res.status(503).json({ error: "Database is not yet initialized." });
+    }
+    // Lazy-load the router to ensure 'db' is initialized
+    // We also need to get `getDbStatus` from the db_manager
+    const dbManager = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
+    const mcpRouter = require('./routes/mcpApi')(
+        db, // The live DB connection
+        () => mainConnection,
+        simulatorManager.getStatuses,
+        dbManager.getDbStatus, // The getDbStatus function
+        config
+    );
+    // Apply IP filter *before* the router
+    ipFilterMiddleware(req, res, () => mcpRouter(req, res, next));
+});
 
-// --- [MODIFIED] Configuration API Router (Conditional) ---
 if (config.VIEW_CONFIG_ENABLED) {
     logger.info("✅ Configuration editor UI is ENABLED.");
     const configRouter = require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger);
     mainRouter.use('/api/env', ipFilterMiddleware, configRouter);
 } else {
     logger.info("✅ 🔒 Configuration editor UI is DISABLED by .env settings.");
-    // Block the API if the UI is disabled
     mainRouter.use('/api/env', (req, res) => {
         res.status(403).json({ error: "Configuration API is disabled by server settings." });
     });
 }
-// --- [END MODIFIED] ---
 
-// Mapper API Router
 const mapperRouter = require('./routes/mapperApi')(mapperEngine);
 mainRouter.use('/api/mapper', ipFilterMiddleware, mapperRouter);
 
-// Chart API Router
 const chartRouter = require('./routes/chartApi')(CHART_CONFIG_PATH, logger);
 mainRouter.use('/api/chart', ipFilterMiddleware, chartRouter);
 
 
-// [NEW] API Route for Manual Publishing
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     if (!mainConnection || !mainConnection.connected) {
         return res.status(503).json({ error: "MQTT client is not connected." });
     }
-
     const { topic, payload, format, qos, retain } = req.body;
-
-    // --- Validation ---
     if (!topic || topic.trim() === '') {
         return res.status(400).json({ error: "Topic is required." });
     }
@@ -469,29 +451,16 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
         return res.status(400).json({ error: "Invalid QoS. Must be 0, 1, or 2." });
     }
     const retainFlag = retain === true;
-
     let finalPayload;
-
     try {
         switch (format) {
             case 'json':
-                // Client sends payload as a string from a textarea.
-                // We parse it to validate, then re-stringify for the broker.
                 finalPayload = JSON.stringify(JSON.parse(payload));
                 break;
             case 'sparkplugb':
-                // Assume payload is JSON text representing a Sparkplug payload object
                 const spPayloadObj = JSON.parse(payload);
-                
-                // Add timestamp if not present
-                if (!spPayloadObj.timestamp) {
-                    spPayloadObj.timestamp = Date.now();
-                }
-                // Add seq if not present
-                if (spPayloadObj.seq === undefined) {
-                    spPayloadObj.seq = 0;
-                }
-                // Handle BigInts in metrics (e.g., if user types "10n")
+                if (!spPayloadObj.timestamp) spPayloadObj.timestamp = Date.now();
+                if (spPayloadObj.seq === undefined) spPayloadObj.seq = 0;
                 if (spPayloadObj.metrics) {
                     spPayloadObj.metrics.forEach(m => {
                         if (typeof m.value === 'string' && /^\d+n$/.test(m.value)) {
@@ -503,15 +472,13 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
                 break;
             case 'string':
             default:
-                finalPayload = payload; // Send as raw string
+                finalPayload = payload;
                 break;
         }
     } catch (err) {
         logger.error({ err, topic: topic }, "❌ Error processing manual publish payload:");
         return res.status(400).json({ error: `Invalid payload format for '${format}'. ${err.message}` });
     }
-
-    // --- Publish ---
     mainConnection.publish(topic, finalPayload, { qos: qosLevel, retain: retainFlag }, (err) => {
         if (err) {
             logger.error({ err, topic: topic }, "❌ Error manually publishing message:");
@@ -522,10 +489,6 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     });
 });
 
-
-// --- [MODIFIED] Static Assets (with conditional block) ---
-
-// Conditionally block config page if disabled in .env
 if (!config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', (req, res) => {
         res.status(403).send('Access to the configuration page is disabled by server settings.');
@@ -534,88 +497,30 @@ if (!config.VIEW_CONFIG_ENABLED) {
         res.status(403).send('Access to configuration scripts is disabled.');
     });
 }
-
 mainRouter.use(express.static(path.join(__dirname, 'public')));
-// --- [END MODIFIED] ---
-
-// --- Mount Everything ---
 app.use(authMiddleware);
 app.use(basePath, mainRouter);
-
-// --- Root Redirect ---
 if (basePath !== '/') {
     app.get('/', (req, res) => {
         res.redirect(basePath);
     });
 }
 
-// --- MQTT Connection Logic ---
-connectToMqttBroker(config, logger, CERTS_PATH, (connection) => {
-    mainConnection = connection;
-
-    // Initialize the message handler
-    const handleMessage = mqttHandler.init(
-        logger,
-        config,
-        wsManager,
-        mapperEngine,
-        db,
-        dbWriteQueue,
-        broadcastDbStatus
-    );
-
-    // Attach the single handler function
-    mainConnection.on('message', handleMessage);
-
-    // --- [MODIFIED] Disconnect handler to stop all sims ---
-    mainConnection.on('close', () => {
-        logger.info('✅ Disconnected from MQTT Broker. Stopping all running simulators...');
-        const statuses = simulatorManager.getStatuses();
-        for (const name in statuses) {
-            if (statuses[name] === 'running') {
-                simulatorManager.stopSimulator(name);
-            }
-        }
-        wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
-    });
-    // --- [END MODIFIED] ---
-});
-
-// --- Child Process Management (MCP) ---
-/*function startMcpServer() {
-    logger.info("✅ 🚀 Starting MCP Server as a child process...");
-    mcpProcess = spawn('node', ['mcp_server.mjs'], { stdio: 'inherit' });
-    mcpProcess.on('close', (code) => logger.info(`MCP Server process exited with code ${code}`));
-    mcpProcess.on('error', (err) => logger.error({ err }, '❌ Failed to start MCP Server process:'));
-}
-*/
+// [REMOVED] MQTT Connection Logic - moved inside DB callback
 
 // --- Server Start ---
 server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
-    if (config.DUCKDB_MAX_SIZE_MB) {
-        logger.info(`Database auto-pruning enabled. Max size: ${config.DUCKDB_MAX_SIZE_MB} MB.`);
-    }
-    setInterval(performMaintenance, 15000);
-    //startMcpServer();
+    // [REMOVED] Maintenance interval, moved inside DB callback
 });
 
 // --- Graceful Shutdown ---
 process.on('SIGINT', () => {
     logger.info("\n✅ Gracefully shutting down...");
-    /*if (mcpProcess) {
-        logger.info("✅    -> Stopping MCP Server process...");
-        mcpProcess.kill('SIGINT');
-    }*/
-
-    if (dbBatchTimer) {
-        clearInterval(dbBatchTimer);
-        logger.info("✅    -> Stopped DB batch timer.");
-        logger.info("✅    -> Processing final DB write queue...");
-        processDbQueue(); 
-    }
     
-    // --- [MODIFIED] Stop all running simulators ---
+    // [MODIFIED] Stop data manager batching
+    dataManager.stop();
+    
     const statuses = simulatorManager.getStatuses();
     for (const name in statuses) {
         if (statuses[name] === 'running') {
@@ -623,23 +528,14 @@ process.on('SIGINT', () => {
             simulatorManager.stopSimulator(name);
         }
     }
-    // --- [END MODIFIED] ---
     
-    const finalShutdown = () => {
-        logger.info("✅ Forcing final database checkpoint...");
-        db.exec("CHECKPOINT;", (err) => {
-            if (err) logger.error({ err }, "❌ Error during final CHECKPOINT:");
-            else logger.info("✅    -> Checkpoint successful.");
-            db.close((err) => {
-                if (err) logger.error({ err }, "Error closing DuckDB:");
-                else logger.info("✅ 🦆 DuckDB connection closed.");
-                logger.info("✅ Shutdown complete.");
-                process.exit(0);
-            });
-        });
+    // [MODIFIED] finalShutdown is now async to wait for DB close
+    const finalShutdown = async () => {
+        // [MODIFIED] Call the dataManager to close all DB connections
+        await dataManager.close(); 
+        logger.info("✅ Shutdown complete.");
+        process.exit(0);
     };
-    
-    const shutdownDelay = config.DB_BATCH_INTERVAL_MS + 1000;
     
     wsManager.close(() => {
         logger.info("✅ WebSocket server closed.");
@@ -648,10 +544,10 @@ process.on('SIGINT', () => {
             if (mainConnection?.connected) {
                 mainConnection.end(true, () => {
                     logger.info("✅ MQTT connection closed.");
-                    setTimeout(finalShutdown, shutdownDelay);
+                    finalShutdown(); // [MODIFIED] Call directly
                 });
             } else {
-                setTimeout(finalShutdown, shutdownDelay);
+                finalShutdown(); // [MODIFIED] Call directly
             }
         });
     });
