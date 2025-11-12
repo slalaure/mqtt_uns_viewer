@@ -117,7 +117,8 @@ const config = {
     PORT: process.env.PORT || 8080,
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
-    DB_BATCH_INSERT_ENABLED: process.env.DB_BATCH_INSERT_ENABLED === 'true',
+    // [REMOVED] DB_BATCH_INSERT_ENABLED: process.env.DB_BATCH_INSERT_ENABLED === 'true',
+    DB_INSERT_BATCH_SIZE: process.env.DB_INSERT_BATCH_SIZE ? parseInt(process.env.DB_INSERT_BATCH_SIZE, 10) : 5000, // [NEW]
     DB_BATCH_INTERVAL_MS: process.env.DB_BATCH_INTERVAL_MS ? parseInt(process.env.DB_BATCH_INTERVAL_MS, 10) : 2000,
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
@@ -146,11 +147,8 @@ if (config.HTTP_USER && config.HTTP_PASSWORD) logger.info("✅ 🔒 HTTP Basic A
 // [MODIFIED] Added Publish view to log
 logger.info(`✅ UI Config: Tree[${config.VIEW_TREE_ENABLED}] SVG[${config.VIEW_SVG_ENABLED}] History[${config.VIEW_HISTORY_ENABLED}] Mapper[${config.VIEW_MAPPER_ENABLED}] Chart[${config.VIEW_CHART_ENABLED}] Publish[${config.VIEW_PUBLISH_ENABLED}]`);
 logger.info(`✅ SVG Config: Path[${config.SVG_FILE_PATH}] `);
-if (config.DB_BATCH_INSERT_ENABLED) {
-    logger.info(`✅ ⚡ Database batch insert is ENABLED (Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
-} else {
-    logger.info("✅ 🐢 Database batch insert is DISABLED (writing message-by-message).");
-}
+// [MODIFIED] Log new batch config
+logger.info(`✅ ⚡ Database batch insert is ENABLED (Size: ${config.DB_INSERT_BATCH_SIZE}, Interval: ${config.DB_BATCH_INTERVAL_MS}ms).`);
 // [NEW] Log demo limits
 if (config.MAX_SAVED_CHART_CONFIGS > 0) logger.info(`✅ 🔒 DEMO LIMIT: Max saved charts set to ${config.MAX_SAVED_CHART_CONFIGS}.`);
 if (config.MAX_SAVED_MAPPER_VERSIONS > 0) logger.info(`✅ 🔒 DEMO LIMIT: Max saved mapper versions set to ${config.MAX_SAVED_MAPPER_VERSIONS}.`);
@@ -203,11 +201,8 @@ wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longRe
 
 // --- DB Batch Insert Processor ---
 function processDbQueue() {
-    if (!config.DB_BATCH_INSERT_ENABLED) {
-        return; 
-    }
-    
-    const batch = dbWriteQueue.splice(0);
+    // [MODIFIED] Process a fixed-size chunk, not the whole queue
+    const batch = dbWriteQueue.splice(0, config.DB_INSERT_BATCH_SIZE);
     if (batch.length === 0) {
         return;
     }
@@ -244,6 +239,7 @@ function processDbQueue() {
                     if (commitErr) {
                         logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
                     } else {
+                        // [MODIFIED] Log with chunk size
                         logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
                         broadcastDbStatus();
                         
@@ -251,6 +247,7 @@ function processDbQueue() {
                             for (const msg of batch) {
                                 if (msg.needsDb) { 
                                     try {
+                                        // [MODIFIED] Parse from payloadStringForDb to ensure correct object
                                         const payloadObject = JSON.parse(msg.payloadStringForDb);
                                         await mapperEngine.processMessage(
                                             msg.topic, 
@@ -271,11 +268,10 @@ function processDbQueue() {
 }
 
 function startDbBatchProcessor() {
-    if (config.DB_BATCH_INSERT_ENABLED) {
-        logger.info(`Starting DB batch processor (interval: ${config.DB_BATCH_INTERVAL_MS}ms)`);
-        if (dbBatchTimer) clearInterval(dbBatchTimer);
-        dbBatchTimer = setInterval(processDbQueue, config.DB_BATCH_INTERVAL_MS);
-    }
+    // [MODIFIED] This logic is no longer conditional
+    logger.info(`Starting DB batch processor (interval: ${config.DB_BATCH_INTERVAL_MS}ms)`);
+    if (dbBatchTimer) clearInterval(dbBatchTimer);
+    dbBatchTimer = setInterval(processDbQueue, config.DB_BATCH_INTERVAL_MS);
 }
 
 // --- Mapper Engine Setup ---
@@ -376,29 +372,6 @@ mainRouter.get('/api/svg/list', (req, res) => {
     } catch (err) {
         logger.error({ err }, "❌ Failed to read data directory to list SVGs.");
         res.status(500).json({ error: "Could not list SVG files." });
-    }
-});
-
-// [MODIFIED] API endpoint to serve custom SVG bindings by name
-mainRouter.get('/api/svg/bindings.js', (req, res) => {
-    const filename = req.query.name;
-
-    // Security: Validate and sanitize the filename
-    if (!filename || !filename.endsWith('.svg.js')) {
-        return res.status(400).json({ error: 'Invalid or missing binding file name. Must end with .svg.js' });
-    }
-    // Prevent directory traversal: path.basename strips directory info
-    const sanitizedName = path.basename(filename);
-
-    const bindingsPath = path.join(DATA_PATH, sanitizedName);
-
-    if (fs.existsSync(bindingsPath)) {
-        res.setHeader('Content-Type', 'application/javascript');
-        res.sendFile(bindingsPath);
-    } else {
-        // Send an empty, valid JS file to avoid 404 errors in the browser console
-        res.setHeader('Content-Type', 'application/javascript');
-        res.send(`// No custom binding file found at /data/${sanitizedName}. Using default logic.`);
     }
 });
 

@@ -113,46 +113,29 @@ async function handleMessage(topic, payload) {
         wsManager.broadcast(JSON.stringify(finalMessageObject));
 
         // --- 4. Smart DB/Mapper Execution ---
-        if (config.DB_BATCH_INSERT_ENABLED) {
-            // --- BATCH MODE ---
-            // Check if any rule for this topic needs the DB
-            const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
-            
-            // Add all data to the queue.
-            dbWriteQueue.push({ 
-                timestamp, 
-                topic, 
-                payloadStringForDb, 
-                payloadObjectForMapper, // Store the object
-                isSparkplugOrigin, 
-                needsDb // <-- Tell the queue if this message needs deferred mapping
-            });
-            broadcastDbStatus();
+        // [MODIFIED] Removed the if/else for batch mode. We *always* use the batch queue now.
+        
+        // Check if any rule for this topic needs the DB
+        const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
+        
+        // Add all data to the queue.
+        dbWriteQueue.push({ 
+            timestamp, 
+            topic, 
+            payloadStringForDb, 
+            payloadObjectForMapper, // Store the object
+            isSparkplugOrigin, 
+            needsDb // <-- Tell the queue if this message needs deferred mapping
+        });
+        broadcastDbStatus();
 
-            if (!needsDb) {
-                // This mapper is simple/stateless. Run it IMMEDIATELY for low latency.
-                // It won't see its own message in the DB, but it doesn't care.
-                await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
-            }
-            // If 'needsDb' is true, the mapper will be called inside 'processDbQueue'
-            
-        } else {
-            // --- NON-BATCH MODE ---
-            // Insert one-by-one
-            const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
-            stmt.run(timestamp, topic, payloadStringForDb, (err) => { // Insert string representation
-                if (err) {
-                    logger.error({ msg: "❌ DuckDB Insert Error", error: err, topic: topic, payloadAttempted: (payloadStringForDb || '').substring(0, 200) + '...' });
-                } else {
-                    broadcastDbStatus();
-                }
-                 // Call mapper *after* statement is finalized.
-                 // This ensures 'await db.all()' works even in non-batch mode.
-                 stmt.finalize(async () => {
-                     await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
-                 });
-            });
+        if (!needsDb) {
+            // This mapper is simple/stateless. Run it IMMEDIATELY for low latency.
+            // It won't see its own message in the DB, but it doesn't care.
+            await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
         }
+        // If 'needsDb' is true, the mapper will be called inside 'processDbQueue'
+            
     } catch (err) { // Catch unexpected errors in this block's logic
         logger.error({ msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`, topic: topic, error_message: err.message, error_stack: err.stack, rawPayloadStartHex: payload.slice(0, 30).toString('hex') });
     }
