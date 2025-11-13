@@ -132,7 +132,7 @@ async function createMcpServer() {
     "list_project_files",
     {
       title: "List Project Files",
-      description: "Lists key files in the project's root and `data` directories to understand the project structure. Used to find simulator code or SVG files to read.",
+      description: "Lists key files in the project's root and `data` directories. Used to find simulator code (`simulator-*.js`), SVG files (`*.svg`), or **custom SVG binding scripts (`*.svg.js`)** to read.",
       inputSchema: {},
       outputSchema: { root_files: z.array(z.string()), data_files: z.array(z.string()) }
     },
@@ -154,7 +154,7 @@ async function createMcpServer() {
     "get_file_content",
     {
       title: "Get File Content",
-      description: "Reads the content of a *single* file from the project's root or `data` directory. Useful for reading existing SVG views (e.g., 'data/paris_metro.svg') or simulator code (e.g., 'simulator-stark.js') to learn patterns.",
+      description: "Reads the content of a *single* file from the project's root or `data` directory. Useful for reading existing SVG views (e.g., 'data/paris-metro.svg') or simulator code (e.g., 'simulator-stark.js') to learn patterns.",
       inputSchema: { 
         filename: z.string().describe("The relative path to the file (e.g., 'simulator-stark.js' or 'data/paris_metro.svg').")
       },
@@ -185,7 +185,7 @@ async function createMcpServer() {
     "save_file_to_data_directory",
     {
       title: "Save File to 'data' Directory",
-      description: "Saves text content to a new file *only* in the `data/` directory. Can be used to create new SVG views (e.g., 'my_view.svg') or draft new simulation scenarios (e.g., 'simulator_new_draft.js'). IMPORTANT: New SVG files (`.svg`) will be available in the 'SVG View' dropdown immediately. New simulator .js files will *NOT* run until a human manually imports them into `simulator.js` and restarts the server.",
+      description: "Saves text content to a new file *only* in the `data/` directory. Use this to create new SVG views or new simulation scenarios. **For a new SVG view, you must save both the `.svg` file and its corresponding `.svg.js` custom logic file (e.g., 'data/my_view.svg' and 'data/my_view.svg.js').** New `.svg` files appear in the dropdown immediately. New simulator `.js` files require a server restart to be loaded (use the `restart_application_server` tool).",
       inputSchema: {
         filename: z.string().describe("The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."),
         content: z.string().describe("The full text content (JavaScript or SVG) to save.")
@@ -519,6 +519,35 @@ async function createMcpServer() {
         };
       } catch (error) {
         return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+      }
+    }
+  );
+
+  // [NEW] Tool to restart the server
+  server.registerTool(
+    "restart_application_server",
+    {
+      title: "Restart Application Server",
+      description: "Triggers a graceful restart of the main MQTT UNS Viewer web server. This is necessary to load new `simulator-*.js` files or apply changes to `.env` configuration.",
+      inputSchema: {}, // No input
+      outputSchema: { message: z.string() }
+    },
+    async () => {
+      try {
+        // This endpoint is on the config API, which might be disabled
+        // We'll call it and handle the error if it's 403
+        const response = await axios.post(`${API_BASE_URL}/env/restart`);
+        const output = response.data;
+        return { 
+          content: [{ type: "text", text: `Server restart initiated: ${output.message}` }],
+          structuredContent: output
+        };
+      } catch (error) {
+         if (error.response && error.response.status === 403) {
+             return { content: [{ type: "text", text: "Error: Restart failed. The Configuration API (VIEW_CONFIG_ENABLED) must be enabled in the .env file to use this tool." }], isError: true };
+         }
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
       }
     }
   );
