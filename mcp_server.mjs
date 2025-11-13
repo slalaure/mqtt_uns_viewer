@@ -66,6 +66,7 @@ const MCP_API_KEY = process.env.MCP_API_KEY || null;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const MODEL_MANIFEST_PATH = path.join(__dirname, 'data/uns_model.json');
+const DATA_DIR = path.dirname(MODEL_MANIFEST_PATH); // [NEW] Path to /data directory
 let unsModel = [];
 
 try {
@@ -121,9 +122,97 @@ const saveMapperConfigInternal = async (config) => {
 async function createMcpServer() {
   const server = new McpServer({
     name: "MQTT UNS Viewer Controller",
-    version: "1.7.0", // Incremented version
-    description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search and simulation controls.",
+    version: "1.8.0", // Incremented version
+    description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search, simulation controls, and tools to read/write new scenarios and SVG views.",
   });
+
+  // --- [NEW] Project & File System Tools (For creating scenarios/views) ---
+
+  server.registerTool(
+    "list_project_files",
+    {
+      title: "List Project Files",
+      description: "Lists key files in the project's root and `data` directories to understand the project structure. Used to find simulator code or SVG files to read.",
+      inputSchema: {},
+      outputSchema: { root_files: z.array(z.string()), data_files: z.array(z.string()) }
+    },
+    async () => {
+      try {
+        const rootFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.json') || f.endsWith('.md'));
+        const dataFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js'));
+        return { 
+          content: [{ type: "text", text: `Found ${rootFiles.length} root files and ${dataFiles.length} data files.` }],
+          structuredContent: { root_files: rootFiles, data_files: dataFiles } 
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "get_file_content",
+    {
+      title: "Get File Content",
+      description: "Reads the content of a *single* file from the project's root or `data` directory. Useful for reading existing SVG views (e.g., 'data/paris_metro.svg') or simulator code (e.g., 'simulator-stark.js') to learn patterns.",
+      inputSchema: { 
+        filename: z.string().describe("The relative path to the file (e.g., 'simulator-stark.js' or 'data/paris_metro.svg').")
+      },
+      outputSchema: { filename: z.string(), content: z.string() }
+    },
+    async ({ filename }) => {
+      try {
+        // Security: Prevent path traversal
+        const resolvedPath = path.resolve(__dirname, filename);
+        
+        // Allow reading from root directory OR data directory
+        if (!resolvedPath.startsWith(__dirname)) {
+           return { content: [{ type: "text", text: "Error: Path traversal detected. Only files within the project root can be read." }], isError: true };
+        }
+        
+        const content = fs.readFileSync(resolvedPath, 'utf8');
+        return { 
+          content: [{ type: "text", text: `Content of ${filename} (first 200 chars): ${content.substring(0, 200)}...` }],
+          structuredContent: { filename: filename, content: content } 
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+      }
+    }
+  );
+
+  server.registerTool(
+    "save_file_to_data_directory",
+    {
+      title: "Save File to 'data' Directory",
+      description: "Saves text content to a new file *only* in the `data/` directory. Can be used to create new SVG views (e.g., 'my_view.svg') or draft new simulation scenarios (e.g., 'simulator_new_draft.js'). IMPORTANT: New SVG files (`.svg`) will be available in the 'SVG View' dropdown immediately. New simulator .js files will *NOT* run until a human manually imports them into `simulator.js` and restarts the server.",
+      inputSchema: {
+        filename: z.string().describe("The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."),
+        content: z.string().describe("The full text content (JavaScript or SVG) to save.")
+      },
+      outputSchema: { success: z.boolean(), path: z.string() }
+    },
+    async ({ filename, content }) => {
+      try {
+        // Security: Ensure we only write to the dataDir
+        const resolvedPath = path.resolve(DATA_DIR, filename);
+        
+        if (!resolvedPath.startsWith(DATA_DIR)) {
+          return { content: [{ type: "text", text: "Error: Path traversal detected. Files can only be saved to the 'data' directory." }], isError: true };
+        }
+        
+        fs.writeFileSync(resolvedPath, content, 'utf8');
+        const savedPath = `data/${filename}`;
+        return { 
+          content: [{ type: "text", text: `File saved successfully to ${savedPath}` }],
+          structuredContent: { success: true, path: savedPath } 
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+      }
+    }
+  );
+
 
   // --- [NEW] Model-Querying Tools ---
 
@@ -392,7 +481,7 @@ async function createMcpServer() {
       title: "Start Simulator",
       description: "Starts a specific MQTT data simulator by name.",
       inputSchema: {
-        scenario_name: z.string().describe("The name of the scenario to start (e.g., 'stark_industries', 'death_star').")
+        scenario_name: z.string().describe("The name of the scenario to start (e.g., 'stark_industries', 'death_star', 'paris_metro').")
       },
       outputSchema: { status: z.any() }
     },
@@ -416,7 +505,7 @@ async function createMcpServer() {
       title: "Stop Simulator",
       description: "Stops a specific MQTT data simulator by name.",
       inputSchema: {
-        scenario_name: z.string().describe("The name of the scenario to stop (e.g., 'stark_industries', 'death_star').")
+        scenario_name: z.string().describe("The name of the scenario to stop (e.g., 'stark_industries', 'death_star', 'paris_metro').")
       },
       outputSchema: { status: z.any() }
     },
