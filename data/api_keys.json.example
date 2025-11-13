@@ -1,0 +1,35 @@
+{
+  "keys": [
+    {
+      "name": "My First Application",
+      "key": "sk-12345abcdef67890-my-app",
+      "enabled": true,
+      "permissions": {
+        "allow": [
+          "my_app/data/telemetry",
+          "my_app/commands/+/status"
+        ]
+      }
+    },
+    {
+      "name": "Building Management System",
+      "key": "sk-bms-a9b8c7d6e5f4",
+      "enabled": true,
+      "permissions": {
+        "allow": [
+          "uns/facility_01/bms/#"
+        ]
+      }
+    },
+    {
+      "name": "Disabled Key",
+      "key": "sk-disabled-key-00000",
+      "enabled": false,
+      "permissions": {
+        "allow": [
+          "#"
+        ]
+      }
+    }
+  ]
+}

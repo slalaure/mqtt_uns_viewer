@@ -40,6 +40,7 @@ const mqttHandler = require('./mqtt-handler');
 const { connectToMqttBroker } = require('./mqtt_client');
 const simulatorManager = require('./simulator');
 const dataManager = require('./database/dataManager'); // [NEW] Import Data Manager
+const externalApiRouter = require('./routes/externalApi'); // [NEW] Import External API router
 // --- [END MODIFIED] ---
 
 
@@ -50,6 +51,8 @@ const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
 const CERTS_PATH = path.join(DATA_PATH, 'certs');
 const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
+// [NEW] Add path for API keys file
+const API_KEYS_FILE_PATH = path.join(DATA_PATH, process.env.EXTERNAL_API_KEYS_FILE || 'api_keys.json');
 
 // --- Logger Setup ---
 const logger = pino({
@@ -96,7 +99,7 @@ function longReplacer(key, value) {
 let mcpProcess = null;
 let mainConnection = null;
 let isPruning = false;
-// [REMOVED] dbWriteQueue and dbBatchTimer are now managed by duckdb_repository.js
+let apiKeysConfig = { keys: [] }; // [NEW] For external API keys
 
 // --- Configuration from Environment ---
 const config = {
@@ -143,7 +146,10 @@ const config = {
     VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false',
     MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
     MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0,
-    API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null
+    API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null,
+    // [NEW] External API Config
+    EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED === 'true',
+    EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json'
 };
 
 
@@ -170,6 +176,34 @@ if (basePath.endsWith('/') && basePath.length > 1) {
     basePath = basePath.slice(0, -1);
 }
 logger.info(`✅ Application base path set to: ${basePath}`);
+
+// --- [NEW] Load External API Keys ---
+if (config.EXTERNAL_API_ENABLED) {
+    const keysFilePath = path.join(DATA_PATH, config.EXTERNAL_API_KEYS_FILE);
+    try {
+        if (!fs.existsSync(keysFilePath)) {
+            // Copy example file if it exists
+            const examplePath = path.join(DATA_PATH, 'api_keys.json.example');
+            if (fs.existsSync(examplePath)) {
+                fs.copyFileSync(examplePath, keysFilePath);
+                logger.info(`✅ Created 'api_keys.json' from example. Please edit this file to add your keys.`);
+            } else {
+                // Create a default empty file
+                fs.writeFileSync(keysFilePath, JSON.stringify({ keys: [] }, null, 2));
+                logger.info(`✅ Created empty 'api_keys.json'. Please edit this file to add your keys.`);
+            }
+        }
+        const fileContent = fs.readFileSync(keysFilePath, 'utf8');
+        apiKeysConfig = JSON.parse(fileContent);
+        const enabledKeys = apiKeysConfig.keys.filter(k => k.enabled).length;
+        logger.info(`✅ 🔒 External Publish API is ENABLED. Loaded ${enabledKeys} enabled key(s) from ${config.EXTERNAL_API_KEYS_FILE}.`);
+    } catch (err) {
+        logger.error({ err, path: keysFilePath }, `❌ FATAL ERROR: Could not read or parse API keys file. Disabling external API.`);
+        config.EXTERNAL_API_ENABLED = false;
+    }
+} else {
+    logger.info("✅ 🔒 External Publish API is DISABLED by .env settings.");
+}
 
 // --- Express App & Server Setup ---
 const app = express();
@@ -261,10 +295,6 @@ db = new duckdb.Database(dbFile, (err) => {
 });
 // --- [END] DuckDB Init Block ---
 
-// [REMOVED] Old DB exec, db_manager.js init, wsManager.init (moved up)
-// [REMOVED] All batch processing logic (processDbQueue, startDbBatchProcessor)
-// [REMOVED] Old Mapper Engine init (moved up)
-
 // --- Middleware ---
 const authMiddleware = (req, res, next) => {
     if (!config.HTTP_USER || !config.HTTP_PASSWORD) {
@@ -302,6 +332,8 @@ const ipFilterMiddleware = (req, res, next) => {
     logger.warn(`[SECURITY] Denied API access from IP: ${clientIp} (Not in ALLOWED_IPS list)`);
     res.status(403).json({ error: `Access denied. Your IP (${clientIp}) is not allowed.` });
 };
+
+// --- [REMOVED] External API Key Authentication Middleware (moved to routes/externalApi.js) ---
 
 // --- Main Router for Base Path ---
 const mainRouter = express.Router();
@@ -489,6 +521,24 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     });
 });
 
+// --- [NEW] Mount the External API Router ---
+if (config.EXTERNAL_API_ENABLED) {
+    const extApiRouter = externalApiRouter(
+        () => mainConnection, // Pass a getter fn for the connection
+        logger,
+        apiKeysConfig,
+        longReplacer
+    );
+    // Apply IP filter globally to all routes in externalApiRouter
+    mainRouter.use('/api/external', ipFilterMiddleware, extApiRouter);
+} else {
+    // If disabled, mount a handler that just returns 503
+    mainRouter.use('/api/external', (req, res) => {
+        res.status(503).json({ error: "External API is disabled by server configuration." });
+    });
+}
+
+
 if (!config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', (req, res) => {
         res.status(403).send('Access to the configuration page is disabled by server settings.');
@@ -505,8 +555,6 @@ if (basePath !== '/') {
         res.redirect(basePath);
     });
 }
-
-// [REMOVED] MQTT Connection Logic - moved inside DB callback
 
 // --- Server Start ---
 server.listen(config.PORT, () => {
