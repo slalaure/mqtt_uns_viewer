@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -86,12 +91,13 @@ async function connect() {
 async function createTableIfNotExists(client) {
     const tableName = config.PG_TABLE_NAME || 'mqtt_events';
     
-    // 1. Create standard table
+    // 1. Create standard table  - Add broker_id
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS ${tableName} (
             timestamp TIMESTAMPTZ NOT NULL,
             topic     VARCHAR NOT NULL,
-            payload   JSONB
+            payload   JSONB,
+            broker_id VARCHAR
         );
     `;
     
@@ -102,7 +108,7 @@ async function createTableIfNotExists(client) {
 
     try {
         await client.query(createTableQuery);
-        logger.info(`✅    -> Table '${tableName}' verified.`);
+        logger.info(`✅    -> Table '${tableName}' verified (schema includes broker_id).`);
         
         try {
             await client.query(createHypertableQuery);
@@ -149,14 +155,15 @@ function formatBatchForInsert(batch, tableName) {
     const values = [];
     let paramIndex = 1;
     
+    //  Add brokerId to the insert
     const placeholders = batch.map(msg => {
-        values.push(msg.timestamp, msg.topic, msg.payloadStringForDb);
-        const p = `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2})`;
-        paramIndex += 3;
+        values.push(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.brokerId);
+        const p = `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3})`;
+        paramIndex += 4;
         return p;
     }).join(',');
 
-    const query = `INSERT INTO ${tableName} (timestamp, topic, payload) VALUES ${placeholders}`;
+    const query = `INSERT INTO ${tableName} (timestamp, topic, payload, broker_id) VALUES ${placeholders}`;
     return { query, values };
 }
 

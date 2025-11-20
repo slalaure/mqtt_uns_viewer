@@ -14,7 +14,7 @@ main#mapper-view {
     background-color: var(--color-bg-secondary);
 }
 
-/* [NEW] Add styles for the new tree-controls */
+/* Add styles for the new tree-controls */
 .mapper-tree-wrapper .tree-controls {
     padding: 10px;
     display: flex;
@@ -68,7 +68,7 @@ main#mapper-view {
 
 /* --- Mapper Controls (Top-left) [MOVED] --- */
 .mapper-controls {
-    /* [MODIFIED] Styles for new position */
+    /* Styles for new position */
     padding: 0 0 15px 0;
     display: flex;
     gap: 10px;
@@ -135,7 +135,7 @@ main#mapper-view {
 body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0) invert(0.2); }
 #mapper-tree .selected .node-timestamp { color: var(--selected-text); opacity: 0.8; }
 
-/* [MODIFIED] Added rules for collapse and filter */
+/* Added rules for collapse and filter */
 #mapper-tree .is-folder.collapsed > ul { 
     display: none; 
 }
@@ -230,7 +230,7 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     gap: 15px;
 }
 
-/* [MODIFIED] Styles for the new Ace Editor <div> */
+/* Styles for the new Ace Editor <div> */
 .target-code-editor {
     width: 100%;
     box-sizing: border-box;
@@ -238,7 +238,17 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     border-radius: 4px;
     background-color: var(--color-code-bg);
     min-height: 300px; /* Increased height */
-    /* Removed font-family, resize, and padding as Ace handles this */
+}
+
+/* ---  Wildcard Hint --- */
+.wildcard-hint {
+    font-size: 0.85em;
+    color: var(--color-success);
+    margin-top: 5px;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
 /* --- Mapper Metrics & Logs --- */
@@ -360,7 +370,7 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
 }
 
 
-/* --- [NEW] Mobile Responsive Styles --- */
+/* --- Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     main#mapper-view {
         flex-direction: column; /* Stack panels vertically */

@@ -68,7 +68,7 @@
     <header>
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
-            <p>v1.4.0-alpha</p> </div>
+            <p>v 1.4.0-pre-1</p> </div>
         <div id="current-datetime" class="datetime-container"></div>
         <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">&#9881;</a>
 
@@ -311,6 +311,7 @@
                         <button id="btn-chart-save-current" class="chart-button" title="Save">Save</button>
                         <button id="btn-chart-save-as" class="chart-button" title="Save As New...">Save As...</button>
                         <button id="btn-chart-delete-config" class="chart-button danger-button" title="Delete Selected Chart">Delete</button>
+                        
                         <div class="form-group">
                             <label for="chart-type-select">Type:</label>
                             <select id="chart-type-select">
@@ -324,18 +325,17 @@
                             <label for="chart-connect-nulls-toggle" class="checkbox-label">Connect Gaps</label>
                         </div>
                         
-                        <div id="chart-time-range-slider-container" class="time-slider-container">
-                            <div class="slider-track"></div>
-                            <div class="slider-range" id="chart-slider-range"></div>
-                            <div class="slider-handle" id="chart-handle-min">
-                                <div class="slider-label" id="chart-label-min"></div>
-                            </div>
-                            <div class="slider-handle" id="chart-handle-max">
-                                <div class="slider-label" id="chart-label-max"></div>
-                            </div>
+                        <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
+                            <label style="font-size: 0.75em; margin-bottom: 2px;">Start</label>
+                            <input type="datetime-local" id="chart-start-date" style="padding: 4px; font-size: 0.85em;">
                         </div>
+                        <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
+                            <label style="font-size: 0.75em; margin-bottom: 2px;">End</label>
+                            <input type="datetime-local" id="chart-end-date" style="padding: 4px; font-size: 0.85em;">
+                        </div>
+                        
+                        <div id="chart-range-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
 
-                        <button id="btn-chart-generate" class="chart-button">Refresh</button>
                         <button id="btn-chart-clear" class="chart-button" title="Clear All Selections">Clear All</button>
                         
                         <button id="btn-chart-export-csv" class="chart-button" title="Export CSV">CSV</button>
@@ -344,6 +344,18 @@
                         
                         <span id="chart-save-status"></span>
                     </div>
+                    
+                    <div id="chart-time-range-slider-container" class="time-slider-container">
+                        <div class="slider-track"></div>
+                        <div class="slider-range" id="chart-slider-range"></div>
+                        <div class="slider-handle" id="chart-handle-min">
+                            <div class="slider-label" id="chart-label-min"></div>
+                        </div>
+                        <div class="slider-handle" id="chart-handle-max">
+                            <div class="slider-label" id="chart-label-max"></div>
+                        </div>
+                    </div>
+
                     <div id="chart-canvas-container">
                         <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
                         <canvas id="chart-canvas" style="display: none;"></canvas>

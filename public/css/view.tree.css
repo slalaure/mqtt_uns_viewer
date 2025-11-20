@@ -159,6 +159,21 @@ body.dark-mode #mqtt-tree .selected .node-name::before {
     margin-bottom: 5px;
     display: block;
 }
+
+/*  Style for brokerId in topic history */
+.history-entry-broker {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: var(--color-text-muted);
+    font-weight: bold;
+    margin-right: 8px;
+    background-color: var(--color-bg-accent);
+    padding: 1px 4px;
+    border-radius: 3px;
+    display: inline-block; /* Makes it sit nicely before the pre */
+    margin-bottom: 5px;
+}
+
 .history-entry-payload {
     margin: 0;
     padding: 8px;
@@ -170,7 +185,7 @@ body.dark-mode #mqtt-tree .selected .node-name::before {
 }
 
 
-/* --- [NEW] Mobile Responsive Styles --- */
+/* ---  Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     main#tree-view {
         flex-direction: column; /* Stack panels vertically */

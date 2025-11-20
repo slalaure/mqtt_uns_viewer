@@ -1,25 +1,14 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+  
  */
 const express = require('express');
 
@@ -31,29 +20,13 @@ const escapeSQL = (str) => {
 
 // Helper pour convertir le pattern MQTT en SQL LIKE
 const mqttToSqlLike = (topicPattern) => {
-    // 1. Échapper les caractères SQL LIKE
     let escaped = escapeSQL(topicPattern)
         .replace(/%/g, '\\%')
         .replace(/_/g, '\\_');
     
-    // 2. Convertir les wildcards MQTT en wildcards SQL LIKE
-    // Remplace '+' (un seul niveau) par '%' (tout sauf '/')
-    // C'est une simplification, le vrai '%' de SQL matcherait '/'.
-    // Une meilleure approche utilise REGEXP mais LIKE est plus simple.
-    // Pour DuckDB, LIKE est suffisant.
-    
-    // Remplace '#' (multi-niveau) par '%'
-    // 'a/#' -> 'a/%'
     escaped = escaped.replace(/#/g, '%');
-    
-    // Remplace '+' (un-niveau) par '%'
-    // 'a/+/c' -> 'a/%/c'
-    // C'est une approximation. Un vrai '+' ne matche pas '/'.
-    // DuckDB supporte regexp_matches(topic, pattern) mais c'est plus lent.
-    // Pour cette app, LIKE est suffisant.
     escaped = escaped.replace(/\+/g, '%');
 
-    // S'il finit par '/%', on enlève le '/' pour matcher 'a/#' -> 'a'
     if (escaped.endsWith('/%')) {
         escaped = escaped.substring(0, escaped.length - 2) + '%';
     }
@@ -62,18 +35,23 @@ const mqttToSqlLike = (topicPattern) => {
 }
 
 
-// [MODIFIED] Accept the 'config' object from server.js
+//  Accept the 'config' object from server.js
 module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, config) => {
     const router = express.Router();
+    const isMultiBroker = config.BROKER_CONFIGS.length > 1;
 
-    // ... (les routes /status, /topics, /tree restent inchangées) ...
     router.get('/status', (req, res) => {
         getDbStatus(statusData => {
-            const mainConnection = getMainConnection();
-            const simulatorInterval = getSimulatorInterval();
+            const mainConnection = getMainConnection(); // This is the primary connection
+            const simulatorStatuses = getSimulatorInterval(); // This is now getStatuses()
+            
+            // Check if *any* simulator is running
+            const isSimRunning = Object.values(simulatorStatuses).some(s => s === 'running');
+
             res.json({
                 mqtt_connected: mainConnection ? mainConnection.connected : false,
-                simulator_status: simulatorInterval ? 'running' : 'stopped',
+                //  Report simulator status correctly
+                simulator_status: isSimRunning ? 'running' : 'stopped', 
                 database_stats: {
                     total_messages: statusData.totalMessages,
                     size_mb: parseFloat(statusData.dbSizeMB.toFixed(2)),
@@ -82,24 +60,32 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             });
         });
     });
+
+    //  Returns list of objects { brokerId, topic }
     router.get('/topics', (req, res) => {
-        db.all("SELECT DISTINCT topic FROM mqtt_events ORDER BY topic ASC", (err, rows) => {
+        db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events ORDER BY broker_id, topic ASC", (err, rows) => {
             if (err) {
                 return res.status(500).json({ error: "Failed to query topics from database." });
             }
-            res.json(rows.map(r => r.topic));
+            // Return full objects, not just strings
+            res.json(rows);
         });
     });
+
+    //  Builds a multi-broker tree if needed
     router.get('/tree', (req, res) => {
-        db.all("SELECT DISTINCT topic FROM mqtt_events", (err, rows) => {
+        db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events", (err, rows) => {
             if (err) {
                 return res.status(500).json({ error: "Failed to query topics from database." });
             }
-            const topics = rows.map(r => r.topic);
+            
             const tree = {};
-            topics.forEach(topic => {
+            rows.forEach(row => {
+                //  Conditionally add broker_id as root
+                const displayTopic = isMultiBroker ? `${row.broker_id}/${row.topic}` : row.topic;
+                
                 let currentLevel = tree;
-                const parts = topic.split('/');
+                const parts = displayTopic.split('/');
                 parts.forEach((part) => {
                     if (!currentLevel[part]) {
                         currentLevel[part] = {};
@@ -112,50 +98,56 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     });
 
 
-    
+    //  Accepts optional brokerId query param
     router.get('/search', (req, res) => {
         const query = req.query.q;
+        const brokerId = req.query.brokerId; // [NEW]
+        
         if (!query || query.length < 3) {
             return res.status(400).json({ error: "Search query must be at least 3 characters long." });
         }
 
         const safeSearchTerm = `%${escapeSQL(query)}%`;
         const limit = 5000;
-
-        // Simplified Query + Explicit CAST to VARCHAR for all ->> operations
-        const sqlQuery = `
-            SELECT topic, payload, timestamp
-            FROM mqtt_events
-            WHERE
-                topic ILIKE '${safeSearchTerm}' -- Search in topic name
-                OR (json_valid(payload) AND ( -- Only check JSON fields if payload is valid JSON
-                    -- Explicitly CAST results of ->> to VARCHAR before ILIKE
+        
+        let whereClauses = [
+            `(
+                topic ILIKE '${safeSearchTerm}'
+                OR (json_valid(payload) AND (
                     CAST(payload->>'description' AS VARCHAR) ILIKE '${safeSearchTerm}'
                     OR CAST(payload->>'raw_payload' AS VARCHAR) ILIKE '${safeSearchTerm}'
                     OR CAST(payload->>'value' AS VARCHAR) ILIKE '${safeSearchTerm}'
                     OR CAST(payload->>'status' AS VARCHAR) ILIKE '${safeSearchTerm}'
-                    OR CAST(payload->>'name' AS VARCHAR) ILIKE '${safeSearchTerm}' -- Error occurred here previously
+                    OR CAST(payload->>'name' AS VARCHAR) ILIKE '${safeSearchTerm}'
                    ))
+            )`
+        ];
+
+        //  Add brokerId filter if provided
+        if (brokerId) {
+            whereClauses.push(`broker_id = '${escapeSQL(brokerId)}'`);
+        }
+
+        const sqlQuery = `
+            SELECT topic, payload, timestamp, broker_id
+            FROM mqtt_events
+            WHERE ${whereClauses.join(' AND ')}
             ORDER BY timestamp DESC
             LIMIT ${limit};
         `;
 
-        // Log the query for debugging
         console.log(`[DEBUG] Full-Text Search Query: ${sqlQuery.replace(/\s+/g, ' ')}`);
 
-        // Execute the query
         db.all(sqlQuery, (err, rows) => {
             if (err) {
                 console.error("❌ Error search request DuckDB (Full-Text):", err);
-                console.error("   Failed Query:", sqlQuery); // Log the failed query
+                console.error("   Failed Query:", sqlQuery); 
                 return res.status(500).json({ error: "Database search query failed." });
             }
 
-            // Convert payload objects back to strings for the client
             const results = rows.map(row => {
                 if (typeof row.payload === 'object' && row.payload !== null) {
                     try {
-                        // Using standard stringify here as longReplacer isn't available in this scope
                         row.payload = JSON.stringify(row.payload);
                     } catch (e) {
                          console.error("Error stringifying payload in /search:", e, row.payload);
@@ -170,10 +162,9 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    // --- [MODIFIED] Endpoint /search/model ---
-    // Change signature to accept an object of filters
+    //  Accepts optional broker_id in body
     router.post('/search/model', (req, res) => {
-        const { topic_template, filters } = req.body; // Changed from json_filter_key/value to filters
+        const { topic_template, filters, broker_id } = req.body; 
 
         if (!topic_template) {
             return res.status(400).json({ error: "Missing 'topic_template' (e.g., '%/erp/workorder')." });
@@ -183,21 +174,21 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         const limit = 5000;
         const useOptimizedQuery = config.DB_BATCH_INSERT_ENABLED === true;
 
-        let sqlQuery;
-        let whereClauses = [`topic LIKE '${safe_topic}'`]; // Start with topic filter
+        let whereClauses = [`topic LIKE '${safe_topic}'`];
 
-        // [NEW] Build dynamic WHERE clauses for filters
+        //  Add brokerId filter if provided
+        if (broker_id) {
+            whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+        }
+
         if (filters && typeof filters === 'object' && Object.keys(filters).length > 0) {
             for (const [key, value] of Object.entries(filters)) {
-                // Basic sanitation. Note: Key cannot be parameterized in payload->>
                 const safe_key = "'" + escapeSQL(key) + "'";
                 const safe_value = "'" + escapeSQL(value) + "'";
                 
                 if (useOptimizedQuery) {
-                    // Optimized query: Access JSON key directly
                     whereClauses.push(`(payload->>${safe_key}) = ${safe_value}`);
                 } else {
-                    // Legacy query: Use CAST operations
                     whereClauses.push(`CAST((CAST(payload AS VARCHAR)::JSON)->>${safe_key} AS VARCHAR) = ${safe_value}`);
                 }
             }
@@ -205,40 +196,25 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         
         const whereString = whereClauses.join(' AND ');
 
-        // [NEW] Build final query
-        if (useOptimizedQuery) {
-            sqlQuery = `
-                WITH FilteredTopics AS (
-                    SELECT * FROM mqtt_events
-                )
-                SELECT topic, payload, timestamp
-                FROM FilteredTopics
-                WHERE ${whereString}
-                ORDER BY timestamp DESC
-                LIMIT ${limit};
-            `;
+        let sqlQuery = `
+            SELECT topic, payload, timestamp, broker_id
+            FROM mqtt_events
+            WHERE ${whereString}
+            ORDER BY timestamp DESC
+            LIMIT ${limit};
+        `;
+        
+        if(useOptimizedQuery) {
             console.log(`[DEBUG] Model Search Query (Optimized): ${sqlQuery.replace(/\s+/g, ' ')}`);
         } else {
-            sqlQuery = `
-                WITH FilteredTopics AS (
-                    SELECT * FROM mqtt_events
-                )
-                SELECT topic, payload, timestamp
-                FROM FilteredTopics
-                WHERE ${whereString}
-                ORDER BY timestamp DESC
-                LIMIT ${limit};
-            `;
-            console.log(`[DEBUG] Model Search Query (Legacy V17): ${sqlQuery.replace(/\s+/g, ' ')}`);
+            console.log(`[DEBUG] Model Search Query (Legacy): ${sqlQuery.replace(/\s+/g, ' ')}`);
         }
         
-        // Appel de la DB avec 2 arguments (sql, callback)
         db.all(sqlQuery, (err, rows) => {
             if (err) {
                 console.error("❌ Erreur de la requête de recherche par modèle:", err);
                 return res.status(500).json({ error: "Database model search query failed." });
             }
-             // [V17 Fix] Le payload est un OBJET, mais le client s'attend à un STRING
             const results = rows.map(row => {
                 if (typeof row.payload === 'object' && row.payload !== null) {
                      try {
@@ -256,20 +232,26 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    // --- Endpoint to purger a topic from DB ---
+    //  Accepts optional broker_id in body
     router.post('/prune-topic', (req, res) => {
-        const { topicPattern } = req.body;
+        const { topicPattern, broker_id } = req.body;
         if (!topicPattern) {
             return res.status(400).json({ error: "Missing 'topicPattern'." });
         }
 
         const sqlPattern = mqttToSqlLike(topicPattern);
-        console.log(`[INFO] Pruning topics from DB matching pattern: ${topicPattern} (SQL: ${sqlPattern})`);
+        let whereClauses = [`topic LIKE '${sqlPattern}'`];
 
-        const query = `DELETE FROM mqtt_events WHERE topic LIKE '${sqlPattern}';`;
+        //  Add brokerId filter if provided
+        if (broker_id) {
+            whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+        }
+
+        console.log(`[INFO] Pruning topics from DB matching: ${whereClauses.join(' AND ')}`);
+
+        const query = `DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')};`;
         
-        // how many lines affected
-        db.run(query, function(err) { // Ne pas utiliser de fonction fléchée ici pour garder 'this'
+        db.run(query, function(err) { 
             if (err) {
                 console.error("❌ Erreur de la requête de purge (prune-topic):", err);
                 return res.status(500).json({ error: "Database prune query failed." });
@@ -278,7 +260,6 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             const changes = this.changes;
             console.log(`[INFO] Prune successful. Deleted ${changes} entries.`);
 
-            // launch  checkpoint/vacuum in background
             db.exec("CHECKPOINT; VACUUM;", (vacErr) => {
                 if (vacErr) {
                     console.error("❌ Erreur durant le CHECKPOINT/VACUUM post-purge:", vacErr);
@@ -293,18 +274,33 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
 
    
+    //  Accepts optional brokerId query param
     router.get('/topic/:topic(.*)', (req, res) => {
         const topic = req.params.topic;
+        const brokerId = req.query.brokerId; // [NEW]
+        
         if (!topic) {
             return res.status(400).json({ error: "Topic not specified." });
         }
-        const safe_topic = escapeSQL(topic);
-        db.all(`SELECT * FROM mqtt_events WHERE topic = '${safe_topic}' ORDER BY timestamp DESC LIMIT 1`, (err, rows) => {
+
+        let query = `SELECT * FROM mqtt_events WHERE topic = ?`;
+        let params = [topic];
+
+        //  Add brokerId filter if provided
+        if (brokerId) {
+            query += " AND broker_id = ?";
+            params.push(brokerId);
+        }
+        
+        query += " ORDER BY timestamp DESC LIMIT 1";
+        
+        db.all(query, params, (err, rows) => {
             if (err) {
                 return res.status(500).json({ error: "Database query failed." });
             }
             if (!rows || rows.length === 0) {
-                return res.status(404).json({ error: `No data found for topic: ${topic}` });
+                const errorMsg = brokerId ? `No data found for topic: ${topic} on broker: ${brokerId}` : `No data found for topic: ${topic}`;
+                return res.status(404).json({ error: errorMsg });
             }
 
             const result = rows[0];
@@ -321,15 +317,32 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             res.json(result);
         });
     });
+
+    //  Accepts optional brokerId query param
     router.get('/history/:topic(.*)', (req, res) => {
         const topic = req.params.topic;
+        const brokerId = req.query.brokerId; // [NEW]
         const limit = parseInt(req.query.limit, 10) || 20;
+
         if (!topic) {
             return res.status(400).json({ error: "Topic not specified." });
         }
-        const safe_topic = escapeSQL(topic);
+        
         const safe_limit = isNaN(limit) ? 20 : limit;
-        db.all(`SELECT * FROM mqtt_events WHERE topic = '${safe_topic}' ORDER BY timestamp DESC LIMIT ${safe_limit}`, (err, rows) => {
+
+        let query = `SELECT * FROM mqtt_events WHERE topic = ?`;
+        let params = [topic];
+
+        //  Add brokerId filter if provided
+        if (brokerId) {
+            query += " AND broker_id = ?";
+            params.push(brokerId);
+        }
+
+        query += " ORDER BY timestamp DESC LIMIT ?";
+        params.push(safe_limit);
+        
+        db.all(query, params, (err, rows) => {
             if (err) {
                 console.error("History query failed:", err);
                 return res.status(500).json({ error: "Database query failed." });

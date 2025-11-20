@@ -1,29 +1,19 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+  
  */
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const dotenv = require('dotenv'); //  Import dotenv library
 
 module.exports = (envPath, envExamplePath, dataPath, logger) => {
     const router = express.Router();
@@ -32,20 +22,15 @@ module.exports = (envPath, envExamplePath, dataPath, logger) => {
     router.get('/', (req, res) => {
         try {
             const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
-            const config = {};
-            envFileContent.split('\n').forEach(line => {
-                if (line && !line.startsWith('#')) {
-                    const firstEqual = line.indexOf('=');
-                    if (firstEqual !== -1) {
-                        const key = line.substring(0, firstEqual);
-                        const value = line.substring(firstEqual + 1);
-                        config[key] = value;
-                    }
-                }
-            });
+            
+            //  Use dotenv.parse instead of manual splitting.
+            // This correctly handles multi-line values wrapped in quotes.
+            const config = dotenv.parse(envFileContent);
+            
             res.json(config);
         } catch (err) {
-            res.status(500).json({ error: 'Could not read .env file.' });
+            logger.error({ err }, "Error parsing .env file");
+            res.status(500).json({ error: 'Could not read or parse .env file.' });
         }
     });
 
@@ -58,6 +43,10 @@ module.exports = (envPath, envExamplePath, dataPath, logger) => {
         try {
             // Rebuild the file from the example to preserve comments and order
             const exampleContent = fs.readFileSync(envExamplePath, { encoding: 'utf8' });
+            
+            // Note: We stick to manual line processing here to preserve the structure/comments 
+            // of the .env.example file. Since the frontend sends minified (single-line) JSON,
+            // writing it back this way is safe.
             exampleContent.split('\n').forEach(line => {
                 if (line.startsWith('#') || !line.trim()) {
                     envFileContent += line + '\n';
@@ -66,9 +55,17 @@ module.exports = (envPath, envExamplePath, dataPath, logger) => {
                     if (firstEqual !== -1) {
                         const key = line.substring(0, firstEqual);
                         if (newConfig.hasOwnProperty(key)) {
-                            envFileContent += `${key}=${newConfig[key]}\n`;
+                            // Quote the value if it contains spaces or special chars, but avoid double quoting
+                            let val = newConfig[key];
+                            
+                            // If it's the JSON brokers list, wrap in single quotes to be safe
+                            if (key === 'MQTT_BROKERS') {
+                                envFileContent += `${key}='${val}'\n`;
+                            } else {
+                                envFileContent += `${key}=${val}\n`;
+                            }
                         } else {
-                            envFileContent += line + '\n'; // Keep original if not in new config
+                            envFileContent += line + '\n'; // Keep original from example if not in new config
                         }
                     }
                 }

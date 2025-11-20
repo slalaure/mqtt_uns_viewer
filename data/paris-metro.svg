@@ -25,12 +25,12 @@
       /* --- Alertes (contrôlées par JS) --- */
       .alarm-text {
         animation: blink-animation 1s steps(2, start) infinite;
-        /* [MODIFIED] Augmentation de la taille de l'alerte */
+        /*  Augmentation de la taille de l'alerte */
         font-size: 36px !important; 
         font-weight: bold;
       }
       @keyframes blink-animation {
-        /* [MODIFIED] Faire clignoter la couleur de remplissage */
+        /*  Faire clignoter la couleur de remplissage */
         50% { fill: #f85149; }
         100% { fill: inherit; }
       }
@@ -44,7 +44,7 @@
         transition: transform 0.5s ease-in-out;
       }
       .train-text { font-family: 'Consolas', 'Lucida Console', monospace; }
-      /* [MODIFIED] Augmentation des tailles de police */
+      /*  Augmentation des tailles de police */
       .train-text-id { font-size: 36px; font-weight: bold; }
       .train-text-label { font-size: 28px; fill: #8b949e; }
       .train-text-data { font-size: 28px; fill: #c9d1d9; }

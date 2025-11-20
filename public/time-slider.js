@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -33,20 +38,27 @@ export function createDualTimeSlider(options) {
     let currentMin = 0;
     let currentMax = 0;
 
-    function makeDraggable(handle, isMin) {
+    // Helper to get percentage from mouse X
+    function getPercentage(clientX, rect) {
+        let x = clientX - rect.left;
+        let percent = (x / rect.width) * 100;
+        return Math.max(0, Math.min(100, percent));
+    }
+
+    // --- Handle Dragging Logic ---
+    function makeHandleDraggable(handle, isMin) {
         if (!handle || !containerEl) return;
 
         handle.addEventListener('mousedown', (e) => {
             e.preventDefault();
+            e.stopPropagation(); // Prevent triggering range drag
             const sliderRect = containerEl.getBoundingClientRect();
 
             const onMouseMove = (moveEvent) => {
-                let x = moveEvent.clientX - sliderRect.left;
-                let percent = (x / sliderRect.width) * 100;
-                percent = Math.max(0, Math.min(100, percent));
+                let percent = getPercentage(moveEvent.clientX, sliderRect);
                 
                 const timeRange = maxTimestamp - minTimestamp;
-                if (timeRange <= 0) return; // Don't drag if no range
+                if (timeRange <= 0) return;
                 
                 const newTimestamp = minTimestamp + (timeRange * percent / 100);
 
@@ -56,19 +68,72 @@ export function createDualTimeSlider(options) {
                     currentMax = Math.max(newTimestamp, currentMin);
                 }
                 
-                // Call the continuous drag callback
-                if (onDrag) {
-                    onDrag(currentMin, currentMax);
-                }
+                if (onDrag) onDrag(currentMin, currentMax);
             };
 
             const onMouseUp = () => {
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);
-                // Call the drag end callback
-                if (onDragEnd) {
-                    onDragEnd(currentMin, currentMax);
+                if (onDragEnd) onDragEnd(currentMin, currentMax);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    // --- Range Bar Dragging Logic ---
+    function makeRangeDraggable() {
+        if (!rangeEl || !containerEl) return;
+
+        rangeEl.style.cursor = 'grab';
+
+        rangeEl.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            rangeEl.style.cursor = 'grabbing';
+            
+            const sliderRect = containerEl.getBoundingClientRect();
+            const startX = e.clientX;
+            
+            // Store initial state to calculate delta
+            const startMin = currentMin;
+            const startMax = currentMax;
+            const duration = startMax - startMin;
+            const totalSpan = maxTimestamp - minTimestamp;
+
+            if (totalSpan <= 0) return;
+
+            const onMouseMove = (moveEvent) => {
+                const currentX = moveEvent.clientX;
+                const pixelDelta = currentX - startX;
+                
+                // Convert pixel delta to time delta
+                const timeDelta = (pixelDelta / sliderRect.width) * totalSpan;
+                
+                let newMin = startMin + timeDelta;
+                let newMax = startMax + timeDelta;
+
+                // Clamp to bounds while maintaining duration size
+                if (newMin < minTimestamp) {
+                    newMin = minTimestamp;
+                    newMax = minTimestamp + duration;
                 }
+                if (newMax > maxTimestamp) {
+                    newMax = maxTimestamp;
+                    newMin = maxTimestamp - duration;
+                }
+
+                currentMin = newMin;
+                currentMax = newMax;
+
+                if (onDrag) onDrag(currentMin, currentMax);
+            };
+
+            const onMouseUp = () => {
+                rangeEl.style.cursor = 'grab';
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                if (onDragEnd) onDragEnd(currentMin, currentMax);
             };
 
             document.addEventListener('mousemove', onMouseMove);
@@ -76,15 +141,12 @@ export function createDualTimeSlider(options) {
         });
     }
     
-    makeDraggable(handleMinEl, true);
-    makeDraggable(handleMaxEl, false);
+    makeHandleDraggable(handleMinEl, true);
+    makeHandleDraggable(handleMaxEl, false);
+    makeRangeDraggable(); // Initialize range dragging
 
     /**
      * Updates the UI of the slider.
-     * @param {number} newMinRange - The new overall minimum timestamp.
-     * @param {number} newMaxRange - The new overall maximum timestamp.
-     * @param {number} newCurrentMin - The new selected minimum timestamp.
-     * @param {number} newCurrentMax - The new selected maximum timestamp.
      */
     function updateUI(newMinRange, newMaxRange, newCurrentMin, newCurrentMax) {
         minTimestamp = newMinRange;
@@ -95,23 +157,24 @@ export function createDualTimeSlider(options) {
         if (!handleMinEl || !rangeEl || !labelMinEl) return;
         
         const timeRange = maxTimestamp - minTimestamp;
-        if (timeRange <= 0) {
-            handleMinEl.style.left = '0%';
-            handleMaxEl.style.left = '100%';
-            rangeEl.style.left = '0%';
-            rangeEl.style.width = '100%';
-            labelMinEl.textContent = formatTimestampForLabel(currentMin);
-            labelMaxEl.textContent = formatTimestampForLabel(currentMax);
-            return;
-        }
-
-        const minPercent = ((currentMin - minTimestamp) / timeRange) * 100;
-        const maxPercent = ((currentMax - minTimestamp) / timeRange) * 100;
         
+        let minPercent = 0;
+        let maxPercent = 100;
+
+        if (timeRange > 0) {
+            minPercent = ((currentMin - minTimestamp) / timeRange) * 100;
+            maxPercent = ((currentMax - minTimestamp) / timeRange) * 100;
+        }
+        
+        // Visual Clamping to prevent elements flying off-screen
+        minPercent = Math.max(0, Math.min(100, minPercent));
+        maxPercent = Math.max(0, Math.min(100, maxPercent));
+
         handleMinEl.style.left = `${minPercent}%`;
         handleMaxEl.style.left = `${maxPercent}%`;
         rangeEl.style.left = `${minPercent}%`;
-        rangeEl.style.width = `${maxPercent - minPercent}%`;
+        rangeEl.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
+        
         labelMinEl.textContent = formatTimestampForLabel(currentMin);
         labelMaxEl.textContent = formatTimestampForLabel(currentMax);
     }
@@ -183,9 +246,6 @@ export function createSingleTimeSlider(options) {
 
     /**
      * Updates the UI of the slider.
-     * @param {number} newMinRange - The new overall minimum timestamp.
-     * @param {number} newMaxRange - The new overall maximum timestamp.
-     * @param {number} newCurrentTime - The new selected timestamp.
      */
     function updateUI(newMinRange, newMaxRange, newCurrentTime) {
         minTimestamp = newMinRange;
@@ -195,14 +255,14 @@ export function createSingleTimeSlider(options) {
         if (!handleEl || !labelEl) return;
 
         const timeRange = maxTimestamp - minTimestamp;
-        if (timeRange <= 0) {
-            handleEl.style.left = '100%'; // Default to end
-            labelEl.textContent = formatTimestampForLabel(currentTime);
-            handleEl.dataset.timestamp = currentTime;
-            return;
+        let currentPercent = 100;
+
+        if (timeRange > 0) {
+            currentPercent = ((currentTime - minTimestamp) / timeRange) * 100;
         }
         
-        const currentPercent = ((currentTime - minTimestamp) / timeRange) * 100;
+        // Visual Clamping
+        currentPercent = Math.max(0, Math.min(100, currentPercent));
         
         handleEl.style.left = `${currentPercent}%`;
         labelEl.textContent = formatTimestampForLabel(currentTime);

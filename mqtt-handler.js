@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -31,14 +36,15 @@ let logger;
 let config;
 let wsManager;
 let mapperEngine;
-let dataManager; // [MODIFIED] No longer holds 'db' or 'dbWriteQueue'
+let dataManager;
 let broadcastDbStatus;
 
 /**
  * The main MQTT message processing logic.
  * This is the function that will be attached to mainConnection.on('message').
+ *  Now accepts brokerId as the first parameter.
  */
-async function handleMessage(topic, payload) {
+async function handleMessage(brokerId, topic, payload) {
     const timestamp = new Date();
    
     let payloadObjectForMapper = null; // Object to pass to mapper
@@ -46,6 +52,8 @@ async function handleMessage(topic, payload) {
     let payloadStringForDb = null;     // String to insert into DB
     let isSparkplugOrigin = false;
     let processingError = null;
+    
+    const handlerLogger = logger.child({ broker: brokerId }); //  Create logger child for this broker
 
     try {
         // --- 1. Decoding ---
@@ -53,50 +61,47 @@ async function handleMessage(topic, payload) {
             try {
                 const decodedPayload = spBv10Codec.decodePayload(payload);
                 isSparkplugOrigin = true;
-                // Use replacer for WS/DB string representation
                 payloadStringForWs = JSON.stringify(decodedPayload, longReplacer, 2);
-                payloadStringForDb = JSON.stringify(decodedPayload, longReplacer); // DB doesn't need pretty print
-                payloadObjectForMapper = decodedPayload; // Pass the raw decoded object
+                payloadStringForDb = JSON.stringify(decodedPayload, longReplacer);
+                payloadObjectForMapper = decodedPayload;
             } catch (decodeErr) {
                 processingError = decodeErr;
-                logger.error({ msg: "❌ Error decoding Sparkplug payload", topic: topic, error_message: decodeErr.message });
-                payloadStringForWs = payload.toString('hex'); // Fallback hex string for WS
+                handlerLogger.error({ msg: "❌ Error decoding Sparkplug payload", topic: topic, error_message: decodeErr.message });
+                payloadStringForWs = payload.toString('hex');
                 payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeErr.message });
-                payloadObjectForMapper = safeJsonParse(payloadStringForDb); // Pass error info to mapper
+                payloadObjectForMapper = safeJsonParse(payloadStringForDb);
             }
         } else {
             // Regular payload (try UTF-8)
             let tempPayloadString = '';
             try {
                 tempPayloadString = payload.toString('utf-8');
-                payloadStringForWs = tempPayloadString; // Assume UTF-8 for WS initially
-                 // Try to parse as JSON for DB and Mapper
+                payloadStringForWs = tempPayloadString;
                 try {
                     payloadObjectForMapper = JSON.parse(tempPayloadString);
-                    payloadStringForDb = tempPayloadString; // It's valid JSON, store as is
+                    payloadStringForDb = tempPayloadString;
                 } catch (parseError) {
                      // Not JSON, treat as raw string
-                     logger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
-                     payloadObjectForMapper = { raw_payload: tempPayloadString }; // Wrap for mapper
-                     payloadStringForDb = JSON.stringify(payloadObjectForMapper); // Store wrapped object in DB
+                     handlerLogger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
+                     payloadObjectForMapper = { raw_payload: tempPayloadString };
+                     payloadStringForDb = JSON.stringify(payloadObjectForMapper);
                 }
 
             } catch (utf8Err) {
                 processingError = utf8Err;
-                logger.error({ msg: "❌ Error converting payload to UTF-8", topic: topic, error_message: utf8Err.message });
-                payloadStringForWs = payload.toString('hex'); // Fallback hex string
+                handlerLogger.error({ msg: "❌ Error converting payload to UTF-8", topic: topic, error_message: utf8Err.message });
+                payloadStringForWs = payload.toString('hex');
                 payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: utf8Err.message });
                 payloadObjectForMapper = safeJsonParse(payloadStringForDb);
             }
         }
 
-        // --- Safety Net (Should ideally not be needed now) ---
+        // --- Safety Net ---
          if (payloadObjectForMapper === null) {
-             logger.error(`payloadObjectForMapper remained null for topic ${topic}. This should not happen.`);
-             // Create a fallback object
+             handlerLogger.error(`payloadObjectForMapper remained null for topic ${topic}. This should not happen.`);
              payloadObjectForMapper = { error: "Payload processing failed unexpectedly", raw_hex: payload.toString('hex')};
              payloadStringForDb = JSON.stringify(payloadObjectForMapper);
-             payloadStringForWs = payloadStringForDb; // Send error via WS too
+             payloadStringForWs = payloadStringForDb;
          }
          if (payloadStringForDb === null) payloadStringForDb = JSON.stringify({ error: "DB Payload string is null"});
          if (payloadStringForWs === null) payloadStringForWs = JSON.stringify({ error: "WS Payload string is null"});
@@ -105,61 +110,52 @@ async function handleMessage(topic, payload) {
         // --- 3. Broadcast WebSocket ---
         const finalMessageObject = {
             type: 'mqtt-message',
+            brokerId: brokerId, //  Tell the frontend which broker this came from
             topic,
-            payload: payloadStringForWs, // Send string representation
+            payload: payloadStringForWs,
             timestamp: timestamp.toISOString()
         };
         wsManager.broadcast(JSON.stringify(finalMessageObject));
 
         // --- 4. Smart DB/Mapper Execution ---
-        // [MODIFIED] This is now a "fire-and-forget" operation
         
-        // Check if any rule for this topic needs the DB
         const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
         
         // 4a. Push to DataManager for asynchronous database writing
-        // This is fast and non-blocking.
         dataManager.insertMessage({ 
+            brokerId, //  Pass brokerId to data manager
             timestamp, 
             topic, 
             payloadStringForDb, 
-            // payloadObjectForMapper, // No longer needed, will be parsed from payloadStringForDb
             isSparkplugOrigin, 
             needsDb
         });
 
         // 4b. Run stateless mappers immediately for low latency
         if (!needsDb) {
-            // This mapper is simple/stateless. Run it IMMEDIATELY.
-            // It won't see its own message in the DB, but it doesn't care.
-            await mapperEngine.processMessage(topic, payloadObjectForMapper, isSparkplugOrigin);
+            //  Pass brokerId to the mapper engine
+            await mapperEngine.processMessage(brokerId, topic, payloadObjectForMapper, isSparkplugOrigin);
         }
         // If 'needsDb' is true, the mapper will be called *by the repository* after write.
             
     } catch (err) { // Catch unexpected errors in this block's logic
-        logger.error({ msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`, topic: topic, error_message: err.message, error_stack: err.stack, rawPayloadStartHex: payload.slice(0, 30).toString('hex') });
+        handlerLogger.error({ msg: `❌ UNEXPECTED FATAL ERROR during message processing logic for topic ${topic}`, topic: topic, error_message: err.message, error_stack: err.stack, rawPayloadStartHex: payload.slice(0, 30).toString('hex') });
     }
 }
 
 /**
  * Initializes the MQTT Handler.
- * @param {pino.Logger} appLogger - The main pino logger.
- * @param {object} appConfig - The application config object.
- * @param {object} appWsManager - The WebSocket Manager instance.
- * @param {object} appMapperEngine - The Mapper Engine instance.
- * @param {object} appDataManager - [MODIFIED] The Data Manager instance.
- * @param {function} appBroadcastDbStatus - The function to broadcast DB status.
- * @returns {function} The async handleMessage function.
+ *  This no longer accepts a single connection
  */
 function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManager, appBroadcastDbStatus) {
     logger = appLogger.child({ component: 'MQTTHandler' });
     config = appConfig;
     wsManager = appWsManager;
     mapperEngine = appMapperEngine;
-    dataManager = appDataManager; // [MODIFIED]
+    dataManager = appDataManager;
     broadcastDbStatus = appBroadcastDbStatus;
 
-    logger.info("✅ MQTT Message Handler initialized.");
+    logger.info("✅ MQTT Message Handler initialized (multi-broker mode).");
     return handleMessage; // Return the function itself
 }
 

@@ -27,7 +27,7 @@ main#publish-view {
 .simulator-panel-wrapper {
     flex: 1; /* Simulator panel takes 1/3 width */
     min-width: 250px;
-    /* [NEW] Allow simulator panel to scroll if many simulators are added */
+    /*  Allow simulator panel to scroll if many simulators are added */
     overflow-y: auto;
 }
 
@@ -121,7 +121,7 @@ main#publish-view {
     /* Remove background and padding, it's just a list now */
 }
 
-/* [NEW] Styles for each individual simulator block */
+/*  Styles for each individual simulator block */
 .simulator-instance-controls {
     background-color: var(--color-bg-accent);
     padding: 15px;
@@ -227,7 +227,7 @@ main#publish-view {
         flex: 1; /* Reset flex */
         min-width: 100%;
         padding: 15px;
-        overflow-y: visible; /* [MODIFIED] Allow panel to grow */
+        overflow-y: visible; /*  Allow panel to grow */
     }
     
     .publish-options-row {

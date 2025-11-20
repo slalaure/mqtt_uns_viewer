@@ -115,13 +115,18 @@ function reset(svgRoot) {
 /**
  * Called for every single MQTT message.
  * This function routes the message to the correct handler.
+ *  Updated signature to accept brokerId as the first argument.
+ * @param {string} brokerId - The ID of the broker.
  * @param {string} topic - The MQTT topic.
  * @param {object} payload - The parsed JSON payload.
  * @param {SVGElement} svgRoot - The root <svg> element.
  */
-function update(topic, payload, svgRoot) {
+function update(brokerId, topic, payload, svgRoot) {
     // This binding only cares about RATP topics and JSON payloads
     if (typeof payload !== 'object' || !topic.startsWith('ratp/uns/')) return;
+
+    // Note: We ignore brokerId here, assuming the simulation runs on the active broker(s).
+    // If you wanted to restrict to a specific broker, you could check: if (brokerId !== 'my_broker') return;
 
     if (topic.includes('/train/')) {
         updateMetroTrain(topic, payload, svgRoot);

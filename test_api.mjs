@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -134,7 +139,7 @@ async function main() {
       throw new Error('Full-text search failed to find data.');
     }
 
-    // --- [MODIFIED] Model-Driven Search Tests ---
+    // ---  Model-Driven Search Tests ---
 
     // [FIX] Changed test to search for a topic from the fast sensor loop
     logTest('Model Search (/search/model - Topic Only)');
@@ -150,9 +155,9 @@ async function main() {
       throw new Error('Model search (topic only) failed.');
     }
 
-    // [MODIFIED] Changed test to search for topic and JSON from the fast sensor loop
+    //  Changed test to search for topic and JSON from the fast sensor loop
     logTest('Model Search (/search/model - Topic + JSON Filter)');
-    // [MODIFIED] Use the new 'filters' object signature
+    //  Use the new 'filters' object signature
     const modelSearchBody2 = {
       topic_template: "%/clean_room_01/humidity",
       filters: {
@@ -236,7 +241,7 @@ async function main() {
 
     logTest('Error 400 for bad model search (missing topic_template)');
     try {
-      // [MODIFIED] Test with the new 'filters' signature
+      //  Test with the new 'filters' signature
       const badBody = { filters: { "priority": "HIGH" } };
       await axios.post(`${CONTEXT_API_URL}/search/model`, badBody);
       logError('Expected 400 error, but request succeeded (test failed).', null);

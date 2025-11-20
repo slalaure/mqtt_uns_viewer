@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -28,7 +33,7 @@ module.exports = (chartConfigPath, logger) => {
             const fileContent = fs.readFileSync(chartConfigPath, 'utf8');
             const config = JSON.parse(fileContent);
 
-            // [MODIFIED] Migration logic for old array-based format
+            //  Migration logic for old array-based format
             if (Array.isArray(config)) {
                 logger.warn("Old array-based charts.json format detected. Migrating to new object format.");
                 const newConfig = {
@@ -63,7 +68,7 @@ module.exports = (chartConfigPath, logger) => {
 
 
     // GET /api/chart/config
-    // [MODIFIED] Retrieve the entire config object
+    //  Retrieve the entire config object
     router.get('/config', (req, res) => {
         try {
             const config = readChartConfig();
@@ -75,11 +80,11 @@ module.exports = (chartConfigPath, logger) => {
     });
 
     // POST /api/chart/config
-    // [MODIFIED] Save/update the entire config object
+    //  Save/update the entire config object
     router.post('/config', (req, res) => {
         try {
             const newConfig = req.body;
-            // [MODIFIED] Validate new structure
+            //  Validate new structure
             if (!newConfig || !Array.isArray(newConfig.configurations)) {
                 return res.status(400).json({ error: "Invalid payload. Expected an object with a 'configurations' array." });
             }

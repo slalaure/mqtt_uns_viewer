@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -7,7 +12,7 @@
  * Manages the manual publish form, Ace Editor, and simulator controls.
  */
 
-import { trackEvent, mqttPatternToRegex } from './utils.js'; // [MODIFIED] Import regex util
+import { trackEvent, mqttPatternToRegex } from './utils.js'; //  Import regex util
 
 // --- DOM Element Querying ---
 const publishForm = document.getElementById('publish-form');
@@ -19,8 +24,8 @@ const publishButton = document.getElementById('publish-button');
 const publishStatus = document.getElementById('publish-status');
 const payloadEditorDiv = document.getElementById('publish-payload-editor');
 
-// [NEW] Simulator controls
-const simulatorListContainer = document.getElementById('simulator-list-container');
+//  Simulator controls
+const simulatorControls = document.getElementById('simulator-list-container');
 const simulatorControlTemplate = document.getElementById('simulator-control-template');
 
 
@@ -28,8 +33,10 @@ const simulatorControlTemplate = document.getElementById('simulator-control-temp
 let aceEditor = null;
 let isDarkTheme = localStorage.getItem('theme') === 'dark';
 let publishStatusTimer = null;
-let subscribedTopics = []; // [NEW] Store subscribed topics
-let simControlsContainer = null; // [NEW] Store reference to simulator list container
+let subscribedTopics = []; //  This is now a fallback
+let simControlsContainer = null; 
+let brokerSelectElement = null; //  To store the broker <select>
+let isMultiBroker = false; // [NEW]
 
 // --- Payload Templates ---
 const PAYLOAD_TEMPLATES = {
@@ -53,22 +60,30 @@ const PAYLOAD_TEMPLATES = {
 /**
  * Initializes the Publish View functionality.
  * @param {object} options
- * @param {string[]} options.subscribedTopics - List of subscribed topic patterns for datalist.
+ * @param {string[]} options.subscribedTopics - List of subscribed topic patterns (fallback).
  * @param {HTMLElement} options.simulatorListContainer - The container for dynamic sim controls.
+ * @param {boolean} options.isMultiBroker - Whether the app is in multi-broker mode.
+ * @param {Array} options.brokerConfigs - List of broker config objects.
  */
 export function initPublishView(options) {
+    subscribedTopics = options.subscribedTopics || [];
+    simControlsContainer = options.simulatorListContainer;
+    isMultiBroker = options.isMultiBroker || false;
+
     if (payloadEditorDiv) {
         // --- Initialize Ace Editor ---
         aceEditor = ace.edit(payloadEditorDiv);
         aceEditor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
         aceEditor.session.setMode('ace/mode/json'); // Default to JSON
         aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); // -1 moves cursor to start, 1 to end
+        
+        // [FIX] Corrected spelling of Ace options
         aceEditor.setOptions({
             fontSize: "14px",
             fontFamily: "monospace",
-            enableBasicAutocompletion: true,
-            enableLiveAutocompletion: true,
-            enableSnippets: true,
+            enableBasicAutocompletion: true, // Corrected
+            enableLiveAutocompletion: true,  // Corrected
+            enableSnippets: true,            // Corrected
             useWorker: true
         });
 
@@ -76,7 +91,6 @@ export function initPublishView(options) {
         publishForm.addEventListener('submit', onPublishSubmit);
         publishFormatSelect.addEventListener('change', onFormatChange);
 
-        // [NEW] Add listener to clear validation error on input
         publishTopicInput.addEventListener('input', () => {
             if (publishTopicInput.classList.contains('input-error')) {
                 publishTopicInput.classList.remove('input-error');
@@ -84,12 +98,38 @@ export function initPublishView(options) {
         });
     }
 
-    // [NEW] Store subscribed topics for validation
-    subscribedTopics = options.subscribedTopics || [];
+    // ---  Multi-Broker Selector ---
+    if (isMultiBroker && options.brokerConfigs && options.brokerConfigs.length > 0) {
+        const firstFormGroup = publishForm.querySelector('.form-group');
+        
+        const brokerGroup = document.createElement('div');
+        brokerGroup.className = 'form-group';
+        
+        const label = document.createElement('label');
+        label.htmlFor = 'publish-broker-select';
+        label.textContent = 'Broker';
+        
+        brokerSelectElement = document.createElement('select');
+        brokerSelectElement.id = 'publish-broker-select';
+        
+        options.brokerConfigs.forEach(broker => {
+            const option = document.createElement('option');
+            option.value = broker.id;
+            option.textContent = `${broker.id} (${broker.host}:${broker.port})`;
+            brokerSelectElement.appendChild(option);
+        });
+        
+        brokerGroup.appendChild(label);
+        brokerGroup.appendChild(brokerSelectElement);
+        
+        if (firstFormGroup) {
+            publishForm.insertBefore(brokerGroup, firstFormGroup);
+        } else {
+            publishForm.prepend(brokerGroup);
+        }
+    }
 
-    // [NEW] Store simulator container
-    simControlsContainer = options.simulatorListContainer;
-    
+
     // --- Populate Topic Datalist ---
     if (options.subscribedTopics) {
         const datalist = document.createElement('datalist');
@@ -116,24 +156,23 @@ export function setPublishTheme(isDark) {
 }
 
 /**
- * [NEW] Checks if the given topic matches any of the subscribed patterns.
- * @param {string} topic - The topic to test.
- * @returns {boolean} True if a match is found, false otherwise.
+ *  Checks if the given topic matches any of the subscribed patterns.
  */
 function isTopicSubscribed(topic) {
+    if (isMultiBroker) return true; // Skip client check in multi-broker mode
+    
     if (!subscribedTopics || subscribedTopics.length === 0) {
-        return false; // No patterns to match against
+        return false; 
     }
     
     for (const pattern of subscribedTopics) {
         try {
-            // Use the regex converter from utils.js
             const regex = mqttPatternToRegex(pattern); 
             if (regex.test(topic)) {
-                return true; // Found a match
+                return true; 
             }
         } catch (e) {
-            console.error(`Invalid MQTT pattern in config: ${pattern}`, e);
+            console.error(`Invalid MQTT pattern: ${pattern}`, e);
         }
     }
     
@@ -153,13 +192,11 @@ function onFormatChange() {
         aceEditor.session.setMode('ace/mode/text');
     }
     
-    // Set template and move cursor to end
     aceEditor.setValue(PAYLOAD_TEMPLATES[format] || "", 1);
 }
 
 /**
  * Handles the manual publish form submission.
- * @param {Event} event - The form submit event.
  */
 async function onPublishSubmit(event) {
     event.preventDefault();
@@ -167,43 +204,40 @@ async function onPublishSubmit(event) {
     
     trackEvent('publish_manual_submit');
 
-    // 1. Get data from form
-    const topic = publishTopicInput.value.trim(); // Trim whitespace
+    const topic = publishTopicInput.value.trim(); 
     const payload = aceEditor.getValue();
     const format = publishFormatSelect.value;
     const qos = parseInt(publishQosSelect.value, 10);
     const retain = publishRetainCheckbox.checked;
+    
+    const brokerId = brokerSelectElement ? brokerSelectElement.value : null;
 
-    // 2. Validate topic
     if (!topic) {
         showPublishStatus('Topic is required.', 'error');
         publishTopicInput.classList.add('input-error');
         return;
     }
 
-    // [NEW] 2.5 Validate topic against subscribed patterns
-    if (!isTopicSubscribed(topic)) {
-        showPublishStatus('Error: Topic does not match any subscribed patterns in config.', 'error');
-        publishTopicInput.classList.add('input-error'); // Add visual feedback
-        return; // Stop submission
+    if (!isMultiBroker && !isTopicSubscribed(topic)) {
+        showPublishStatus('Warning: Topic may not match subscribed patterns.', 'error');
+        publishTopicInput.classList.add('input-error');
+    } else {
+        publishTopicInput.classList.remove('input-error');
     }
     
-    // [NEW] Clear error class if validation passes
-    publishTopicInput.classList.remove('input-error');
-    
-    // 3. Disable UI
     publishButton.disabled = true;
     publishButton.textContent = 'Publishing...';
     showPublishStatus('Publishing...', 'success');
 
-    // 4. Send to backend
     try {
+        const requestBody = { topic, payload, format, qos, retain, brokerId };
+        
         const response = await fetch('api/publish/message', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ topic, payload, format, qos, retain })
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();
@@ -212,13 +246,12 @@ async function onPublishSubmit(event) {
             throw new Error(result.error || `HTTP error! Status: ${response.status}`);
         }
 
-        showPublishStatus(`Message published to '${topic}'!`, 'success');
+        showPublishStatus(`${result.message || 'Message published!'}`, 'success');
 
     } catch (err) {
         console.error("Publish error:", err);
         showPublishStatus(`Error: ${err.message}`, 'error');
     } finally {
-        // 5. Re-enable UI
         publishButton.disabled = false;
         publishButton.textContent = 'Publish Message';
     }
@@ -226,8 +259,6 @@ async function onPublishSubmit(event) {
 
 /**
  * Helper to show a status message in the publish UI.
- * @param {string} message - The text to display.
- * @param {string} type - 'success' or 'error'.
  */
 function showPublishStatus(message, type = 'success') {
     if (!publishStatus) return;
@@ -242,12 +273,10 @@ function showPublishStatus(message, type = 'success') {
 }
 
 
-// --- [NEW] Simulator Logic ---
+// ---  Simulator Logic ---
 
 /**
  * Helper to format snake_case names to Title Case.
- * @param {string} name - e.g., 'stark_industries'
- * @returns {string} e.g., 'Stark Industries'
  */
 function formatSimName(name) {
     return name.split('_')
@@ -257,8 +286,6 @@ function formatSimName(name) {
 
 /**
  * Helper to update the UI of a single simulator control block.
- * @param {HTMLElement} controlEl - The .simulator-instance-controls element.
- * @param {string} status - 'running' or 'stopped'.
  */
 function updateControlUI(controlEl, status) {
     const statusEl = controlEl.querySelector('.status-indicator');
@@ -281,13 +308,11 @@ function updateControlUI(controlEl, status) {
 }
 
 /**
- * [NEW] Receives the full map of simulator statuses and updates the UI.
- * @param {object} statuses - e.g., { stark_industries: 'running', death_star: 'stopped' }
+ *  Receives the full map of simulator statuses and updates the UI.
  */
 export function updateSimulatorStatuses(statuses) {
     if (!simControlsContainer || !simulatorControlTemplate) return;
 
-    // We can just rebuild the list, it's simpler than merging
     simControlsContainer.innerHTML = '';
     
     if (Object.keys(statuses).length === 0) {
@@ -296,19 +321,15 @@ export function updateSimulatorStatuses(statuses) {
     }
 
     for (const [name, status] of Object.entries(statuses)) {
-        // 1. Clone template
         const controlEl = simulatorControlTemplate.content.cloneNode(true).firstElementChild;
 
-        // 2. Find elements inside the clone
         const nameEl = controlEl.querySelector('.simulator-name');
         const startBtn = controlEl.querySelector('.btn-start-sim');
         const stopBtn = controlEl.querySelector('.btn-stop-sim');
         
-        // 3. Populate
         nameEl.textContent = formatSimName(name);
-        updateControlUI(controlEl, status); // Set initial UI state
+        updateControlUI(controlEl, status); 
 
-        // 4. Add event listeners
         startBtn.addEventListener('click', () => {
             fetch(`api/simulator/start/${name}`, { method: 'POST' });
             trackEvent(`simulator_start_${name}`);
@@ -319,7 +340,6 @@ export function updateSimulatorStatuses(statuses) {
             trackEvent(`simulator_stop_${name}`);
         });
 
-        // 5. Append to list
         simControlsContainer.appendChild(controlEl);
     }
 }

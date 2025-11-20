@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -9,7 +14,7 @@
  * It dynamically loads all scenarios from the /data directory.
  */
 
-// --- [NEW] Node.js Core Imports ---
+// ---  Node.js Core Imports ---
 const fs = require('fs');
 const path = require('path');
 
@@ -22,7 +27,7 @@ const path = require('path');
 let mainLogger = null;
 let mainPublish = null;
 let mainSparkplugEnabled = false;
-const DATA_PATH = path.join(__dirname, 'data'); // [NEW] Define data path
+const DATA_PATH = path.join(__dirname, 'data'); //  Define data path
 
 // Map of all available scenario "factories"
 const availableScenarios = new Map();
@@ -47,7 +52,7 @@ function init(logger, publishCallback, isSparkplugEnabled) {
 
     // --- 1. [REMOVED] Register all DEFAULT (built-in) scenarios ---
     
-    // --- 2. [MODIFIED] Scan /data for ALL scenarios ---
+    // --- 2.  Scan /data for ALL scenarios ---
     mainLogger.info(`Scanning ${DATA_PATH} for all simulators (simulator-*.js)...`);
     try {
         if (fs.existsSync(DATA_PATH)) {

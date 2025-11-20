@@ -1,35 +1,24 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+  
  */
 
 // Import shared utilities
-import { formatTimestampForLabel, highlightText, trackEvent } from './utils.js'; // [MODIFIED]
-// [NEW] Import the new time slider module
+import { formatTimestampForLabel, highlightText, trackEvent } from './utils.js'; 
 import { createDualTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
 const historyLogContainer = document.getElementById('historical-log-container');
 const historySearchInput = document.getElementById('history-search-input');
+const historyControls = document.querySelector('.history-controls'); 
 const timeRangeSliderContainer = document.getElementById('time-range-slider-container');
 const handleMin = document.getElementById('handle-min');
 const handleMax = document.getElementById('handle-max');
@@ -39,26 +28,50 @@ const labelMax = document.getElementById('label-max');
 
 // --- Module-level State ---
 let allHistoryEntries = [];
-let minTimestamp = 0;
-let maxTimestamp = 0;
-let currentMinTimestamp = 0;
-let currentMaxTimestamp = 0;
-let historySlider = null; // [NEW] Module instance for the slider
+let globalMinTimestamp = 0; // Absolute DB Min (Left anchor)
+let globalMaxTimestamp = 0; // Absolute Live Max (Right anchor)
+let currentMinTimestamp = 0; // User selected left handle
+let currentMaxTimestamp = 0; // User selected right handle
+let historySlider = null; 
+let isMultiBroker = false;
+let brokerFilterSelect = null;
+
+let isRealTimeMode = true; // If true, updates move the window
+
+// UI Elements for Dates
+let startDateInput = null;
+let endDateInput = null;
+let fetchTimer = null;
+
+// Callbacks
+let requestRangeCallback = null; // Function to call app.js to fetch data
 
 /**
- * [MODIFIED] Applies current filters (time + search) and re-renders the log.
- * This is now exported and named for clarity.
+ * Helper to format Date for input type="datetime-local" (YYYY-MM-DDTHH:mm)
+ */
+function toDateTimeLocal(timestamp) {
+    if (!timestamp) return '';
+    const d = new Date(timestamp);
+    const offsetMs = d.getTimezoneOffset() * 60 * 1000;
+    return (new Date(d.getTime() - offsetMs)).toISOString().slice(0, 16);
+}
+
+/**
+ * Applies current filters (time + search + broker) and re-renders the log.
  */
 export function renderFilteredHistory() {
     if (!historyLogContainer) return;
 
     const searchTerm = historySearchInput.value.trim().toLowerCase();
     const searchActive = searchTerm.length >= 3;
+    const selectedBrokerId = brokerFilterSelect ? brokerFilterSelect.value : 'all';
 
-    // Filter entries based on the module's state
+    // Filter what is currently in memory
     const filteredEntries = allHistoryEntries.filter(entry => {
-        const inTimeRange = entry.timestampMs >= currentMinTimestamp && entry.timestampMs <= currentMaxTimestamp;
-        if (!inTimeRange) return false;
+        if (selectedBrokerId !== 'all' && entry.brokerId !== selectedBrokerId) return false;
+
+        // Filter by range (handle timestamps)
+        if (entry.timestampMs < currentMinTimestamp || entry.timestampMs > currentMaxTimestamp) return false;
         
         if (searchActive) {
             const topicMatch = entry.topic.toLowerCase().includes(searchTerm);
@@ -68,32 +81,132 @@ export function renderFilteredHistory() {
         return true;
     });
 
-    historyLogContainer.innerHTML = ''; // Clear previous entries
+    historyLogContainer.innerHTML = ''; 
     
     if (filteredEntries.length === 0) {
-        historyLogContainer.innerHTML = '<p class="history-placeholder">No log entries match the current filters.</p>';
+        historyLogContainer.innerHTML = '<p class="history-placeholder">No log entries in this view range.</p>';
     } else {
-        filteredEntries.forEach(entry => addHistoryEntry(entry, searchActive ? searchTerm : null));
+        // Limit rendering to avoid browser freeze
+        const displayEntries = filteredEntries.slice(0, 500);
+        displayEntries.forEach(entry => addHistoryEntry(entry, searchActive ? searchTerm : null));
+        
+        if (filteredEntries.length > 500) {
+            const limitMsg = document.createElement('div');
+            limitMsg.style.textAlign = 'center';
+            limitMsg.style.padding = '10px';
+            limitMsg.style.color = 'var(--color-text-secondary)';
+            limitMsg.textContent = `... showing 500 of ${filteredEntries.length} entries. Narrow filter or range to see more.`;
+            historyLogContainer.appendChild(limitMsg);
+        }
     }
 }
 
-
 /**
  * Initializes the History View functionality.
- * This is called once by app.js when the app loads.
  */
-export function initHistoryView() {
-    historySearchInput?.addEventListener('input', renderFilteredHistory); // [MODIFIED]
-    
-    // [NEW] Track when a search is "committed" (on blur or Enter)
-    historySearchInput?.addEventListener('change', () => {
-        if (historySearchInput.value.trim().length > 0) {
-            trackEvent('history_search_submit');
-        }
+export function initHistoryView(options = {}) {
+    isMultiBroker = options.isMultiBroker || false;
+    requestRangeCallback = options.requestRangeCallback || null; 
+
+    // Debounce search input to trigger backend fetch
+    historySearchInput?.addEventListener('input', () => {
+        renderFilteredHistory(); // Instant filter
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(() => {
+            // Also fetch from DB with filter
+            triggerDataFetch(currentMinTimestamp, currentMaxTimestamp);
+        }, 800);
     });
 
+    // --- 1. Create Date Picker UI Controls ---
+    const dateControlsDiv = document.createElement('div');
+    dateControlsDiv.style.display = 'flex';
+    dateControlsDiv.style.gap = '10px';
+    dateControlsDiv.style.marginBottom = '10px';
+    dateControlsDiv.style.alignItems = 'center';
+    dateControlsDiv.style.flexWrap = 'wrap';
 
-    // [MODIFIED] Initialize the dual time slider
+    const startGrp = document.createElement('div');
+    startGrp.style.display = 'flex';
+    startGrp.style.flexDirection = 'column';
+    startGrp.innerHTML = '<label style="font-size:0.8em;">Start</label>';
+    startDateInput = document.createElement('input');
+    startDateInput.type = 'datetime-local';
+    startDateInput.className = 'modal-input';
+    startDateInput.style.fontSize = '0.9em';
+    startGrp.appendChild(startDateInput);
+
+    const endGrp = document.createElement('div');
+    endGrp.style.display = 'flex';
+    endGrp.style.flexDirection = 'column';
+    endGrp.innerHTML = '<label style="font-size:0.8em;">End</label>';
+    endDateInput = document.createElement('input');
+    endDateInput.type = 'datetime-local';
+    endDateInput.className = 'modal-input';
+    endDateInput.style.fontSize = '0.9em';
+    endGrp.appendChild(endDateInput);
+
+    // Quick Range Buttons
+    const btnGrp = document.createElement('div');
+    btnGrp.style.display = 'flex';
+    btnGrp.style.gap = '5px';
+    btnGrp.style.marginTop = '14px';
+    btnGrp.style.flexWrap = 'wrap'; // Allow buttons to wrap
+    
+    const createRangeBtn = (text, hours) => {
+        const btn = document.createElement('button');
+        btn.textContent = text;
+        btn.className = 'mapper-button'; 
+        btn.onclick = () => setRelativeRange(hours);
+        return btn;
+    };
+    
+    btnGrp.appendChild(createRangeBtn('1h', 1));
+    btnGrp.appendChild(createRangeBtn('6h', 6));
+    btnGrp.appendChild(createRangeBtn('24h', 24));
+    btnGrp.appendChild(createRangeBtn('7d', 24*7));
+    //  Added requested buttons
+    btnGrp.appendChild(createRangeBtn('1M', 24*30));
+    btnGrp.appendChild(createRangeBtn('3M', 24*30*3));
+    btnGrp.appendChild(createRangeBtn('1Y', 24*365));
+    btnGrp.appendChild(createRangeBtn('Full', 'FULL'));
+
+    dateControlsDiv.appendChild(startGrp);
+    dateControlsDiv.appendChild(endGrp);
+    dateControlsDiv.appendChild(btnGrp);
+
+    if (timeRangeSliderContainer) {
+        timeRangeSliderContainer.parentNode.insertBefore(dateControlsDiv, timeRangeSliderContainer);
+    }
+
+    const onDateChange = () => {
+        const start = startDateInput.value ? new Date(startDateInput.value).getTime() : 0;
+        const end = endDateInput.value ? new Date(endDateInput.value).getTime() : Date.now();
+        if (start && end && start < end) {
+            // User manually changed date -> Disable Realtime mode unless it implies 'now'
+            const isNow = Math.abs(end - Date.now()) < 60000;
+            isRealTimeMode = isNow; 
+            triggerDataFetch(start, end);
+        }
+    };
+    startDateInput.addEventListener('change', onDateChange);
+    endDateInput.addEventListener('change', onDateChange);
+
+
+    // --- 2. Broker Filter ---
+    if (isMultiBroker && historyControls) {
+        brokerFilterSelect = document.createElement('select');
+        brokerFilterSelect.id = 'history-broker-filter';
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = 'All Brokers';
+        brokerFilterSelect.appendChild(allOption);
+        
+        brokerFilterSelect.addEventListener('change', renderFilteredHistory);
+        historyControls.prepend(brokerFilterSelect);
+    }
+
+    // --- 3. Slider Init ---
     if (handleMin && handleMax) {
         historySlider = createDualTimeSlider({
             containerEl: timeRangeSliderContainer,
@@ -103,88 +216,129 @@ export function initHistoryView() {
             labelMinEl: labelMin,
             labelMaxEl: labelMax,
             onDrag: (newMin, newMax) => {
-                // Update state continuously while dragging
                 currentMinTimestamp = newMin;
                 currentMaxTimestamp = newMax;
-                updateSliderUI(); // Update labels
+                
+                // Tightened Real-time threshold: Only activate if effectively at the very end
+                const range = globalMaxTimestamp - globalMinTimestamp;
+                // Use a stricter threshold (99.9%) to avoid accidental live mode
+                const threshold = globalMinTimestamp + (range * 0.999); 
+                isRealTimeMode = (newMax >= threshold);
+
+                updateSliderUI();
             },
             onDragEnd: (newMin, newMax) => {
-                // Apply filter only on mouse up
-                currentMinTimestamp = newMin;
-                currentMaxTimestamp = newMax;
-                renderFilteredHistory(); // [MODIFIED] Re-render log
-                trackEvent('history_slider_drag_end'); // [NEW]
+                triggerDataFetch(newMin, newMax);
             }
         });
     }
 }
 
 /**
- * [MODIFIED] Receives the full history log and timestamp data from the main app.
- * This function NO LONGER re-renders the log unless it's the initial load.
- * @param {Array} entries - The complete list of history entries.
- * @param {boolean} isInitialLoad - True if this is the first batch of data.
+ * Handles quick range buttons.
+ * @param {number|string} hours - Number of hours to go back, or 'FULL'.
  */
-export function setHistoryData(entries, isInitialLoad) { 
-    allHistoryEntries = entries;
-
-    if (allHistoryEntries.length === 0) {
-        if(timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'none';
-        minTimestamp = maxTimestamp = currentMinTimestamp = currentMaxTimestamp = 0;
-        if (isInitialLoad) renderFilteredHistory(); // Render empty state
-        return { min: 0, max: 0 }; 
+function setRelativeRange(hours) {
+    if (hours === 'FULL') {
+        isRealTimeMode = true;
+        // Request global bounds
+        triggerDataFetch(globalMinTimestamp, Date.now());
+        return;
     }
 
-    if (timeRangeSliderContainer) timeRangeSliderContainer.style.display = 'block';
-
-    // Check if the handle is at the live edge *before* updating maxTimestamp
-    const isLive = (currentMaxTimestamp === maxTimestamp || isInitialLoad);
-
-    // Update global timestamps
-    minTimestamp = allHistoryEntries[allHistoryEntries.length - 1].timestampMs;
-    maxTimestamp = allHistoryEntries[0].timestampMs;
-
-    if (isInitialLoad) {
-        // On first load, set slider to full range
-        currentMinTimestamp = minTimestamp;
-        currentMaxTimestamp = maxTimestamp;
-    } else if (isLive) {
-        // If we were 'live', keep the max handle pegged to the new max timestamp
-        currentMaxTimestamp = maxTimestamp;
-    }
-    // If not initialLoad and not isLive, currentMin/MaxTimestamp are *not*
-    // touched, preserving the user's selection.
-
-    // [MODIFIED] Only re-render if it's the initial load.
-    if (isInitialLoad) {
-        renderFilteredHistory();
-    }
+    const end = Date.now();
+    let start = end - (hours * 60 * 60 * 1000);
     
-    // Always update the slider's visual range
+    // [FIX] Ensure start does not go below global min to prevent UI bugs (disappearing handle)
+    if (globalMinTimestamp > 0 && start < globalMinTimestamp) {
+        start = globalMinTimestamp;
+    }
+
+    isRealTimeMode = true; // Quick actions usually imply "recent"
+    triggerDataFetch(start, end);
+}
+
+function triggerDataFetch(start, end) {
+    // Update Inputs
+    if (startDateInput) startDateInput.value = toDateTimeLocal(start);
+    if (endDateInput) endDateInput.value = toDateTimeLocal(end);
+
+    currentMinTimestamp = start;
+    currentMaxTimestamp = end;
     updateSliderUI();
 
-    // Return the new state to app.js
-    return { 
-        min: minTimestamp, 
-        max: maxTimestamp
-    };
-}
-
-/**
- * Updates the visual state of the time range slider
- * by calling the slider module.
- */
-function updateSliderUI() {
-    if (historySlider) {
-        historySlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
+    // Call Backend
+    if (requestRangeCallback) {
+        const filter = historySearchInput.value.trim();
+        requestRangeCallback(start, end, filter);
     }
 }
 
 /**
- * Creates and appends a single log entry to the history container.
- * @param {object} entry - The history entry object.
- * @param {string | null} searchTerm - The term to highlight.
+ * Called by app.js when DB bounds are received (Initial Load).
  */
+export function setDbBounds(min, max) {
+    globalMinTimestamp = new Date(min).getTime();
+    globalMaxTimestamp = new Date(max).getTime();
+    
+    // On startup, cover entire range
+    currentMinTimestamp = globalMinTimestamp;
+    currentMaxTimestamp = globalMaxTimestamp;
+    isRealTimeMode = true;
+
+    updateSliderUI();
+}
+
+/**
+ * Receives data from the main app.
+ * @param {Array} entries - Log entries.
+ * @param {boolean} isInitialLoad - If true, this is the startup batch.
+ * @param {boolean} isUpdate - If true, this is a single live update.
+ */
+export function setHistoryData(entries, isInitialLoad, isUpdate = false) { 
+    if (isUpdate) {
+        // Live update: Append new entries to the list
+        allHistoryEntries.unshift(...entries);
+        
+        // Update global max time
+        const newMax = entries[0].timestampMs;
+        if (newMax > globalMaxTimestamp) globalMaxTimestamp = newMax;
+        
+        // If in Real-Time Mode, drag the right handle along
+        if (isRealTimeMode) {
+            currentMaxTimestamp = globalMaxTimestamp;
+        }
+        // Note: We DO NOT change currentMinTimestamp in live mode unless it was already at globalMin
+    } else {
+        // Bulk load (Initial or Fetch Range result)
+        allHistoryEntries = entries;
+        
+        // If this was a specific fetch, update bounds logic if needed
+        // But usually we trust the query parameters used
+        if (entries.length > 2000) {
+            // Show warning if result set is huge (popup as requested)
+             if(!isInitialLoad) console.log("Notice: The selected range returned a large number of results.");
+        }
+    }
+
+    // Sync Date Inputs
+    if (startDateInput) startDateInput.value = toDateTimeLocal(currentMinTimestamp);
+    if (endDateInput) endDateInput.value = toDateTimeLocal(currentMaxTimestamp);
+
+    renderFilteredHistory();
+    updateSliderUI();
+
+    // Return current view bounds for other modules
+    return { min: currentMinTimestamp, max: currentMaxTimestamp };
+}
+
+function updateSliderUI() {
+    if (historySlider) {
+        // The scale is defined by Global bounds
+        historySlider.updateUI(globalMinTimestamp, globalMaxTimestamp, currentMinTimestamp, currentMaxTimestamp);
+    }
+}
+
 function addHistoryEntry(entry, searchTerm = null) {
     if (!historyLogContainer) return;
 
@@ -196,12 +350,12 @@ function addHistoryEntry(entry, searchTerm = null) {
 
     const topicSpan = document.createElement('span');
     topicSpan.className = 'log-entry-topic';
-    // Use imported highlight function
-    topicSpan.innerHTML = highlightText(entry.topic, searchTerm); 
+    const brokerPrefix = isMultiBroker ? `[${entry.brokerId}] ` : '';
+    topicSpan.innerHTML = highlightText(brokerPrefix + entry.topic, searchTerm); 
 
     const timeSpan = document.createElement('span');
     timeSpan.className = 'log-entry-timestamp';
-    timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
+    timeSpan.textContent = new Date(entry.timestamp).toLocaleString('en-GB');
 
     header.appendChild(topicSpan);
     header.appendChild(timeSpan);
@@ -210,15 +364,12 @@ function addHistoryEntry(entry, searchTerm = null) {
     try {
         const jsonObj = JSON.parse(entry.payload);
         const prettyPayload = JSON.stringify(jsonObj, null, 2);
-        // Use imported highlight function
         pre.innerHTML = highlightText(prettyPayload, searchTerm); 
     } catch(e) {
-        // Use imported highlight function
         pre.innerHTML = highlightText(entry.payload, searchTerm); 
     }
 
     div.appendChild(header);
     div.appendChild(pre);
-    
     historyLogContainer.appendChild(div);
 }

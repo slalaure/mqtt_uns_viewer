@@ -29,7 +29,7 @@ main#chart-view {
     background-color: var(--color-bg-secondary);
 }
 
-/* --- Chart Controls (Top-left) [MODIFIED] --- */
+/* --- Chart Controls (Top-left)  --- */
 .chart-tree-wrapper .tree-controls {
     padding: 10px;
     display: flex;
@@ -77,7 +77,7 @@ main#chart-view {
 body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) invert(0.2); }
 #chart-tree .selected .node-timestamp { color: var(--selected-text); opacity: 0.8; }
 
-/* [MODIFIED] Added rules for collapse and filter */
+/*  Added rules for collapse and filter */
 #chart-tree .is-folder.collapsed > ul { 
     display: none; 
 }
@@ -166,14 +166,14 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     background-color: var(--color-bg-accent);
 }
 
-/* [NEW] Style for the config select dropdown */
+/*  Style for the config select dropdown */
 #chart-config-select {
     flex-grow: 1;
     min-width: 150px;
     max-width: 250px;
 }
 
-/* [NEW] Style for the new save/delete buttons */
+/*  Style for the new save/delete buttons */
 #btn-chart-save-current {
     background-color: var(--color-primary);
     color: var(--color-header-text);
@@ -273,7 +273,7 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 }
 
 
-/* --- [NEW] Mobile Responsive Styles --- */
+/* ---  Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     main#chart-view {
         flex-direction: column; /* Stack panels vertically */

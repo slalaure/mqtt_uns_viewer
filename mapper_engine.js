@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -11,7 +16,7 @@ const path = require('path');
 const vm = require('vm');
 const mustache = require('mustache');
 const mqttMatch = require('mqtt-match');
-const spBv10Codec = require('sparkplug-payload').get("spBv10"); // <-- Import Sparkplug codec
+const spBv10Codec = require('sparkplug-payload').get("spBv10"); 
 
 const MAPPINGS_FILE_PATH = path.join(__dirname, 'data', 'mappings.json');
 
@@ -19,17 +24,16 @@ let config = {
     versions: [],
     activeVersionId: null
 };
-let metrics = new Map(); // In-memory metrics: Map<ruleId, { count: 0, logs: [] }>
+let metrics = new Map(); 
 let metricsUpdateTimer = null;
 
-let publishCallback = (topic, payload) => {};
+let activeConnections = new Map();
 let broadcastCallback = (message) => {};
 let engineLogger = null;
 let payloadReplacer = null; 
-let internalDb = null; // <-- [MODIFIED] Will be injected by server.js
+let internalDb = null; 
 
-// [MODIFIED] Updated default code to show new async DB capability
-const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic and msg.payload (parsed JSON).
+const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
 // Return the modified 'msg' object to publish.
 // Return null or undefined to skip publishing.
@@ -40,7 +44,7 @@ try {
         SELECT AVG(CAST(payload->>'value' AS DOUBLE)) as avg_val 
         FROM (
             SELECT payload FROM mqtt_events 
-            WHERE topic = '\${msg.topic}' 
+            WHERE topic = '\${msg.topic}' AND broker_id = '\${msg.brokerId}'
             ORDER BY timestamp DESC 
             LIMIT 5
         )
@@ -50,7 +54,7 @@ try {
         msg.payload.average_5 = result.avg_val;
     }
 } catch (e) {
-    console.error("DB query failed: " + e.message);
+    console.error(\"DB query failed: \" + e.message);
 }
 */
 
@@ -64,11 +68,10 @@ const createNewVersion = (name) => {
         id: newVersionId,
         name: name || `Version ${config.versions.length + 1}`,
         createdAt: new Date().toISOString(),
-        rules: [] // Rules are now attached to source topics
+        rules: [] 
     };
 };
 
-// [MODIFIED] The sandbox for the user's VM
 const createSandbox = (msg) => {
     return {
         msg: msg,
@@ -78,11 +81,9 @@ const createSandbox = (msg) => {
             error: (...args) => engineLogger.error({ vm_log: args }, "VM Error")
         },
         JSON: JSON,
-        // [NEW] Expose safe, Promise-based DB functions
         db: {
             all: (sql) => new Promise((resolve, reject) => {
                 if (!internalDb) return reject(new Error("Database not initialized"));
-                // Add basic SQL query validation (prevent writing/deleting)
                 if (!sql.trim().toUpperCase().startsWith('SELECT')) {
                     return reject(new Error("Database access is read-only (SELECT only)."));
                 }
@@ -129,11 +130,10 @@ const loadMappings = () => {
 
 const saveMappings = (newConfig) => {
     try {
-        config = newConfig; // Update in-memory cache
+        config = newConfig; 
         fs.writeFileSync(MAPPINGS_FILE_PATH, JSON.stringify(config, null, 2));
         engineLogger.info(`✅ Mapper Engine: Saved config. Active: ${config.activeVersionId}`);
 
-        // Broadcast the config update to all clients
         broadcastCallback(JSON.stringify({
             type: 'mapper-config-update',
             config: config
@@ -155,13 +155,11 @@ const getActiveRules = () => {
 };
 
 const getMetrics = () => {
-    // Convert Map to a plain object for JSON serialization
     return Object.fromEntries(metrics);
 };
 
-// [MODIFIED] Debounced function to broadcast metrics updates
 const broadcastMetrics = () => {
-    if (metricsUpdateTimer) return; // Already scheduled
+    if (metricsUpdateTimer) return; 
 
     metricsUpdateTimer = setTimeout(() => {
         broadcastCallback(JSON.stringify({
@@ -169,10 +167,9 @@ const broadcastMetrics = () => {
             metrics: getMetrics()
         }));
         metricsUpdateTimer = null;
-    }, 1500); // Broadcast metrics at most every 1.5 seconds
+    }, 1500); 
 };
 
-// [MODIFIED] This function is now also used to log errors and debug traces
 const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg = null, debugMsg = null) => {
     const ruleId = `${rule.sourceTopic}::${target.id}`;
     if (!metrics.has(ruleId)) {
@@ -180,21 +177,19 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
     }
     const ruleMetrics = metrics.get(ruleId);
     
-    // Only increment count on success
     if (!errorMsg && !debugMsg) {
         ruleMetrics.count++;
     }
 
-    // Add log entry
     const logEntry = {
         ts: new Date().toISOString(),
         inTopic: inTopic,
     };
 
     if (errorMsg) {
-        logEntry.error = errorMsg.substring(0, 200); // Add error field
+        logEntry.error = errorMsg.substring(0, 200); 
     } else if (debugMsg) {
-        logEntry.debug = debugMsg; // Add debug field
+        logEntry.debug = debugMsg; 
     } else {
         logEntry.outTopic = outTopic;
         logEntry.outPayload = outPayloadStr.substring(0, 150) + (outPayloadStr.length > 150 ? '...' : '');
@@ -202,31 +197,22 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
 
     ruleMetrics.logs.unshift(logEntry);
 
-    // Keep only the last 20 logs
     if (ruleMetrics.logs.length > 20) {
         ruleMetrics.logs.pop();
     }
     
-    // [MODIFIED] Handle immediate broadcast for errors
     if (errorMsg) {
-        // If it's an error, broadcast IMMEDIATELY.
-        clearTimeout(metricsUpdateTimer); // Clear any pending (TRACE) broadcast
+        clearTimeout(metricsUpdateTimer); 
         metricsUpdateTimer = null;
         broadcastCallback(JSON.stringify({
             type: 'mapper-metrics-update',
             metrics: getMetrics()
         }));
     } else {
-        // Otherwise, use the debouncer for TRACE and success logs
         broadcastMetrics();
     }
 };
 
-/**
- * [NEW] Checks if any active rule for a topic requires DB access.
- * @param {string} topic - The incoming MQTT topic.
- * @returns {boolean} - True if a matching rule uses 'await db'.
- */
 const rulesForTopicRequireDb = (topic) => {
     const activeRules = getActiveRules();
     if (activeRules.length === 0) return false;
@@ -234,40 +220,33 @@ const rulesForTopicRequireDb = (topic) => {
     for (const rule of activeRules) {
         if (mqttMatch(rule.sourceTopic.trim(), topic)) {
             for (const target of rule.targets) {
-                // [FIX] Sanitize code here too, just in case
                 const cleanCode = target.code ? target.code.replace(/\u00A0/g, " ") : "";
                 if (target.enabled && cleanCode.includes('await db')) {
-                    return true; // Found a rule that needs the DB
+                    return true; 
                 }
             }
         }
     }
-    return false; // No matching rules need the DB
+    return false; 
 };
 
-
-// [MODIFIED] This function now processes rules asynchronously
-const processMessage = async (topic, payloadObject, isSparkplugOrigin = false) => {
+const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin = false) => {
     const activeRules = getActiveRules();
     if (activeRules.length === 0) return;
 
     const originalMsg = {
         topic: topic,
-        payload: payloadObject
+        payload: payloadObject,
+        brokerId: brokerId 
     };
 
     for (const rule of activeRules) {
-        // [FIX] Add .trim() for robustness against whitespace errors
         if (mqttMatch(rule.sourceTopic.trim(), topic)) {
             
-            // [MODIFIED] Process targets in parallel
             const targetPromises = rule.targets.map(async (target) => {
                 if (!target.enabled) return;
 
-                // --- [NEW] Add Debug Trace Log ---
-                // Send a log *before* the try block to prove we matched the rule
                 updateMetrics(rule, target, topic, null, null, null, "Rule matched. Attempting execution...");
-                // --- [END NEW] ---
 
                 try {
                     let msgForSandbox;
@@ -275,71 +254,77 @@ const processMessage = async (topic, payloadObject, isSparkplugOrigin = false) =
                         msgForSandbox = JSON.parse(JSON.stringify(originalMsg));
                     } catch(copyErr) {
                         engineLogger.error({ err: copyErr, topic: topic }, "Mapper Engine: Failed to deep copy message for sandbox.");
-                        return; // Don't process this target
+                        return; 
                     }
 
                     let resultMsg = null;
                     const context = vm.createContext(createSandbox(msgForSandbox));
                     
-                    // [FIX] Sanitize code to remove non-breaking spaces (U+000A)
                     const cleanCode = target.code.replace(/\u00A0/g, " ");
 
-                    // [MODIFIED] Wrap code in an async IIFE to allow 'await'
-                    const script = new vm.Script(`(async () => { ${cleanCode} })();`); // Use cleanCode
+                    const script = new vm.Script(`(async () => { ${cleanCode} })();`); 
                     
-                    // [MODIFIED] The script now returns a Promise
-                    // Increased timeout for potential DB queries
                     resultMsg = await script.runInContext(context, { timeout: 2000 }); 
 
                     if (resultMsg && resultMsg.payload !== undefined) {
-                        // The script returns the modified 'msg' object
-                        const outputTopic = mustache.render(target.outputTopic, resultMsg.payload);
+                        //  Simplified view context (removed wildcard logic)
+                        const viewContext = {
+                            ...resultMsg.payload,
+                            topic: topic,
+                            brokerId: brokerId
+                        };
 
-                        let outputPayload; // Can be String or Buffer
-                        let outputPayloadForMetrics; // Always string for metrics
+                        const outputTopic = mustache.render(target.outputTopic, viewContext);
 
-                        // Determine if the *output* should be Sparkplug Protobuf
+                        let outputPayload; 
+                        let outputPayloadForMetrics; 
+
                         const shouldOutputSparkplug = isSparkplugOrigin && outputTopic.startsWith('spBv1.0/');
 
                         if (shouldOutputSparkplug) {
-                             // Source was SPB AND Target is SPB -> Re-encode Protobuf
                             try {
                                 outputPayload = spBv10Codec.encodePayload(resultMsg.payload);
                                 outputPayloadForMetrics = JSON.stringify(resultMsg.payload, payloadReplacer);
                             } catch (encodeErr) {
                                 engineLogger.error({ err: encodeErr, rule: rule.sourceTopic, target: target.id, payload: resultMsg.payload }, "❌ Mapper Engine: Failed to re-encode payload as Sparkplug Protobuf.");
-                                return; // Skip if encoding fails
+                                return; 
                             }
                         } else {
-                            // Source was SPB -> Target is JSON OR Source was JSON (Target can be JSON or SPB, but we output JSON)
-                            // Output as JSON String
                             outputPayload = JSON.stringify(resultMsg.payload, payloadReplacer);
                             outputPayloadForMetrics = outputPayload;
                         }
 
-                        // Publish (payload can be Buffer or String)
-                        publishCallback(outputTopic, outputPayload);
+                        // Default to the source broker if targetBrokerId is not specified
+                        const targetBrokerId = target.targetBrokerId || brokerId; 
+                        const connection = activeConnections.get(targetBrokerId);
+
+                        // [FIXED] Add check for connection existence and status before publishing
+                        if (connection && connection.connected) {
+                            connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
+                        } else {
+                            // [FIXED] Log a proper error and skip the publish for this target
+                            const errorMessage = `Target broker '${targetBrokerId}' not found or not connected. Cannot publish.`;
+                            engineLogger.error(errorMessage);
+                            updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                            return; 
+                        }
 
                         broadcastCallback(JSON.stringify({
                             type: 'mapped-topic-generated',
+                            brokerId: targetBrokerId, 
                             topic: outputTopic
                         }));
 
-                        // [MODIFIED] Call updateMetrics with success parameters
                         updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
                     
                     } else if (resultMsg === null) {
-                        // [NEW] The script ran successfully but returned null, log this as a trace
                         updateMetrics(rule, target, topic, null, null, null, "Script executed and returned null (skipped publish).");
                     }
 
                 } catch (err) {
-                    // [MODIFIED] Log error to server AND to UI metrics
                     engineLogger.error({ err, ruleName: rule.sourceTopic, targetId: target.id }, "❌ Mapper Engine: Error executing async JS transform.");
                     
-                    // --- [ THIS IS THE FIX ] ---
-                    // Send the full error string/stack, not just .message
-                    let errorString = "Unknown execution error"; // Default
+                    let errorString = "Unknown execution error"; 
                     if (err) {
                         if (err.stack) {
                             errorString = err.stack;
@@ -350,24 +335,19 @@ const processMessage = async (topic, payloadObject, isSparkplugOrigin = false) =
                         }
                     }
                     updateMetrics(rule, target, topic, null, null, errorString, null);
-                    // --- [ END OF FIX ] ---
                 }
-            }); // end map
+            }); 
             
-            // [MODIFIED] Wait for all targets of this rule to finish
             await Promise.all(targetPromises);
         }
     }
 };
 
-
-// [MODIFIED] Constructor now accepts publisher, broadcaster, logger, longReplacer
-module.exports = (publisher, broadcaster, logger, longReplacer) => {
-    if (!publisher || !broadcaster || !logger || !longReplacer) {
-        throw new Error("Mapper Engine V2 requires a publisher, broadcaster, logger, and longReplacer function.");
+module.exports = (connectionsMap, broadcaster, logger, longReplacer) => {
+    if (!connectionsMap || !broadcaster || !logger || !longReplacer) {
+        throw new Error("Mapper Engine V2 requires a connections map, broadcaster, logger, and longReplacer function.");
     }
-    // [REMOVED] DB connection - will be injected
-    publishCallback = publisher;
+    activeConnections = connectionsMap; 
     broadcastCallback = broadcaster;
     engineLogger = logger.child({ component: 'MapperEngineV2' });
     payloadReplacer = longReplacer;
@@ -375,7 +355,6 @@ module.exports = (publisher, broadcaster, logger, longReplacer) => {
     loadMappings();
 
     return {
-        // [NEW] Function to inject the DB connection post-init
         setDb: (dbConnection) => {
             internalDb = dbConnection;
             logger.info("✅ Database connection injected into Mapper Engine.");

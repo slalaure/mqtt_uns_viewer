@@ -1,25 +1,14 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+  
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,10 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load current configuration from the server
     async function loadConfig() {
         try {
-            // Removed leading slash to make the URL relative
             const response = await fetch('api/env');
             if (!response.ok) {
-                // Handle auth error gracefully
                 if (response.status === 401) {
                     throw new Error('Authentication failed. Please check your credentials.');
                 }
@@ -52,15 +39,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 const label = document.createElement('label');
                 label.htmlFor = `input-${key}`;
                 label.textContent = key;
-
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.id = `input-${key}`;
-                input.name = key;
-                input.value = config[key];
-
                 group.appendChild(label);
-                group.appendChild(input);
+
+                //  Special handling for MQTT_BROKERS to use a Textarea
+                if (key === 'MQTT_BROKERS') {
+                    const textarea = document.createElement('textarea');
+                    textarea.id = `input-${key}`;
+                    textarea.name = key;
+                    
+                    let rawValue = config[key];
+                    // Remove potential surrounding single quotes from .env parsing
+                    if (typeof rawValue === 'string') {
+                        rawValue = rawValue.replace(/^'|'$/g, '');
+                    }
+
+                    try {
+                        // Try to parse and pretty-print the JSON
+                        const jsonObj = JSON.parse(rawValue);
+                        textarea.value = JSON.stringify(jsonObj, null, 4);
+                    } catch (e) {
+                        // If not valid JSON, display raw value
+                        textarea.value = rawValue;
+                    }
+                    group.appendChild(textarea);
+                } else {
+                    // Default Input field
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = `input-${key}`;
+                    input.name = key;
+                    input.value = config[key];
+                    group.appendChild(input);
+                }
+
                 form.appendChild(group);
             }
         } catch (error) {
@@ -80,8 +91,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
 
+        //  Minify MQTT_BROKERS JSON back to a single line string
+        if (configData['MQTT_BROKERS']) {
+            try {
+                const jsonContent = configData['MQTT_BROKERS'];
+                const parsed = JSON.parse(jsonContent);
+                // Minify to single line for .env compatibility
+                configData['MQTT_BROKERS'] = JSON.stringify(parsed);
+            } catch (e) {
+                statusMessage.textContent = 'Error: Invalid JSON in MQTT_BROKERS field.';
+                statusMessage.className = 'status-message error';
+                saveButton.disabled = false;
+                saveButton.textContent = 'Save Configuration';
+                return; // Stop submission
+            }
+        }
+
         try {
-            //  Removed leading slash
             const response = await fetch('api/env', {
                 method: 'POST',
                 headers: {
@@ -103,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (restart) {
                 statusMessage.textContent = 'Restarting server...';
                 statusMessage.className = 'status-message success';
-                // Removed leading slash
                 fetch('api/env/restart', { method: 'POST' });
             } else {
                 statusMessage.textContent = 'Configuration saved! Restart the server later to apply changes.';

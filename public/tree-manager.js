@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -12,41 +17,73 @@
  * @param {HTMLElement} rootElement The <ul> element to build the tree in.
  * @param {object} options
  * @param {string} options.treeId A unique ID prefix for nodes (e.g., 'main-tree').
- * @param {function} [options.onNodeClick] (event, nodeContainer, topic) => void
- * @param {function} [options.onCheckboxClick] (event, nodeContainer, topic) => void
+ * @param {function} [options.onNodeClick] (event, nodeContainer, brokerId, topic) => void
+ * @param {function} [options.onCheckboxClick] (event, nodeContainer, brokerId, topic) => void
  * @param {boolean} [options.showCheckboxes] Show filter checkboxes.
  * @param {boolean} [options.allowFolderCollapse] Allow folders to be collapsed.
+ * @param {boolean} [options.isMultiBroker] Whether the app is in multi-broker mode.
  */
 export function createTreeManager(rootElement, options = {}) {
-    const { treeId, onNodeClick, onCheckboxClick, showCheckboxes = false, allowFolderCollapse = true } = options;
+    const { 
+        treeId, 
+        onNodeClick, 
+        onCheckboxClick, 
+        showCheckboxes = false, 
+        allowFolderCollapse = true,
+        isMultiBroker = false 
+    } = options;
+    
     const rootNode = rootElement;
     let nodeMap = new Map(); // Stores references to <li> elements by topic
 
     /**
      * Creates or updates a node in this tree.
-     * @param {string} topic Full topic string.
-     * @param {string} payload The payload string.
-     * @param {string} timestamp ISO timestamp.
+     * @param {string} brokerId - The ID of the broker.
+     * @param {string} topic - Full topic string.
+     * @param {string} payload - The payload string.
+     * @param {string} timestamp - ISO timestamp.
      * @param {object} updateOptions
      * @param {boolean} updateOptions.enableAnimations
      */
-    function update(topic, payload, timestamp, updateOptions = {}) {
+    function update(brokerId, topic, payload, timestamp, updateOptions = {}) {
         const { enableAnimations = false } = updateOptions;
-        const parts = topic.split('/');
+        
+        //  Safety check for brokerId to prevent "undefined" root folders
+        const safeBrokerId = brokerId || 'default';
+
+        //  Create the topic path that will be displayed in the tree.
+        const displayTopic = isMultiBroker ? `${safeBrokerId}/${topic}` : topic;
+        
+        const parts = displayTopic.split('/');
         let currentTopicPath = '';
+        // Used to reconstruct the actual MQTT topic (without broker prefix if needed)
+        let currentRealTopic = ''; 
+
         let currentUl = rootNode;
         const affectedNodes = [];
         const formattedTimestamp = new Date(timestamp).toLocaleTimeString('en-GB');
 
-        let li; // <-- [THE FIX] Declare li here, outside the loop.
+        let li; 
 
         for (let index = 0; index < parts.length; index++) {
             const part = parts[index];
             currentTopicPath += (index > 0 ? '/' : '') + part;
+            
+            // Reconstruct the real topic for data attributes
+            if (isMultiBroker) {
+                // If multi-broker, skip the first part (brokerId) for the topic string
+                if (index > 0) {
+                    currentRealTopic += (index > 1 ? '/' : '') + part;
+                }
+            } else {
+                currentRealTopic += (index > 0 ? '/' : '') + part;
+            }
+
             const isLastPart = index === parts.length - 1;
+            
+            // The node ID must be unique *per tree*
             const partId = `node-${treeId}-${currentTopicPath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
-            // [MODIFIED] Remove 'let' to assign to the outer-scoped variable
             li = nodeMap.get(currentTopicPath); 
             let isNewNode = false;
 
@@ -71,12 +108,22 @@ export function createTreeManager(rootElement, options = {}) {
                 `;
 
                 nodeContainer.querySelector('.node-name').textContent = part;
-                nodeContainer.dataset.topic = currentTopicPath; // Store full path
+                
+                // [FIXED] Store the specific path for this node level, NOT the full leaf topic.
+                // This ensures clicking a folder ("ratp") passes "ratp", not "ratp/uns/incidents".
+                // For the root folder in multi-broker mode, currentRealTopic might be empty, handle that.
+                const nodeSpecificTopic = (isMultiBroker && index === 0) ? '' : currentRealTopic;
+
+                nodeContainer.dataset.brokerId = safeBrokerId;
+                nodeContainer.dataset.topic = nodeSpecificTopic; 
+                
                 li.appendChild(nodeContainer);
 
-                // --- [MODIFIED] Find parent <ul> and append ---
-                const parentTopic = parts.slice(0, index).join('/');
-                const parentLi = nodeMap.get(parentTopic);
+                // --- Find parent <ul> and append ---
+                const parentPathParts = parts.slice(0, index);
+                const parentDisplayTopic = parentPathParts.join('/');
+                const parentLi = nodeMap.get(parentDisplayTopic);
+                
                 let parentUl;
                 if (parentLi) {
                     // This is a child node
@@ -94,18 +141,16 @@ export function createTreeManager(rootElement, options = {}) {
                     }
                 }
                 parentUl.appendChild(li);
-                // --- [END MODIFIED] ---
                 
                 nodeMap.set(currentTopicPath, li);
                 
-                // Add listeners
+                // Add listeners with correct closure data
                 if (onNodeClick) {
-                    nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, currentTopicPath));
+                    nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
                 }
                 if (showCheckboxes && onCheckboxClick) {
-                     nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, currentTopicPath));
+                     nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
                 }
-
             }
 
             const nodeContainer = li.querySelector('.node-container');
@@ -113,6 +158,7 @@ export function createTreeManager(rootElement, options = {}) {
             if (timestampSpan) timestampSpan.textContent = formattedTimestamp;
             affectedNodes.push({ element: li, isNew: isNewNode });
 
+            // Only set payload on the actual leaf node or updated node
             nodeContainer.dataset.payload = payload;
 
             if (isLastPart) {
@@ -120,12 +166,6 @@ export function createTreeManager(rootElement, options = {}) {
                 li.classList.remove('is-folder', 'collapsed');
             } else {
                 li.classList.add('is-folder');
-                // [MODIFIED] Remove the separate click listener.
-                // The main onNodeClick in app.js will now handle this.
-                if (allowFolderCollapse && isNewNode) {
-                    // [MODIFIED] Removed li.classList.add('collapsed')
-                    // Folders will now be expanded by default.
-                }
             }
 
             currentUl = li.querySelector('ul') || currentUl;
@@ -143,55 +183,60 @@ export function createTreeManager(rootElement, options = {}) {
             });
         }
         
-        return li; // <-- This return will now work correctly.
+        return li; 
     }
 
     /**
-     * Wipes and rebuilds the tree from a Map of topics.
-     * @param {Map<string, object>} topicMap - Map of { topic -> entry }
+     * Wipes and rebuilds the tree from a list of topic entries.
+     * @param {Array<object>} entries - Array of { broker_id, topic, payload, timestamp }
      */
-    function rebuild(topicMap) {
-        console.log(`[tree-manager ${treeId}] Rebuilding tree with ${topicMap.size} topics...`); // [DEBUG LOG]
+    function rebuild(entries) {
+        console.log(`[tree-manager ${treeId}] Rebuilding tree with ${entries.length} topics...`); 
         
-        // [MODIFIED] Only clear the root <ul>, not the whole container
         const rootUl = rootNode.querySelector(':scope > ul');
         if (rootUl) {
             rootUl.innerHTML = '';
         }
         nodeMap.clear();
         
-        // Sort topics to ensure parents are created before children
-        const sortedTopics = Array.from(topicMap.keys()).sort();
+        const sortedEntries = entries.sort((a, b) => {
+            const brokerA = a.broker_id || 'default';
+            const brokerB = b.broker_id || 'default';
+            
+            const topicA = isMultiBroker ? `${brokerA}/${a.topic}` : a.topic;
+            const topicB = isMultiBroker ? `${brokerB}/${b.topic}` : b.topic;
+            return topicA.localeCompare(topicB);
+        });
         
         let i = 0;
-        for (const topic of sortedTopics) {
+        for (const entry of sortedEntries) {
             i++;
-            const entry = topicMap.get(topic);
             try {
-                update(topic, entry.payload, entry.timestamp, { enableAnimations: false });
+                update(entry.broker_id, entry.topic, entry.payload, entry.timestamp, { enableAnimations: false });
             } catch (e) {
-                console.error(`[tree-manager ${treeId}] Failed to update node for topic: ${topic}`, e); // [DEBUG LOG]
+                console.error(`[tree-manager ${treeId}] Failed to update node for topic: ${entry.topic}`, e); 
             }
         }
-        console.log(`[tree-manager ${treeId}] Rebuild complete. ${i} nodes processed.`); // [DEBUG LOG]
+        console.log(`[tree-manager ${treeId}] Rebuild complete. ${i} nodes processed.`); 
     }
 
     /**
      * Applies coloring logic to all nodes in this tree.
-     * @param {function} colorLogicFn - (topic, liElement) => void
+     * @param {function} colorLogicFn - (brokerId, topic, liElement) => void
      */
     function colorTree(colorLogicFn) {
-        nodeMap.forEach((li, topic) => {
-            colorLogicFn(topic, li);
+        rootNode.querySelectorAll('li > .node-container').forEach(nodeContainer => {
+            const li = nodeContainer.closest('li');
+            const brokerId = nodeContainer.dataset.brokerId;
+            const topic = nodeContainer.dataset.topic;
+            
+            if (brokerId !== undefined && topic !== undefined) {
+                 colorLogicFn(brokerId, topic, li);
+            }
         });
     }
 
-    /**
-     * Expands or collapses all folders.
-     * @param {boolean} collapse - True to collapse, false to expand.
-     */
     function toggleAllFolders(collapse) {
-        // [MODIFIED] Target the root <ul>
         const rootUl = rootNode.querySelector(':scope > ul');
         if (!rootUl) return;
         rootUl.querySelectorAll('.is-folder').forEach(folderLi => {
@@ -199,15 +244,18 @@ export function createTreeManager(rootElement, options = {}) {
         });
     }
     
-    /**
-     * Recursively filters the tree.
-     * @param {HTMLElement} node - The <li> element to start from.
-     * @param {string} filterText - The lowercase filter text.
-     * @returns {boolean} True if this node or a child matches.
-     */
     function filterNode(node, filterText) {
-        const nodeName = node.querySelector(':scope > .node-container > .node-name').textContent.toLowerCase();
-        const isMatch = nodeName.includes(filterText);
+        const nodeContainer = node.querySelector(':scope > .node-container');
+        if (!nodeContainer) return false;
+
+        const nodeName = nodeContainer.querySelector('.node-name').textContent.toLowerCase();
+        const originalTopic = nodeContainer.dataset.topic?.toLowerCase() || '';
+        const brokerId = nodeContainer.dataset.brokerId?.toLowerCase() || '';
+        
+        const isMatch = nodeName.includes(filterText) || 
+                        originalTopic.includes(filterText) || 
+                        (isMultiBroker && brokerId.includes(filterText));
+                        
         let hasVisibleChild = false;
         
         const children = node.querySelectorAll(':scope > ul > li');
@@ -229,14 +277,9 @@ export function createTreeManager(rootElement, options = {}) {
         }
     }
     
-    /**
-     * Applies the filter text to the entire tree.
-     * @param {string} filterText - The text to filter by.
-     */
     function applyFilter(filterText) {
-        // [MODIFIED] Target the root <ul>
         const rootUl = rootNode.querySelector(':scope > ul');
-        if (!rootUl) return; // No tree to filter
+        if (!rootUl) return; 
         
         const allNodes = rootUl.querySelectorAll(':scope > li');
         allNodes.forEach(node => filterNode(node, filterText.toLowerCase()));

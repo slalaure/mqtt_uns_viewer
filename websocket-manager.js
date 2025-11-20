@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -15,6 +20,12 @@ let logger = null;
 let appBasePath = '/';
 let longReplacer = null; 
 let getDbStatus = null; 
+
+// Helper to escape single quotes for SQL strings
+const escapeSQL = (str) => {
+    if (typeof str !== 'string') return str;
+    return str.replace(/'/g, "''");
+}
 
 /**
  * Initializes the WebSocket Manager.
@@ -44,54 +55,44 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         
         logger.info('✅ ➡️ WebSocket client connected.');
 
-        // Send initial batch of historical data
-        db.all("SELECT * FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
+        // 1. Send DB Bounds (Absolute Min/Max)
+        db.all("SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts FROM mqtt_events", (err, rows) => {
+            if (!err && rows && rows.length > 0) {
+                //  Use timestamp value instead of ISO string
+                const min = rows[0].min_ts ? new Date(rows[0].min_ts).getTime() : 0;
+                const max = rows[0].max_ts ? new Date(rows[0].max_ts).getTime() : Date.now();
+
+                ws.send(JSON.stringify({ 
+                    type: 'db-bounds', 
+                    min: min, 
+                    max: max 
+                }));
+            }
+        });
+
+        // 2. Send initial batch (Latest 200)
+        db.all("SELECT timestamp, topic, payload, broker_id FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
             if (!err && ws.readyState === ws.OPEN) {
-                const processedRows = rows.map(row => {
-                    if (typeof row.payload === 'object' && row.payload !== null) {
-                        try {
-                            row.payload = JSON.stringify(row.payload, longReplacer);
-                        } catch (e) {
-                            logger.warn({ err: e, topic: row.topic }, "Failed to stringify history payload");
-                            row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
-                        }
-                    } else if (row.payload === null) {
-                        row.payload = 'null';
-                    }
-                    return row;
-                });
+                const processedRows = rows.map(row => processRow(row));
+                // Reverse to chronological order for charts/history
                 ws.send(JSON.stringify({ type: 'history-initial-data', data: processedRows }));
             }
         });
 
-        // Send initial tree state (latest message for EVERY topic)
+        // 3. Send initial tree state
         const treeStateQuery = `
             WITH RankedEvents AS (
-                SELECT *, ROW_NUMBER() OVER(PARTITION BY topic ORDER BY timestamp DESC) as rn
+                SELECT *, ROW_NUMBER() OVER(PARTITION BY broker_id, topic ORDER BY timestamp DESC) as rn
                 FROM mqtt_events
             )
-            SELECT topic, payload, timestamp
+            SELECT topic, payload, timestamp, broker_id
             FROM RankedEvents
             WHERE rn = 1
-            ORDER BY topic ASC;
+            ORDER BY broker_id, topic ASC;
         `;
         db.all(treeStateQuery, (err, rows) => {
-            if (err) {
-                logger.error({ err }, "❌ DuckDB Error fetching initial tree state");
-            } else if (ws.readyState === ws.OPEN) {
-                const processedRows = rows.map(row => {
-                    if (typeof row.payload === 'object' && row.payload !== null) {
-                        try {
-                            row.payload = JSON.stringify(row.payload, longReplacer);
-                        } catch (e) {
-                            logger.warn({ err: e, topic: row.topic }, "Failed to stringify tree-state payload");
-                            row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
-                        }
-                    } else if (row.payload === null) {
-                        row.payload = 'null';
-                    }
-                    return row;
-                });
+            if (!err && ws.readyState === ws.OPEN) {
+                const processedRows = rows.map(row => processRow(row));
                 ws.send(JSON.stringify({ type: 'tree-initial-state', data: processedRows }));
             }
         });
@@ -100,25 +101,84 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         ws.on('message', (message) => {
             try {
                 const parsedMessage = JSON.parse(message);
-                if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
-                    db.all("SELECT * FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT 20", [parsedMessage.topic], (err, rows) => {
+                
+                //  Handle Range Request with filter
+                if (parsedMessage.type === 'get-history-range') {
+                    const { start, end, filter } = parsedMessage;
+                    
+                    const safeStart = start || 0;
+                    const safeEnd = end || Date.now();
+                    
+                    let whereClauses = [
+                        // [CRITICAL FIX] Cast the numeric JavaScript timestamp (ms) to TIMESTAMPTZ (requires seconds)
+                        `timestamp >= to_timestamp(${safeStart} / 1000.0)`, 
+                        `timestamp <= to_timestamp(${safeEnd} / 1000.0)`
+                    ];
+                    let limit = 5000;
+                    
+                    if (filter && filter.length >= 3) {
+                         const safeSearchTerm = `%${escapeSQL(filter)}%`;
+                         
+                         whereClauses.push(
+                             `(topic ILIKE '${safeSearchTerm}' OR (json_valid(payload) AND (
+                                CAST(payload->>'description' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                                OR CAST(payload->>'raw_payload' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                                OR CAST(payload->>'value' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                                OR CAST(payload->>'status' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                                OR CAST(payload->>'name' AS VARCHAR) ILIKE '${safeSearchTerm}'
+                               )))`
+                         );
+                        // If filter is active, increase the limit but still cap it
+                        limit = 10000;
+                    }
+
+                    const query = `
+                        SELECT timestamp, topic, payload, broker_id 
+                        FROM mqtt_events 
+                        WHERE ${whereClauses.join(' AND ')}
+                        ORDER BY timestamp DESC 
+                        LIMIT ${limit};
+                    `;
+
+                    db.all(query, (err, rows) => {
                         if (err) {
-                            logger.error({ err, topic: parsedMessage.topic }, `❌ DuckDB Error fetching history for topic`);
+                            logger.error({ err, query: query }, "Error fetching history range");
+                            // Send an error message back
+                            ws.send(JSON.stringify({ 
+                                type: 'history-range-data', 
+                                error: "Database query failed.",
+                                data: []
+                            }));
                         } else if (ws.readyState === ws.OPEN) {
-                            const processedRows = rows.map(row => {
-                                if (typeof row.payload === 'object' && row.payload !== null) {
-                                    try {
-                                        row.payload = JSON.stringify(row.payload, longReplacer);
-                                    } catch (e) {
-                                        logger.warn({ err: e, topic: row.topic }, "Failed to stringify topic-history payload");
-                                        row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
-                                    }
-                                } else if (row.payload === null) {
-                                    row.payload = 'null';
-                                }
-                                return row;
-                            });
-                            ws.send(JSON.stringify({ type: 'topic-history-data', topic: parsedMessage.topic, data: processedRows }));
+                            const processedRows = rows.map(row => processRow(row));
+                            ws.send(JSON.stringify({ 
+                                type: 'history-range-data', 
+                                data: processedRows,
+                                requestStart: safeStart,
+                                requestEnd: safeEnd,
+                                filterApplied: filter
+                            }));
+                        }
+                    });
+                }
+
+                if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
+                    const topic = parsedMessage.topic;
+                    const brokerId = parsedMessage.brokerId; 
+                    
+                    let query = "SELECT timestamp, topic, payload, broker_id FROM mqtt_events WHERE topic = ?";
+                    let params = [topic];
+
+                    if (brokerId) {
+                        query += " AND broker_id = ?";
+                        params.push(brokerId);
+                    }
+                    query += " ORDER BY timestamp DESC LIMIT 20";
+
+                    db.all(query, params, (err, rows) => {
+                        if (!err && ws.readyState === ws.OPEN) {
+                            const processedRows = rows.map(row => processRow(row));
+                            ws.send(JSON.stringify({ type: 'topic-history-data', topic: topic, brokerId: brokerId, data: processedRows }));
                         }
                     });
                 }
@@ -127,17 +187,35 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
             }
         });
         
-        // Send current DB status on connect
         if (getDbStatus) {
             getDbStatus((statusData) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify(statusData));
-                }
+                if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(statusData));
             });
         }
     });
     
     logger.info('✅ WebSocket Manager initialized.');
+}
+
+// Helper to process row JSON/BigInt
+function processRow(row) {
+    // DuckDB returns timestamps as strings, convert to milliseconds since epoch
+    if (typeof row.timestamp === 'string') {
+        row.timestampMs = new Date(row.timestamp).getTime();
+    } else {
+         row.timestampMs = row.timestamp;
+    }
+    
+    if (typeof row.payload === 'object' && row.payload !== null) {
+        try {
+            row.payload = JSON.stringify(row.payload, longReplacer);
+        } catch (e) {
+            row.payload = JSON.stringify({ "error": "Failed to stringify payload" });
+        }
+    } else if (row.payload === null) {
+        row.payload = 'null';
+    }
+    return row;
 }
 
 /**

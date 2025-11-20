@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -68,10 +73,8 @@ function processDbQueue() {
         return;
     }
 
-    // [MODIFIED] Check if db connection is valid
     if (!db) {
         logger.error("DuckDB processQueue skipped, DB connection not ready.");
-        // Put items back in queue
         dbWriteQueue.unshift(...batch);
         return;
     }
@@ -81,11 +84,13 @@ function processDbQueue() {
             if (err) return logger.error({ err }, "DB Batch: Failed to BEGIN TRANSACTION");
         });
 
-        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload) VALUES (?, ?, ?)');
+        //  Add broker_id to the INSERT statement
+        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload, broker_id) VALUES (?, ?, ?, ?)');
         let errorCount = 0;
 
         for (const msg of batch) {
-            stmt.run(msg.timestamp, msg.topic, msg.payloadStringForDb, (runErr) => {
+            //  Add msg.brokerId as the 4th parameter
+            stmt.run(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.brokerId, (runErr) => {
                 if (runErr) {
                     logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
                     errorCount++;
@@ -109,7 +114,6 @@ function processDbQueue() {
                         logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
                     } else {
                         logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
-                        // Note: broadcastDbStatus() is now called on push() for better UI feedback
                         
                         // Trigger mappers that were waiting for this data
                         (async () => {
@@ -117,7 +121,9 @@ function processDbQueue() {
                                 if (msg.needsDb) { 
                                     try {
                                         const payloadObject = JSON.parse(msg.payloadStringForDb);
+                                        //  Pass brokerId to mapper
                                         await mapperEngine.processMessage(
+                                            msg.brokerId,
                                             msg.topic, 
                                             payloadObject,
                                             msg.isSparkplugOrigin
@@ -152,7 +158,6 @@ function stop() {
  * @param {function} callback
  */
 function close(callback) {
-    // Checkpoint is good practice, but close() handles WAL
     logger.info("Closing DuckDB connection...");
     db.close((err) => {
         if (err) logger.error({ err }, "Error closing DuckDB:");

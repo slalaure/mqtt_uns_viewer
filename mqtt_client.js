@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -26,79 +31,114 @@ const mqtt = require('mqtt');
 const fs = require('fs');
 const path = require('path');
 
-function connectToMqttBroker(config, logger, certsPath, onConnectCallback) {
+/**
+ *  Connects to a single MQTT broker based on a broker config object.
+ * @param {object} brokerConfig - The broker configuration object from the JSON array.
+ * @param {pino.Logger} logger - The main pino logger.
+ * @param {string} certsPath - The path to the /data/certs directory.
+ * @param {function} onConnectCallback - Callback executed on successful connection. (brokerId, connection) => {}
+ */
+function connectToMqttBroker(brokerConfig, logger, certsPath, onConnectCallback) {
+    const {
+        id,
+        host,
+        port,
+        protocol,
+        clientId,
+        username,
+        password,
+        topics,
+        certFilename,
+        keyFilename,
+        caFilename,
+        alpnProtocol,
+        rejectUnauthorized = true // Default to true
+    } = brokerConfig;
+
     const options = {
-        host: config.MQTT_BROKER_HOST,
-        port: parseInt(config.MQTT_PORT),
-        protocol: (parseInt(config.MQTT_PORT) === 443 || parseInt(config.MQTT_PORT) === 8883) ? 'mqtts' : 'mqtt',
-        clientId: config.CLIENT_ID,
+        host: host,
+        port: parseInt(port),
+        protocol: protocol || 'mqtt',
+        clientId: clientId,
         clean: true,
         reconnectPeriod: 1000,
-        servername: config.MQTT_BROKER_HOST,
-        rejectUnauthorized: config.MQTT_REJECT_UNAUTHORIZED // Use config value
+        servername: host,
+        rejectUnauthorized: rejectUnauthorized
     };
+    
+    const brokerLogger = logger.child({ component: 'MQTTClient', broker: id });
 
-    if (!config.MQTT_REJECT_UNAUTHORIZED) {
-        logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        logger.warn("SECURITY WARNING: MQTT_REJECT_UNAUTHORIZED is false.");
-        logger.warn("Certificate verification is DISABLED. This is insecure.");
-        logger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    if (!rejectUnauthorized) {
+        brokerLogger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        brokerLogger.warn("SECURITY WARNING: rejectUnauthorized is false.");
+        brokerLogger.warn("Certificate verification is DISABLED. This is insecure.");
+        brokerLogger.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     }
 
-    if (config.MQTT_USERNAME) options.username = config.MQTT_USERNAME;
-    if (config.MQTT_PASSWORD) options.password = config.MQTT_PASSWORD;
+    if (username) options.username = username;
+    if (password) options.password = password;
 
-    // --- [MODIFIED] Certificate Logic ---
+    // --- Certificate Logic ---
     
     // Case 1: MTLS (Client Cert + Key + CA) - e.g., AWS IoT
-    if (config.CERT_FILENAME && config.KEY_FILENAME && config.CA_FILENAME) {
+    if (certFilename && keyFilename && caFilename) {
         try {
-            options.key = fs.readFileSync(path.join(certsPath, config.KEY_FILENAME));
-            options.cert = fs.readFileSync(path.join(certsPath, config.CERT_FILENAME));
-            options.ca = fs.readFileSync(path.join(certsPath, config.CA_FILENAME));
-            logger.info("✅ Using certificate-based (MTLS) authentication.");
+            options.key = fs.readFileSync(path.join(certsPath, keyFilename));
+            options.cert = fs.readFileSync(path.join(certsPath, certFilename));
+            options.ca = fs.readFileSync(path.join(certsPath, caFilename));
+            brokerLogger.info("✅ Using certificate-based (MTLS) authentication.");
         } catch (err) {
-            logger.error({ err }, "FATAL ERROR: Could not read MTLS certificate files (key, cert, or ca).");
+            brokerLogger.error({ err }, "FATAL ERROR: Could not read MTLS certificate files (key, cert, or ca).");
             process.exit(1);
         }
     } 
     // Case 2: Standard TLS (Server verification only) - e.g., demo.flashmq.org
-    else if (config.CA_FILENAME) {
+    else if (caFilename) {
          try {
-            options.ca = fs.readFileSync(path.join(certsPath, config.CA_FILENAME));
-            logger.info("✅ Using standard TLS authentication (verifying server with provided CA).");
+            options.ca = fs.readFileSync(path.join(certsPath, caFilename));
+            brokerLogger.info("✅ Using standard TLS authentication (verifying server with provided CA).");
         } catch (err) {
-            logger.error({ err }, "FATAL ERROR: Could not read CA certificate file.");
+            brokerLogger.error({ err }, "FATAL ERROR: Could not read CA certificate file.");
             process.exit(1);
         }
     }
     // Case 3: No certs provided (using system CAs or rejectUnauthorized:false)
-    else if (config.CERT_FILENAME || config.KEY_FILENAME) {
-        logger.warn("Incomplete certificate configuration. Both CERT_FILENAME and KEY_FILENAME (and often CA_FILENAME) are required for MTLS. Ignoring partial certs.");
+    else if (certFilename || keyFilename) {
+        brokerLogger.warn("Incomplete certificate configuration. Both certFilename and keyFilename (and often caFilename) are required for MTLS. Ignoring partial certs.");
     }
-    // --- [END MODIFIED] ---
+    // --- [END] ---
 
 
-    if (config.MQTT_ALPN_PROTOCOL) options.ALPNProtocols = [config.MQTT_ALPN_PROTOCOL];
+    if (alpnProtocol) options.ALPNProtocols = [alpnProtocol];
 
+    brokerLogger.info(`Connecting to broker '${id}' at ${protocol}://${host}:${port}...`);
     const connection = mqtt.connect(options);
 
     connection.on('connect', () => {
-        logger.info(`✅ Connected to MQTT Broker!`);
-        const topics = config.MQTT_TOPIC.split(',').map(topic => topic.trim());
-        connection.subscribe(topics, { qos: 1 }, (err, granted) => {
+        brokerLogger.info(`✅ Connected to MQTT Broker '${id}'!`);
+        
+        // Use topics from the broker config
+        const subscriptionTopics = Array.isArray(topics) ? topics.map(topic => topic.trim()) : [];
+        if (subscriptionTopics.length === 0) {
+            brokerLogger.warn("No topics specified for this broker. No data will be received.");
+            return;
+        }
+
+        connection.subscribe(subscriptionTopics, { qos: 1 }, (err, granted) => {
             if (err) {
-                logger.error({ err }, '❌ Subscription failed:');
+                brokerLogger.error({ err }, '❌ Subscription failed:');
             } else {
                 granted.forEach(grant => {
-                    logger.info(`✅    -> Subscription to '${grant.topic}' successful (QoS ${grant.qos}).`);
+                    brokerLogger.info(`✅    -> Subscription to '${grant.topic}' successful (QoS ${grant.qos}).`);
                 });
             }
         });
-        onConnectCallback(connection);
+        
+        //  Pass broker 'id' and 'connection' to the callback
+        onConnectCallback(id, connection);
     });
 
-    connection.on('error', (error) => logger.error({ err: error }, '❌ MQTT Client Error:'));
+    connection.on('error', (error) => brokerLogger.error({ err: error }, '❌ MQTT Client Error:'));
 }
 
 module.exports = { connectToMqttBroker };

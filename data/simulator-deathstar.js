@@ -1,5 +1,10 @@
 /**
- * @license MIT
+ * @license Apache License, Version 2.0 (the "License")
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
@@ -21,7 +26,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     
     let narrativeInterval = null;
     let sensorInterval = null;
-    const NARRATIVE_INTERVAL_MS = 15000; // [MODIFIED] Faster narrative loop
+    const NARRATIVE_INTERVAL_MS = 15000; //  Faster narrative loop
     const SENSOR_INTERVAL_MS = 7000;    // Loop for sensor/telemetry data
     
     const randomBetween = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
@@ -279,14 +284,14 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             simState.equipmentStatus.droid_mse_6.task = 'Deliver tactical plans to Lord Vader';
             return { topic: 'galactic_empire/death_star/logistics/droid_dispatch', payload: { droidId: "MSE-6-881", task: "Deliver datapad to Lord Vader", destination: "Command Center" } };
         },
-        // [NEW] 4. Prisoner transfer
+        //  4. Prisoner transfer
         () => {
             logger.info("[DeathStarSim] Prisoner Arrived: Leia Organa");
             simState.equipmentStatus.detention_AA23.prisoner = "Leia Organa (ID: 2187)";
             simState.equipmentStatus.detention_AA23.status = "detained";
             return { topic: 'galactic_empire/death_star/security/detention_block_AA23/status', payload: { ...simState.equipmentStatus.detention_AA23 } };
         },
-        // [NEW] 5. Interrogation
+        //  5. Interrogation
         () => {
             simState.equipmentStatus.bridge_status.commander = simState.commanders[0]; // Vader
             simState.equipmentStatus["interrogator_IT_O"].status = "active";
@@ -312,12 +317,12 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             simState.equipmentStatus.tractor_beam_01.power = 100;
             return { topic: 'galactic_empire/death_star/defense_systems/tractor_beam_01/status', payload: { status: 'active', power: 100, target: "Millennium Falcon", emitted_at: new Date().toISOString() } };
         },
-        // [NEW] 9. Guard post abandoned
+        //  9. Guard post abandoned
         () => {
             simState.equipmentStatus.detention_AA23.guard = "none (post abandoned)";
             return { topic: 'galactic_empire/death_star/security/detention_block_AA23/status', payload: { ...simState.equipmentStatus.detention_AA23 } };
         },
-        // [NEW] 10. Prisoner escape!
+        //  10. Prisoner escape!
         () => {
             logger.warn("[DeathStarSim] Prisoner Escape!");
             simState.equipmentStatus.detention_AA23.prisoner = "none";
@@ -327,13 +332,13 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             simState.equipmentStatus.bridge_status.commander = simState.commanders[0]; // Vader
             return { topic: 'galactic_empire/death_star/command/bridge/status', payload: { ...simState.equipmentStatus.bridge_status, status: "Security breach in detention block AA-23! Prisoner has escaped!" } };
         },
-        // [NEW] 11. Trash compactor activated
+        //  11. Trash compactor activated
         () => {
             logger.warn("[DeathStarSim] Activating trash compactor!");
             simState.equipmentStatus.trash_compactor_3263827.walls_active = true;
             return { topic: 'galactic_empire/death_star/waste_management/trash_compactor_3263827/command', payload: { command: "ACTIVATE" } };
         },
-        // [NEW] 12. Trash compactor shut down
+        //  12. Trash compactor shut down
         () => {
             logger.info("[DeathStarSim] Shutting down all trash compactors.");
             simState.equipmentStatus.trash_compactor_3263827.walls_active = false;
