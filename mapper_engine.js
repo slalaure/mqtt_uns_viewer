@@ -32,6 +32,8 @@ let broadcastCallback = (message) => {};
 let engineLogger = null;
 let payloadReplacer = null; 
 let internalDb = null; 
+// [NEW] Store server configuration for permission checks
+let serverConfig = null;
 
 const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
@@ -230,6 +232,19 @@ const rulesForTopicRequireDb = (topic) => {
     return false; 
 };
 
+// [NEW] Helper to check if publishing is allowed based on server config
+const isPublishAllowed = (brokerId, topic) => {
+    if (!serverConfig || !serverConfig.BROKER_CONFIGS) return true; // Default allow if no config
+
+    const brokerConfig = serverConfig.BROKER_CONFIGS.find(b => b.id === brokerId);
+    if (!brokerConfig) return false; // Broker unknown
+
+    const publishPatterns = brokerConfig.publish || [];
+    if (publishPatterns.length === 0) return false; // Read-Only
+
+    return publishPatterns.some(pattern => mqttMatch(pattern, topic));
+};
+
 const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin = false) => {
     const activeRules = getActiveRules();
     if (activeRules.length === 0) return;
@@ -298,24 +313,29 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                         const targetBrokerId = target.targetBrokerId || brokerId; 
                         const connection = activeConnections.get(targetBrokerId);
 
-                        // [FIXED] Add check for connection existence and status before publishing
+                        // [MODIFIED] Check connection AND permissions
                         if (connection && connection.connected) {
-                            connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
+                            if (isPublishAllowed(targetBrokerId, outputTopic)) {
+                                connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
+                                
+                                broadcastCallback(JSON.stringify({
+                                    type: 'mapped-topic-generated',
+                                    brokerId: targetBrokerId, 
+                                    topic: outputTopic
+                                }));
+
+                                updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
+                            } else {
+                                const errorMessage = `Target broker '${targetBrokerId}' does not allow publishing to '${outputTopic}'. Check config.`;
+                                engineLogger.warn(errorMessage);
+                                updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                            }
                         } else {
-                            // [FIXED] Log a proper error and skip the publish for this target
                             const errorMessage = `Target broker '${targetBrokerId}' not found or not connected. Cannot publish.`;
                             engineLogger.error(errorMessage);
                             updateMetrics(rule, target, topic, null, null, errorMessage, null);
                             return; 
                         }
-
-                        broadcastCallback(JSON.stringify({
-                            type: 'mapped-topic-generated',
-                            brokerId: targetBrokerId, 
-                            topic: outputTopic
-                        }));
-
-                        updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
                     
                     } else if (resultMsg === null) {
                         updateMetrics(rule, target, topic, null, null, null, "Script executed and returned null (skipped publish).");
@@ -343,7 +363,8 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
     }
 };
 
-module.exports = (connectionsMap, broadcaster, logger, longReplacer) => {
+// [MODIFIED] Accept 'serverConfig' as 5th argument
+module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerConfig) => {
     if (!connectionsMap || !broadcaster || !logger || !longReplacer) {
         throw new Error("Mapper Engine V2 requires a connections map, broadcaster, logger, and longReplacer function.");
     }
@@ -351,6 +372,7 @@ module.exports = (connectionsMap, broadcaster, logger, longReplacer) => {
     broadcastCallback = broadcaster;
     engineLogger = logger.child({ component: 'MapperEngineV2' });
     payloadReplacer = longReplacer;
+    serverConfig = appServerConfig; // Store config
 
     loadMappings();
 

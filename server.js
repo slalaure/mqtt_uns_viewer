@@ -136,6 +136,14 @@ const config = {
 try {
     if (process.env.MQTT_BROKERS) {
         config.BROKER_CONFIGS = JSON.parse(process.env.MQTT_BROKERS);
+        config.BROKER_CONFIGS.forEach(broker => {
+            if (!broker.subscribe) {
+                broker.subscribe = broker.topics || ['#'];
+            }
+            if (!broker.publish) {
+                broker.publish = (broker.canPublish === false) ? [] : ['#'];
+            }
+        });
         logger.info(`✅ Loaded ${config.BROKER_CONFIGS.length} broker configuration(s) from MQTT_BROKERS.`);
     } else if (config.MQTT_BROKER_HOST) {
         logger.warn("MQTT_BROKERS variable not set. Falling back to deprecated single-broker .env variables (MQTT_BROKER_HOST, etc.).");
@@ -148,7 +156,8 @@ try {
                 clientId: config.CLIENT_ID,
                 username: process.env.MQTT_USERNAME?.trim() || null,
                 password: process.env.MQTT_PASSWORD?.trim() || null,
-                topics: config.MQTT_TOPIC ? config.MQTT_TOPIC.split(',').map(t => t.trim()) : [],
+                subscribe: config.MQTT_TOPIC ? config.MQTT_TOPIC.split(',').map(t => t.trim()) : ['#'],
+                publish: ['#'],
                 certFilename: process.env.CERT_FILENAME?.trim() || null,
                 keyFilename: process.env.KEY_FILENAME?.trim() || null,
                 caFilename: process.env.CA_FILENAME?.trim() || null,
@@ -163,8 +172,8 @@ try {
         throw new Error("MQTT_BROKERS array is empty. At least one broker must be configured.");
     }
     for (const broker of config.BROKER_CONFIGS) {
-        if (!broker.id || !broker.host || !broker.port || !broker.clientId || !broker.topics) {
-            throw new Error(`Invalid broker config: 'id', 'host', 'port', 'clientId', and 'topics' are required. Problematic config: ${JSON.stringify(broker)}`);
+        if (!broker.id || !broker.host || !broker.port || !broker.clientId) {
+            throw new Error(`Invalid broker config: 'id', 'host', 'port', and 'clientId' are required. Problematic config: ${JSON.stringify(broker)}`);
         }
         // Initialize status
         brokerStatuses.set(broker.id, { status: 'connecting', error: null });
@@ -241,12 +250,13 @@ const app = express();
 const server = http.createServer(app);
 
 // ---  Mapper Engine Setup ---
-// Pass the full connection map, not a callback
+// [MODIFIED] Pass the entire config to the engine to allow permission checks
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
     wsManager.broadcast, 
     logger,
-    longReplacer
+    longReplacer,
+    config // Pass config here
 );
 
 // ---  DuckDB Setup (Centralized Initialization) ---
@@ -467,7 +477,14 @@ mainRouter.get('/api/svg/bindings.js', (req, res) => {
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
-        brokerConfigs: config.BROKER_CONFIGS.map(b => ({ id: b.id, host: b.host, port: b.port, topics: b.topics })), // [MODIFIED]
+        // [MODIFIED] Expose new permission structures to frontend
+        brokerConfigs: config.BROKER_CONFIGS.map(b => ({ 
+            id: b.id, 
+            host: b.host, 
+            port: b.port, 
+            subscribe: b.subscribe, // Send detailed sub topics
+            publish: b.publish      // Send detailed pub topics
+        })),
         isMultiBroker: config.BROKER_CONFIGS.length > 1,
         viewTreeEnabled: config.VIEW_TREE_ENABLED,
         viewSvgEnabled: config.VIEW_SVG_ENABLED,
@@ -563,6 +580,17 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     if (!topic || topic.trim() === '') {
         return res.status(400).json({ error: "Topic is required." });
     }
+
+    // [MODIFIED] Authorize Topic against 'publish' permission patterns
+    const brokerConfig = config.BROKER_CONFIGS.find(b => b.id === brokerIdUsed);
+    const allowedPublishPatterns = brokerConfig ? brokerConfig.publish : [];
+    
+    const isAllowed = allowedPublishPatterns.some(pattern => mqttMatch(pattern, topic));
+    if (!isAllowed) {
+        logger.warn(`[SECURITY] Blocked publish to '${topic}' on broker '${brokerIdUsed}'. No matching publish pattern found.`);
+        return res.status(403).json({ error: `Publishing to topic '${topic}' is not authorized on broker '${brokerIdUsed}'.` });
+    }
+
     const qosLevel = parseInt(qos, 10);
     if (isNaN(qosLevel) || qosLevel < 0 || qosLevel > 2) {
         return res.status(400).json({ error: "Invalid QoS. Must be 0, 1, or 2." });

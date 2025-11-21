@@ -147,7 +147,7 @@ export function updateMapperConfig(newConfig) {
 }
 
 /**
- *  Handle click on mapper tree node.
+ * Handle click on mapper tree node.
  * Now explicitly ignores folders/parent topics for mapping.
  */
 export function handleMapperNodeClick(event, nodeContainer, brokerId, topic) {
@@ -352,7 +352,17 @@ function createTargetEditor(rule, target) {
         brokerConfigs.forEach(broker => {
             const option = document.createElement('option');
             option.value = broker.id;
-            option.textContent = `${broker.id} (${broker.host})`;
+            
+            // [MODIFIED] Check for read-only permission
+            const isReadOnly = (!broker.publish || broker.publish.length === 0);
+            
+            if (isReadOnly) {
+                option.textContent = `🔒 ${broker.id} (Read-Only)`;
+                option.disabled = true; // Disable selection
+            } else {
+                option.textContent = `${broker.id} (${broker.host})`;
+            }
+            
             select.appendChild(option);
         });
         

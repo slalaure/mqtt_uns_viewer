@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- *  Connects to a single MQTT broker based on a broker config object.
+ * Connects to a single MQTT broker based on a broker config object.
  * @param {object} brokerConfig - The broker configuration object from the JSON array.
  * @param {pino.Logger} logger - The main pino logger.
  * @param {string} certsPath - The path to the /data/certs directory.
@@ -47,7 +47,9 @@ function connectToMqttBroker(brokerConfig, logger, certsPath, onConnectCallback)
         clientId,
         username,
         password,
-        topics,
+        // [MODIFIED] Use new subscription topics array, fallback to old 'topics'
+        subscribe,
+        topics, 
         certFilename,
         keyFilename,
         caFilename,
@@ -117,10 +119,12 @@ function connectToMqttBroker(brokerConfig, logger, certsPath, onConnectCallback)
     connection.on('connect', () => {
         brokerLogger.info(`✅ Connected to MQTT Broker '${id}'!`);
         
-        // Use topics from the broker config
-        const subscriptionTopics = Array.isArray(topics) ? topics.map(topic => topic.trim()) : [];
+        // [MODIFIED] Prioritize specific 'subscribe' list, fallback to legacy 'topics'
+        const rawTopics = (subscribe && subscribe.length > 0) ? subscribe : topics;
+        const subscriptionTopics = Array.isArray(rawTopics) ? rawTopics.map(topic => topic.trim()) : [];
+        
         if (subscriptionTopics.length === 0) {
-            brokerLogger.warn("No topics specified for this broker. No data will be received.");
+            brokerLogger.warn("No subscription topics specified for this broker. No data will be received.");
             return;
         }
 

@@ -36,7 +36,8 @@ let publishStatusTimer = null;
 let subscribedTopics = []; //  This is now a fallback
 let simControlsContainer = null; 
 let brokerSelectElement = null; //  To store the broker <select>
-let isMultiBroker = false; // [NEW]
+let isMultiBroker = false; 
+let availableBrokers = []; // Store full broker configs [NEW]
 
 // --- Payload Templates ---
 const PAYLOAD_TEMPLATES = {
@@ -69,6 +70,7 @@ export function initPublishView(options) {
     subscribedTopics = options.subscribedTopics || [];
     simControlsContainer = options.simulatorListContainer;
     isMultiBroker = options.isMultiBroker || false;
+    availableBrokers = options.brokerConfigs || []; // [NEW] Store configs
 
     if (payloadEditorDiv) {
         // --- Initialize Ace Editor ---
@@ -77,13 +79,12 @@ export function initPublishView(options) {
         aceEditor.session.setMode('ace/mode/json'); // Default to JSON
         aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); // -1 moves cursor to start, 1 to end
         
-        // [FIX] Corrected spelling of Ace options
         aceEditor.setOptions({
             fontSize: "14px",
             fontFamily: "monospace",
-            enableBasicAutocompletion: true, // Corrected
-            enableLiveAutocompletion: true,  // Corrected
-            enableSnippets: true,            // Corrected
+            enableBasicAutocompletion: true, 
+            enableLiveAutocompletion: true,  
+            enableSnippets: true,            
             useWorker: true
         });
 
@@ -91,15 +92,14 @@ export function initPublishView(options) {
         publishForm.addEventListener('submit', onPublishSubmit);
         publishFormatSelect.addEventListener('change', onFormatChange);
 
+        // [MODIFIED] Live validation on topic input
         publishTopicInput.addEventListener('input', () => {
-            if (publishTopicInput.classList.contains('input-error')) {
-                publishTopicInput.classList.remove('input-error');
-            }
+            validatePublishPermissions();
         });
     }
 
     // ---  Multi-Broker Selector ---
-    if (isMultiBroker && options.brokerConfigs && options.brokerConfigs.length > 0) {
+    if (isMultiBroker && availableBrokers.length > 0) {
         const firstFormGroup = publishForm.querySelector('.form-group');
         
         const brokerGroup = document.createElement('div');
@@ -112,13 +112,22 @@ export function initPublishView(options) {
         brokerSelectElement = document.createElement('select');
         brokerSelectElement.id = 'publish-broker-select';
         
-        options.brokerConfigs.forEach(broker => {
+        availableBrokers.forEach(broker => {
             const option = document.createElement('option');
             option.value = broker.id;
-            option.textContent = `${broker.id} (${broker.host}:${broker.port})`;
+            
+            // [NEW] Add visual indicator for Read-Only brokers
+            const isReadOnly = (!broker.publish || broker.publish.length === 0);
+            const lockIcon = isReadOnly ? '🔒 ' : '';
+            const readOnlyText = isReadOnly ? ' (Read-Only)' : '';
+            
+            option.textContent = `${lockIcon}${broker.id} (${broker.host})${readOnlyText}`;
             brokerSelectElement.appendChild(option);
         });
         
+        // [NEW] Re-validate when broker changes
+        brokerSelectElement.addEventListener('change', validatePublishPermissions);
+
         brokerGroup.appendChild(label);
         brokerGroup.appendChild(brokerSelectElement);
         
@@ -128,7 +137,6 @@ export function initPublishView(options) {
             publishForm.prepend(brokerGroup);
         }
     }
-
 
     // --- Populate Topic Datalist ---
     if (options.subscribedTopics) {
@@ -142,6 +150,9 @@ export function initPublishView(options) {
         document.body.appendChild(datalist); // Add to body
         publishTopicInput.setAttribute('list', datalist.id);
     }
+    
+    // [NEW] Initial validation run
+    validatePublishPermissions();
 }
 
 /**
@@ -156,16 +167,26 @@ export function setPublishTheme(isDark) {
 }
 
 /**
- *  Checks if the given topic matches any of the subscribed patterns.
+ * [MODIFIED] Checks if the given topic matches allowed PUBLISH patterns for the selected broker.
  */
-function isTopicSubscribed(topic) {
-    if (isMultiBroker) return true; // Skip client check in multi-broker mode
-    
-    if (!subscribedTopics || subscribedTopics.length === 0) {
-        return false; 
+function isPublishAllowed(brokerId, topic) {
+    // Find config for this broker
+    let brokerConfig;
+    if (isMultiBroker) {
+        brokerConfig = availableBrokers.find(b => b.id === brokerId);
+    } else {
+        brokerConfig = availableBrokers[0]; // Single broker mode
     }
+
+    if (!brokerConfig) return false;
+
+    const publishPatterns = brokerConfig.publish || [];
     
-    for (const pattern of subscribedTopics) {
+    // Check if strictly Read-Only
+    if (publishPatterns.length === 0) return false;
+
+    // Check specific patterns
+    for (const pattern of publishPatterns) {
         try {
             const regex = mqttPatternToRegex(pattern); 
             if (regex.test(topic)) {
@@ -176,7 +197,58 @@ function isTopicSubscribed(topic) {
         }
     }
     
-    return false; // No pattern matched
+    return false; 
+}
+
+/**
+ * [NEW] Validates UI state based on broker permissions and topic.
+ * Enables/Disables button and shows warnings.
+ */
+function validatePublishPermissions() {
+    if (!publishButton || !publishTopicInput) return;
+
+    const topic = publishTopicInput.value.trim();
+    const brokerId = brokerSelectElement ? brokerSelectElement.value : (availableBrokers[0]?.id || 'default');
+    
+    // Find broker config
+    const brokerConfig = availableBrokers.find(b => b.id === brokerId) || availableBrokers[0];
+    
+    if (!brokerConfig) return;
+
+    // 1. Check if Broker is Read-Only
+    const isReadOnly = (!brokerConfig.publish || brokerConfig.publish.length === 0);
+    
+    if (isReadOnly) {
+        publishButton.disabled = true;
+        publishButton.textContent = "🔒 Broker is Read-Only";
+        publishButton.title = "This broker configuration does not allow publishing.";
+        publishTopicInput.classList.remove('input-error'); // Not a topic error, a broker error
+        return;
+    }
+
+    // 2. Check Topic Permission (if topic is entered)
+    if (topic.length > 0) {
+        const allowed = isPublishAllowed(brokerId, topic);
+        if (!allowed) {
+            publishButton.disabled = true;
+            publishButton.textContent = "⛔ Topic Not Allowed";
+            publishTopicInput.classList.add('input-error');
+            publishTopicInput.title = "Publishing to this topic is restricted by broker configuration.";
+            showPublishStatus('Topic forbidden by configuration.', 'error');
+        } else {
+            publishButton.disabled = false;
+            publishButton.textContent = "Publish Message";
+            publishTopicInput.classList.remove('input-error');
+            publishTopicInput.title = "";
+            // Clear status if it was an error before
+            if (publishStatus.className === 'error') publishStatus.textContent = '';
+        }
+    } else {
+        // Reset state if no topic
+        publishButton.disabled = false;
+        publishButton.textContent = "Publish Message";
+        publishTopicInput.classList.remove('input-error');
+    }
 }
 
 
@@ -210,7 +282,7 @@ async function onPublishSubmit(event) {
     const qos = parseInt(publishQosSelect.value, 10);
     const retain = publishRetainCheckbox.checked;
     
-    const brokerId = brokerSelectElement ? brokerSelectElement.value : null;
+    const brokerId = brokerSelectElement ? brokerSelectElement.value : (availableBrokers[0]?.id);
 
     if (!topic) {
         showPublishStatus('Topic is required.', 'error');
@@ -218,11 +290,11 @@ async function onPublishSubmit(event) {
         return;
     }
 
-    if (!isMultiBroker && !isTopicSubscribed(topic)) {
-        showPublishStatus('Warning: Topic may not match subscribed patterns.', 'error');
+    // [MODIFIED] Client-side security check before sending
+    if (!isPublishAllowed(brokerId, topic)) {
+        showPublishStatus('⛔ Security Block: Publishing to this topic is not allowed by config.', 'error');
         publishTopicInput.classList.add('input-error');
-    } else {
-        publishTopicInput.classList.remove('input-error');
+        return;
     }
     
     publishButton.disabled = true;
@@ -252,8 +324,8 @@ async function onPublishSubmit(event) {
         console.error("Publish error:", err);
         showPublishStatus(`Error: ${err.message}`, 'error');
     } finally {
-        publishButton.disabled = false;
-        publishButton.textContent = 'Publish Message';
+        // [MODIFIED] Re-validate state instead of blind reset
+        validatePublishPermissions();
     }
 }
 
@@ -308,7 +380,7 @@ function updateControlUI(controlEl, status) {
 }
 
 /**
- *  Receives the full map of simulator statuses and updates the UI.
+ * Receives the full map of simulator statuses and updates the UI.
  */
 export function updateSimulatorStatuses(statuses) {
     if (!simControlsContainer || !simulatorControlTemplate) return;
