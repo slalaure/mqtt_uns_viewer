@@ -87,6 +87,7 @@ function longReplacer(key, value) {
 // --- Global Variables ---
 let mcpProcess = null;
 let activeConnections = new Map(); //  Stores all active MQTT connections by brokerId
+let brokerStatuses = new Map(); // Stores { status: string, error: string|null } by brokerId
 let isPruning = false;
 let apiKeysConfig = { keys: [] };
 
@@ -165,6 +166,8 @@ try {
         if (!broker.id || !broker.host || !broker.port || !broker.clientId || !broker.topics) {
             throw new Error(`Invalid broker config: 'id', 'host', 'port', 'clientId', and 'topics' are required. Problematic config: ${JSON.stringify(broker)}`);
         }
+        // Initialize status
+        brokerStatuses.set(broker.id, { status: 'connecting', error: null });
     }
 } catch (err) {
     logger.error({ err }, "❌ FATAL ERROR: Could not parse MQTT_BROKERS JSON. Please check your .env file.");
@@ -226,6 +229,13 @@ function getPrimaryConnection() {
     return activeConnections.get(primaryBrokerId) || null;
 }
 
+// --- Helper to update and broadcast broker status ---
+function updateBrokerStatus(brokerId, status, error = null) {
+    const info = { status, error, timestamp: Date.now() };
+    brokerStatuses.set(brokerId, info);
+    wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
+}
+
 // --- Express App & Server Setup ---
 const app = express();
 const server = http.createServer(app);
@@ -277,7 +287,8 @@ db = new duckdb.Database(dbFile, (err) => {
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
 
     // 5. Initialize WebSocket Manager (passes DB for READS)
-    wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer);
+    // Added getBrokerStatuses callback
+    wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
 
     // 6. Start DB Maintenance Interval
     setInterval(performMaintenance, 15000);
@@ -288,6 +299,7 @@ db = new duckdb.Database(dbFile, (err) => {
             connectToMqttBroker(brokerConfig, logger, CERTS_PATH, (brokerId, connection) => {
                 
                 activeConnections.set(brokerId, connection);
+                updateBrokerStatus(brokerId, 'connected');
 
                 const handleMessage = mqttHandler.init(
                     logger,
@@ -302,10 +314,20 @@ db = new duckdb.Database(dbFile, (err) => {
                     handleMessage(brokerId, topic, payload); 
                 });
 
+                // Error handling for status tracking
+                connection.on('error', (err) => {
+                    updateBrokerStatus(brokerId, 'error', err.message);
+                });
+
+                connection.on('offline', () => {
+                    updateBrokerStatus(brokerId, 'offline');
+                });
+
                 //  Add event listener for actual closure
                 connection.on('close', () => {
                     logger.warn(`🛑 MQTT Broker '${brokerId}' disconnected unexpectedly.`);
                     activeConnections.delete(brokerId);
+                    updateBrokerStatus(brokerId, 'disconnected');
                     
                     // Attempt reconnection after a delay
                     if (!isShuttingDown) {
@@ -328,6 +350,7 @@ db = new duckdb.Database(dbFile, (err) => {
                 // Track reconnection success (if the 'close' handler initiated a reconnect)
                 connection.on('reconnect', () => {
                      logger.info(`🔄 Reconnecting to MQTT Broker '${brokerId}'...`);
+                     updateBrokerStatus(brokerId, 'connecting');
                 });
                 
             });

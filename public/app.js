@@ -73,6 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const datetimeContainer = document.getElementById('current-datetime');
     const darkModeToggle = document.getElementById('dark-mode-toggle');
     const btnConfigView = document.getElementById('btn-config-view'); 
+    
+    // [NEW] Query the status container
+    const brokerStatusContainer = document.getElementById('broker-status-container');
 
     const treeViewWrapper = document.querySelector('.tree-view-wrapper');
     const payloadContainer = document.getElementById('payload-display');
@@ -430,12 +433,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'mapper-metrics-update':
                     updateMapperMetrics(message.metrics);
                     break;
+                
+                // [NEW] Broker Status Updates
+                case 'broker-status-all':
+                    renderBrokerStatuses(message.data);
+                    break;
+                case 'broker-status':
+                    updateSingleBrokerStatus(message.brokerId, message.status, message.error);
+                    break;
             }
         } catch (e) {
             console.error("Error processing message:", e, message);
         }
     }
     
+    // --- [NEW] Broker Status Functions ---
+    
+    function renderBrokerStatuses(statusMap) {
+        if (!brokerStatusContainer) return;
+        brokerStatusContainer.innerHTML = '';
+        
+        for (const [brokerId, info] of Object.entries(statusMap)) {
+            createBrokerStatusElement(brokerId, info.status, info.error);
+        }
+    }
+    
+    function createBrokerStatusElement(brokerId, status, error) {
+        const item = document.createElement('div');
+        item.className = `broker-status-item status-${status}`;
+        item.id = `broker-status-${brokerId}`;
+        
+        // Create tooltip content if there's an error
+        if (error) {
+            item.title = `Error: ${error}`;
+        } else {
+            item.title = `${brokerId}: ${status}`;
+        }
+        
+        item.innerHTML = `
+            <span class="broker-dot"></span>
+            <span class="broker-name">${brokerId}</span>
+        `;
+        brokerStatusContainer.appendChild(item);
+    }
+    
+    function updateSingleBrokerStatus(brokerId, status, error) {
+        let item = document.getElementById(`broker-status-${brokerId}`);
+        if (!item) {
+            createBrokerStatusElement(brokerId, status, error);
+            return;
+        }
+        
+        // Remove old status class
+        item.classList.remove('status-connected', 'status-connecting', 'status-error', 'status-offline', 'status-disconnected');
+        // Add new status class
+        item.classList.add(`status-${status}`);
+        
+        if (error) {
+            item.title = `Error: ${error}`;
+        } else {
+            item.title = `${brokerId}: ${status}`;
+        }
+    }
+
     async function startApp() {
         // This wrapper is for the websocket reconnect logic
     }

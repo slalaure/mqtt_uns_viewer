@@ -37,6 +37,12 @@
     --color-code-text: var(--color-text);
     --color-mapped-source: #8e44ad; /* Purple */
     --color-mapped-target: #27ae60; /* Green */
+    
+    /* [NEW] Status Colors */
+    --status-connected: #28a745; /* Green */
+    --status-connecting: #ffc107; /* Yellow/Orange */
+    --status-error: #dc3545; /* Red */
+    --status-offline: #6c757d; /* Gray */
 }
 
 /* --- Dark Mode Theme Variables --- */
@@ -87,7 +93,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    /*  Removed overflow: hidden; */
+    /* Removed overflow: hidden; */
 }
 
 /* --- Header  --- */
@@ -101,7 +107,55 @@ header {
     align-items: center;
 }
 header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font size */
-header p { margin: 0 0 0 10px; font-size: 0.8em; opacity: 0.9; text-align: left; } /* Reduced margin and font size */
+
+/* [NEW] Header Sub-row for Version and Status */
+.header-sub-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: 10px;
+}
+.header-sub-row p { 
+    margin: 0; 
+    font-size: 0.8em; 
+    opacity: 0.9; 
+}
+
+/* [NEW] Broker Status Container */
+.broker-status-container {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.broker-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75em;
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 12px;
+    cursor: default;
+}
+
+.broker-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--status-offline); /* Default */
+    box-shadow: 0 0 2px rgba(0,0,0,0.3);
+}
+
+.status-connected .broker-dot { background-color: var(--status-connected); box-shadow: 0 0 4px var(--status-connected); }
+.status-connecting .broker-dot { background-color: var(--status-connecting); animation: blink 1s infinite; }
+.status-error .broker-dot { background-color: var(--status-error); }
+.status-offline .broker-dot { background-color: var(--status-offline); }
+.status-disconnected .broker-dot { background-color: var(--status-offline); }
+
+@keyframes blink {
+    50% { opacity: 0.5; }
+}
 
 .datetime-container {
     font-family: 'Courier New', Courier, monospace;
@@ -192,7 +246,7 @@ input:checked + .slider:before {
     background-color: var(--color-bg-accent);
 }
 
-/*  Added disabled styles */
+/* Added disabled styles */
 .simulator-controls button:disabled {
     background-color: var(--color-bg-accent);
     color: var(--color-text-muted);
@@ -284,16 +338,16 @@ body.dark-mode .nav-button {
 /* --- View Container --- */
 .view-container {
     flex-grow: 1;
-    overflow: hidden; /*  Keep this, but we'll manage children */
+    overflow: hidden; /* Keep this, but we'll manage children */
     position: relative;
-    display: flex; /*  Make this a flex container */
+    display: flex; /* Make this a flex container */
 }
 .view {
     display: none;
     width: 100%;
     height: 100%;
-    /*  Was position: absolute, now let it be a flex item */
-    flex-direction: column; /*  Default to column for mobile */
+    /* Was position: absolute, now let it be a flex item */
+    flex-direction: column; /* Default to column for mobile */
 }
 .view.active {
     display: flex;
@@ -337,7 +391,7 @@ body.dark-mode .nav-button {
     border-top: 1px solid var(--color-border);
     border-bottom: 1px solid var(--color-border);
     width: 100%;
-    margin: 0; /*  Remove margin */
+    margin: 0; /* Remove margin */
     transition: background-color 0.2s ease;
     z-index: 5;
 }
@@ -349,7 +403,7 @@ body.dark-mode .nav-button {
 /* (Used by Tree, Mapper, Chart) */
 .payload-container {
     flex-grow: 1;
-    min-width: 0; /*  Allow shrinking */
+    min-width: 0; /* Allow shrinking */
     padding: 20px;
     box-sizing: border-box;
     height: 100%;
@@ -364,7 +418,7 @@ body.dark-mode .nav-button {
     flex: 0 0 60%;
     display: flex;
     flex-direction: column;
-    min-height: 0; /*  Was 0, changed to 150px for safety */
+    min-height: 0; /* Was 0, changed to 150px for safety */
 }
 
 .payload-header {
@@ -721,7 +775,12 @@ body.dark-mode .is-file.mapped-target .node-name::before {
         padding: 10px 15px;
     }
     header h1 { font-size: 1.1em; }
-    header p { display: none; } /* Hide subtitle */
+    
+    .header-sub-row {
+        margin-left: 0;
+        width: 100%;
+        justify-content: space-between;
+    }
 
     .datetime-container {
         font-size: 0.9em;
@@ -731,6 +790,7 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     
     .header-content {
         max-width: calc(100% - 100px); /* Don't overlap datetime */
+        width: 100%;
     }
 
     /* Stack theme switcher and config button */

@@ -20,6 +20,7 @@ let logger = null;
 let appBasePath = '/';
 let longReplacer = null; 
 let getDbStatus = null; 
+let getBrokerStatuses = null; // [NEW]
 
 // Helper to escape single quotes for SQL strings
 const escapeSQL = (str) => {
@@ -35,13 +36,15 @@ const escapeSQL = (str) => {
  * @param {string} basePath - The application's base path.
  * @param {function} getDbCallback - The getDbStatus function from db_manager.
  * @param {function} replacer - The longReplacer function for JSON stringify.
+ * @param {function} getBrokerStatusesCallback - Callback to get current broker statuses.
  */
-function initWebSocketManager(server, database, appLogger, basePath, getDbCallback, replacer) {
+function initWebSocketManager(server, database, appLogger, basePath, getDbCallback, replacer, getBrokerStatusesCallback) {
     db = database;
     logger = appLogger.child({ component: 'WebSocketManager' });
     appBasePath = basePath;
     longReplacer = replacer; 
     getDbStatus = getDbCallback;
+    getBrokerStatuses = getBrokerStatusesCallback;
     
     wss = new WebSocketServer({ server });
     
@@ -54,6 +57,17 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         }
         
         logger.info('✅ ➡️ WebSocket client connected.');
+
+        // 0. Send Broker Statuses (Immediate UI feedback)
+        if (getBrokerStatuses) {
+            const statuses = getBrokerStatuses();
+            // Convert Map to Object for JSON serialization
+            const statusObj = Object.fromEntries(statuses);
+            ws.send(JSON.stringify({ 
+                type: 'broker-status-all', 
+                data: statusObj 
+            }));
+        }
 
         // 1. Send DB Bounds (Absolute Min/Max)
         db.all("SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts FROM mqtt_events", (err, rows) => {
