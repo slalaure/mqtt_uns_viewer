@@ -8,7 +8,6 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
-  
  */
 
 // ---  Module Imports ---
@@ -525,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initSvgView(appConfig);
         initHistoryView({ 
             isMultiBroker: isMultiBroker,
+            brokerConfigs: brokerConfigs, // Pass brokerConfigs here
             requestRangeCallback: requestHistoryRange 
         }); 
         

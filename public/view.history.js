@@ -107,6 +107,7 @@ export function renderFilteredHistory() {
 export function initHistoryView(options = {}) {
     isMultiBroker = options.isMultiBroker || false;
     requestRangeCallback = options.requestRangeCallback || null; 
+    const brokerConfigs = options.brokerConfigs || [];
 
     // Debounce search input to trigger backend fetch
     historySearchInput?.addEventListener('input', () => {
@@ -201,6 +202,14 @@ export function initHistoryView(options = {}) {
         allOption.value = 'all';
         allOption.textContent = 'All Brokers';
         brokerFilterSelect.appendChild(allOption);
+        
+        // Populate the dropdown with configured brokers
+        brokerConfigs.forEach(config => {
+            const option = document.createElement('option');
+            option.value = config.id;
+            option.textContent = config.id;
+            brokerFilterSelect.appendChild(option);
+        });
         
         brokerFilterSelect.addEventListener('change', renderFilteredHistory);
         historyControls.prepend(brokerFilterSelect);
