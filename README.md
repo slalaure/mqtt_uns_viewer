@@ -121,7 +121,7 @@ docker-compose up -d
 #### Connectivity
 ```bash
 # Define multiple brokers (Minified JSON)
-MQTT_BROKERS='[{"id":"local","host":"mosquitto","port":1883,"protocol":"mqtt","topics":["#"]},{"id":"cloud","host":"aws-iot.com","port":8883,"protocol":"mqtts","certFilename":"cert.pem","keyFilename":"key.pem","caFilename":"root.pem"}]'
+MQTT_BROKERS='[{"id":"local","host":"mosquitto","port":1883,"protocol":"mqtt","subscribe":["#"],"publish":[]},{"id":"cloud","host":"aws-iot.com","port":8883,"protocol":"mqtts","certFilename":"cert.pem","keyFilename":"key.pem","caFilename":"root.pem"}]'
 ```
 
 #### Storage Tuning
