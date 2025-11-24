@@ -20,7 +20,7 @@ let logger = null;
 let appBasePath = '/';
 let longReplacer = null; 
 let getDbStatus = null; 
-let getBrokerStatuses = null; // [NEW]
+let getBrokerStatuses = null; 
 
 // Helper to escape single quotes for SQL strings
 const escapeSQL = (str) => {
@@ -178,19 +178,26 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
 
                 if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
                     const topic = parsedMessage.topic;
-                    const brokerId = parsedMessage.brokerId; 
+                    let brokerId = parsedMessage.brokerId; 
                     
                     let query = "SELECT timestamp, topic, payload, broker_id FROM mqtt_events WHERE topic = ?";
                     let params = [topic];
 
                     if (brokerId) {
+                        // [FIX] Alias 'default' to 'default_broker' to match DB migration
+                        if (brokerId === 'default') brokerId = 'default_broker';
+                        
                         query += " AND broker_id = ?";
                         params.push(brokerId);
                     }
                     query += " ORDER BY timestamp DESC LIMIT 20";
 
-                    db.all(query, params, (err, rows) => {
-                        if (!err && ws.readyState === ws.OPEN) {
+                    // [CRITICAL FIX] Use spread operator ...params because DuckDB node client 
+                    // expects variadic arguments (sql, arg1, arg2, callback), NOT an array.
+                    db.all(query, ...params, (err, rows) => {
+                        if (err) {
+                            logger.error({ err, query, params }, "❌ Error fetching recent topic history.");
+                        } else if (ws.readyState === ws.OPEN) {
                             const processedRows = rows.map(row => processRow(row));
                             ws.send(JSON.stringify({ type: 'topic-history-data', topic: topic, brokerId: brokerId, data: processedRows }));
                         }
