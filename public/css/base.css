@@ -38,7 +38,7 @@
     --color-mapped-source: #8e44ad; /* Purple */
     --color-mapped-target: #27ae60; /* Green */
     
-    /* [NEW] Status Colors */
+    /*  Status Colors */
     --status-connected: #28a745; /* Green */
     --status-connecting: #ffc107; /* Yellow/Orange */
     --status-error: #dc3545; /* Red */
@@ -108,7 +108,7 @@ header {
 }
 header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font size */
 
-/* [NEW] Header Sub-row for Version and Status */
+/*  Header Sub-row for Version and Status */
 .header-sub-row {
     display: flex;
     align-items: center;
@@ -121,7 +121,7 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     opacity: 0.9; 
 }
 
-/* [NEW] Broker Status Container */
+/*  Broker Status Container */
 .broker-status-container {
     display: flex;
     gap: 12px;

@@ -45,15 +45,15 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
             turbolaser_02: { status: 'standby', temp: 155, power: 10, target: 'none', spSeq: 0, bdSeq: 0 },
             droid_r5_j4:   { status: 'patrol', battery: 85.0, task: 'sector 1138 patrol', spSeq: 0, bdSeq: 0 },
             droid_mse_6:   { status: 'transit', battery: 95.0, task: 'deliver datapad to command', spSeq: 0, bdSeq: 0 },
-            interrogator_IT_O: { status: 'idle', subject: 'none', spSeq: 0, bdSeq: 0 }, // [NEW]
+            interrogator_IT_O: { status: 'idle', subject: 'none', spSeq: 0, bdSeq: 0 }, 
 
             // JSON UNS Devices
             life_support_s01: { o2: 20.9, co2: 410, pressure: 101.2 },
             shield_gen_main:  { power: 100, status: 'online' },
             tractor_beam_01:  { status: 'inactive', power: 0.0 },
-            detention_AA23:   { prisoner: 'none', status: 'empty', guard: 'TK-421' }, // [NEW]
-            trash_compactor_3263827: { status: 'idle', pressure: 10.0, walls_active: false }, // [NEW]
-            bridge_status:    { alert_level: 'green', commander: 'Admiral Motti' } // [NEW]
+            detention_AA23:   { prisoner: 'none', status: 'empty', guard: 'TK-421' }, 
+            trash_compactor_3263827: { status: 'idle', pressure: 10.0, walls_active: false }, 
+            bridge_status:    { alert_level: 'green', commander: 'Admiral Motti' } 
         }
     };
 

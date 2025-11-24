@@ -32,7 +32,7 @@ let broadcastCallback = (message) => {};
 let engineLogger = null;
 let payloadReplacer = null; 
 let internalDb = null; 
-// [NEW] Store server configuration for permission checks
+//  Store server configuration for permission checks
 let serverConfig = null;
 
 const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
@@ -232,7 +232,7 @@ const rulesForTopicRequireDb = (topic) => {
     return false; 
 };
 
-// [NEW] Helper to check if publishing is allowed based on server config
+//  Helper to check if publishing is allowed based on server config
 const isPublishAllowed = (brokerId, topic) => {
     if (!serverConfig || !serverConfig.BROKER_CONFIGS) return true; // Default allow if no config
 

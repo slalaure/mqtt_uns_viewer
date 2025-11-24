@@ -26,6 +26,11 @@ const sliderRange = document.getElementById('slider-range');
 const labelMin = document.getElementById('label-min');
 const labelMax = document.getElementById('label-max');
 
+// --- Constants ---
+// [NEW] Maximum number of entries to keep in browser memory to prevent crashes.
+// 50,000 objects approx 20-50MB RAM depending on payload size.
+const MAX_CLIENT_ENTRIES = 50000; 
+
 // --- Module-level State ---
 let allHistoryEntries = [];
 let globalMinTimestamp = 0; // Absolute DB Min (Left anchor)
@@ -54,6 +59,19 @@ function toDateTimeLocal(timestamp) {
     const d = new Date(timestamp);
     const offsetMs = d.getTimezoneOffset() * 60 * 1000;
     return (new Date(d.getTime() - offsetMs)).toISOString().slice(0, 16);
+}
+
+function showLoader() {
+    if (historyLogContainer) {
+        // Preserve existing content if possible, or just replace content
+        // Replacing content is cleaner to avoid duplicating loaders
+        historyLogContainer.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px; color: var(--color-text-secondary);">
+                <div class="broker-dot" style="background-color: var(--color-primary); animation: blink 1s infinite;"></div>
+                <span>Fetching data...</span>
+            </div>
+        `;
+    }
 }
 
 /**
@@ -276,6 +294,9 @@ function triggerDataFetch(start, end) {
     currentMaxTimestamp = end;
     updateSliderUI();
 
+    // Show visual feedback immediately
+    showLoader();
+
     // Call Backend
     if (requestRangeCallback) {
         const filter = historySearchInput.value.trim();
@@ -309,6 +330,13 @@ export function setHistoryData(entries, isInitialLoad, isUpdate = false) {
         // Live update: Append new entries to the list
         allHistoryEntries.unshift(...entries);
         
+        // [NEW] Memory Protection: Cap the size of the client-side array
+        // If we exceed the limit, chop off the oldest entries (at the end of array)
+        if (allHistoryEntries.length > MAX_CLIENT_ENTRIES) {
+            // Keep the newest 50k
+            allHistoryEntries = allHistoryEntries.slice(0, MAX_CLIENT_ENTRIES);
+        }
+
         // Update global max time
         const newMax = entries[0].timestampMs;
         if (newMax > globalMaxTimestamp) globalMaxTimestamp = newMax;
@@ -334,7 +362,7 @@ export function setHistoryData(entries, isInitialLoad, isUpdate = false) {
     if (startDateInput) startDateInput.value = toDateTimeLocal(currentMinTimestamp);
     if (endDateInput) endDateInput.value = toDateTimeLocal(currentMaxTimestamp);
 
-    renderFilteredHistory();
+    renderFilteredHistory(); // This will overwrite the loader with content or empty state
     updateSliderUI();
 
     // Return current view bounds for other modules

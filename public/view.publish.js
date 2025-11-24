@@ -37,7 +37,7 @@ let subscribedTopics = []; //  This is now a fallback
 let simControlsContainer = null; 
 let brokerSelectElement = null; //  To store the broker <select>
 let isMultiBroker = false; 
-let availableBrokers = []; // Store full broker configs [NEW]
+let availableBrokers = []; // Store full broker configs 
 
 // --- Payload Templates ---
 const PAYLOAD_TEMPLATES = {
@@ -70,7 +70,7 @@ export function initPublishView(options) {
     subscribedTopics = options.subscribedTopics || [];
     simControlsContainer = options.simulatorListContainer;
     isMultiBroker = options.isMultiBroker || false;
-    availableBrokers = options.brokerConfigs || []; // [NEW] Store configs
+    availableBrokers = options.brokerConfigs || []; //  Store configs
 
     if (payloadEditorDiv) {
         // --- Initialize Ace Editor ---
@@ -116,7 +116,7 @@ export function initPublishView(options) {
             const option = document.createElement('option');
             option.value = broker.id;
             
-            // [NEW] Add visual indicator for Read-Only brokers
+            //  Add visual indicator for Read-Only brokers
             const isReadOnly = (!broker.publish || broker.publish.length === 0);
             const lockIcon = isReadOnly ? '🔒 ' : '';
             const readOnlyText = isReadOnly ? ' (Read-Only)' : '';
@@ -125,7 +125,7 @@ export function initPublishView(options) {
             brokerSelectElement.appendChild(option);
         });
         
-        // [NEW] Re-validate when broker changes
+        //  Re-validate when broker changes
         brokerSelectElement.addEventListener('change', validatePublishPermissions);
 
         brokerGroup.appendChild(label);
@@ -151,7 +151,7 @@ export function initPublishView(options) {
         publishTopicInput.setAttribute('list', datalist.id);
     }
     
-    // [NEW] Initial validation run
+    //  Initial validation run
     validatePublishPermissions();
 }
 
@@ -201,7 +201,7 @@ function isPublishAllowed(brokerId, topic) {
 }
 
 /**
- * [NEW] Validates UI state based on broker permissions and topic.
+ *  Validates UI state based on broker permissions and topic.
  * Enables/Disables button and shows warnings.
  */
 function validatePublishPermissions() {

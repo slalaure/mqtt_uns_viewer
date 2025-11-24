@@ -82,6 +82,9 @@ let chartRefreshTimer = null;
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
 
+// Configuration for Downsampling
+const MAX_POINTS_PER_SERIES = 1500; // Target number of points to display per series
+
 let payloadViewer = createPayloadViewer({
     topicEl: document.getElementById('chart-payload-topic'),
     contentEl: document.getElementById('chart-payload-content'),
@@ -96,8 +99,12 @@ let appCallbacks = {
     colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"), 
 };
 
+/**
+ * External refresh trigger (called by app.js when new data arrives)
+ */
 export function refreshChart() {
-    onGenerateChart();
+    // Data arrived, we can process and hide loader
+    onGenerateChart(false); 
 }
 
 export function getChartedTopics() { return chartedVariables; }
@@ -124,6 +131,23 @@ function toDateTimeLocal(timestamp) {
     return (new Date(d.getTime() - offsetMs)).toISOString().slice(0, 16);
 }
 
+function showChartLoader() {
+    if (chartPlaceholder) {
+        chartPlaceholder.style.display = 'block';
+        chartPlaceholder.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <div class="broker-dot" style="background-color: var(--color-primary); animation: blink 1s infinite;"></div>
+                <span>Loading and processing data...</span>
+            </div>`;
+    }
+    if (chartCanvas) chartCanvas.style.opacity = '0.5';
+}
+
+function hideChartLoader() {
+    if (chartCanvas) chartCanvas.style.opacity = '1';
+    // Placeholder hiding is handled in render logic depending on data availability
+}
+
 export function initChartView(callbacks) {
     const { displayPayload, maxSavedChartConfigs, isMultiBroker: multiBrokerState, requestRangeCallback, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
@@ -146,8 +170,8 @@ export function initChartView(callbacks) {
     btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
     btnChartSaveAs?.addEventListener('click', onSaveAsNew);
     btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
-    chartTypeSelect?.addEventListener('change', onGenerateChart);
-    chartConnectNulls?.addEventListener('change', onGenerateChart);
+    chartTypeSelect?.addEventListener('change', () => onGenerateChart(true));
+    chartConnectNulls?.addEventListener('change', () => onGenerateChart(true));
 
     if (chartRangeButtonsContainer) {
         const createRangeBtn = (text, hours) => {
@@ -218,11 +242,14 @@ export function initChartView(callbacks) {
 }
 
 function triggerDataFetch(start, end) {
+    showChartLoader();
     clearTimeout(chartRefreshTimer);
     chartRefreshTimer = setTimeout(() => {
         if (appCallbacks.requestRangeCallback) {
+            // Request backend data. The app.js will call refreshChart() when data arrives.
             appCallbacks.requestRangeCallback(start, end, null);
         } else {
+            // Fallback for standalone mode
             onGenerateChart();
         }
     }, 200);
@@ -256,6 +283,7 @@ export function handleChartNodeClick(event, nodeContainer, brokerId, topic) {
 export function updateChartSliderUI(min, max, isInitialLoad = false, force = false) {
     if (!chartSlider) return; 
     if (isUserInteracting && !force) return;
+    // Debounce high-frequency updates from live stream
     if (!isInitialLoad && !force && Date.now() - lastSliderUpdate < 1000) return;
     
     lastSliderUpdate = Date.now();
@@ -280,11 +308,11 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     
     if (isChartLive && !isInitialLoad && !force && chartedVariables.size > 0) {
-        onGenerateChart(); 
+        onGenerateChart(false); 
     }
 }
 
-// ... (Rest of helper functions: getNestedValue, findNumericKeys, populateChartVariables, etc. remain exactly as before) ...
+// --- Helpers: Parsing ---
 
 function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return undefined;
@@ -395,7 +423,7 @@ function onClearAll() {
     chartConnectNulls.checked = false;
     currentConfigId = null;
     chartConfigSelect.value = ""; 
-    onGenerateChart(); 
+    onGenerateChart(true); 
     appCallbacks.colorChartTreeCallback(); 
 }
 
@@ -413,26 +441,79 @@ function onChartVariableToggle(event) {
         chartedVariables.delete(varId);
         trackEvent('chart_remove_variable'); 
     }
-    onGenerateChart();
+    onGenerateChart(true);
     appCallbacks.colorChartTreeCallback();
 }
 
-function onGenerateChart() {
+/**
+ * Downsample data using Bucket Averaging (simple and efficient).
+ * Reduces data points to MAX_POINTS_PER_SERIES.
+ */
+function downsampleData(data, targetCount) {
+    if (data.length <= targetCount) return data;
+
+    const sampled = [];
+    // Size of each bucket
+    const bucketSize = Math.ceil(data.length / targetCount);
+
+    for (let i = 0; i < data.length; i += bucketSize) {
+        // Get slice for this bucket
+        const bucket = data.slice(i, i + bucketSize);
+        
+        // Calculate averages for this bucket
+        let sumVal = 0;
+        let sumTs = 0;
+        let count = 0;
+
+        for (const point of bucket) {
+            // Only average if value is valid number
+            if (point && point.y !== null && point.y !== undefined) {
+                sumVal += point.y;
+                sumTs += point.x;
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            sampled.push({
+                x: Math.round(sumTs / count),
+                y: sumVal / count
+            });
+        }
+    }
+    return sampled;
+}
+
+/**
+ * Main Chart Generation Logic.
+ * @param {boolean} showLoader - Force showing loader (useful for button clicks)
+ */
+function onGenerateChart(showLoader = false) {
     trackEvent('chart_generate_refresh'); 
     if (isUserInteracting) return;
 
+    if (showLoader) showChartLoader();
+
+    // Use setTimeout to allow UI to render loader before heavy processing
+    setTimeout(() => {
+        processChartData();
+    }, 10);
+}
+
+function processChartData() {
     if (chartedVariables.size === 0) {
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
         chartPlaceholder.style.display = 'block';
         chartPlaceholder.textContent = 'Select a topic and check variables to plot, or load a saved chart.';
         chartCanvas.style.display = 'none';
         lastGeneratedData = { labels: [], datasets: [] };
+        hideChartLoader();
         return;
     }
 
     const allHistory = appCallbacks.getHistory(); 
 
-    //  Add a safety buffer (500ms) to the time filter to catch boundary issues
+    // Filter strictly by requested range + small buffer
     const timeFilteredHistory = allHistory.filter(entry =>
         entry.timestampMs >= (currentMinTimestamp - 500) &&
         entry.timestampMs <= (currentMaxTimestamp + 500)
@@ -444,13 +525,14 @@ function onGenerateChart() {
         chartPlaceholder.textContent = "No data found in the selected time range.";
         chartCanvas.style.display = 'none';
         lastGeneratedData = { labels: [], datasets: [] };
+        hideChartLoader();
         return;
     }
 
     const chartType = chartTypeSelect.value;
     const connectNulls = chartConnectNulls.checked;
     let datasets = [];
-    let labels = [];
+    let labels = []; // Not strictly used for XY scatter/line, but kept for compatibility
     const isDarkMode = document.body.classList.contains('dark-mode');
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
     const textColor = isDarkMode ? '#e0e0e0' : '#333';
@@ -458,12 +540,25 @@ function onGenerateChart() {
     const dynamicScales = {
         x: {
             type: 'time',
-            time: { unit: 'second', tooltipFormat: 'yyyy-MM-dd HH:mm:ss' },
+            time: {
+                // [MODIFIED] Explicit format configuration to show date + time on large scales
+                tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
+                displayFormats: {
+                    millisecond: 'HH:mm:ss.SSS',
+                    second: 'HH:mm:ss',
+                    minute: 'HH:mm',
+                    hour: 'dd/MM HH:mm', // Show date when zoomed out to hours
+                    day: 'yyyy-MM-dd'
+                }
+            },
             grid: { color: gridColor },
-            ticks: { color: textColor }
+            ticks: { color: textColor },
+            min: currentMinTimestamp,
+            max: currentMaxTimestamp
         }
     };
 
+    // --- PIE CHART LOGIC ---
     if (chartType === 'pie') {
         const totals = {};
         chartedVariables.forEach((varInfo, varId) => {
@@ -499,11 +594,21 @@ function onGenerateChart() {
             backgroundColor: Object.keys(totals).map((_, i) => `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`),
         }];
         labels = Object.keys(totals);
-    } else {
-        let allTimestamps = new Set();
-        let dataByVar = new Map(); 
+    } 
+    // --- LINE / BAR CHART LOGIC ---
+    else {
+        let i = 0;
         for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
-            const varData = new Map();
+            const color = `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`;
+            const topicParts = topic.split('/');
+            const cleanPath = path.replace(/\[|\]/g, ''); 
+            const brokerPrefix = isMultiBroker ? `[${brokerId}] ` : '';
+            const label = `${brokerPrefix}${topicParts.slice(-2).join('/')} | ${cleanPath}`;
+            const yAxisId = `y${i}`; 
+            const position = (i % 2 === 0) ? 'left' : 'right'; 
+            
+            // Collect raw data points
+            let rawPoints = [];
             for (const entry of timeFilteredHistory) {
                 if (entry.brokerId === brokerId && entry.topic === topic) {
                     try {
@@ -511,47 +616,37 @@ function onGenerateChart() {
                         let value = getNestedValue(payload, path);
                         if (typeof value === 'string') {
                             const numVal = parseFloat(value);
-                            if (!isNaN(numVal) && isFinite(Number(value))) value = numVal; 
+                            if (!isNaN(numVal) && isFinite(Number(value))) value = numVal;
                         }
                         if (typeof value === 'number') {
-                            varData.set(entry.timestampMs, value);
-                            allTimestamps.add(entry.timestampMs);
+                            rawPoints.push({ x: entry.timestampMs, y: value });
                         }
                     } catch (e) { }
                 }
             }
-            dataByVar.set(varId, varData);
-        }
-        if (allTimestamps.size === 0) {
-             if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-             chartPlaceholder.style.display = 'block';
-             chartPlaceholder.textContent = "No numeric data found for selected variables in this time range.";
-             chartCanvas.style.display = 'none';
-             lastGeneratedData = { labels: [], datasets: [] };
-             return;
-        }
-        labels = Array.from(allTimestamps).sort((a, b) => a - b);
-        let i = 0;
-        for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
-            const color = `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`;
-            const varDataMap = dataByVar.get(varId);
-            const data = labels.map(ts => varDataMap.get(ts) ?? null);
-            const topicParts = topic.split('/');
-            const cleanPath = path.replace(/\[|\]/g, ''); 
-            const brokerPrefix = isMultiBroker ? `[${brokerId}] ` : '';
-            const label = `${brokerPrefix}${topicParts.slice(-2).join('/')} | ${cleanPath}`;
-            const yAxisId = `y${i}`; 
-            const position = (i % 2 === 0) ? 'left' : 'right'; 
+
+            // Sort by time before downsampling
+            rawPoints.sort((a, b) => a.x - b.x);
+
+            // --- DOWNSAMPLING ---
+            let processedPoints = rawPoints;
+            if (rawPoints.length > MAX_POINTS_PER_SERIES) {
+                console.log(`[Chart] Downsampling series '${label}' from ${rawPoints.length} to ~${MAX_POINTS_PER_SERIES} points.`);
+                processedPoints = downsampleData(rawPoints, MAX_POINTS_PER_SERIES);
+            }
+
             datasets.push({
                 label: label,
-                data: data,
+                data: processedPoints, // {x, y} format for Chart.js time scale
                 borderColor: color,
                 backgroundColor: color,
                 fill: false,
                 spanGaps: connectNulls,
                 tension: 0.1,
-                yAxisID: yAxisId 
+                yAxisID: yAxisId,
+                pointRadius: processedPoints.length > 200 ? 0 : 3 // Hide points if dense
             });
+
             dynamicScales[yAxisId] = {
                 type: 'linear',
                 position: position,
@@ -565,21 +660,61 @@ function onGenerateChart() {
     if (chartInstance) chartInstance.destroy();
     chartPlaceholder.style.display = 'none';
     chartCanvas.style.display = 'block';
+    
     chartInstance = new Chart(chartCanvas, {
         type: chartType,
-        data: { labels: labels, datasets: datasets },
+        data: { datasets: datasets }, // No global labels needed for Time Scale with XY data
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: (chartType === 'pie') ? {} : dynamicScales,
             plugins: {
                 legend: { labels: { color: textColor } },
-                tooltip: { mode: 'index', intersect: false }
+                // [MODIFIED] Added Zoom Plugin Configuration
+                zoom: {
+                    zoom: {
+                        drag: {
+                            enabled: true,
+                            backgroundColor: 'rgba(54, 162, 235, 0.3)'
+                        },
+                        mode: 'x',
+                        onZoomComplete: ({chart}) => {
+                            const {min, max} = chart.scales.x;
+                            currentMinTimestamp = min;
+                            currentMaxTimestamp = max;
+                            isUserInteracting = true;
+                            isChartLive = false;
+                            updateChartSliderUI(currentMinTimestamp, currentMaxTimestamp, false, true);
+                            triggerDataFetch(min, max);
+                        }
+                    },
+                    pan: {
+                        enabled: false,
+                        mode: 'x'
+                    }
+                },
+                tooltip: { 
+                    mode: 'index', 
+                    intersect: false,
+                    callbacks: {
+                        title: (context) => {
+                            // Format timestamp in tooltip
+                            if (context[0] && context[0].parsed.x) {
+                                return new Date(context[0].parsed.x).toLocaleString();
+                            }
+                            return '';
+                        }
+                    }
+                }
             },
-            animation: false
+            animation: false,
+            parsing: false, // Improved performance for explicit {x,y} structure
+            normalized: true // Data is pre-sorted
         }
     });
     lastGeneratedData = { labels, datasets };
+    
+    hideChartLoader();
 }
 
 function toggleChartFullscreen() {
@@ -603,13 +738,14 @@ function onExportPNG() {
 
 function onExportCSV() {
     trackEvent('chart_export_csv'); 
-    const { labels, datasets } = lastGeneratedData;
-    if (!labels || labels.length === 0 || !datasets || datasets.length === 0) {
+    // Export currently displayed data from the chart instance to ensure we get processed/downsampled data
+    if (!chartInstance || !chartInstance.data.datasets || chartInstance.data.datasets.length === 0) {
         alert("Please generate a chart first.");
         return;
     }
     const chartType = chartTypeSelect.value;
     let csvContent = "data:text/csv;charset=utf-8,";
+    
     if (chartType === 'pie') {
         csvContent += "Variable,Total\r\n";
         chartInstance.data.labels.forEach((label, index) => {
@@ -617,17 +753,32 @@ function onExportCSV() {
             csvContent += `"${label}",${value}\r\n`;
         });
     } else {
-        const headers = ['timestamp', ...datasets.map(d => `"${d.label}"`)]; 
+        const headers = ['timestamp', ...chartInstance.data.datasets.map(d => `"${d.label}"`)];
         csvContent += headers.join(',') + '\r\n';
-        labels.forEach((timestamp, index) => {
-            const row = [new Date(timestamp).toISOString()]; 
-            datasets.forEach(ds => {
-                const value = ds.data[index];
-                row.push(value ?? ''); 
+        
+        // Collect all unique timestamps from all datasets
+        const allTimestamps = new Set();
+        chartInstance.data.datasets.forEach(ds => {
+            ds.data.forEach(point => allTimestamps.add(point.x));
+        });
+        const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+
+        // Map data for quick lookup: datasetIndex -> timestamp -> value
+        const dataMap = chartInstance.data.datasets.map(ds => {
+            const map = new Map();
+            ds.data.forEach(p => map.set(p.x, p.y));
+            return map;
+        });
+
+        sortedTimestamps.forEach(ts => {
+            const row = [new Date(ts).toISOString()];
+            dataMap.forEach(map => {
+                row.push(map.has(ts) ? map.get(ts) : '');
             });
             csvContent += row.join(',') + '\r\n';
         });
     }
+    
     const encodedUri = encodeURI(csvContent);
     const a = document.createElement('a');
     a.href = encodedUri;

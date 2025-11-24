@@ -42,7 +42,7 @@ import {
     refreshChart 
 } from './view.chart.js';
 import { initPublishView, setPublishTheme, updateSimulatorStatuses } from './view.publish.js';
-// [NEW] Import floating widget init and toggle
+//  Import floating widget init and toggle
 import { initChatView, toggleChatWidget } from './view.chat.js'; 
 
 
@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
             brokerConfigs: brokerConfigs 
         });
 
-        // [NEW] Initialize Floating Chat Widget Logic
+        //  Initialize Floating Chat Widget Logic
         if (appConfig.viewChatEnabled) {
             initChatView();
             // Only show the FAB if enabled

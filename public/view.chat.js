@@ -214,6 +214,8 @@ async function sendMessage() {
     
     isProcessing = true;
     btnSend.disabled = true;
+    
+    // Show blinking dots
     showTypingIndicator(true);
 
     // 2. Prepare Payload (Backend handles keys/urls)
@@ -227,7 +229,6 @@ async function sendMessage() {
 
     // 3. Send to Backend Agent
     try {
-        // [MODIFIED] No llmConfig sent, backend uses .env
         const response = await fetch('api/chat/completion', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -247,24 +248,35 @@ async function sendMessage() {
 
     } catch (error) {
         console.error("Chat Error:", error);
+        // Add error directly to chat state to visualize it
         addMessageToState('error', `Error: ${error.message}`);
     } finally {
         isProcessing = false;
         btnSend.disabled = false;
+        // Hide blinking dots
         showTypingIndicator(false);
         chatInput.focus();
     }
 }
 
+/**
+ * Shows or hides a blinking dots indicator.
+ * @param {boolean} show
+ */
 function showTypingIndicator(show) {
     if (!chatHistory) return;
     const existing = document.getElementById('typing-indicator');
+    
     if (show) {
         if (!existing) {
             const div = document.createElement('div');
             div.id = 'typing-indicator';
-            div.className = 'typing-indicator';
-            div.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+            div.className = 'typing-indicator-container';
+            div.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
             chatHistory.appendChild(div);
             scrollToBottom();
         }

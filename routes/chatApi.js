@@ -12,7 +12,7 @@
  */
 const express = require('express');
 const axios = require('axios');
-const mqttMatch = require('mqtt-match'); // [NEW] Required for permission checks
+const mqttMatch = require('mqtt-match'); //  Required for permission checks
 
 // [MODIFIED] Accepted 'getBrokerConnection' instead of 'getPrimaryConnection'
 module.exports = (db, logger, config, getBrokerConnection) => {
@@ -228,7 +228,7 @@ module.exports = (db, logger, config, getBrokerConnection) => {
         apiUrl += 'chat/completions';
         
         // --- SYSTEM PROMPT (ARCHITECT MODE) ---
-        // [NEW] Dynamically generate broker permission context
+        //  Dynamically generate broker permission context
         const brokerContext = config.BROKER_CONFIGS.map(b => {
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             return `- Broker '${b.id}': Publish Allowed=${pubRules}`;

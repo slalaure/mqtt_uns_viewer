@@ -27,7 +27,7 @@ const mqttMatch = require('mqtt-match');
 // --- Module Imports  ---
 const wsManager = require('./websocket-manager');
 const mqttHandler = require('./mqtt-handler');
-const { createMqttClient } = require('./mqtt_client'); // [MODIFIED] New function name
+const { createMqttClient } = require('./mqtt_client'); 
 const simulatorManager = require('./simulator');
 const dataManager = require('./database/dataManager');
 const externalApiRouter = require('./routes/externalApi'); 
@@ -83,6 +83,7 @@ let activeConnections = new Map();
 let brokerStatuses = new Map(); 
 let isPruning = false;
 let apiKeysConfig = { keys: [] };
+let isShuttingDown = false; // Global shutdown flag
 
 // --- Configuration from Environment ---
 const config = {
@@ -115,7 +116,7 @@ const config = {
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
     VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
     VIEW_CHAT_ENABLED: process.env.VIEW_CHAT_ENABLED !== 'false',
-    LLM_API_URL: process.env.LLM_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    LLM_API_URL: process.env.LLM_API_URL || '[https://generativelanguage.googleapis.com/v1beta/openai/](https://generativelanguage.googleapis.com/v1beta/openai/)',
     LLM_API_KEY: process.env.LLM_API_KEY || '',
     LLM_MODEL: process.env.LLM_MODEL || 'gemini-2.0-flash',
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
@@ -271,7 +272,6 @@ db = new duckdb.Database(dbFile, (err) => {
     setInterval(performMaintenance, 15000);
 
     // 7.  Connect to ALL MQTT Brokers
-    // [CRITICAL FIX] Loop once, create client once. No recursive calls.
     config.BROKER_CONFIGS.forEach(brokerConfig => {
         const brokerId = brokerConfig.id;
         
@@ -328,7 +328,6 @@ db = new duckdb.Database(dbFile, (err) => {
 
         connection.on('close', () => {
             if (!isShuttingDown) {
-               // Log but DO NOT call connect() manually. The library will emit 'reconnect'.
                logger.warn(`⚠️ MQTT Broker '${brokerId}' connection closed.`);
                updateBrokerStatus(brokerId, 'disconnected');
             }
@@ -346,8 +345,6 @@ const authMiddleware = (req, res, next) => {
     }
     return next();
 };
-
-let isShuttingDown = false;
 
 let ALLOWED_IPS = config.API_ALLOWED_IPS ? config.API_ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const ipFilterMiddleware = (req, res, next) => {
@@ -475,30 +472,65 @@ server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
 });
 
-// --- Graceful Shutdown ---
-process.on('SIGINT', () => {
-    logger.info("\n✅ Gracefully shutting down...");
+// --- Graceful Shutdown Logic ---
+async function gracefulShutdown() {
+    if (isShuttingDown) return;
     isShuttingDown = true;
     
+    logger.info("\n✅ Gracefully shutting down...");
+
     // Force exit after 5 seconds if stuck
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
 
-    dataManager.stop();
-    simulatorManager.getStatuses(); // Stop sims logic embedded in manager
-    
-    wsManager.close(() => {
-        server.close(() => {
-            // Close MQTT connections forcefully
-            activeConnections.forEach((conn) => {
-                if (conn) conn.end(true); // Force close
-            });
-            dataManager.close().then(() => {
-                logger.info("✅ Shutdown complete.");
-                process.exit(0);
+    try {
+        // 1. Stop App logic
+        dataManager.stop();
+        simulatorManager.getStatuses(); // Implicitly touches sims logic
+        
+        // 2. Close Websockets
+        await new Promise(resolve => wsManager.close(resolve));
+        
+        // 3. Close HTTP Server
+        await new Promise((resolve) => {
+            server.close(() => {
+                logger.info("✅ HTTP Server closed.");
+                resolve();
             });
         });
-    });
+
+        // 4. Close MQTT connections forcefully
+        activeConnections.forEach((conn) => {
+            if (conn) conn.end(true); 
+        });
+        logger.info("✅ MQTT Connections closed.");
+
+        // 5. Close Database
+        await dataManager.close();
+        logger.info("✅ Database closed.");
+
+        logger.info("✅ Shutdown complete.");
+        process.exit(0);
+    } catch (err) {
+        logger.error({ err }, "❌ Error during graceful shutdown.");
+        process.exit(1);
+    }
+}
+
+// --- Process Signal Handling ---
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+
+// --- Catch Unhandled Exceptions/Rejections ---
+// Prevents silent crashes and zombie DB locks in production
+process.on('uncaughtException', (err) => {
+    logger.fatal({ err }, "❌ FATAL: Uncaught Exception. Shutting down...");
+    gracefulShutdown();
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.fatal({ err: reason }, "❌ FATAL: Unhandled Rejection. Shutting down...");
+    gracefulShutdown();
 });

@@ -400,7 +400,7 @@ async function createMcpServer() {
         const encodedTopic = encodeURIComponent(topic);
         const params = new URLSearchParams();
         if (broker_id) {
-            params.append('brokerId', broker_id); // [NEW]
+            params.append('brokerId', broker_id); 
         }
         if (limit) {
             params.append('limit', limit);

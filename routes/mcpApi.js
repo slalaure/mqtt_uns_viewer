@@ -101,7 +101,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     //  Accepts optional brokerId query param
     router.get('/search', (req, res) => {
         const query = req.query.q;
-        const brokerId = req.query.brokerId; // [NEW]
+        const brokerId = req.query.brokerId; 
         
         if (!query || query.length < 3) {
             return res.status(400).json({ error: "Search query must be at least 3 characters long." });
@@ -277,7 +277,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     //  Accepts optional brokerId query param
     router.get('/topic/:topic(.*)', (req, res) => {
         const topic = req.params.topic;
-        const brokerId = req.query.brokerId; // [NEW]
+        const brokerId = req.query.brokerId; 
         
         if (!topic) {
             return res.status(400).json({ error: "Topic not specified." });
@@ -321,7 +321,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     //  Accepts optional brokerId query param
     router.get('/history/:topic(.*)', (req, res) => {
         const topic = req.params.topic;
-        const brokerId = req.query.brokerId; // [NEW]
+        const brokerId = req.query.brokerId; 
         const limit = parseInt(req.query.limit, 10) || 20;
 
         if (!topic) {

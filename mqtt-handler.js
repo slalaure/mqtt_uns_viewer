@@ -39,10 +39,13 @@ let mapperEngine;
 let dataManager;
 let broadcastDbStatus;
 
+// [NEW] Production Limit: Payloads larger than 2MB are dangerous for the event loop
+const MAX_PAYLOAD_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+
 /**
  * The main MQTT message processing logic.
  * This is the function that will be attached to mainConnection.on('message').
- *  Now accepts brokerId as the first parameter.
+ * Now accepts brokerId as the first parameter.
  */
 async function handleMessage(brokerId, topic, payload) {
     const timestamp = new Date();
@@ -56,50 +59,68 @@ async function handleMessage(brokerId, topic, payload) {
     const handlerLogger = logger.child({ broker: brokerId }); //  Create logger child for this broker
 
     try {
-        // --- 1. Decoding ---
-        if (config.IS_SPARKPLUG_ENABLED && topic.startsWith('spBv1.0/')) {
-            try {
-                const decodedPayload = spBv10Codec.decodePayload(payload);
-                isSparkplugOrigin = true;
-                payloadStringForWs = JSON.stringify(decodedPayload, longReplacer, 2);
-                payloadStringForDb = JSON.stringify(decodedPayload, longReplacer);
-                payloadObjectForMapper = decodedPayload;
-            } catch (decodeErr) {
-                processingError = decodeErr;
-                handlerLogger.error({ msg: "❌ Error decoding Sparkplug payload", topic: topic, error_message: decodeErr.message });
-                payloadStringForWs = payload.toString('hex');
-                payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeErr.message });
-                payloadObjectForMapper = safeJsonParse(payloadStringForDb);
-            }
+        // --- [NEW] 0. Payload Size Protection ---
+        if (payload.length > MAX_PAYLOAD_SIZE_BYTES) {
+            handlerLogger.warn({ topic, size: payload.length }, "⚠️ Payload too large. Truncating to prevent DoS.");
+            
+            const oversizeMsg = { 
+                error: "PAYLOAD_TOO_LARGE", 
+                original_size_bytes: payload.length, 
+                message: "Payload exceeded safe limit (2MB) and was discarded." 
+            };
+            
+            // We save the error object to DB/WS, but we DO NOT parse the massive buffer.
+            payloadStringForWs = JSON.stringify(oversizeMsg);
+            payloadStringForDb = payloadStringForWs;
+            payloadObjectForMapper = oversizeMsg;
+            
+            // Skip decoding logic to save CPU
         } else {
-            // Regular payload (try UTF-8)
-            let tempPayloadString = '';
-            try {
-                tempPayloadString = payload.toString('utf-8');
-                payloadStringForWs = tempPayloadString;
+            // --- 1. Decoding ---
+            if (config.IS_SPARKPLUG_ENABLED && topic.startsWith('spBv1.0/')) {
                 try {
-                    payloadObjectForMapper = JSON.parse(tempPayloadString);
-                    payloadStringForDb = tempPayloadString;
-                } catch (parseError) {
-                     // Not JSON, treat as raw string
-                     handlerLogger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
-                     payloadObjectForMapper = { raw_payload: tempPayloadString };
-                     payloadStringForDb = JSON.stringify(payloadObjectForMapper);
+                    const decodedPayload = spBv10Codec.decodePayload(payload);
+                    isSparkplugOrigin = true;
+                    payloadStringForWs = JSON.stringify(decodedPayload, longReplacer, 2);
+                    payloadStringForDb = JSON.stringify(decodedPayload, longReplacer);
+                    payloadObjectForMapper = decodedPayload;
+                } catch (decodeErr) {
+                    processingError = decodeErr;
+                    handlerLogger.error({ msg: "❌ Error decoding Sparkplug payload", topic: topic, error_message: decodeErr.message });
+                    payloadStringForWs = payload.toString('hex');
+                    payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeErr.message });
+                    payloadObjectForMapper = safeJsonParse(payloadStringForDb);
                 }
+            } else {
+                // Regular payload (try UTF-8)
+                let tempPayloadString = '';
+                try {
+                    tempPayloadString = payload.toString('utf-8');
+                    payloadStringForWs = tempPayloadString;
+                    try {
+                        payloadObjectForMapper = JSON.parse(tempPayloadString);
+                        payloadStringForDb = tempPayloadString;
+                    } catch (parseError) {
+                         // Not JSON, treat as raw string
+                         handlerLogger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
+                         payloadObjectForMapper = { raw_payload: tempPayloadString };
+                         payloadStringForDb = JSON.stringify(payloadObjectForMapper);
+                    }
 
-            } catch (utf8Err) {
-                processingError = utf8Err;
-                handlerLogger.error({ msg: "❌ Error converting payload to UTF-8", topic: topic, error_message: utf8Err.message });
-                payloadStringForWs = payload.toString('hex');
-                payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: utf8Err.message });
-                payloadObjectForMapper = safeJsonParse(payloadStringForDb);
+                } catch (utf8Err) {
+                    processingError = utf8Err;
+                    handlerLogger.error({ msg: "❌ Error converting payload to UTF-8", topic: topic, error_message: utf8Err.message });
+                    payloadStringForWs = payload.toString('hex');
+                    payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: utf8Err.message });
+                    payloadObjectForMapper = safeJsonParse(payloadStringForDb);
+                }
             }
         }
 
         // --- Safety Net ---
          if (payloadObjectForMapper === null) {
              handlerLogger.error(`payloadObjectForMapper remained null for topic ${topic}. This should not happen.`);
-             payloadObjectForMapper = { error: "Payload processing failed unexpectedly", raw_hex: payload.toString('hex')};
+             payloadObjectForMapper = { error: "Payload processing failed unexpectedly", raw_hex: payload.slice(0, 50).toString('hex')};
              payloadStringForDb = JSON.stringify(payloadObjectForMapper);
              payloadStringForWs = payloadStringForDb;
          }
@@ -145,7 +166,7 @@ async function handleMessage(brokerId, topic, payload) {
 
 /**
  * Initializes the MQTT Handler.
- *  This no longer accepts a single connection
+ * This no longer accepts a single connection
  */
 function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManager, appBroadcastDbStatus) {
     logger = appLogger.child({ component: 'MQTTHandler' });
