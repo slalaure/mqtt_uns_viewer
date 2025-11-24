@@ -59,7 +59,9 @@
     <link rel="stylesheet" href="css/view.history.css">
     <link rel="stylesheet" href="css/view.mapper.css">
     <link rel="stylesheet" href="css/view.chart.css">
-    <link rel="stylesheet" href="css/view.publish.css"> <script src="libs/chart-min.js"></script>
+    <link rel="stylesheet" href="css/view.publish.css"> 
+    <link rel="stylesheet" href="css/view.chat.css"> 
+    <script src="libs/chart-min.js"></script>
     <script src="libs/chartjs-adapter-date-fns-min.js"></script>
     <script src="libs/ace-min.js"></script>
 </head>
@@ -69,7 +71,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.4.1</p>
+                <p>v  1.5.0-beta</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -92,7 +94,8 @@
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
-        <button id="btn-publish-view" class="tab-button">Publish</button> </nav>
+        <button id="btn-publish-view" class="tab-button">Publish</button> 
+        </nav>
 
     <div class="view-container">
         <main id="tree-view" class="view active">
@@ -431,7 +434,30 @@
                 </div>
             </div>
         </main>
+
         </div>
+    
+    <div id="chat-widget-container" class="chat-widget-container">
+        <div class="chat-header">
+            <span>AI Assistant</span>
+            <div class="chat-controls">
+                <button id="btn-chat-clear" title="Clear History">🗑️</button>
+                <button id="btn-chat-minimize" title="Minimize">_</button>
+            </div>
+        </div>
+        <div class="chat-body">
+            <div id="chat-history" class="chat-history-container">
+                </div>
+            <div class="chat-input-area">
+                <textarea id="chat-input" rows="1" placeholder="Ask..."></textarea>
+                <button id="btn-send-chat">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
+        💬
+    </button>
     
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
@@ -460,6 +486,8 @@
 
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
-    <script src="view.publish.js" type="module"></script> </body>
+    <script src="view.publish.js" type="module"></script> 
+    <script src="view.chat.js" type="module"></script>
+</body>
 
 </html>
