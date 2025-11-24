@@ -16,6 +16,12 @@ services:
       - NODE_ENV=production
       - PORT=8080
       - BASE_PATH=/
+    # Production logging configuration to prevent infinite log growth
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   # Rotate logs every 10MB
+        max-file: "3"     # Keep maximum 3 rotated files
     # Le CMD par défaut du Dockerfile ["node", "server.js"] est utilisé
 
   # Service 2: Le serveur MCP (mcp_server.mjs)
@@ -39,3 +45,9 @@ services:
     command: node mcp_server.mjs # Remplace le CMD du Dockerfile
     depends_on:
       - app # S'assure que 'app' démarre en premier
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
