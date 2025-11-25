@@ -116,7 +116,7 @@ const config = {
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
     VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
     VIEW_CHAT_ENABLED: process.env.VIEW_CHAT_ENABLED !== 'false',
-    LLM_API_URL: process.env.LLM_API_URL || '[https://generativelanguage.googleapis.com/v1beta/openai/](https://generativelanguage.googleapis.com/v1beta/openai/)',
+    LLM_API_URL: process.env.LLM_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
     LLM_API_KEY: process.env.LLM_API_KEY || '',
     LLM_MODEL: process.env.LLM_MODEL || 'gemini-2.0-flash',
     SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
@@ -424,7 +424,8 @@ mainRouter.use('/api/context', (req, res, next) => {
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
 
 if (config.VIEW_CHAT_ENABLED) {
-    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection));
+    // [MODIFIED] Passed simulatorManager to chatApi
+    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager));
 }
 
 if (config.VIEW_CONFIG_ENABLED) {

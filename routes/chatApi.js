@@ -14,8 +14,8 @@ const express = require('express');
 const axios = require('axios');
 const mqttMatch = require('mqtt-match'); //  Required for permission checks
 
-// [MODIFIED] Accepted 'getBrokerConnection' instead of 'getPrimaryConnection'
-module.exports = (db, logger, config, getBrokerConnection) => {
+// [MODIFIED] Added simulatorManager
+module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => {
     const router = express.Router();
 
     // --- 1. Tool Definitions ---
@@ -81,6 +81,43 @@ module.exports = (db, logger, config, getBrokerConnection) => {
                         broker_id: { type: "string", description: "Optional. ID of the broker to use. Defaults to primary." }
                     },
                     required: ["topic", "payload"]
+                }
+            }
+        },
+        // [NEW] Simulator Tools
+        {
+            type: "function",
+            function: {
+                name: "get_simulator_status",
+                description: "Get the list of all available simulators and their current state (running/stopped).",
+                parameters: { type: "object", properties: {}, required: [] }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "start_simulator",
+                description: "Start a specific simulator by name.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string", description: "The name of the simulator (e.g., 'stark_industries', 'paris_metro')." }
+                    },
+                    required: ["name"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "stop_simulator",
+                description: "Stop a specific simulator by name.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string", description: "The name of the simulator." }
+                    },
+                    required: ["name"]
                 }
             }
         }
@@ -203,6 +240,18 @@ module.exports = (db, logger, config, getBrokerConnection) => {
                     }
                 });
             });
+        },
+        // [NEW] Simulator Tool Implementations
+        get_simulator_status: async () => {
+            return simulatorManager.getStatuses();
+        },
+        start_simulator: async ({ name }) => {
+            if (!simulatorManager) return { error: "Simulator manager not available" };
+            return simulatorManager.startSimulator(name);
+        },
+        stop_simulator: async ({ name }) => {
+            if (!simulatorManager) return { error: "Simulator manager not available" };
+            return simulatorManager.stopSimulator(name);
         }
     };
 
@@ -244,24 +293,23 @@ module.exports = (db, logger, config, getBrokerConnection) => {
             CAPABILITIES:
             1. **READ**: You can inspect the database (list topics, history, search).
             2. **WRITE**: You can CREATE data using 'publish_message'.
+            3. **CONTROL**: You can manage simulators ('get_simulator_status', 'start_simulator', 'stop_simulator').
 
             UNS NAVIGATION HINTS:
             - If the user asks for a physical asset (e.g., "plane", "machine"), consider the UNS hierarchy: 'Country/Region/Site/Area/Line/Cell'.
-            - If exact search fails, think of synonyms (e.g., "Plane" -> "Aviation", "Appareil").
+            - If exact search fails, think of synonyms.
             - A topic like "france/isere/grenoble/transport/aviation" is valid.
-            - To see ALL data under a path, use wildcard searches or 'search_data' with the root keyword (e.g., "grenoble").
+            
+            SIMULATOR INSTRUCTIONS:
+            - If asked to "stop all simulators", first use 'get_simulator_status' to see what is running, then call 'stop_simulator' for each running simulator.
+            - If asked to "start simulation", check 'get_simulator_status' first to see what is available.
 
             INSTRUCTIONS:
             - **CRITICAL**: You MUST respect the Broker Permissions listed above.
-            - If the user asks to simulate data, you MUST choose a topic that matches the "Publish Allowed" patterns.
             - If a broker is READ-ONLY, do not attempt to publish to it.
             - If you have multiple brokers, check which one allows the topic you want to create.
-            - When creating a demo, invent a realistic UNS hierarchy (e.g., Enterprise/Site/Area/Line/Cell/Tag) BUT prefix it correctly if required by permissions (e.g., 'mqttunsviewer/Enterprise/...').
-            - Publish multiple messages to create a complete structure if asked.
             - Always use JSON payloads for metrics (e.g., {"value": 123, "unit": "C"}).
-            
-            DEBUGGING:
-            - If you look for data (using get_topic_history) and find a JSON object, READ IT before answering the user about specific values like "temperature".`
+            `
         };
 
         const conversation = [systemMessage, ...messages];
