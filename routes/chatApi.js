@@ -14,8 +14,8 @@ const express = require('express');
 const axios = require('axios');
 const mqttMatch = require('mqtt-match'); //  Required for permission checks
 
-// [MODIFIED] Added simulatorManager
-module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => {
+// [MODIFIED] Added wsManager argument to support broadcasting
+module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager) => {
     const router = express.Router();
 
     // --- 1. Tool Definitions ---
@@ -66,7 +66,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                 }
             }
         },
-        // [MODIFIED TOOL] Publish Capability now supports broker_id
         {
             type: "function",
             function: {
@@ -84,7 +83,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                 }
             }
         },
-        // [NEW] Simulator Tools
+        // Simulator Tools
         {
             type: "function",
             function: {
@@ -145,21 +144,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
         search_data: async ({ query, limit }) => {
              return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
-                
-                // [IMPROVED SEARCH] Split query into words for multi-keyword matching (AND logic)
                 const words = query.split(/\s+/).filter(w => w.length > 0);
-                
                 if (words.length === 0) return resolve([]);
 
-                // Build dynamic SQL for each word: (topic LIKE %word% OR payload LIKE %word%)
                 const conditions = words.map(word => {
                     const safeWord = `%${word.replace(/'/g, "''")}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
 
                 const whereClause = conditions.join(' AND ');
-                
-                // Fix for DuckDB driver limit issue
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClause} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 
                 logger.info(`[ChatAPI] Enhanced Search SQL: ${sql}`);
@@ -174,7 +167,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
             return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 if (!topic) return resolve({ error: "Topic is missing" });
-                // Fix for DuckDB driver limit issue
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.all(sql, [topic], (err, rows) => {
                     if (err) return reject(err);
@@ -182,11 +174,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                 });
             });
         },
-        // [NEW IMPL] Smart Publish Logic with Permission Checks
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
-                // 1. Identify Broker
-                let targetBrokerConfig = config.BROKER_CONFIGS[0]; // Default to first
+                let targetBrokerConfig = config.BROKER_CONFIGS[0]; 
                 
                 if (broker_id) {
                     targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
@@ -194,7 +184,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                         return resolve({ error: `Broker with ID '${broker_id}' not found.` });
                     }
                 } else {
-                    // Try to find a broker that allows this topic if no ID is specified
                     const capableBroker = config.BROKER_CONFIGS.find(b => {
                         return b.publish && b.publish.some(p => mqttMatch(p, topic));
                     });
@@ -204,8 +193,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                 }
 
                 const usedBrokerId = targetBrokerConfig.id;
-
-                // 2. Check Permissions (Critical!)
                 const allowedPublishPatterns = targetBrokerConfig.publish || [];
                 const isAllowed = allowedPublishPatterns.some(pattern => mqttMatch(pattern, topic));
 
@@ -217,19 +204,16 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                     });
                 }
 
-                // 3. Get Connection
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) {
                     return resolve({ error: `MQTT Client for broker '${usedBrokerId}' is not connected. Cannot publish.` });
                 }
 
-                // 4. Prepare Payload
                 let finalPayload = payload;
                 if (typeof payload === 'object') {
                     finalPayload = JSON.stringify(payload);
                 }
 
-                // 5. Publish
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) {
                         logger.error({ err }, `[ChatAPI] Failed to publish to ${topic}`);
@@ -241,17 +225,37 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
                 });
             });
         },
-        // [NEW] Simulator Tool Implementations
         get_simulator_status: async () => {
+            if (!simulatorManager) return { error: "Simulator manager not available" };
             return simulatorManager.getStatuses();
         },
         start_simulator: async ({ name }) => {
             if (!simulatorManager) return { error: "Simulator manager not available" };
-            return simulatorManager.startSimulator(name);
+            const result = simulatorManager.startSimulator(name);
+            
+            // [MODIFIED] Broadcast updated status to UI via WebSocket
+            if (wsManager) {
+                wsManager.broadcast(JSON.stringify({ 
+                    type: 'simulator-status', 
+                    statuses: simulatorManager.getStatuses() 
+                }));
+            }
+            
+            return result;
         },
         stop_simulator: async ({ name }) => {
             if (!simulatorManager) return { error: "Simulator manager not available" };
-            return simulatorManager.stopSimulator(name);
+            const result = simulatorManager.stopSimulator(name);
+            
+            // [MODIFIED] Broadcast updated status to UI via WebSocket
+            if (wsManager) {
+                wsManager.broadcast(JSON.stringify({ 
+                    type: 'simulator-status', 
+                    statuses: simulatorManager.getStatuses() 
+                }));
+            }
+            
+            return result;
         }
     };
 
@@ -259,25 +263,20 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
      * POST /api/chat/completion
      */
     router.post('/completion', async (req, res) => {
-        // [MODIFIED] Ignore client-side config, use server-side config
         const { messages } = req.body;
 
         if (!messages) {
             return res.status(400).json({ error: "Missing messages." });
         }
 
-        // Validate server-side config exists
         if (!config.LLM_API_KEY) {
             return res.status(500).json({ error: "LLM_API_KEY is not configured on the server." });
         }
 
-        // Clean up API URL (handle trailing slash)
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
         
-        // --- SYSTEM PROMPT (ARCHITECT MODE) ---
-        //  Dynamically generate broker permission context
         const brokerContext = config.BROKER_CONFIGS.map(b => {
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
@@ -315,7 +314,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
         const conversation = [systemMessage, ...messages];
 
         const requestPayload = {
-            model: config.LLM_MODEL, // Use server-side model config
+            model: config.LLM_MODEL,
             messages: conversation,
             tools: tools,
             tool_choice: "auto", 
@@ -372,7 +371,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager) => 
 
                 // --- Step 3: Final Answer ---
                 const payload2 = { 
-                    model: config.LLM_MODEL, // Use server-side model
+                    model: config.LLM_MODEL, 
                     messages: conversationWithTools 
                 };
 

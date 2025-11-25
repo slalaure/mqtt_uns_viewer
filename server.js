@@ -424,8 +424,8 @@ mainRouter.use('/api/context', (req, res, next) => {
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
 
 if (config.VIEW_CHAT_ENABLED) {
-    // [MODIFIED] Passed simulatorManager to chatApi
-    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager));
+    // [MODIFIED] Passed wsManager to chatApi to enable UI broadcasting from AI tools
+    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager));
 }
 
 if (config.VIEW_CONFIG_ENABLED) {
