@@ -50,8 +50,14 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
     
     wss.on('connection', (ws, req) => {
         const url = new URL(req.url, `http://${req.headers.host}`);
-        if (!url.pathname.startsWith(appBasePath)) {
-            logger.warn(`WebSocket connection rejected: Path ${url.pathname} does not match base path ${appBasePath}`);
+        
+        // [MODIFIED] Relaxed check for Reverse Proxies (Path Stripping)
+        // If the proxy strips the path, url.pathname will be '/' or just query params.
+        // If the proxy passes the path, it will be appBasePath.
+        const isMatch = url.pathname.startsWith(appBasePath) || url.pathname === '/' || url.pathname === '';
+
+        if (!isMatch) {
+            logger.warn(`WebSocket connection rejected: Path ${url.pathname} does not match base path ${appBasePath} (and is not root)`);
             ws.terminate();
             return;
         }

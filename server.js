@@ -131,7 +131,6 @@ const config = {
 
 
 // ---  Broker Configuration Parsing ---
-// [MODIFIED] Soft failure mode: Use empty array if config is missing or invalid.
 try {
     if (process.env.MQTT_BROKERS) {
         try {
@@ -346,8 +345,6 @@ db = new duckdb.Database(dbFile, (err) => {
 
         connection.on('close', () => {
             if (!isShuttingDown) {
-               // Only log as warn if we expected it to be open
-               // logger.warn(`⚠️ MQTT Broker '${brokerId}' connection closed.`);
                updateBrokerStatus(brokerId, 'disconnected');
             }
         });
@@ -378,18 +375,8 @@ app.set('trust proxy', true);
 // Simulator
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
-    // [MODIFIED] Simulator works even if MQTT is disconnected (using internal handler would be better, but for now we check connection)
-    // If no broker connected, we can still publish to web clients via WebSocket manually if we refactored,
-    // but preserving current logic: if unconnected, it just logs.
     if (conn && conn.connected) {
         conn.publish(topic, payload, { qos: 1 });
-    } else {
-        // Fallback: Loopback to websocket if no broker (Internal Simulation Mode)
-        // This requires accessing mqttHandler directly, which is complex here.
-        // For now, we accept that simulators need a broker to loop back messages.
-        // Or we could execute the logic locally. 
-        // Ideally, we would call mqttHandler.handleMessage('simulator', topic, payload) here directly.
-        // But since we are in "No Crash" mode, simply doing nothing is acceptable.
     }
 }, config.IS_SPARKPLUG_ENABLED);
 
@@ -455,7 +442,6 @@ mainRouter.use('/api/context', (req, res, next) => {
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
 
 if (config.VIEW_CHAT_ENABLED) {
-    // [MODIFIED] Passed wsManager to chatApi to enable UI broadcasting from AI tools
     mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager));
 }
 
@@ -471,7 +457,6 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const conn = getBrokerConnection(brokerId);
     if (!conn || !conn.connected) return res.status(503).json({ error: "Broker not connected" });
     
-    // Determine payload
     let finalPayload = payload;
     if (format === 'json' || typeof payload === 'object') {
         try { finalPayload = JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload); } catch(e) {}
@@ -498,8 +483,6 @@ if (!config.VIEW_CONFIG_ENABLED) {
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false }));
 
 // [NEW] SPA Route Handling for Tabs
-// Allows accessing /tree, /chart, /history, etc. directly via URL.
-// IMPORTANT: We handle both with and without trailing slash to be robust.
 const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish'];
 clientRoutes.forEach(route => {
     mainRouter.get('/' + route, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -507,17 +490,30 @@ clientRoutes.forEach(route => {
 });
 
 app.use(authMiddleware);
+
+// --- [CRITICAL FIX] Hybrid Routing Strategy ---
+// 1. Mount on the specific basePath (for local dev or pass-through proxies)
 app.use(basePath, mainRouter);
 
-// [FIXED] Handle Reverse Proxy Trailing Slash logic + Default to /tree/
-// If at root, redirect to /tree/ (with slash) to please Redbird and load the default tab.
+// 2. Mount on root '/' (for stripping proxies like Redbird/Traefik)
+// If basePath is not root, we also listen on root to catch requests where the prefix was stripped by the proxy.
 if (basePath !== '/') {
-    app.get('/', (req, res) => res.redirect(basePath + '/tree/'));
-} else {
-    // If basePath is root, we are at /, redirect to /tree/
-    // We must handle this BEFORE mainRouter might catch it (though mainRouter mostly handles subpaths)
-    app.get('/', (req, res) => res.redirect('/tree/'));
+    logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/' to support path-stripping proxies.`);
+    app.use('/', mainRouter);
 }
+
+// [FIXED] Handle Reverse Proxy Trailing Slash logic + Default to /tree/
+// If at root (and not handled by mainRouter static files), redirect to default tab.
+// Note: mainRouter now handles '/' via express.static (index.html), so this might only be hit if index.html is missing 
+// or if we want to force a specific tab URL structure.
+app.get('/', (req, res) => {
+    // If the proxy stripped the path, the browser URL is still /webapp/tmp_uns_logs/
+    // We want to redirect to /webapp/tmp_uns_logs/tree/
+    // Since we are inside the container, we must use basePath to construct the redirect.
+    const target = basePath === '/' ? '/tree/' : basePath + '/tree/';
+    res.redirect(target);
+});
+
 
 // --- Server Start ---
 server.listen(config.PORT, () => {
@@ -531,21 +527,17 @@ async function gracefulShutdown() {
     
     logger.info("\n✅ Gracefully shutting down...");
 
-    // Force exit after 5 seconds if stuck
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
 
     try {
-        // 1. Stop App logic
         dataManager.stop();
-        simulatorManager.getStatuses(); // Implicitly touches sims logic
+        simulatorManager.getStatuses();
         
-        // 2. Close Websockets
         await new Promise(resolve => wsManager.close(resolve));
         
-        // 3. Close HTTP Server
         await new Promise((resolve) => {
             server.close(() => {
                 logger.info("✅ HTTP Server closed.");
@@ -553,13 +545,11 @@ async function gracefulShutdown() {
             });
         });
 
-        // 4. Close MQTT connections forcefully
         activeConnections.forEach((conn) => {
             if (conn) conn.end(true); 
         });
         logger.info("✅ MQTT Connections closed.");
 
-        // 5. Close Database
         await dataManager.close();
         logger.info("✅ Database closed.");
 
@@ -576,7 +566,6 @@ process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
 // --- Catch Unhandled Exceptions/Rejections ---
-// Prevents silent crashes and zombie DB locks in production
 process.on('uncaughtException', (err) => {
     logger.fatal({ err }, "❌ FATAL: Uncaught Exception. Shutting down...");
     gracefulShutdown();
