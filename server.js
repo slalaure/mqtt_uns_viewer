@@ -221,6 +221,10 @@ function updateBrokerStatus(brokerId, status, error = null) {
 const app = express();
 const server = http.createServer(app);
 
+// [FIX] Enable trust proxy for Redbird/Traefik compatibility
+// This ensures Express respects X-Forwarded-Proto/Host headers
+app.enable('trust proxy');
+
 // ---  Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
@@ -490,20 +494,19 @@ if (!config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
 
-mainRouter.use(express.static(path.join(__dirname, 'public')));
+// [FIX] Disable internal redirect for static files to allow Redbird to handle slashes
+mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false }));
+
 app.use(authMiddleware);
 app.use(basePath, mainRouter);
 
-// [FIXED] Redbird (Reverse Proxy) Loop Fix
-// Redbird usually forces a trailing slash (e.g. /mqtt -> /mqtt/).
-// If we redirect to 'basePath' (without slash), the browser requests that, and Redbird redirects back to slash.
-// By redirecting to 'basePath + "/"', we align with Redbird and break the infinite loop.
+// [FIX] Handle Reverse Proxy Trailing Slash logic
+// If we are at a subpath and no slash is present, redirect to add it.
+// If we are at root, Express usually handles it via static index.html, but redbird forces /.
 if (basePath !== '/') {
     app.get('/', (req, res) => res.redirect(basePath + '/'));
-} else {
-    // If basePath is root, we are already there, mainRouter handles it.
-    // Ensure we don't accidentally intercept mainRouter's root.
-}
+} 
+// Note: If basePath is '/', we don't need a redirect rule as 'mainRouter' handles '/' via static.
 
 // --- Server Start ---
 server.listen(config.PORT, () => {
