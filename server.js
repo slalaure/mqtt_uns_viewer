@@ -8,7 +8,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
-  
+ * Server Entry Point
  */
 
 // --- Imports ---
@@ -220,8 +220,7 @@ function updateBrokerStatus(brokerId, status, error = null) {
 const app = express();
 const server = http.createServer(app);
 
-// [FIX] Enable trust proxy for Redbird/Traefik compatibility
-// This ensures Express respects X-Forwarded-Proto/Host headers
+// Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
 
 // ---  Mapper Engine Setup ---
@@ -239,7 +238,6 @@ const dbWalFile = dbFile + '.wal';
 let db; 
 db = new duckdb.Database(dbFile, (err) => {
     if (err) {
-        // [MODIFIED] Fatal DB error is still fatal as the app depends on it
         logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
         process.exit(1);
     }
@@ -286,7 +284,6 @@ db = new duckdb.Database(dbFile, (err) => {
     config.BROKER_CONFIGS.forEach(brokerConfig => {
         const brokerId = brokerConfig.id;
         
-        // [MODIFIED] Check if creation returned null (e.g. invalid certs)
         const connection = createMqttClient(brokerConfig, logger, CERTS_PATH);
         
         if (!connection) {
@@ -313,7 +310,6 @@ db = new duckdb.Database(dbFile, (err) => {
             logger.info(`✅ MQTT Broker '${brokerId}' connected.`);
             updateBrokerStatus(brokerId, 'connected');
             
-            // Subscribe
             const rawTopics = (brokerConfig.subscribe && brokerConfig.subscribe.length > 0) ? brokerConfig.subscribe : brokerConfig.topics;
             const subscriptionTopics = Array.isArray(rawTopics) ? rawTopics.map(t => t.trim()) : [];
             
@@ -380,7 +376,7 @@ simulatorManager.init(logger, (topic, payload) => {
     }
 }, config.IS_SPARKPLUG_ENABLED);
 
-// --- API Routes (Simplified for brevity, logic mostly unchanged) ---
+// --- API Routes ---
 mainRouter.get('/api/svg/file', (req, res) => {
     const filePath = path.join(DATA_PATH, path.basename(req.query.name || ''));
     if (fs.existsSync(filePath) && filePath.endsWith('.svg')) res.sendFile(filePath);
@@ -479,37 +475,51 @@ if (!config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
 
-// [FIXED] Disable internal redirect for static files to allow Redbird to handle slashes
+// Disable internal redirect for static files to allow Redbird to handle slashes
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false }));
 
-// [NEW] SPA Route Handling for Tabs
+// [MODIFIED] Helper to serve index.html with dynamic base tag injection.
+// This fixes 404 errors on assets when reloading deep routes (e.g. /webapp/history/).
+const serveSPA = (req, res) => {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    fs.readFile(indexPath, 'utf8', (err, data) => {
+        if (err) {
+            logger.error({ err }, "Failed to read index.html");
+            return res.status(500).send("Server Error");
+        }
+        
+        // Ensure base path ends with a slash for the <base> tag logic to work correctly
+        const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
+        
+        // Inject <base href="..."> into the <head>
+        // We use a regex replacement to ensure it's placed early in the head
+        const modifiedHtml = data.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
+        
+        res.send(modifiedHtml);
+    });
+};
+
+// [MODIFIED] Apply the dynamic SPA handler to all client routes
 const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish'];
 clientRoutes.forEach(route => {
-    mainRouter.get('/' + route, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-    mainRouter.get('/' + route + '/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+    mainRouter.get('/' + route, serveSPA);
+    mainRouter.get('/' + route + '/', serveSPA);
 });
 
 app.use(authMiddleware);
 
-// --- [CRITICAL FIX] Hybrid Routing Strategy ---
+// Hybrid Routing Strategy
 // 1. Mount on the specific basePath (for local dev or pass-through proxies)
 app.use(basePath, mainRouter);
 
 // 2. Mount on root '/' (for stripping proxies like Redbird/Traefik)
-// If basePath is not root, we also listen on root to catch requests where the prefix was stripped by the proxy.
 if (basePath !== '/') {
     logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/' to support path-stripping proxies.`);
     app.use('/', mainRouter);
 }
 
-// [FIXED] Handle Reverse Proxy Trailing Slash logic + Default to /tree/
-// If at root (and not handled by mainRouter static files), redirect to default tab.
-// Note: mainRouter now handles '/' via express.static (index.html), so this might only be hit if index.html is missing 
-// or if we want to force a specific tab URL structure.
+// Handle Reverse Proxy Trailing Slash logic + Default to /tree/
 app.get('/', (req, res) => {
-    // If the proxy stripped the path, the browser URL is still /webapp/tmp_uns_logs/
-    // We want to redirect to /webapp/tmp_uns_logs/tree/
-    // Since we are inside the container, we must use basePath to construct the redirect.
     const target = basePath === '/' ? '/tree/' : basePath + '/tree/';
     res.redirect(target);
 });
