@@ -494,19 +494,30 @@ if (!config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
 
-// [FIX] Disable internal redirect for static files to allow Redbird to handle slashes
+// [FIXED] Disable internal redirect for static files to allow Redbird to handle slashes
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false }));
+
+// [NEW] SPA Route Handling for Tabs
+// Allows accessing /tree, /chart, /history, etc. directly via URL.
+// IMPORTANT: We handle both with and without trailing slash to be robust.
+const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish'];
+clientRoutes.forEach(route => {
+    mainRouter.get('/' + route, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+    mainRouter.get('/' + route + '/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+});
 
 app.use(authMiddleware);
 app.use(basePath, mainRouter);
 
-// [FIX] Handle Reverse Proxy Trailing Slash logic
-// If we are at a subpath and no slash is present, redirect to add it.
-// If we are at root, Express usually handles it via static index.html, but redbird forces /.
+// [FIXED] Handle Reverse Proxy Trailing Slash logic + Default to /tree/
+// If at root, redirect to /tree/ (with slash) to please Redbird and load the default tab.
 if (basePath !== '/') {
-    app.get('/', (req, res) => res.redirect(basePath + '/'));
-} 
-// Note: If basePath is '/', we don't need a redirect rule as 'mainRouter' handles '/' via static.
+    app.get('/', (req, res) => res.redirect(basePath + '/tree/'));
+} else {
+    // If basePath is root, we are at /, redirect to /tree/
+    // We must handle this BEFORE mainRouter might catch it (though mainRouter mostly handles subpaths)
+    app.get('/', (req, res) => res.redirect('/tree/'));
+}
 
 // --- Server Start ---
 server.listen(config.PORT, () => {

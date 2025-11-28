@@ -137,19 +137,23 @@ document.addEventListener('DOMContentLoaded', () => {
         darkModeToggle.checked ? enableDarkMode() : disableDarkMode();
     });
 
-    // --- Tab Switching Logic (Chat removed) ---
-    function switchView(viewToShow) {
+    // --- Tab Switching Logic (Updated for URL Routing) ---
+    // Pass 'updateHistory' = false when called from popstate/init to avoid pushing duplicates
+    function switchView(viewToShow, updateHistory = true) {
         // [MODIFIED] Removed chatView from arrays
         const views = [treeView, mapView, historyView, mapperView, chartView, publishView]; 
         const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView, btnChartView, btnPublishView]; 
         let targetView, targetButton;
+        
+        // Map view IDs to URL slugs
+        let slug = 'tree'; 
 
-        if (viewToShow === 'map') { targetView = mapView; targetButton = btnMapView; }
-        else if (viewToShow === 'history') { targetView = historyView; targetButton = btnHistoryView; }
-        else if (viewToShow === 'mapper') { targetView = mapperView; targetButton = btnMapperView; }
-        else if (viewToShow === 'chart') { targetView = chartView; targetButton = btnChartView; }
-        else if (viewToShow === 'publish') { targetView = publishView; targetButton = btnPublishView; } 
-        else { targetView = treeView; targetButton = btnTreeView; }
+        if (viewToShow === 'map') { targetView = mapView; targetButton = btnMapView; slug = 'svg'; } // Use 'svg' in URL as requested
+        else if (viewToShow === 'history') { targetView = historyView; targetButton = btnHistoryView; slug = 'history'; }
+        else if (viewToShow === 'mapper') { targetView = mapperView; targetButton = btnMapperView; slug = 'mapper'; }
+        else if (viewToShow === 'chart') { targetView = chartView; targetButton = btnChartView; slug = 'chart'; }
+        else if (viewToShow === 'publish') { targetView = publishView; targetButton = btnPublishView; slug = 'publish'; } 
+        else { targetView = treeView; targetButton = btnTreeView; slug = 'tree'; } // Default
 
         views.forEach(v => v?.classList.remove('active'));
         buttons.forEach(b => b?.classList.remove('active'));
@@ -161,6 +165,55 @@ document.addEventListener('DOMContentLoaded', () => {
         if (viewToShow === 'history') {
             renderFilteredHistory();
         }
+
+        // --- Handle URL Update ---
+        if (updateHistory) {
+            // Ensure basePath ends with slash for concatenation
+            const base = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
+            const newUrl = `${base}${slug}/`;
+            // Only push if URL actually changes
+            if (window.location.pathname !== newUrl && window.location.pathname !== newUrl.slice(0, -1)) {
+                window.history.pushState({ view: viewToShow }, '', newUrl);
+            }
+        }
+    }
+    
+    // Listen for Back/Forward buttons
+    window.addEventListener('popstate', (event) => {
+        if (event.state && event.state.view) {
+            switchView(event.state.view, false);
+        } else {
+            // Fallback: parse URL again
+            handleRoutingFromUrl();
+        }
+    });
+
+    // Helper to determine view from URL
+    function handleRoutingFromUrl() {
+        const path = window.location.pathname;
+        let viewToLoad = 'tree'; // Default
+
+        // Normalize base path to not have trailing slash for comparison
+        const normalizedBase = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
+        
+        // Remove base path from current path to get the "route"
+        // e.g. /myapp/chart/ -> /chart/
+        let relativePath = path;
+        if (path.startsWith(normalizedBase)) {
+            relativePath = path.substring(normalizedBase.length);
+        }
+        
+        // Remove leading/trailing slashes for easier matching
+        const cleanPath = relativePath.replace(/^\/|\/$/g, '');
+
+        if (cleanPath === 'svg' || cleanPath === 'map') viewToLoad = 'map';
+        else if (cleanPath === 'history') viewToLoad = 'history';
+        else if (cleanPath === 'mapper') viewToLoad = 'mapper';
+        else if (cleanPath === 'chart') viewToLoad = 'chart';
+        else if (cleanPath === 'publish') viewToLoad = 'publish';
+        else viewToLoad = 'tree';
+
+        switchView(viewToLoad, false); // Don't push state on initial load/popstate
     }
     
     btnTreeView?.addEventListener('click', () => switchView('tree'));
@@ -398,8 +451,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnTreeView?.classList.remove('active');
         treeView?.classList.remove('active');
-        let defaultViewActivated = false;
-
+        
+        // [MODIFIED] Logic to show/hide tabs based on config
         const views = [
             { enabled: appConfig.viewTreeEnabled, btn: btnTreeView, view: 'tree' },
             { enabled: appConfig.viewSvgEnabled, btn: btnMapView, view: 'map' },
@@ -407,22 +460,18 @@ document.addEventListener('DOMContentLoaded', () => {
             { enabled: appConfig.viewMapperEnabled, btn: btnMapperView, view: 'mapper' },
             { enabled: appConfig.viewChartEnabled, btn: btnChartView, view: 'chart' },
             { enabled: appConfig.viewPublishEnabled, btn: btnPublishView, view: 'publish' },
-            // [MODIFIED] Chat view is handled separately by the widget logic
         ];
 
         views.forEach(v => {
             if (v.enabled) {
                 v.btn.style.display = 'block';
-                if (!defaultViewActivated) {
-                    switchView(v.view);
-                    defaultViewActivated = true;
-                }
             } else {
                 v.btn.style.display = 'none';
             }
         });
         
-        if (!defaultViewActivated) switchView('tree'); 
+        // [MODIFIED] Initial Routing Call
+        handleRoutingFromUrl();
 
         if (btnConfigView) btnConfigView.style.display = appConfig.viewConfigEnabled ? 'block' : 'none';
         
