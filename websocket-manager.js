@@ -46,16 +46,30 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
     getDbStatus = getDbCallback;
     getBrokerStatuses = getBrokerStatusesCallback;
     
-    wss = new WebSocketServer({ server });
+    // [CRITICAL FIX] "noServer: true"
+    // We detach the WebSocket server from the HTTP server's default routing.
+    // We will handle the 'upgrade' event manually below. This solves issues where
+    // reverse proxies strip paths (e.g. /webapp/foo -> /) causing 'ws' to reject the path.
+    wss = new WebSocketServer({ noServer: true });
     
-    wss.on('connection', (ws, req) => {
-        // [FIXED] Removed strict path validation.
-        // In reverse proxy environments with path stripping, req.url might be '/' 
-        // while the client thinks it's connecting to '/webapp/path'.
-        // Since this container serves only this app, we accept all Upgrade requests that reach us.
-        const reqPath = req.url ? req.url.split('?')[0] : 'unknown';
-        logger.info(`✅ ➡️ WebSocket client connected. (Incoming path: ${reqPath}, Configured Base: ${appBasePath})`);
+    // Manual Upgrade Handling
+    server.on('upgrade', (request, socket, head) => {
+        const reqUrl = request.url;
         
+        // Log the exact URL received by Node.js (useful to debug what Redbird is sending)
+        logger.info(`🔄 HTTP Upgrade Request received on path: '${reqUrl}'`);
+
+        // We accept ALL upgrades on this server port, regardless of path.
+        // This makes the server resilient to whatever path rewriting the proxy did.
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+        });
+    });
+
+    wss.on('connection', (ws, req) => {
+        // Log successful connection
+        logger.info('✅ ➡️ WebSocket client connected successfully.');
+
         // 0. Send Broker Statuses (Immediate UI feedback)
         if (getBrokerStatuses) {
             const statuses = getBrokerStatuses();
@@ -74,11 +88,14 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                 const min = rows[0].min_ts ? new Date(rows[0].min_ts).getTime() : 0;
                 const max = rows[0].max_ts ? new Date(rows[0].max_ts).getTime() : Date.now();
 
-                ws.send(JSON.stringify({ 
-                    type: 'db-bounds', 
-                    min: min, 
-                    max: max 
-                }));
+                // Check if connection is still open before sending
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ 
+                        type: 'db-bounds', 
+                        min: min, 
+                        max: max 
+                    }));
+                }
             }
         });
 
@@ -213,7 +230,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         }
     });
     
-    logger.info('✅ WebSocket Manager initialized.');
+    logger.info('✅ WebSocket Manager initialized (Manual Upgrade Mode).');
 }
 
 // Helper to process row JSON/BigInt

@@ -325,13 +325,21 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             
-            // [FIXED] Robust WebSocket URL construction
-            // Remove trailing slash from appBasePath to avoid double slashes,
-            // but ensure we connect to the configured base path so proxy routing works.
-            const cleanBasePath = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
+            // [CRITICAL FIX] Ensure trailing slash for WebSocket URL
+            // Many reverse proxies (like Redbird or Nginx) configured for directory mapping
+            // will issue a 301 Redirect if the trailing slash is missing.
+            // WebSocket clients (JS `new WebSocket()`) generally FAIL immediately on 301 Redirects (Error 1006).
+            // We force the slash here to hit the "directory" directly.
+            let cleanBasePath = appBasePath;
+            if (!cleanBasePath.endsWith('/')) {
+                cleanBasePath += '/';
+            }
+            
+            // Construct full URL. 
+            // Note: If base path is just '/', cleanBasePath is '/'.
             const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
             
-            console.log("Connecting WebSocket to:", wsUrl); // Debugging
+            console.log("Connecting WebSocket to:", wsUrl); 
             
             ws = new WebSocket(wsUrl);
             ws.onopen = () => finishInitialization(appConfig);
