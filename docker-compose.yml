@@ -1,53 +1,68 @@
 version: '3.8'
 
 services:
-  # Service 1: L'application web principale (server.js)
+  # Service 1: The main web application (server.js)
   app:
     build:
       context: .
     container_name: mqtt_uns_viewer_app
     restart: always
     ports:
-      - "8080:8080" # Expose l'application web sur le port 8080 de la VM
+      - "8080:8080" # Expose web app on port 8080 of the host
     volumes:
-      # Monte le dossier 'data' pour la persistance
+      # Mount 'data' folder for persistence
       - ./data:/usr/src/app/data
     environment:
       - NODE_ENV=production
       - PORT=8080
       - BASE_PATH=/
+    # Assign to the explicit internal network
+    networks:
+      - mqtt_viewer_net
     # Production logging configuration to prevent infinite log growth
     logging:
       driver: "json-file"
       options:
         max-size: "10m"   # Rotate logs every 10MB
         max-file: "3"     # Keep maximum 3 rotated files
-    # Le CMD par défaut du Dockerfile ["node", "server.js"] est utilisé
+    # Default Dockerfile CMD ["node", "server.js"] is used
 
-  # Service 2: Le serveur MCP (mcp_server.mjs)
+  # Service 2: The MCP server (mcp_server.mjs)
   mcp:
     build:
-      context: . # Utilise la même image que 'app'
+      context: . # Uses the same image as 'app'
     container_name: mqtt_uns_viewer_mcp
     restart: always
     ports:
-      - "3000:3000" # Expose le serveur MCP sur le port 3000 de la VM
+      - "3000:3000" # Expose MCP server on port 3000 of the host
     volumes:
-      - ./data:/usr/src/app/data # Requis pour lire data/uns_model.json
+      - ./data:/usr/src/app/data # Required to read data/uns_model.json
     environment:
       - NODE_ENV=production
-      # --- Configuration critique du MCP ---
-      - MCP_TRANSPORT=http    # Force le mode HTTP
-      - MCP_PORT=3000         # Définit le port d'écoute
-      - MAIN_APP_HOST=app     # [IMPORTANT] C'est le nom du service 'app' ci-dessus (DNS Docker)
-      - PORT=8080             # Le port sur lequel 'app' écoute
+      # --- Critical MCP Configuration ---
+      - MCP_TRANSPORT=http    # Force HTTP mode
+      - MCP_PORT=3000         # Define listening port
+      - MAIN_APP_HOST=app     # [IMPORTANT] This is the service name 'app' above (Docker DNS)
+      - PORT=8080             # The port 'app' is listening on internally
       - BASE_PATH=/
-    command: node mcp_server.mjs # Remplace le CMD du Dockerfile
+    # Assign to the explicit internal network
+    networks:
+      - mqtt_viewer_net
+    command: node mcp_server.mjs # Overrides Dockerfile CMD
     depends_on:
-      - app # S'assure que 'app' démarre en premier
+      - app # Ensure 'app' starts first
     # Production logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+# Define specific network settings to use RFC 6598 (CGNAT) space
+# This prevents conflicts with standard 192.168.x.x or 10.x.x.x corporate networks
+networks:
+  mqtt_viewer_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 100.64.0.0/24

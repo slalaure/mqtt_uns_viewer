@@ -33,10 +33,11 @@ const path = require('path');
 /**
  * Creates and returns an MQTT client instance based on the config.
  * It does NOT wait for the connection to be established.
+ * * [MODIFIED] Now returns null instead of exiting process on configuration errors.
  * * @param {object} brokerConfig - The broker configuration object.
  * @param {pino.Logger} logger - The main pino logger.
  * @param {string} certsPath - The path to the /data/certs directory.
- * @returns {mqtt.MqttClient} The MQTT client instance.
+ * @returns {mqtt.MqttClient|null} The MQTT client instance or null if config failed.
  */
 function createMqttClient(brokerConfig, logger, certsPath) {
     const {
@@ -83,16 +84,16 @@ function createMqttClient(brokerConfig, logger, certsPath) {
             options.ca = fs.readFileSync(path.join(certsPath, caFilename));
             brokerLogger.info("✅ Configured with MTLS (Client Cert + Key + CA).");
         } catch (err) {
-            brokerLogger.error({ err }, "FATAL ERROR: Could not read MTLS certificate files.");
-            process.exit(1);
+            brokerLogger.error({ err }, "❌ ERROR: Could not read MTLS certificate files. Skipping this broker connection.");
+            return null; // Return null instead of crashing the whole app
         }
     } else if (caFilename) {
          try {
             options.ca = fs.readFileSync(path.join(certsPath, caFilename));
             brokerLogger.info("✅ Configured with standard TLS (CA only).");
         } catch (err) {
-            brokerLogger.error({ err }, "FATAL ERROR: Could not read CA certificate file.");
-            process.exit(1);
+            brokerLogger.error({ err }, "❌ ERROR: Could not read CA certificate file. Skipping this broker connection.");
+            return null; // Return null instead of crashing
         }
     }
 
@@ -101,7 +102,12 @@ function createMqttClient(brokerConfig, logger, certsPath) {
     brokerLogger.info(`Initializing client for '${id}' at ${protocol}://${host}:${port}...`);
     
     // Create the client but let the caller attach event listeners
-    return mqtt.connect(options);
+    try {
+        return mqtt.connect(options);
+    } catch (e) {
+        brokerLogger.error({ err: e }, "❌ Unexpected error during MQTT connect initialization.");
+        return null;
+    }
 }
 
 module.exports = { createMqttClient };

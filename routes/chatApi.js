@@ -14,8 +14,8 @@ const express = require('express');
 const axios = require('axios');
 const mqttMatch = require('mqtt-match'); //  Required for permission checks
 
-// [MODIFIED] Added wsManager argument to support broadcasting
-module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager) => {
+// [MODIFIED] Accepted 'getBrokerConnection' instead of 'getPrimaryConnection'
+module.exports = (db, logger, config, getBrokerConnection) => {
     const router = express.Router();
 
     // --- 1. Tool Definitions ---
@@ -40,11 +40,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             type: "function",
             function: {
                 name: "search_data",
-                description: "Search for messages containing specific keywords (space-separated). Searches both topic paths and JSON payloads.",
+                description: "Search for messages containing specific keywords. IMPORTANT: Data is mostly in ENGLISH. If the user asks in French, translate keywords to English (e.g., 'panne' -> 'error', 'maintenance' -> 'maintenance'). Do not send full sentences, only 1-3 distinct keywords.",
                 parameters: {
                     type: "object",
                     properties: {
-                        query: { type: "string", description: "Keywords to search (e.g., 'aviation grenoble')." },
+                        query: { type: "string", description: "Space-separated English keywords (e.g., 'maintenance cmms')." },
                         limit: { type: "number" }
                     },
                     required: ["query"]
@@ -66,6 +66,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
             }
         },
+        // [MODIFIED TOOL] Publish Capability now supports broker_id
         {
             type: "function",
             function: {
@@ -144,15 +145,21 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         search_data: async ({ query, limit }) => {
              return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
+                
+                // [IMPROVED SEARCH] Split query into words for multi-keyword matching (AND logic)
                 const words = query.split(/\s+/).filter(w => w.length > 0);
+                
                 if (words.length === 0) return resolve([]);
 
+                // Build dynamic SQL for each word: (topic LIKE %word% OR payload LIKE %word%)
                 const conditions = words.map(word => {
                     const safeWord = `%${word.replace(/'/g, "''")}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
 
                 const whereClause = conditions.join(' AND ');
+                
+                // Fix for DuckDB driver limit issue
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClause} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 
                 logger.info(`[ChatAPI] Enhanced Search SQL: ${sql}`);
@@ -167,6 +174,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 if (!topic) return resolve({ error: "Topic is missing" });
+                // Fix for DuckDB driver limit issue
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.all(sql, [topic], (err, rows) => {
                     if (err) return reject(err);
@@ -174,9 +182,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
+        // [NEW IMPL] Smart Publish Logic with Permission Checks
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
-                let targetBrokerConfig = config.BROKER_CONFIGS[0]; 
+                // 1. Identify Broker
+                let targetBrokerConfig = config.BROKER_CONFIGS[0]; // Default to first
                 
                 if (broker_id) {
                     targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
@@ -184,6 +194,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         return resolve({ error: `Broker with ID '${broker_id}' not found.` });
                     }
                 } else {
+                    // Try to find a broker that allows this topic if no ID is specified
                     const capableBroker = config.BROKER_CONFIGS.find(b => {
                         return b.publish && b.publish.some(p => mqttMatch(p, topic));
                     });
@@ -193,6 +204,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
 
                 const usedBrokerId = targetBrokerConfig.id;
+
+                // 2. Check Permissions (Critical!)
                 const allowedPublishPatterns = targetBrokerConfig.publish || [];
                 const isAllowed = allowedPublishPatterns.some(pattern => mqttMatch(pattern, topic));
 
@@ -204,16 +217,19 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     });
                 }
 
+                // 3. Get Connection
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) {
                     return resolve({ error: `MQTT Client for broker '${usedBrokerId}' is not connected. Cannot publish.` });
                 }
 
+                // 4. Prepare Payload
                 let finalPayload = payload;
                 if (typeof payload === 'object') {
                     finalPayload = JSON.stringify(payload);
                 }
 
+                // 5. Publish
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) {
                         logger.error({ err }, `[ChatAPI] Failed to publish to ${topic}`);
@@ -263,20 +279,25 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
      * POST /api/chat/completion
      */
     router.post('/completion', async (req, res) => {
+        // [MODIFIED] Ignore client-side config, use server-side config
         const { messages } = req.body;
 
         if (!messages) {
             return res.status(400).json({ error: "Missing messages." });
         }
 
+        // Validate server-side config exists
         if (!config.LLM_API_KEY) {
             return res.status(500).json({ error: "LLM_API_KEY is not configured on the server." });
         }
 
+        // Clean up API URL (handle trailing slash)
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
         
+        // --- SYSTEM PROMPT (ARCHITECT MODE) ---
+        //  Dynamically generate broker permission context
         const brokerContext = config.BROKER_CONFIGS.map(b => {
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
@@ -292,7 +313,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             CAPABILITIES:
             1. **READ**: You can inspect the database (list topics, history, search).
             2. **WRITE**: You can CREATE data using 'publish_message'.
-            3. **CONTROL**: You can manage simulators ('get_simulator_status', 'start_simulator', 'stop_simulator').
+
+            DATA LANGUAGE & SEARCH STRATEGY:
+            - **CRITICAL**: The machine data and UNS structure are primarily in **ENGLISH** (e.g., "maintenance_request", "error", "workorder").
+            - If the user asks in French (e.g., "Y a-t-il des maintenances prévues ?"), you MUST **translate** the intent into English keywords before calling tools.
+            - Example: User "panne sur le robot" -> Tool \`search_data({ query: "robot error" })\`.
+            - Do NOT use stop words (le, la, de, for, the) in the search query. Use concise technical keywords.
 
             UNS NAVIGATION HINTS:
             - If the user asks for a physical asset (e.g., "plane", "machine"), consider the UNS hierarchy: 'Country/Region/Site/Area/Line/Cell'.
@@ -305,10 +331,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
             INSTRUCTIONS:
             - **CRITICAL**: You MUST respect the Broker Permissions listed above.
+            - If the user asks to simulate data, you MUST choose a topic that matches the "Publish Allowed" patterns.
             - If a broker is READ-ONLY, do not attempt to publish to it.
             - If you have multiple brokers, check which one allows the topic you want to create.
+            - When creating a demo, invent a realistic UNS hierarchy (e.g., Enterprise/Site/Area/Line/Cell/Tag) BUT prefix it correctly if required by permissions (e.g., 'mqttunsviewer/Enterprise/...').
+            - Publish multiple messages to create a complete structure if asked.
             - Always use JSON payloads for metrics (e.g., {"value": 123, "unit": "C"}).
-            `
+            
+            DEBUGGING:
+            - If you look for data (using get_topic_history) and find a JSON object, READ IT before answering the user about specific values like "temperature".`
         };
 
         const conversation = [systemMessage, ...messages];
@@ -371,7 +402,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                 // --- Step 3: Final Answer ---
                 const payload2 = { 
-                    model: config.LLM_MODEL, 
+                    model: config.LLM_MODEL, // Use server-side model
                     messages: conversationWithTools 
                 };
 

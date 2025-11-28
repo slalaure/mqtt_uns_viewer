@@ -15,6 +15,92 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('config-form');
     const saveButton = document.getElementById('save-config-button');
     const statusMessage = document.getElementById('status-message');
+    
+    // Cert Manager Elements
+    const certList = document.getElementById('cert-list');
+    const uploadInput = document.getElementById('cert-upload-input');
+    const btnUpload = document.getElementById('btn-upload-cert');
+    const uploadStatus = document.getElementById('cert-upload-status');
+
+    // --- Certificate Manager Logic ---
+
+    async function loadCertificates() {
+        try {
+            const response = await fetch('api/env/certs');
+            if (!response.ok) throw new Error("Failed to fetch certificates.");
+            const files = await response.json();
+            
+            certList.innerHTML = '';
+            if (files.length === 0) {
+                certList.innerHTML = '<li class="cert-item" style="justify-content: center; color: var(--color-text-secondary);">No certificates found.</li>';
+                return;
+            }
+
+            files.forEach(filename => {
+                const li = document.createElement('li');
+                li.className = 'cert-item';
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = filename;
+                
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn-copy-cert';
+                copyBtn.textContent = 'Copy Name';
+                copyBtn.type = 'button'; // Prevent form submission
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(filename);
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => copyBtn.textContent = 'Copy Name', 1500);
+                };
+
+                li.appendChild(nameSpan);
+                li.appendChild(copyBtn);
+                certList.appendChild(li);
+            });
+        } catch (e) {
+            certList.innerHTML = `<li class="cert-item" style="color: var(--color-danger);">Error: ${e.message}</li>`;
+        }
+    }
+
+    btnUpload.addEventListener('click', async () => {
+        const file = uploadInput.files[0];
+        if (!file) {
+            alert("Please select a file first.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('certificate', file);
+
+        btnUpload.disabled = true;
+        btnUpload.textContent = 'Uploading...';
+        uploadStatus.textContent = '';
+
+        try {
+            const response = await fetch('api/env/certs', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (!response.ok) throw new Error(result.error || 'Upload failed');
+
+            uploadStatus.textContent = '✅ Uploaded!';
+            uploadStatus.style.color = 'var(--color-success)';
+            uploadInput.value = ''; // Clear input
+            loadCertificates(); // Refresh list
+        } catch (e) {
+            uploadStatus.textContent = `❌ ${e.message}`;
+            uploadStatus.style.color = 'var(--color-danger)';
+        } finally {
+            btnUpload.disabled = false;
+            btnUpload.textContent = 'Upload';
+            setTimeout(() => { uploadStatus.textContent = ''; }, 3000);
+        }
+    });
+
+
+    // --- Existing Configuration Logic ---
 
     // Load current configuration from the server
     async function loadConfig() {
@@ -144,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Load config when the page starts
+    // Load config and certs when the page starts
     loadConfig();
+    loadCertificates();
 });

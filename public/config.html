@@ -9,6 +9,43 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/config.css">
 
+    <style>
+        .cert-manager {
+            background-color: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 25px;
+        }
+        .cert-manager h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
+        .cert-upload-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
+        .cert-list { 
+            list-style: none; padding: 0; margin: 0; 
+            max-height: 150px; overflow-y: auto; 
+            border: 1px solid var(--color-border-secondary);
+            border-radius: 4px;
+            background-color: var(--color-bg-tertiary);
+        }
+        .cert-item {
+            padding: 6px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--color-border-secondary);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        .cert-item:last-child { border-bottom: none; }
+        .btn-copy-cert {
+            padding: 2px 8px;
+            font-size: 0.8em;
+            cursor: pointer;
+            background-color: var(--color-bg-accent);
+            border: 1px solid var(--color-border);
+            border-radius: 3px;
+        }
+        .btn-copy-cert:hover { background-color: var(--color-primary); color: white; }
+    </style>
 </head>
 <body class="scrollable-page">
     <header>
@@ -23,6 +60,19 @@
         <h1>Configuration</h1>
         <p>Modify the application settings below. The server will require a restart after saving.</p>
         
+        <div class="cert-manager">
+            <h3>Certificate Manager (Upload .pem, .crt, .key, .ca)</h3>
+            <div class="cert-upload-row">
+                <input type="file" id="cert-upload-input" accept=".pem,.crt,.key,.ca,.cer,.pfx,.p12" />
+                <button id="btn-upload-cert" class="modal-button" type="button">Upload</button>
+                <span id="cert-upload-status" style="font-size: 0.9em; margin-left: 10px;"></span>
+            </div>
+            <div style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 5px;">Available Certificates in <code>/data/certs</code>:</div>
+            <ul id="cert-list" class="cert-list">
+                <li style="padding: 10px; color: #888;">Loading...</li>
+            </ul>
+        </div>
+
         <form id="config-form">
             </form>
 

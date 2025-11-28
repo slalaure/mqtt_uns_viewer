@@ -8,3 +8,15 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+docker-compose-eds.yml
+.env.bkp
+data/mappings.json
+data/charts.json
+data/certs/c6a0532ed5a30983c508428c51444b8568f8a6ceeff135dd90f069b1fcf99201-certificate.pem.crt
+data/certs/c6a0532ed5a30983c508428c51444b8568f8a6ceeff135dd90f069b1fcf99201-private.pem.key
+data/certs/c6a0532ed5a30983c508428c51444b8568f8a6ceeff135dd90f069b1fcf99201-public.pem.key
+data/certs/certificate.pem.crt
+data/certs/private.pem.key
+data/mqtt_events.duckdb
+data/mqtt_events.duckdb.wal
+build_docker_image.sh
