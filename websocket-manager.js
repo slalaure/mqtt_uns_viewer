@@ -49,21 +49,13 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
     wss = new WebSocketServer({ server });
     
     wss.on('connection', (ws, req) => {
-        const url = new URL(req.url, `http://${req.headers.host}`);
+        // [FIXED] Removed strict path validation.
+        // In reverse proxy environments with path stripping, req.url might be '/' 
+        // while the client thinks it's connecting to '/webapp/path'.
+        // Since this container serves only this app, we accept all Upgrade requests that reach us.
+        const reqPath = req.url ? req.url.split('?')[0] : 'unknown';
+        logger.info(`✅ ➡️ WebSocket client connected. (Incoming path: ${reqPath}, Configured Base: ${appBasePath})`);
         
-        // [MODIFIED] Relaxed check for Reverse Proxies (Path Stripping)
-        // If the proxy strips the path, url.pathname will be '/' or just query params.
-        // If the proxy passes the path, it will be appBasePath.
-        const isMatch = url.pathname.startsWith(appBasePath) || url.pathname === '/' || url.pathname === '';
-
-        if (!isMatch) {
-            logger.warn(`WebSocket connection rejected: Path ${url.pathname} does not match base path ${appBasePath} (and is not root)`);
-            ws.terminate();
-            return;
-        }
-        
-        logger.info('✅ ➡️ WebSocket client connected.');
-
         // 0. Send Broker Statuses (Immediate UI feedback)
         if (getBrokerStatuses) {
             const statuses = getBrokerStatuses();

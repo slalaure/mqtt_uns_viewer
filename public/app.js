@@ -91,15 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMapperView = document.getElementById('btn-mapper-view');
     const btnChartView = document.getElementById('btn-chart-view');
     const btnPublishView = document.getElementById('btn-publish-view'); 
-    // [MODIFIED] Removed btnChatView query as it's no longer a tab button
-
+    
     const treeView = document.getElementById('tree-view');
     const mapView = document.getElementById('map-view');
     const historyView = document.getElementById('history-view');
     const mapperView = document.getElementById('mapper-view');
     const chartView = document.getElementById('chart-view');
     const publishView = document.getElementById('publish-view'); 
-    // [MODIFIED] Removed chatView query as it's now #chat-widget-container handled in view.chat.js
 
     // ... (Other DOM queries same as before) ...
     const historyTotalMessages = document.getElementById('history-total-messages');
@@ -314,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- WebSocket Connection & Logic (Unchanged) ---
+    // --- WebSocket Connection & Logic ---
     (async () => {
         try {
             const configResponse = await fetch('api/config');
@@ -326,7 +324,14 @@ document.addEventListener('DOMContentLoaded', () => {
             brokerConfigs = appConfig.brokerConfigs || [];
             
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//${window.location.host}${appBasePath}`;
+            
+            // [FIXED] Robust WebSocket URL construction
+            // Remove trailing slash from appBasePath to avoid double slashes,
+            // but ensure we connect to the configured base path so proxy routing works.
+            const cleanBasePath = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
+            const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
+            
+            console.log("Connecting WebSocket to:", wsUrl); // Debugging
             
             ws = new WebSocket(wsUrl);
             ws.onopen = () => finishInitialization(appConfig);
@@ -337,7 +342,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 else messageBuffer.push(message);
             };
             ws.onerror = (err) => console.error("WebSocket Error:", err);
-            ws.onclose = () => { isAppInitialized = false; setTimeout(startApp, 3000); };
+            ws.onclose = (event) => { 
+                console.warn(`WebSocket closed (code: ${event.code}, reason: ${event.reason}). Reconnecting in 3s...`);
+                isAppInitialized = false; 
+                setTimeout(startApp, 3000); 
+            };
 
         } catch (error) {
             console.error("Failed to fetch initial app configuration:", error);
@@ -346,7 +355,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ... (processWsMessage, renderBrokerStatuses, updateSingleBrokerStatus - Unchanged) ...
     function processWsMessage(message) {
-        // Same logic as provided in previous context, omitted for brevity in answer but kept in final file
         try {
             switch(message.type) {
                 case 'mqtt-message':
@@ -371,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     break;
-                // ... (Other cases: simulator-status, db-bounds, history-initial-data, history-range-data, tree-initial-state, topic-history-data, db-status-update, pruning-status, mapper-config-update, mapped-topic-generated, mapper-metrics-update, broker-status-all, broker-status)
                 case 'simulator-status': updateSimulatorStatuses(message.statuses); break;
                 case 'db-bounds':
                     globalDbMin = message.min; globalDbMax = message.max;
@@ -441,7 +448,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (error) item.title = `Error: ${error}`; else item.title = `${brokerId}: ${status}`;
     }
 
-    async function startApp() {} // Wrapper for reconnect logic
+    async function startApp() {
+        // Simple reload wrapper for reconnect logic
+        window.location.reload();
+    } 
 
     function finishInitialization(appConfig) {
         if (brokerConfigs.length > 0) {
@@ -568,7 +578,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical'), direction: 'vertical', panelA: treeViewWrapper });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal'), direction: 'horizontal', panelA: payloadMainArea, containerEl: payloadContainer });
-        // ... (other resizers kept as is) ...
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-mapper'), direction: 'vertical', panelA: document.querySelector('.mapper-tree-wrapper') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal-mapper'), direction: 'horizontal', panelA: document.getElementById('mapper-payload-area'), containerEl: document.getElementById('mapper-payload-container') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-chart'), direction: 'vertical', panelA: document.querySelector('.chart-tree-wrapper') });
