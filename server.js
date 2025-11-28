@@ -493,7 +493,17 @@ if (!config.VIEW_CONFIG_ENABLED) {
 mainRouter.use(express.static(path.join(__dirname, 'public')));
 app.use(authMiddleware);
 app.use(basePath, mainRouter);
-if (basePath !== '/') app.get('/', (req, res) => res.redirect(basePath));
+
+// [FIXED] Redbird (Reverse Proxy) Loop Fix
+// Redbird usually forces a trailing slash (e.g. /mqtt -> /mqtt/).
+// If we redirect to 'basePath' (without slash), the browser requests that, and Redbird redirects back to slash.
+// By redirecting to 'basePath + "/"', we align with Redbird and break the infinite loop.
+if (basePath !== '/') {
+    app.get('/', (req, res) => res.redirect(basePath + '/'));
+} else {
+    // If basePath is root, we are already there, mainRouter handles it.
+    // Ensure we don't accidentally intercept mainRouter's root.
+}
 
 // --- Server Start ---
 server.listen(config.PORT, () => {
