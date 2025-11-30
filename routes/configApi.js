@@ -16,7 +16,8 @@ const path = require('path');
 const dotenv = require('dotenv');
 const multer = require('multer');
 
-module.exports = (envPath, envExamplePath, dataPath, logger) => {
+// [MODIFIED] Added 'db' argument to accept the DuckDB instance
+module.exports = (envPath, envExamplePath, dataPath, logger, db) => {
     const router = express.Router();
     const certsPath = path.join(dataPath, 'certs');
     const modelPath = path.join(dataPath, 'uns_model.json'); // Path to UNS Model
@@ -174,6 +175,36 @@ module.exports = (envPath, envExamplePath, dataPath, logger) => {
         res.json({ message: 'Server is restarting...' });
         logger.info("Restart requested via API. Shutting down...");
         process.exit(0);
+    });
+
+    // POST /api/env/reset-db: Resets the DuckDB database
+    router.post('/reset-db', (req, res) => {
+        if (!db) {
+            return res.status(503).json({ error: "Database not connected/available." });
+        }
+
+        logger.warn("⚠️  User initiated full database reset (TRUNCATE).");
+
+        db.serialize(() => {
+            // 1. Delete all records
+            db.run("DELETE FROM mqtt_events;", (err) => {
+                if (err) {
+                    logger.error({ err }, "Failed to truncate mqtt_events");
+                    return res.status(500).json({ error: "Failed to clear database table." });
+                }
+
+                // 2. Vacuum to reclaim disk space
+                db.run("VACUUM;", (vacErr) => {
+                    if (vacErr) {
+                        logger.error({ err: vacErr }, "Failed to vacuum database after truncate");
+                    } else {
+                        logger.info("✅ Database truncated and vacuumed successfully.");
+                    }
+                    
+                    res.json({ message: 'Database has been reset successfully.' });
+                });
+            });
+        });
     });
 
     return router;

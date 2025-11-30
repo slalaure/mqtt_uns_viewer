@@ -10,14 +10,14 @@
     <link rel="stylesheet" href="css/config.css">
 
     <style>
-        .cert-manager, .model-manager {
+        .cert-manager, .model-manager, .database-manager {
             background-color: var(--color-bg);
             border: 1px solid var(--color-border);
             border-radius: 4px;
             padding: 15px;
             margin-bottom: 25px;
         }
-        .cert-manager h3, .model-manager h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
+        .cert-manager h3, .model-manager h3, .database-manager h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
         .cert-upload-row, .model-upload-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
         .cert-list { 
             list-style: none; padding: 0; margin: 0; 
@@ -45,6 +45,13 @@
             border-radius: 3px;
         }
         .btn-copy-cert:hover { background-color: var(--color-primary); color: white; }
+        
+        .danger-zone-text {
+            color: var(--color-danger);
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+        }
     </style>
 </head>
 <body class="scrollable-page">
@@ -60,6 +67,19 @@
         <h1>Configuration</h1>
         <p>Modify the application settings below. The server will require a restart after saving.</p>
         
+        <div class="database-manager" style="border-color: var(--color-danger);">
+            <h3 style="color: var(--color-danger);">Database Management</h3>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 15px;">
+                Manage the embedded DuckDB database.
+            </p>
+            <span class="danger-zone-text">⚠️ Danger Zone:</span>
+            <p style="font-size: 0.9em; margin-bottom: 15px;">
+                Resetting the database will permanently delete <strong>ALL</strong> recorded MQTT history and reclaim disk space. This action cannot be undone.
+            </p>
+            <button id="btn-reset-db" class="modal-button button-danger" type="button">Reset Database to 0</button>
+            <span id="reset-db-status" style="font-size: 0.9em; margin-left: 10px; font-weight: bold;"></span>
+        </div>
+
         <div class="cert-manager">
             <h3>Certificate Manager (Upload .pem, .crt, .key, .ca)</h3>
             <div class="cert-upload-row">

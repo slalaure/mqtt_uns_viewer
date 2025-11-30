@@ -442,7 +442,8 @@ if (config.VIEW_CHAT_ENABLED) {
 }
 
 if (config.VIEW_CONFIG_ENABLED) {
-    mainRouter.use('/api/env', ipFilterMiddleware, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger));
+    // [MODIFIED] Added 'db' parameter to configApi require to support database operations (like reset)
+    mainRouter.use('/api/env', ipFilterMiddleware, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db));
 }
 
 mainRouter.use('/api/mapper', ipFilterMiddleware, require('./routes/mapperApi')(mapperEngine));

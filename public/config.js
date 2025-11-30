@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-button');
     const statusMessage = document.getElementById('status-message');
     
+    // Database Reset Elements
+    const btnResetDb = document.getElementById('btn-reset-db');
+    const resetDbStatus = document.getElementById('reset-db-status');
+
     // Cert Manager Elements
     const certList = document.getElementById('cert-list');
     const uploadInput = document.getElementById('cert-upload-input');
@@ -28,6 +32,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const modelUploadInput = document.getElementById('model-upload-input');
     const btnUploadModel = document.getElementById('btn-upload-model');
     const modelUploadStatus = document.getElementById('model-upload-status');
+
+    // --- Database Reset Logic ---
+    btnResetDb.addEventListener('click', async () => {
+        const confirmed = confirm("⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?");
+        
+        if (!confirmed) return;
+
+        btnResetDb.disabled = true;
+        btnResetDb.textContent = "Resetting...";
+        resetDbStatus.textContent = "";
+
+        try {
+            const response = await fetch('api/env/reset-db', {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Reset failed.");
+            }
+
+            resetDbStatus.textContent = "✅ Database reset successfully!";
+            resetDbStatus.style.color = 'var(--color-success)';
+            
+        } catch (e) {
+            resetDbStatus.textContent = `❌ Error: ${e.message}`;
+            resetDbStatus.style.color = 'var(--color-danger)';
+        } finally {
+            btnResetDb.disabled = false;
+            btnResetDb.textContent = "Reset Database to 0";
+            setTimeout(() => { resetDbStatus.textContent = ''; }, 5000);
+        }
+    });
 
     // --- UNS Model Manager Logic ---
 
