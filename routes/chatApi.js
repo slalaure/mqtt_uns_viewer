@@ -13,10 +13,13 @@
 const express = require('express');
 const axios = require('axios');
 const mqttMatch = require('mqtt-match'); //  Required for permission checks
+const fs = require('fs');
+const path = require('path');
 
 // [MODIFIED] Accepted 'getBrokerConnection' instead of 'getPrimaryConnection'
 module.exports = (db, logger, config, getBrokerConnection) => {
     const router = express.Router();
+    const MODEL_MANIFEST_PATH = path.join(__dirname, '..', 'data', 'uns_model.json');
 
     // --- 1. Tool Definitions ---
     const tools = [
@@ -118,6 +121,21 @@ module.exports = (db, logger, config, getBrokerConnection) => {
                         name: { type: "string", description: "The name of the simulator." }
                     },
                     required: ["name"]
+                }
+            }
+        },
+        // [NEW TOOL] UNS Model Update
+        {
+            type: "function",
+            function: {
+                name: "update_uns_model",
+                description: "Updates the content of the 'uns_model.json' file. Use this to add new concepts, keywords, or topic templates to the semantic model.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        model_json: { type: "string", description: "The full JSON string representing the new model array. Must be a valid JSON array of definition objects." }
+                    },
+                    required: ["model_json"]
                 }
             }
         }
@@ -242,36 +260,66 @@ module.exports = (db, logger, config, getBrokerConnection) => {
             });
         },
         get_simulator_status: async () => {
-            if (!simulatorManager) return { error: "Simulator manager not available" };
+            // Need to require simulatorManager dynamically or pass it from server.js
+            // Assuming it is passed in via a closure in server.js or we need to access the global one
+            // Since this module exports a function called by server.js, we assume simulatorManager functions are passed or accessible.
+            // **Correction**: In `server.js`, we pass `simulatorManager` now? No, checking `server.js`...
+            // `mainRouter.use('/api/chat', ..., require('./routes/chatApi')(..., simulatorManager, wsManager));`
+            // We need to update the export signature below if not already done.
+            // Assuming standard require:
+            const simulatorManager = require('../simulator'); 
             return simulatorManager.getStatuses();
         },
         start_simulator: async ({ name }) => {
-            if (!simulatorManager) return { error: "Simulator manager not available" };
+            const simulatorManager = require('../simulator');
+            const wsManager = require('../websocket-manager');
             const result = simulatorManager.startSimulator(name);
             
-            // [MODIFIED] Broadcast updated status to UI via WebSocket
-            if (wsManager) {
-                wsManager.broadcast(JSON.stringify({ 
-                    type: 'simulator-status', 
-                    statuses: simulatorManager.getStatuses() 
-                }));
-            }
+            // Broadcast status
+            wsManager.broadcast(JSON.stringify({ 
+                type: 'simulator-status', 
+                statuses: simulatorManager.getStatuses() 
+            }));
             
             return result;
         },
         stop_simulator: async ({ name }) => {
-            if (!simulatorManager) return { error: "Simulator manager not available" };
+            const simulatorManager = require('../simulator');
+            const wsManager = require('../websocket-manager');
             const result = simulatorManager.stopSimulator(name);
             
-            // [MODIFIED] Broadcast updated status to UI via WebSocket
-            if (wsManager) {
-                wsManager.broadcast(JSON.stringify({ 
-                    type: 'simulator-status', 
-                    statuses: simulatorManager.getStatuses() 
-                }));
-            }
+            // Broadcast status
+            wsManager.broadcast(JSON.stringify({ 
+                type: 'simulator-status', 
+                statuses: simulatorManager.getStatuses() 
+            }));
             
             return result;
+        },
+        // [NEW IMPL] Update UNS Model
+        update_uns_model: async ({ model_json }) => {
+            return new Promise((resolve) => {
+                try {
+                    let newModel;
+                    try {
+                        newModel = JSON.parse(model_json);
+                    } catch (e) {
+                        return resolve({ error: "Invalid JSON format." });
+                    }
+
+                    if (!Array.isArray(newModel)) {
+                        return resolve({ error: "Model must be a JSON Array." });
+                    }
+
+                    fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
+                    logger.info("✅ [ChatAPI] UNS Model Manifest updated by AI Agent.");
+                    
+                    resolve({ success: true, message: "UNS Model Manifest updated successfully." });
+                } catch (error) {
+                    logger.error({ err: error }, "[ChatAPI] Error updating UNS model");
+                    resolve({ error: `Error updating model: ${error.message}` });
+                }
+            });
         }
     };
 
@@ -313,6 +361,7 @@ module.exports = (db, logger, config, getBrokerConnection) => {
             CAPABILITIES:
             1. **READ**: You can inspect the database (list topics, history, search).
             2. **WRITE**: You can CREATE data using 'publish_message'.
+            3. **MANAGE**: You can UPDATE the UNS Semantic Model using 'update_uns_model'.
 
             DATA LANGUAGE & SEARCH STRATEGY:
             - **CRITICAL**: The machine data and UNS structure are primarily in **ENGLISH** (e.g., "maintenance_request", "error", "workorder").

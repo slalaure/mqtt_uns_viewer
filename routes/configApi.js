@@ -19,6 +19,7 @@ const multer = require('multer');
 module.exports = (envPath, envExamplePath, dataPath, logger) => {
     const router = express.Router();
     const certsPath = path.join(dataPath, 'certs');
+    const modelPath = path.join(dataPath, 'uns_model.json'); // Path to UNS Model
 
     // Ensure certs directory exists
     if (!fs.existsSync(certsPath)) {
@@ -51,6 +52,8 @@ module.exports = (envPath, envExamplePath, dataPath, logger) => {
 
     const upload = multer({ storage: storage, fileFilter: fileFilter });
 
+    // --- Certificate Routes ---
+
     // GET /api/env/certs: List available certificates
     router.get('/certs', (req, res) => {
         try {
@@ -73,6 +76,46 @@ module.exports = (envPath, envExamplePath, dataPath, logger) => {
         logger.info(`✅ Certificate uploaded: ${req.file.filename}`);
         res.json({ message: 'Certificate uploaded successfully', filename: req.file.filename });
     });
+
+    // --- UNS Model Routes ---
+
+    // GET /api/env/model: Get the current UNS Model JSON
+    router.get('/model', (req, res) => {
+        try {
+            if (!fs.existsSync(modelPath)) {
+                return res.json([]); // Return empty array if no model exists
+            }
+            const content = fs.readFileSync(modelPath, 'utf8');
+            const json = JSON.parse(content);
+            res.json(json);
+        } catch (err) {
+            logger.error({ err }, "Error reading uns_model.json");
+            res.status(500).json({ error: 'Could not read UNS model file.' });
+        }
+    });
+
+    // POST /api/env/model: Update/Upload UNS Model JSON
+    router.post('/model', (req, res) => {
+        try {
+            const newModel = req.body;
+            
+            // Basic Validation: Must be an array
+            if (!Array.isArray(newModel)) {
+                return res.status(400).json({ error: "Invalid format. UNS Model must be a JSON Array." });
+            }
+
+            // Write to file (pretty print)
+            fs.writeFileSync(modelPath, JSON.stringify(newModel, null, 2), 'utf8');
+            
+            logger.info("✅ UNS Model (uns_model.json) updated via API.");
+            res.json({ message: 'UNS Model saved successfully.' });
+        } catch (err) {
+            logger.error({ err }, "Error writing uns_model.json");
+            res.status(500).json({ error: 'Could not save UNS model file.' });
+        }
+    });
+
+    // --- Environment Config Routes ---
 
     // GET: Reads and parses the .env file
     router.get('/', (req, res) => {

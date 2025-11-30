@@ -10,15 +10,15 @@
     <link rel="stylesheet" href="css/config.css">
 
     <style>
-        .cert-manager {
+        .cert-manager, .model-manager {
             background-color: var(--color-bg);
             border: 1px solid var(--color-border);
             border-radius: 4px;
             padding: 15px;
             margin-bottom: 25px;
         }
-        .cert-manager h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
-        .cert-upload-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
+        .cert-manager h3, .model-manager h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.1em; }
+        .cert-upload-row, .model-upload-row { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
         .cert-list { 
             list-style: none; padding: 0; margin: 0; 
             max-height: 150px; overflow-y: auto; 
@@ -71,6 +71,24 @@
             <ul id="cert-list" class="cert-list">
                 <li style="padding: 10px; color: #888;">Loading...</li>
             </ul>
+        </div>
+
+        <div class="model-manager">
+            <h3>UNS Semantic Model (uns_model.json)</h3>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 10px;">
+                Define your factory's data model here. This is used by the AI Assistant and search tools to understand your UNS structure.
+            </p>
+            <div class="model-upload-row">
+                <input type="file" id="model-upload-input" accept=".json" />
+                <button id="btn-upload-model" class="modal-button" type="button">Upload JSON File</button>
+                <span id="model-upload-status" style="font-size: 0.9em; margin-left: 10px;"></span>
+            </div>
+            <div class="form-group">
+                <textarea id="uns-model-editor" style="min-height: 250px; font-family: 'Courier New', monospace;" spellcheck="false" placeholder="Loading model..."></textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button id="btn-save-model" class="modal-button button-primary" type="button">Save Model</button>
+            </div>
         </div>
 
         <form id="config-form">

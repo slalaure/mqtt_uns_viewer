@@ -22,6 +22,93 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnUpload = document.getElementById('btn-upload-cert');
     const uploadStatus = document.getElementById('cert-upload-status');
 
+    // Model Manager Elements
+    const modelEditor = document.getElementById('uns-model-editor');
+    const btnSaveModel = document.getElementById('btn-save-model');
+    const modelUploadInput = document.getElementById('model-upload-input');
+    const btnUploadModel = document.getElementById('btn-upload-model');
+    const modelUploadStatus = document.getElementById('model-upload-status');
+
+    // --- UNS Model Manager Logic ---
+
+    async function loadUnsModel() {
+        try {
+            const response = await fetch('api/env/model');
+            if (!response.ok) throw new Error("Failed to fetch UNS Model.");
+            const model = await response.json();
+            
+            // Pretty print JSON in textarea
+            modelEditor.value = JSON.stringify(model, null, 2);
+        } catch (e) {
+            modelEditor.value = `// Error loading model: ${e.message}\n[]`;
+        }
+    }
+
+    async function saveUnsModel(modelData) {
+        btnSaveModel.disabled = true;
+        btnSaveModel.textContent = "Saving...";
+        
+        try {
+            // Validate JSON
+            let jsonPayload;
+            if (typeof modelData === 'string') {
+                jsonPayload = JSON.parse(modelData);
+            } else {
+                jsonPayload = modelData;
+            }
+
+            const response = await fetch('api/env/model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jsonPayload)
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || "Failed to save model.");
+            }
+
+            alert("UNS Model saved successfully!");
+            loadUnsModel(); // Reload to formatting
+        } catch (e) {
+            alert(`Error saving model: ${e.message}`);
+        } finally {
+            btnSaveModel.disabled = false;
+            btnSaveModel.textContent = "Save Model";
+        }
+    }
+
+    // Save Button Click (Textarea content)
+    btnSaveModel.addEventListener('click', () => {
+        saveUnsModel(modelEditor.value);
+    });
+
+    // Upload File Click
+    btnUploadModel.addEventListener('click', () => {
+        const file = modelUploadInput.files[0];
+        if (!file) {
+            alert("Please select a JSON file first.");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                // We save immediately upon upload
+                saveUnsModel(json);
+                modelUploadStatus.textContent = "✅ Uploaded & Saved!";
+                modelUploadStatus.style.color = 'var(--color-success)';
+                modelUploadInput.value = '';
+                setTimeout(() => { modelUploadStatus.textContent = ''; }, 3000);
+            } catch (err) {
+                alert("Invalid JSON file: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+
     // --- Certificate Manager Logic ---
 
     async function loadCertificates() {
@@ -230,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Load config and certs when the page starts
+    // Load config, certs, and model when the page starts
     loadConfig();
     loadCertificates();
+    loadUnsModel();
 });

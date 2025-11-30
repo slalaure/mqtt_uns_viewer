@@ -57,13 +57,24 @@ const MODEL_MANIFEST_PATH = path.join(__dirname, 'data/uns_model.json');
 const DATA_DIR = path.dirname(MODEL_MANIFEST_PATH); 
 let unsModel = [];
 
-try {
-  const modelData = fs.readFileSync(MODEL_MANIFEST_PATH, 'utf8');
-  unsModel = JSON.parse(modelData);
-  console.error("✅ Successfully loaded UNS Model Manifest from data/uns_model.json");
-} catch (err) {
-  console.error("❌ WARNING: Could not load 'data/uns_model.json'. Model-querying tools will not work.", err.message);
+// Helper to load or reload model
+function loadUnsModel() {
+    try {
+        if (fs.existsSync(MODEL_MANIFEST_PATH)) {
+            const modelData = fs.readFileSync(MODEL_MANIFEST_PATH, 'utf8');
+            unsModel = JSON.parse(modelData);
+            console.error("✅ UNS Model Manifest loaded/reloaded.");
+        } else {
+            console.error("⚠️ UNS Model Manifest not found. Initializing empty.");
+            unsModel = [];
+        }
+    } catch (err) {
+        console.error("❌ Error loading UNS Model:", err.message);
+    }
 }
+
+// Initial Load
+loadUnsModel();
 
 // ---  Helper function for schema inference ---
 /**
@@ -190,6 +201,12 @@ async function createMcpServer() {
         }
         
         fs.writeFileSync(resolvedPath, content, 'utf8');
+        
+        // If updating uns_model.json, reload it in memory
+        if (filename === 'uns_model.json') {
+            loadUnsModel();
+        }
+
         const savedPath = `data/${filename}`;
         return { 
           content: [{ type: "text", text: `File saved successfully to ${savedPath}` }],
@@ -215,6 +232,9 @@ async function createMcpServer() {
       outputSchema: { definitions: z.array(z.any()) }
     },
     async ({ concept }) => {
+      // Reload to ensure fresh data
+      loadUnsModel();
+
       if (unsModel.length === 0) {
         return { content: [{ type: "text", text: "Error: The UNS Model Manifest (uns_model.json) is not loaded." }], isError: true };
       }
@@ -229,6 +249,43 @@ async function createMcpServer() {
         content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
         structuredContent: output
       };
+    }
+  );
+
+  // [NEW TOOL] Update UNS Model
+  server.registerTool(
+    "update_uns_model",
+    {
+      title: "Update UNS Model Manifest",
+      description: "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
+      inputSchema: {
+        model_json: z.string().describe("The full JSON string representing the new model array. Must be a valid JSON array of definition objects.")
+      },
+      outputSchema: { success: z.boolean(), message: z.string() }
+    },
+    async ({ model_json }) => {
+      try {
+        let newModel;
+        try {
+            newModel = JSON.parse(model_json);
+        } catch (e) {
+            return { content: [{ type: "text", text: "Error: Invalid JSON format." }], isError: true };
+        }
+
+        if (!Array.isArray(newModel)) {
+            return { content: [{ type: "text", text: "Error: Model must be a JSON Array." }], isError: true };
+        }
+
+        fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
+        loadUnsModel(); // Reload in memory
+
+        return { 
+          content: [{ type: "text", text: "UNS Model Manifest updated successfully." }],
+          structuredContent: { success: true, message: "Model updated." } 
+        };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Error updating model: ${error.message}` }], isError: true };
+      }
     }
   );
 
@@ -248,6 +305,7 @@ async function createMcpServer() {
     async ({ concept, filters, broker_id }) => {
       try {
         // 1. Find the model definition
+        loadUnsModel(); // Ensure fresh
         if (unsModel.length === 0) {
             return { content: [{ type: "text", text: "Error: The UNS Model Manifest (uns_model.json) is not loaded." }], isError: true };
         }
