@@ -22,15 +22,23 @@ const btnClear = document.getElementById('btn-chat-clear');
 const btnMinimize = document.getElementById('btn-chat-minimize');
 const fabButton = document.getElementById('btn-chat-fab');
 
+// --- New Elements (Dynamically Injected) ---
+let fileInput = null;
+let previewContainer = null;
+
 // --- State ---
 let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
+let pendingAttachment = null; // { type: 'image'|'text', content: string, name: string }
 
 /**
  * Initializes the Chat View.
  */
 export function initChatView() {
+    // --- 1. Inject Upload Controls ---
+    injectUploadUI();
+
     loadHistory();
 
     // FAB Click -> Open Widget
@@ -65,6 +73,107 @@ export function initChatView() {
             renderHistory();
             trackEvent('chat_clear_history');
         }
+    });
+}
+
+/**
+ * Injects the file upload button and preview area into the existing DOM.
+ */
+function injectUploadUI() {
+    const inputArea = document.querySelector('.chat-input-area');
+    if (!inputArea) return;
+
+    // 1. Create File Input (Hidden)
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.id = 'chat-file-input';
+    fileInput.accept = 'image/*,.txt,.json,.csv,.js,.md,.log';
+    fileInput.style.display = 'none';
+    fileInput.addEventListener('change', handleFileSelect);
+    inputArea.appendChild(fileInput);
+
+    // 2. Create Attachment Button (Paperclip)
+    const btnAttach = document.createElement('button');
+    btnAttach.id = 'btn-chat-attach';
+    btnAttach.innerHTML = '📎';
+    btnAttach.title = 'Attach file';
+    btnAttach.addEventListener('click', () => fileInput.click());
+    
+    // Insert before the textarea
+    inputArea.insertBefore(btnAttach, chatInput);
+
+    // 3. Create Preview Container (Above input area)
+    previewContainer = document.createElement('div');
+    previewContainer.id = 'chat-file-preview';
+    previewContainer.style.display = 'none';
+    
+    // Insert into chat-body, before input-area
+    const chatBody = document.querySelector('.chat-body');
+    if (chatBody) {
+        chatBody.insertBefore(previewContainer, inputArea);
+    }
+}
+
+/**
+ * Handles file selection from the input.
+ */
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    const isImage = file.type.startsWith('image/');
+
+    // Max size check (e.g. 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        alert("File too large. Max 2MB.");
+        fileInput.value = '';
+        return;
+    }
+
+    reader.onload = (e) => {
+        const result = e.target.result;
+        
+        pendingAttachment = {
+            type: isImage ? 'image' : 'text',
+            content: result, // Base64 for image, String for text
+            name: file.name
+        };
+
+        renderPreview();
+        chatInput.focus();
+    };
+
+    if (isImage) {
+        reader.readAsDataURL(file);
+    } else {
+        reader.readAsText(file);
+    }
+}
+
+function renderPreview() {
+    if (!pendingAttachment) {
+        previewContainer.style.display = 'none';
+        previewContainer.innerHTML = '';
+        return;
+    }
+
+    previewContainer.style.display = 'flex';
+    previewContainer.innerHTML = `
+        <div class="preview-item">
+            ${pendingAttachment.type === 'image' 
+                ? `<img src="${pendingAttachment.content}" alt="preview">` 
+                : `<div class="file-icon">📄</div>`
+            }
+            <span class="file-name">${pendingAttachment.name}</span>
+            <button class="btn-remove-attachment">×</button>
+        </div>
+    `;
+
+    previewContainer.querySelector('.btn-remove-attachment').addEventListener('click', () => {
+        pendingAttachment = null;
+        fileInput.value = '';
+        renderPreview();
     });
 }
 
@@ -149,32 +258,47 @@ function appendMessageToUI(msg) {
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
     
-    let htmlContent = formatMessageContent(msg.content || '');
-
-    // Visualize tool usage if present
-    if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-        msg.tool_calls.forEach(tool => {
-            // Clean arguments string for display
-            const args = tool.function.arguments.length > 50 
-                ? tool.function.arguments.substring(0, 50) + '...' 
-                : tool.function.arguments;
-                
-            htmlContent += `
-                <div class="tool-usage">
-                    <div class="tool-usage-header">🔧 ${tool.function.name}</div>
-                    <code>${args}</code>
-                </div>
-            `;
-        });
-    }
+    let contentToFormat = msg.content;
     
-    // Handle tool output messages (collapsible or small)
-    if (msg.role === 'tool') {
-        div.classList.add('system'); 
-        div.innerHTML = `<div class="tool-usage-header">📋 Output (${msg.name}):</div>` + 
-                        `<small>${htmlContent.substring(0, 150)}${htmlContent.length > 150 ? '...' : ''}</small>`;
+    // Handle Array Content (Multimodal - Image + Text)
+    if (Array.isArray(msg.content)) {
+        let htmlParts = '';
+        msg.content.forEach(part => {
+            if (part.type === 'text') {
+                htmlParts += formatMessageContent(part.text);
+            } else if (part.type === 'image_url') {
+                htmlParts += `<div class="chat-image-container"><img src="${part.image_url.url}" alt="User Upload" class="chat-image"></div>`;
+            }
+        });
+        div.innerHTML = htmlParts;
     } else {
-        div.innerHTML = htmlContent;
+        // Standard Text Content
+        let htmlContent = formatMessageContent(msg.content || '');
+
+        // Visualize tool usage if present
+        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
+            msg.tool_calls.forEach(tool => {
+                const args = tool.function.arguments.length > 50 
+                    ? tool.function.arguments.substring(0, 50) + '...' 
+                    : tool.function.arguments;
+                    
+                htmlContent += `
+                    <div class="tool-usage">
+                        <div class="tool-usage-header">🔧 ${tool.function.name}</div>
+                        <code>${args}</code>
+                    </div>
+                `;
+            });
+        }
+        
+        // Handle tool output messages
+        if (msg.role === 'tool') {
+            div.classList.add('system'); 
+            div.innerHTML = `<div class="tool-usage-header">📋 Output (${msg.name}):</div>` + 
+                            `<small>${htmlContent.substring(0, 150)}${htmlContent.length > 150 ? '...' : ''}</small>`;
+        } else {
+            div.innerHTML = htmlContent;
+        }
     }
 
     chatHistory.appendChild(div);
@@ -205,12 +329,43 @@ async function sendMessage() {
     if (isProcessing) return;
     
     const text = chatInput.value.trim();
-    if (!text) return;
+    if (!text && !pendingAttachment) return;
+
+    let messageContent = text;
+
+    // --- Prepare Payload with Attachment ---
+    if (pendingAttachment) {
+        if (pendingAttachment.type === 'image') {
+            // OpenAI/Gemini Multimodal Format
+            messageContent = [
+                { type: "text", text: text },
+                { 
+                    type: "image_url", 
+                    image_url: { 
+                        url: pendingAttachment.content 
+                    } 
+                }
+            ];
+        } else {
+            // Text File: Append content to prompt
+            const cleanContent = pendingAttachment.content.length > 10000 
+                ? pendingAttachment.content.substring(0, 10000) + "\n...[TRUNCATED]..." 
+                : pendingAttachment.content;
+            
+            messageContent = `${text}\n\n--- ATTACHED FILE: ${pendingAttachment.name} ---\n${cleanContent}\n--- END OF FILE ---`;
+        }
+    }
 
     // 1. UI Updates
     chatInput.value = '';
     chatInput.style.height = 'auto';
-    addMessageToState('user', text);
+    
+    // Clear attachment state
+    pendingAttachment = null;
+    renderPreview();
+    fileInput.value = '';
+
+    addMessageToState('user', messageContent);
     
     isProcessing = true;
     btnSend.disabled = true;

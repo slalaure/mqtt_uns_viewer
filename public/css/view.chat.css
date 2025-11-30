@@ -138,7 +138,7 @@
     max-width: 95%;
 }
 
-/* [MODIFIED] Error Message Style - More Prominent */
+/* Error Message Style */
 .chat-message.error {
     align-self: center;
     background-color: rgba(220, 53, 69, 0.15);
@@ -153,6 +153,16 @@
 .chat-message.error::before {
     content: '⚠️';
     font-size: 1.2em;
+}
+
+/* --- Image in Chat Styles --- */
+.chat-image-container {
+    margin: 5px 0;
+}
+.chat-image {
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
 }
 
 /* --- Tool Usage Styles --- */
@@ -173,7 +183,7 @@
     margin-bottom: 2px;
 }
 
-/* --- [NEW] Typing Indicator (Three Blinking Dots) --- */
+/* --- Typing Indicator --- */
 .typing-indicator-container {
     align-self: flex-start;
     background-color: var(--color-bg-secondary);
@@ -235,6 +245,27 @@
     border-color: var(--color-primary);
 }
 
+/* Attach File Button */
+#btn-chat-attach {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    font-size: 1.4em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+    margin-bottom: 2px; /* Align with textarea bottom */
+}
+#btn-chat-attach:hover {
+    background-color: var(--color-bg-accent);
+    color: var(--color-text);
+}
+
 #btn-send-chat {
     width: 40px;
     height: 40px;
@@ -255,6 +286,58 @@
 #btn-send-chat:disabled {
     background-color: var(--color-text-secondary);
     cursor: not-allowed;
+}
+
+/* --- File Preview Area --- */
+#chat-file-preview {
+    padding: 10px 15px;
+    background-color: var(--color-bg-accent);
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+}
+
+.preview-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: var(--color-bg-secondary);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    max-width: 100%;
+}
+
+.preview-item img {
+    height: 32px;
+    width: 32px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.file-icon {
+    font-size: 24px;
+}
+
+.file-name {
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.btn-remove-attachment {
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+.btn-remove-attachment:hover {
+    color: var(--color-danger);
 }
 
 /* --- Markdown Styling inside bubbles --- */
