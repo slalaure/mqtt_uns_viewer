@@ -143,7 +143,9 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                         `timestamp >= to_timestamp(${safeStart} / 1000.0)`, 
                         `timestamp <= to_timestamp(${safeEnd} / 1000.0)`
                     ];
-                    let limit = 5000;
+                    
+                    // [MODIFIED] Increased base limit to capture more history
+                    let limit = 20000;
                     
                     if (filter && filter.length >= 3) {
                          const safeSearchTerm = `%${escapeSQL(filter)}%`;
@@ -157,8 +159,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                                 OR CAST(payload->>'name' AS VARCHAR) ILIKE '${safeSearchTerm}'
                                )))`
                          );
-                        // If filter is active, increase the limit but still cap it
-                        limit = 10000;
+                        // If filter is active, limit remains high
                     }
 
                     const query = `

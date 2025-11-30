@@ -27,8 +27,7 @@ const labelMin = document.getElementById('label-min');
 const labelMax = document.getElementById('label-max');
 
 // --- Constants ---
-// [NEW] Maximum number of entries to keep in browser memory to prevent crashes.
-// 50,000 objects approx 20-50MB RAM depending on payload size.
+// Maximum number of entries to keep in browser memory to prevent crashes.
 const MAX_CLIENT_ENTRIES = 50000; 
 
 // --- Module-level State ---
@@ -42,6 +41,7 @@ let isMultiBroker = false;
 let brokerFilterSelect = null;
 
 let isRealTimeMode = true; // If true, updates move the window
+let visibleCount = 1000; // [NEW] Number of items to render initially
 
 // UI Elements for Dates
 let startDateInput = null;
@@ -63,8 +63,6 @@ function toDateTimeLocal(timestamp) {
 
 function showLoader() {
     if (historyLogContainer) {
-        // Preserve existing content if possible, or just replace content
-        // Replacing content is cleaner to avoid duplicating loaders
         historyLogContainer.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px; color: var(--color-text-secondary);">
                 <div class="broker-dot" style="background-color: var(--color-primary); animation: blink 1s infinite;"></div>
@@ -88,7 +86,6 @@ function exportHistoryToJSON() {
     const searchActive = searchTerm.length >= 3;
     const selectedBrokerId = brokerFilterSelect ? brokerFilterSelect.value : 'all';
 
-    // Apply the same filters as the view to export exactly what the user sees/has filtered
     const entriesToExport = allHistoryEntries.filter(entry => {
         if (selectedBrokerId !== 'all' && entry.brokerId !== selectedBrokerId) return false;
         if (entry.timestampMs < currentMinTimestamp || entry.timestampMs > currentMaxTimestamp) return false;
@@ -105,10 +102,9 @@ function exportHistoryToJSON() {
         return;
     }
 
-    // [FIX] Sanitize objects to remove internal/redundant keys (broker_id, timestampMs)
     const sanitizedEntries = entriesToExport.map(entry => ({
         timestamp: entry.timestamp,
-        brokerId: entry.brokerId, // Standardize on camelCase
+        brokerId: entry.brokerId, 
         topic: entry.topic,
         payload: entry.payload
     }));
@@ -125,6 +121,7 @@ function exportHistoryToJSON() {
 
 /**
  * Applies current filters (time + search + broker) and re-renders the log.
+ * [MODIFIED] Supports "Show More" pagination.
  */
 export function renderFilteredHistory() {
     if (!historyLogContainer) return;
@@ -153,17 +150,31 @@ export function renderFilteredHistory() {
     if (filteredEntries.length === 0) {
         historyLogContainer.innerHTML = '<p class="history-placeholder">No log entries in this view range.</p>';
     } else {
-        // Limit rendering to avoid browser freeze
-        const displayEntries = filteredEntries.slice(0, 500);
+        // [MODIFIED] Limit rendering using visibleCount
+        const displayEntries = filteredEntries.slice(0, visibleCount);
         displayEntries.forEach(entry => addHistoryEntry(entry, searchActive ? searchTerm : null));
         
-        if (filteredEntries.length > 500) {
-            const limitMsg = document.createElement('div');
-            limitMsg.style.textAlign = 'center';
-            limitMsg.style.padding = '10px';
-            limitMsg.style.color = 'var(--color-text-secondary)';
-            limitMsg.textContent = `... showing 500 of ${filteredEntries.length} entries. Narrow filter or range to see more.`;
-            historyLogContainer.appendChild(limitMsg);
+        // [MODIFIED] "Show More" button if there are more entries
+        if (filteredEntries.length > visibleCount) {
+            const btnContainer = document.createElement('div');
+            btnContainer.style.textAlign = 'center';
+            btnContainer.style.padding = '15px';
+            
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.className = 'mapper-button'; // Reuse existing style
+            loadMoreBtn.style.padding = '8px 20px';
+            loadMoreBtn.style.cursor = 'pointer';
+            
+            const remaining = filteredEntries.length - visibleCount;
+            loadMoreBtn.textContent = `Show Next 1000 (${remaining} remaining)`;
+            
+            loadMoreBtn.onclick = () => {
+                visibleCount += 1000;
+                renderFilteredHistory(); // Re-render with new limit
+            };
+            
+            btnContainer.appendChild(loadMoreBtn);
+            historyLogContainer.appendChild(btnContainer);
         }
     }
 }
@@ -178,10 +189,10 @@ export function initHistoryView(options = {}) {
 
     // Debounce search input to trigger backend fetch
     historySearchInput?.addEventListener('input', () => {
+        visibleCount = 1000; // [MODIFIED] Reset limit on search
         renderFilteredHistory(); // Instant filter
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(() => {
-            // Also fetch from DB with filter
             triggerDataFetch(currentMinTimestamp, currentMaxTimestamp);
         }, 800);
     });
@@ -219,7 +230,7 @@ export function initHistoryView(options = {}) {
     btnGrp.style.display = 'flex';
     btnGrp.style.gap = '5px';
     btnGrp.style.marginTop = '14px';
-    btnGrp.style.flexWrap = 'wrap'; // Allow buttons to wrap
+    btnGrp.style.flexWrap = 'wrap'; 
     
     const createRangeBtn = (text, hours) => {
         const btn = document.createElement('button');
@@ -262,7 +273,6 @@ export function initHistoryView(options = {}) {
         const start = startDateInput.value ? new Date(startDateInput.value).getTime() : 0;
         const end = endDateInput.value ? new Date(endDateInput.value).getTime() : Date.now();
         if (start && end && start < end) {
-            // User manually changed date -> Disable Realtime mode unless it implies 'now'
             const isNow = Math.abs(end - Date.now()) < 60000;
             isRealTimeMode = isNow; 
             triggerDataFetch(start, end);
@@ -281,7 +291,6 @@ export function initHistoryView(options = {}) {
         allOption.textContent = 'All Brokers';
         brokerFilterSelect.appendChild(allOption);
         
-        // Populate the dropdown with configured brokers
         brokerConfigs.forEach(config => {
             const option = document.createElement('option');
             option.value = config.id;
@@ -289,7 +298,10 @@ export function initHistoryView(options = {}) {
             brokerFilterSelect.appendChild(option);
         });
         
-        brokerFilterSelect.addEventListener('change', renderFilteredHistory);
+        brokerFilterSelect.addEventListener('change', () => {
+            visibleCount = 1000; // [MODIFIED] Reset limit on filter change
+            renderFilteredHistory();
+        });
         historyControls.prepend(brokerFilterSelect);
     }
 
@@ -306,9 +318,7 @@ export function initHistoryView(options = {}) {
                 currentMinTimestamp = newMin;
                 currentMaxTimestamp = newMax;
                 
-                // Tightened Real-time threshold: Only activate if effectively at the very end
                 const range = globalMaxTimestamp - globalMinTimestamp;
-                // Use a stricter threshold (99.9%) to avoid accidental live mode
                 const threshold = globalMinTimestamp + (range * 0.999); 
                 isRealTimeMode = (newMax >= threshold);
 
@@ -323,12 +333,10 @@ export function initHistoryView(options = {}) {
 
 /**
  * Handles quick range buttons.
- * @param {number|string} hours - Number of hours to go back, or 'FULL'.
  */
 function setRelativeRange(hours) {
     if (hours === 'FULL') {
         isRealTimeMode = true;
-        // Request global bounds
         triggerDataFetch(globalMinTimestamp, Date.now());
         return;
     }
@@ -336,17 +344,15 @@ function setRelativeRange(hours) {
     const end = Date.now();
     let start = end - (hours * 60 * 60 * 1000);
     
-    // [FIX] Ensure start does not go below global min to prevent UI bugs (disappearing handle)
     if (globalMinTimestamp > 0 && start < globalMinTimestamp) {
         start = globalMinTimestamp;
     }
 
-    isRealTimeMode = true; // Quick actions usually imply "recent"
+    isRealTimeMode = true;
     triggerDataFetch(start, end);
 }
 
 function triggerDataFetch(start, end) {
-    // Update Inputs
     if (startDateInput) startDateInput.value = toDateTimeLocal(start);
     if (endDateInput) endDateInput.value = toDateTimeLocal(end);
 
@@ -354,10 +360,8 @@ function triggerDataFetch(start, end) {
     currentMaxTimestamp = end;
     updateSliderUI();
 
-    // Show visual feedback immediately
     showLoader();
 
-    // Call Backend
     if (requestRangeCallback) {
         const filter = historySearchInput.value.trim();
         requestRangeCallback(start, end, filter);
@@ -371,7 +375,6 @@ export function setDbBounds(min, max) {
     globalMinTimestamp = new Date(min).getTime();
     globalMaxTimestamp = new Date(max).getTime();
     
-    // On startup, cover entire range
     currentMinTimestamp = globalMinTimestamp;
     currentMaxTimestamp = globalMaxTimestamp;
     isRealTimeMode = true;
@@ -381,57 +384,43 @@ export function setDbBounds(min, max) {
 
 /**
  * Receives data from the main app.
- * @param {Array} entries - Log entries.
- * @param {boolean} isInitialLoad - If true, this is the startup batch.
- * @param {boolean} isUpdate - If true, this is a single live update.
  */
 export function setHistoryData(entries, isInitialLoad, isUpdate = false) { 
     if (isUpdate) {
         // Live update: Append new entries to the list
         allHistoryEntries.unshift(...entries);
         
-        // [NEW] Memory Protection: Cap the size of the client-side array
-        // If we exceed the limit, chop off the oldest entries (at the end of array)
         if (allHistoryEntries.length > MAX_CLIENT_ENTRIES) {
-            // Keep the newest 50k
             allHistoryEntries = allHistoryEntries.slice(0, MAX_CLIENT_ENTRIES);
         }
 
-        // Update global max time
         const newMax = entries[0].timestampMs;
         if (newMax > globalMaxTimestamp) globalMaxTimestamp = newMax;
         
-        // If in Real-Time Mode, drag the right handle along
         if (isRealTimeMode) {
             currentMaxTimestamp = globalMaxTimestamp;
         }
-        // Note: We DO NOT change currentMinTimestamp in live mode unless it was already at globalMin
     } else {
-        // Bulk load (Initial or Fetch Range result)
+        // Bulk load
         allHistoryEntries = entries;
+        visibleCount = 1000; // [MODIFIED] Reset visible count on new bulk load
         
-        // If this was a specific fetch, update bounds logic if needed
-        // But usually we trust the query parameters used
         if (entries.length > 2000) {
-            // Show warning if result set is huge (popup as requested)
              if(!isInitialLoad) console.log("Notice: The selected range returned a large number of results.");
         }
     }
 
-    // Sync Date Inputs
     if (startDateInput) startDateInput.value = toDateTimeLocal(currentMinTimestamp);
     if (endDateInput) endDateInput.value = toDateTimeLocal(currentMaxTimestamp);
 
-    renderFilteredHistory(); // This will overwrite the loader with content or empty state
+    renderFilteredHistory(); 
     updateSliderUI();
 
-    // Return current view bounds for other modules
     return { min: currentMinTimestamp, max: currentMaxTimestamp };
 }
 
 function updateSliderUI() {
     if (historySlider) {
-        // The scale is defined by Global bounds
         historySlider.updateUI(globalMinTimestamp, globalMaxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     }
 }
