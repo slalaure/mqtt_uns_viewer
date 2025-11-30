@@ -16,8 +16,8 @@ const path = require('path');
 const dotenv = require('dotenv');
 const multer = require('multer');
 
-// [MODIFIED] Added 'db' argument to accept the DuckDB instance
-module.exports = (envPath, envExamplePath, dataPath, logger, db) => {
+// [MODIFIED] Added 'dataManager' argument to enable imports to all DBs
+module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) => {
     const router = express.Router();
     const certsPath = path.join(dataPath, 'certs');
     const modelPath = path.join(dataPath, 'uns_model.json'); // Path to UNS Model
@@ -31,19 +31,17 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db) => {
         }
     }
 
-    // Configure Multer for file uploads
-    const storage = multer.diskStorage({
+    // Configure Multer for file uploads (Certificates)
+    const storageCerts = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, certsPath);
         },
         filename: function (req, file, cb) {
-            // Sanitize filename to just the basename to prevent directory traversal
             cb(null, path.basename(file.originalname));
         }
     });
     
-    // Filter to allow common certificate extensions
-    const fileFilter = (req, file, cb) => {
+    const fileFilterCerts = (req, file, cb) => {
         if (file.originalname.match(/\.(pem|crt|key|ca|cer|pfx|p12)$/)) {
             cb(null, true);
         } else {
@@ -51,7 +49,29 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db) => {
         }
     };
 
-    const upload = multer({ storage: storage, fileFilter: fileFilter });
+    const uploadCerts = multer({ storage: storageCerts, fileFilter: fileFilterCerts });
+
+    // [NEW] Configure Multer for JSON imports (Model and History)
+    // We store them temporarily in dataPath
+    const storageJson = multer.diskStorage({
+        destination: function (req, file, cb) {
+            cb(null, dataPath);
+        },
+        filename: function (req, file, cb) {
+            cb(null, `import_${Date.now()}_${path.basename(file.originalname)}`);
+        }
+    });
+
+    const fileFilterJson = (req, file, cb) => {
+        if (file.originalname.match(/\.json$/i)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only JSON files are allowed!'), false);
+        }
+    };
+
+    const uploadJson = multer({ storage: storageJson, fileFilter: fileFilterJson });
+
 
     // --- Certificate Routes ---
 
@@ -70,7 +90,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db) => {
     });
 
     // POST /api/env/certs: Upload a certificate
-    router.post('/certs', upload.single('certificate'), (req, res) => {
+    router.post('/certs', uploadCerts.single('certificate'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded or invalid file type.' });
         }
@@ -115,6 +135,67 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db) => {
             res.status(500).json({ error: 'Could not save UNS model file.' });
         }
     });
+
+    // --- [NEW] Database Import Route ---
+    // POST /api/env/import-db: Imports a JSON file into configured databases
+    router.post('/import-db', uploadJson.single('db_import'), async (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No JSON file uploaded.' });
+        }
+
+        const filePath = req.file.path;
+        logger.info(`[ImportDB] Starting import from ${req.file.originalname}...`);
+
+        try {
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            const entries = JSON.parse(fileContent);
+
+            if (!Array.isArray(entries)) {
+                throw new Error("Invalid JSON structure. Expected an array of history entries.");
+            }
+
+            if (!dataManager) {
+                // Fallback if dataManager wasn't passed correctly
+                throw new Error("DataManager is not available for import.");
+            }
+
+            let count = 0;
+            for (const entry of entries) {
+                // Map the JSON structure to what DataManager expects
+                const message = {
+                    brokerId: entry.brokerId || entry.broker_id || 'default_broker',
+                    timestamp: new Date(entry.timestamp || entry.timestampMs || Date.now()),
+                    topic: entry.topic,
+                    payloadStringForDb: typeof entry.payload === 'string' ? entry.payload : JSON.stringify(entry.payload),
+                    isSparkplugOrigin: false, // Cannot accurately determine from export, assume false
+                    needsDb: true // Force insert
+                };
+
+                // Validate essential fields
+                if (message.topic) {
+                    dataManager.insertMessage(message);
+                    count++;
+                }
+            }
+
+            logger.info(`[ImportDB] Queued ${count} messages for insertion into active databases (DuckDB/TimescaleDB).`);
+            
+            // Cleanup temp file
+            fs.unlinkSync(filePath);
+
+            res.json({ 
+                success: true, 
+                message: `Successfully queued ${count} entries for import. Data will appear shortly.` 
+            });
+
+        } catch (err) {
+            logger.error({ err }, "[ImportDB] Import failed.");
+            // Try to cleanup
+            try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
+            res.status(500).json({ error: `Import failed: ${err.message}` });
+        }
+    });
+
 
     // --- Environment Config Routes ---
 

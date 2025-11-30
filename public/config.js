@@ -16,9 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-button');
     const statusMessage = document.getElementById('status-message');
     
-    // Database Reset Elements
+    // Database Management Elements
     const btnResetDb = document.getElementById('btn-reset-db');
     const resetDbStatus = document.getElementById('reset-db-status');
+    const btnImportDb = document.getElementById('btn-import-db');
+    const importInput = document.getElementById('db-import-input');
+    const importStatus = document.getElementById('db-import-status');
 
     // Cert Manager Elements
     const certList = document.getElementById('cert-list');
@@ -32,6 +35,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const modelUploadInput = document.getElementById('model-upload-input');
     const btnUploadModel = document.getElementById('btn-upload-model');
     const modelUploadStatus = document.getElementById('model-upload-status');
+
+    // --- Database Import Logic ---
+    if (btnImportDb && importInput) {
+        btnImportDb.addEventListener('click', async () => {
+            const file = importInput.files[0];
+            if (!file) {
+                alert("Please select a JSON export file first.");
+                return;
+            }
+
+            if (!confirm(`Import data from '${file.name}'?\nThis will be added to the existing history queue.`)) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('db_import', file);
+
+            btnImportDb.disabled = true;
+            btnImportDb.textContent = "Importing...";
+            importStatus.textContent = "Uploading & Processing...";
+            importStatus.style.color = "var(--color-text)";
+
+            try {
+                const response = await fetch('api/env/import-db', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || "Import failed.");
+                }
+
+                importStatus.textContent = result.message; // Success message from server
+                importStatus.style.color = 'var(--color-success)';
+                importInput.value = ''; // Clear input
+            } catch (e) {
+                importStatus.textContent = `❌ Error: ${e.message}`;
+                importStatus.style.color = 'var(--color-danger)';
+            } finally {
+                btnImportDb.disabled = false;
+                btnImportDb.textContent = "Import Data";
+                // Clear success message after a delay
+                setTimeout(() => {
+                    if (importStatus.textContent.includes('Successfully')) {
+                        importStatus.textContent = '';
+                    }
+                }, 5000);
+            }
+        });
+    }
 
     // --- Database Reset Logic ---
     btnResetDb.addEventListener('click', async () => {

@@ -67,12 +67,25 @@
         <h1>Configuration</h1>
         <p>Modify the application settings below. The server will require a restart after saving.</p>
         
-        <div class="database-manager" style="border-color: var(--color-danger);">
-            <h3 style="color: var(--color-danger);">Database Management</h3>
+        <div class="database-manager" style="border-color: var(--color-primary);">
+            <h3>Database Management</h3>
             <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 15px;">
-                Manage the embedded DuckDB database.
+                Manage the embedded DuckDB database and import data.
             </p>
-            <span class="danger-zone-text">⚠️ Danger Zone:</span>
+            
+            <div style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px dashed var(--color-border);">
+                <h4 style="margin-top: 0; font-size: 1em;">Import History (JSON)</h4>
+                <p style="font-size: 0.9em; margin-bottom: 10px;">
+                    Import history from a JSON export file. Data will be queued for insertion into DuckDB and TimescaleDB (if configured).
+                </p>
+                <div class="cert-upload-row">
+                    <input type="file" id="db-import-input" accept=".json" />
+                    <button id="btn-import-db" class="modal-button button-primary" type="button">Import Data</button>
+                    <span id="db-import-status" style="font-size: 0.9em; margin-left: 10px;"></span>
+                </div>
+            </div>
+
+            <h4 style="color: var(--color-danger); margin-top: 0;">⚠️ Danger Zone</h4>
             <p style="font-size: 0.9em; margin-bottom: 15px;">
                 Resetting the database will permanently delete <strong>ALL</strong> recorded MQTT history and reclaim disk space. This action cannot be undone.
             </p>

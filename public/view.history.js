@@ -75,6 +75,55 @@ function showLoader() {
 }
 
 /**
+ * Exports the currently filtered history entries to a JSON file.
+ */
+function exportHistoryToJSON() {
+    trackEvent('history_export_json');
+    if (!allHistoryEntries || allHistoryEntries.length === 0) {
+        alert("No data to export.");
+        return;
+    }
+
+    const searchTerm = historySearchInput.value.trim().toLowerCase();
+    const searchActive = searchTerm.length >= 3;
+    const selectedBrokerId = brokerFilterSelect ? brokerFilterSelect.value : 'all';
+
+    // Apply the same filters as the view to export exactly what the user sees/has filtered
+    const entriesToExport = allHistoryEntries.filter(entry => {
+        if (selectedBrokerId !== 'all' && entry.brokerId !== selectedBrokerId) return false;
+        if (entry.timestampMs < currentMinTimestamp || entry.timestampMs > currentMaxTimestamp) return false;
+        if (searchActive) {
+            const topicMatch = entry.topic.toLowerCase().includes(searchTerm);
+            const payloadMatch = entry.payload.toLowerCase().includes(searchTerm);
+            return topicMatch || payloadMatch;
+        }
+        return true;
+    });
+
+    if (entriesToExport.length === 0) {
+        alert("Current filters result in no data.");
+        return;
+    }
+
+    // [FIX] Sanitize objects to remove internal/redundant keys (broker_id, timestampMs)
+    const sanitizedEntries = entriesToExport.map(entry => ({
+        timestamp: entry.timestamp,
+        brokerId: entry.brokerId, // Standardize on camelCase
+        topic: entry.topic,
+        payload: entry.payload
+    }));
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sanitizedEntries, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadAnchorNode.setAttribute("download", `mqtt_history_export_${dateStr}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
+/**
  * Applies current filters (time + search + broker) and re-renders the log.
  */
 export function renderFilteredHistory() {
@@ -184,11 +233,22 @@ export function initHistoryView(options = {}) {
     btnGrp.appendChild(createRangeBtn('6h', 6));
     btnGrp.appendChild(createRangeBtn('24h', 24));
     btnGrp.appendChild(createRangeBtn('7d', 24*7));
-    //  Added requested buttons
     btnGrp.appendChild(createRangeBtn('1M', 24*30));
     btnGrp.appendChild(createRangeBtn('3M', 24*30*3));
     btnGrp.appendChild(createRangeBtn('1Y', 24*365));
     btnGrp.appendChild(createRangeBtn('Full', 'FULL'));
+
+    // Export Button
+    const exportBtn = document.createElement('button');
+    exportBtn.textContent = 'Export JSON';
+    exportBtn.className = 'mapper-button';
+    exportBtn.style.marginTop = '14px';
+    exportBtn.style.backgroundColor = 'var(--color-bg-tertiary)';
+    exportBtn.style.border = '1px solid var(--color-success)';
+    exportBtn.style.color = 'var(--color-success)';
+    exportBtn.title = "Download currently filtered data";
+    exportBtn.onclick = exportHistoryToJSON;
+    btnGrp.appendChild(exportBtn);
 
     dateControlsDiv.appendChild(startGrp);
     dateControlsDiv.appendChild(endGrp);
