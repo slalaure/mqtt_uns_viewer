@@ -89,6 +89,7 @@
     flex-direction: column;
     overflow: hidden;
     background-color: var(--color-bg);
+    position: relative; /* For Modal positioning */
 }
 
 /* --- Chat History --- */
@@ -109,6 +110,7 @@
     font-size: 0.9em;
     line-height: 1.4;
     word-wrap: break-word;
+    position: relative; /* For speaker button positioning */
 }
 
 .chat-message.user {
@@ -125,6 +127,7 @@
     color: var(--color-text);
     border-bottom-left-radius: 2px;
     box-shadow: 0 1px 2px var(--color-shadow);
+    padding-bottom: 25px; /* Space for speaker icon */
 }
 
 .chat-message.system {
@@ -153,6 +156,24 @@
 .chat-message.error::before {
     content: '⚠️';
     font-size: 1.2em;
+}
+
+/* --- Speak Button (TTS) --- */
+.btn-message-speak {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s, transform 0.1s;
+    padding: 2px;
+}
+.btn-message-speak:hover {
+    opacity: 1;
+    transform: scale(1.1);
 }
 
 /* --- Image in Chat Styles --- */
@@ -245,8 +266,8 @@
     border-color: var(--color-primary);
 }
 
-/* Attach File Button */
-#btn-chat-attach {
+/* Shared style for icon buttons (Attach, Mic, Cam) */
+.chat-icon-btn {
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -261,11 +282,28 @@
     transition: background-color 0.2s, color 0.2s;
     margin-bottom: 2px; /* Align with textarea bottom */
 }
-#btn-chat-attach:hover {
+.chat-icon-btn:hover {
     background-color: var(--color-bg-accent);
     color: var(--color-text);
 }
 
+/* Microphone Specifics */
+#btn-chat-mic {
+    font-size: 1.2em; /* Slightly smaller than paperclip */
+}
+#btn-chat-mic.listening {
+    color: var(--color-danger);
+    background-color: rgba(220, 53, 69, 0.1);
+    animation: mic-pulse 1.5s infinite;
+}
+
+@keyframes mic-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+/* Send Button */
 #btn-send-chat {
     width: 40px;
     height: 40px;
@@ -338,6 +376,68 @@
 }
 .btn-remove-attachment:hover {
     color: var(--color-danger);
+}
+
+/* --- Camera Modal Styles --- */
+.chat-camera-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.camera-content {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    background: #000;
+}
+
+#chat-camera-feed {
+    width: 100%;
+    max-height: 80vh;
+    background: #000;
+}
+
+.camera-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+}
+
+.camera-btn-capture {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: white;
+    border: 4px solid rgba(200, 200, 200, 0.5);
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+.camera-btn-capture:active {
+    transform: scale(0.9);
+}
+
+.camera-btn-cancel {
+    color: white;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
 }
 
 /* --- Markdown Styling inside bubbles --- */

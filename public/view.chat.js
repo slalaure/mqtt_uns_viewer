@@ -9,6 +9,8 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * View module for the Floating AI Chat Assistant.
+ * Includes Continuous Voice Input and Language-Aware Output.
+ * Optimized for Chrome "Google" Voices & Safari compatibility.
  */
 
 import { trackEvent } from './utils.js';
@@ -22,358 +24,410 @@ const btnClear = document.getElementById('btn-chat-clear');
 const btnMinimize = document.getElementById('btn-chat-minimize');
 const fabButton = document.getElementById('btn-chat-fab');
 
-// --- New Elements (Dynamically Injected) ---
+// --- New Elements ---
 let fileInput = null;
 let previewContainer = null;
+let btnMic = null; 
+let btnCam = null; 
+let cameraModal = null; 
+let cameraVideo = null; 
+let cameraStream = null; 
 
 // --- State ---
 let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
-let pendingAttachment = null; // { type: 'image'|'text', content: string, name: string }
+let pendingAttachment = null;
 
-/**
- * Initializes the Chat View.
- */
+// --- Voice State ---
+let recognition = null;
+let isListening = false;
+let wasLastInputVoice = false; 
+let finalTranscript = ''; 
+let userWantMicActive = false;
+
+// Global reference for TTS to prevent Garbage Collection
+let currentUtterance = null; 
+// Cache for voices
+let availableVoices = [];
+
 export function initChatView() {
-    // --- 1. Inject Upload Controls ---
     injectUploadUI();
-
+    injectVoiceUI(); 
+    injectCameraUI(); 
     loadHistory();
 
-    // FAB Click -> Open Widget
-    fabButton?.addEventListener('click', () => {
-        toggleChatWidget(true);
-    });
+    // [FIX] Pre-load voices aggressively for Chrome/Safari
+    if ('speechSynthesis' in window) {
+        const loadVoices = () => {
+            availableVoices = window.speechSynthesis.getVoices();
+            console.log(`[TTS] Loaded ${availableVoices.length} voices.`);
+        };
+        loadVoices();
+        // Chrome fires this when voices are ready
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
 
-    // Minimize Click -> Close Widget
-    btnMinimize?.addEventListener('click', () => {
-        toggleChatWidget(false);
-    });
-
-    // Send Message
-    btnSend?.addEventListener('click', sendMessage);
+    fabButton?.addEventListener('click', () => toggleChatWidget(true));
+    btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
+    btnSend?.addEventListener('click', () => sendMessage(false));
     
-    // Input Handling (Enter to send, Shift+Enter for newline)
     chatInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage();
+            sendMessage(false);
         }
-        // Auto-resize textarea
-        chatInput.style.height = 'auto';
-        chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+        autoResizeInput();
     });
 
-    // Clear History
     btnClear?.addEventListener('click', () => {
         if (confirm('Clear conversation history?')) {
             conversationHistory = [];
             saveHistory();
             renderHistory();
             trackEvent('chat_clear_history');
+            window.speechSynthesis.cancel();
         }
     });
 }
 
-/**
- * Injects the file upload button and preview area into the existing DOM.
- */
-function injectUploadUI() {
+function autoResizeInput() {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+}
+
+function injectCameraUI() {
+    const inputArea = document.querySelector('.chat-input-area');
+    if (!inputArea) return;
+    btnCam = document.createElement('button');
+    btnCam.id = 'btn-chat-cam';
+    btnCam.innerHTML = '📷';
+    btnCam.title = 'Take Photo';
+    btnCam.className = 'chat-icon-btn';
+    if (btnMic) inputArea.insertBefore(btnCam, btnMic);
+    else inputArea.insertBefore(btnCam, btnSend);
+
+    cameraModal = document.createElement('div');
+    cameraModal.className = 'chat-camera-modal';
+    cameraModal.style.display = 'none';
+    cameraModal.innerHTML = `
+        <div class="camera-content">
+            <video id="chat-camera-feed" autoplay playsinline></video>
+            <div class="camera-controls">
+                <button id="btn-camera-cancel" class="camera-btn-cancel">Cancel</button>
+                <button id="btn-camera-capture" class="camera-btn-capture"></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(cameraModal);
+    cameraVideo = document.getElementById('chat-camera-feed');
+    document.getElementById('btn-camera-cancel').addEventListener('click', closeCamera);
+    document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
+    btnCam.addEventListener('click', openCamera);
+}
+
+async function openCamera() {
+    if (!window.isSecureContext) {
+        alert("Camera requires HTTPS or localhost.");
+        return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return alert("Camera not supported");
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        cameraVideo.srcObject = cameraStream;
+        cameraModal.style.display = 'flex';
+        if (userWantMicActive) {
+            userWantMicActive = false;
+            recognition?.stop();
+        }
+    } catch (err) { alert("Camera error: " + err.message); }
+}
+
+function closeCamera() {
+    if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+    if (cameraModal) cameraModal.style.display = 'none';
+}
+
+function takePicture() {
+    if (!cameraVideo || !cameraStream) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = cameraVideo.videoWidth;
+    canvas.height = cameraVideo.videoHeight;
+    canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+    pendingAttachment = { type: 'image', content: canvas.toDataURL('image/jpeg', 0.8), name: `capture_${Date.now()}.jpg` };
+    closeCamera();
+    renderPreview();
+}
+
+function injectVoiceUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
 
-    // 1. Create File Input (Hidden)
-    fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.id = 'chat-file-input';
-    fileInput.accept = 'image/*,.txt,.json,.csv,.js,.md,.log';
-    fileInput.style.display = 'none';
-    fileInput.addEventListener('change', handleFileSelect);
-    inputArea.appendChild(fileInput);
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-    // 2. Create Attachment Button (Paperclip)
-    const btnAttach = document.createElement('button');
-    btnAttach.id = 'btn-chat-attach';
-    btnAttach.innerHTML = '📎';
-    btnAttach.title = 'Attach file';
-    btnAttach.addEventListener('click', () => fileInput.click());
-    
-    // Insert before the textarea
-    inputArea.insertBefore(btnAttach, chatInput);
+    btnMic = document.createElement('button');
+    btnMic.id = 'btn-chat-mic';
+    btnMic.innerHTML = '🎤'; 
+    btnMic.title = 'Voice Input (Click to Start/Stop)';
+    btnMic.className = 'chat-icon-btn';
+    inputArea.insertBefore(btnMic, btnSend);
 
-    // 3. Create Preview Container (Above input area)
-    previewContainer = document.createElement('div');
-    previewContainer.id = 'chat-file-preview';
-    previewContainer.style.display = 'none';
-    
-    // Insert into chat-body, before input-area
-    const chatBody = document.querySelector('.chat-body');
-    if (chatBody) {
-        chatBody.insertBefore(previewContainer, inputArea);
-    }
-}
+    recognition = new SpeechRecognition();
+    recognition.continuous = true; 
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
 
-/**
- * Handles file selection from the input.
- */
-function handleFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    const isImage = file.type.startsWith('image/');
-
-    // Max size check (e.g. 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-        alert("File too large. Max 2MB.");
-        fileInput.value = '';
-        return;
-    }
-
-    reader.onload = (e) => {
-        const result = e.target.result;
-        
-        pendingAttachment = {
-            type: isImage ? 'image' : 'text',
-            content: result, // Base64 for image, String for text
-            name: file.name
-        };
-
-        renderPreview();
-        chatInput.focus();
+    recognition.onstart = () => {
+        isListening = true;
+        btnMic.classList.add('listening');
+        chatInput.placeholder = "Listening... (Click mic to stop)";
     };
 
-    if (isImage) {
-        reader.readAsDataURL(file);
-    } else {
-        reader.readAsText(file);
-    }
-}
-
-function renderPreview() {
-    if (!pendingAttachment) {
-        previewContainer.style.display = 'none';
-        previewContainer.innerHTML = '';
-        return;
-    }
-
-    previewContainer.style.display = 'flex';
-    previewContainer.innerHTML = `
-        <div class="preview-item">
-            ${pendingAttachment.type === 'image' 
-                ? `<img src="${pendingAttachment.content}" alt="preview">` 
-                : `<div class="file-icon">📄</div>`
+    recognition.onend = () => {
+        isListening = false;
+        if (userWantMicActive) {
+            try { recognition.start(); } catch(e) { /* ignore */ }
+        } else {
+            btnMic.classList.remove('listening');
+            chatInput.placeholder = "Ask...";
+            if (chatInput.value.trim().length > 0) {
+                wasLastInputVoice = true;
             }
-            <span class="file-name">${pendingAttachment.name}</span>
-            <button class="btn-remove-attachment">×</button>
-        </div>
-    `;
+        }
+    };
 
-    previewContainer.querySelector('.btn-remove-attachment').addEventListener('click', () => {
-        pendingAttachment = null;
-        fileInput.value = '';
-        renderPreview();
+    recognition.onresult = (event) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript + ' ';
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+        chatInput.value = finalTranscript + interimTranscript;
+        autoResizeInput();
+        chatInput.scrollTop = chatInput.scrollHeight;
+    };
+
+    recognition.onerror = (event) => {
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            userWantMicActive = false;
+            isListening = false;
+            btnMic.classList.remove('listening');
+        }
+    };
+
+    btnMic.addEventListener('click', () => {
+        if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            alert("Voice input requires HTTPS security.");
+            return;
+        }
+
+        if (userWantMicActive) {
+            userWantMicActive = false;
+            recognition.stop();
+        } else {
+            window.speechSynthesis.cancel();
+            userWantMicActive = true;
+            if (!chatInput.value.trim()) {
+                finalTranscript = '';
+            } else {
+                finalTranscript = chatInput.value + ' ';
+            }
+            try { recognition.start(); } catch(e) { console.error(e); }
+        }
     });
 }
 
 /**
- * Toggles the visibility of the floating widget.
- * @param {boolean} show - True to show, false to hide.
+ * [FIX] Enhanced Speak Text
+ * - Prioritizes "Google" voices for better quality.
+ * - Handles language matching strictly.
+ * - Ensures voices are loaded before speaking.
  */
+function speakText(text) {
+    if (!('speechSynthesis' in window)) return;
+    
+    window.speechSynthesis.cancel();
+    
+    let cleanText = text
+        .replace(/\*\*/g, '') 
+        .replace(/`/g, '')    
+        .replace(/#/g, '')    
+        .replace(/\[(.*?)\]\(.*?\)/g, '$1') 
+        .replace(/```[\s\S]*?```/g, 'Code block skipped.') 
+        .replace(/<[^>]*>/g, '');
+
+    currentUtterance = new SpeechSynthesisUtterance(cleanText);
+    
+    const targetLang = navigator.language || 'en-US';
+    currentUtterance.lang = targetLang;
+    currentUtterance.rate = 1.0; // Standard speed for natural voices
+
+    // Ensure voices are loaded
+    if (availableVoices.length === 0) {
+        availableVoices = window.speechSynthesis.getVoices();
+    }
+
+    // Voice Selection Strategy (Priority Order)
+    // 1. Exact language match AND contains "Google" (High Quality Chrome)
+    // 2. Exact language match
+    // 3. Approximate language match (fr-FR vs fr-CA) AND contains "Google"
+    // 4. Approximate language match
+    let voice = availableVoices.find(v => v.lang === targetLang && v.name.includes('Google'));
+    
+    if (!voice) {
+        voice = availableVoices.find(v => v.lang === targetLang);
+    }
+    if (!voice) {
+        voice = availableVoices.find(v => v.lang.startsWith(targetLang.substring(0, 2)) && v.name.includes('Google'));
+    }
+    if (!voice) {
+        voice = availableVoices.find(v => v.lang.startsWith(targetLang.substring(0, 2)));
+    }
+
+    if (voice) {
+        console.log(`[TTS] Speaking with voice: ${voice.name} (${voice.lang})`);
+        currentUtterance.voice = voice;
+    } else {
+        console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
+    }
+
+    currentUtterance.onend = () => { currentUtterance = null; };
+    currentUtterance.onerror = (e) => { console.error("TTS Error:", e); currentUtterance = null; };
+
+    window.speechSynthesis.speak(currentUtterance);
+}
+
+function injectUploadUI() {
+    const inputArea = document.querySelector('.chat-input-area');
+    if (!inputArea) return;
+    fileInput = document.createElement('input');
+    fileInput.type = 'file'; fileInput.id = 'chat-file-input'; fileInput.style.display = 'none';
+    fileInput.addEventListener('change', handleFileSelect);
+    inputArea.appendChild(fileInput);
+    const btnAttach = document.createElement('button');
+    btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
+    btnAttach.addEventListener('click', () => fileInput.click());
+    if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
+    else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
+    else inputArea.insertBefore(btnAttach, chatInput);
+    previewContainer = document.createElement('div');
+    previewContainer.id = 'chat-file-preview'; previewContainer.style.display = 'none';
+    document.querySelector('.chat-body')?.insertBefore(previewContainer, inputArea);
+}
+function handleFileSelect(e) {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        pendingAttachment = { type: file.type.startsWith('image/')?'image':'text', content: evt.target.result, name: file.name };
+        renderPreview(); chatInput.focus();
+    };
+    if (file.type.startsWith('image/')) reader.readAsDataURL(file); else reader.readAsText(file);
+}
+function renderPreview() {
+    if(!pendingAttachment) { previewContainer.style.display='none'; return; }
+    previewContainer.style.display='flex';
+    previewContainer.innerHTML = `<div class="preview-item">${pendingAttachment.type==='image'?`<img src="${pendingAttachment.content}">`:`<div class="file-icon">📄</div>`}<span class="file-name">${pendingAttachment.name}</span><button class="btn-remove-attachment">×</button></div>`;
+    previewContainer.querySelector('.btn-remove-attachment').onclick = () => { pendingAttachment=null; fileInput.value=''; renderPreview(); };
+}
 export function toggleChatWidget(show) {
     isWidgetOpen = show;
-    if (show) {
-        chatContainer.classList.add('active');
-        fabButton.style.display = 'none'; // Hide FAB when open
-        trackEvent('chat_widget_open');
-        setTimeout(() => {
-            scrollToBottom();
-            chatInput.focus();
-        }, 300);
-    } else {
-        chatContainer.classList.remove('active');
-        fabButton.style.display = 'flex'; // Show FAB when closed
-        trackEvent('chat_widget_minimize');
-    }
+    chatContainer.classList.toggle('active', show);
+    fabButton.style.display = show ? 'none' : 'flex';
+    if(show) setTimeout(() => { scrollToBottom(); chatInput.focus(); }, 300);
 }
-
-/**
- * Loads conversation history from LocalStorage.
- */
 function loadHistory() {
-    try {
-        const saved = localStorage.getItem('chat_history');
-        if (saved) {
-            conversationHistory = JSON.parse(saved);
-            renderHistory();
-        } else {
-            // Initial welcome message
-            addMessageToState('system', 'Hello! I am your UNS Assistant. I can help you explore topics, search history, and control simulators.');
-        }
-    } catch (e) {
-        console.error("Failed to load chat history", e);
-        conversationHistory = [];
-    }
+    try { conversationHistory = JSON.parse(localStorage.getItem('chat_history') || '[]'); renderHistory(); } 
+    catch { conversationHistory = []; }
+    if(conversationHistory.length===0) addMessageToState('system', 'Hello! I am your UNS Assistant.');
 }
-
-function saveHistory() {
-    localStorage.setItem('chat_history', JSON.stringify(conversationHistory));
-}
-
-/**
- * Adds a message to the state and updates UI.
- */
-function addMessageToState(role, content, toolCalls = null) {
-    const msg = { role, content, timestamp: Date.now() };
-    if (toolCalls) msg.tool_calls = toolCalls;
-    
+function saveHistory() { localStorage.setItem('chat_history', JSON.stringify(conversationHistory)); }
+function addMessageToState(role, content, toolCalls=null) {
+    const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
     conversationHistory.push(msg);
-    
-    // Keep context window reasonable (last 30 messages)
-    if (conversationHistory.length > 30) {
-        conversationHistory = conversationHistory.slice(conversationHistory.length - 30);
-    }
-    
-    saveHistory();
-    appendMessageToUI(msg);
+    if(conversationHistory.length>30) conversationHistory=conversationHistory.slice(-30);
+    saveHistory(); appendMessageToUI(msg);
 }
+function renderHistory() { chatHistory.innerHTML=''; conversationHistory.forEach(appendMessageToUI); scrollToBottom(); }
+function scrollToBottom() { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
-/**
- * Renders the entire history.
- */
-function renderHistory() {
-    if (!chatHistory) return;
-    chatHistory.innerHTML = '';
-    conversationHistory.forEach(msg => appendMessageToUI(msg));
-    scrollToBottom();
-}
-
-/**
- * Appends a single message bubble to the UI.
- */
 function appendMessageToUI(msg) {
     if (!chatHistory) return;
-
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
-    
     let contentToFormat = msg.content;
     
-    // Handle Array Content (Multimodal - Image + Text)
     if (Array.isArray(msg.content)) {
         let htmlParts = '';
         msg.content.forEach(part => {
-            if (part.type === 'text') {
-                htmlParts += formatMessageContent(part.text);
-            } else if (part.type === 'image_url') {
-                htmlParts += `<div class="chat-image-container"><img src="${part.image_url.url}" alt="User Upload" class="chat-image"></div>`;
-            }
+            if (part.type === 'text') htmlParts += formatMessageContent(part.text);
+            else if (part.type === 'image_url') htmlParts += `<div class="chat-image-container"><img src="${part.image_url.url}" class="chat-image"></div>`;
         });
         div.innerHTML = htmlParts;
     } else {
-        // Standard Text Content
         let htmlContent = formatMessageContent(msg.content || '');
-
-        // Visualize tool usage if present
-        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
-            msg.tool_calls.forEach(tool => {
-                const args = tool.function.arguments.length > 50 
-                    ? tool.function.arguments.substring(0, 50) + '...' 
-                    : tool.function.arguments;
-                    
-                htmlContent += `
-                    <div class="tool-usage">
-                        <div class="tool-usage-header">🔧 ${tool.function.name}</div>
-                        <code>${args}</code>
-                    </div>
-                `;
-            });
+        if (msg.tool_calls) {
+            msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${t.function.name}</div>`);
         }
-        
-        // Handle tool output messages
-        if (msg.role === 'tool') {
-            div.classList.add('system'); 
-            div.innerHTML = `<div class="tool-usage-header">📋 Output (${msg.name}):</div>` + 
-                            `<small>${htmlContent.substring(0, 150)}${htmlContent.length > 150 ? '...' : ''}</small>`;
-        } else {
-            div.innerHTML = htmlContent;
-        }
+        if (msg.role === 'tool') div.classList.add('system'), div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
+        else div.innerHTML = htmlContent;
     }
 
+    if (msg.role === 'assistant' && msg.content && !Array.isArray(msg.content)) {
+        const speakerBtn = document.createElement('button');
+        speakerBtn.className = 'btn-message-speak';
+        speakerBtn.innerHTML = '🔊';
+        speakerBtn.onclick = () => speakText(msg.content);
+        div.appendChild(speakerBtn);
+    }
     chatHistory.appendChild(div);
     scrollToBottom();
 }
 
-/**
- * Basic formatter for Markdown-like syntax.
- */
 function formatMessageContent(text) {
     if (!text) return '';
-    let formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    formatted = formatted.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    formatted = formatted.replace(/\n/g, '<br>');
-    return formatted;
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+               .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+               .replace(/`([^`]+)`/g, '<code>$1</code>')
+               .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+               .replace(/\n/g, '<br>');
 }
 
-function scrollToBottom() {
-    if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
-}
-
-/**
- * Sends the user message to the backend API.
- */
-async function sendMessage() {
+async function sendMessage(fromVoice = false) {
     if (isProcessing) return;
-    
+    window.speechSynthesis.cancel();
+
+    if (userWantMicActive || isListening) {
+        userWantMicActive = false;
+        if(recognition) recognition.stop();
+    }
+
+    const isVoice = fromVoice || wasLastInputVoice;
+    wasLastInputVoice = false; 
+
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
 
     let messageContent = text;
-
-    // --- Prepare Payload with Attachment ---
     if (pendingAttachment) {
         if (pendingAttachment.type === 'image') {
-            // OpenAI/Gemini Multimodal Format
-            messageContent = [
-                { type: "text", text: text },
-                { 
-                    type: "image_url", 
-                    image_url: { 
-                        url: pendingAttachment.content 
-                    } 
-                }
-            ];
+            messageContent = [{ type: "text", text: text }, { type: "image_url", image_url: { url: pendingAttachment.content } }];
         } else {
-            // Text File: Append content to prompt
-            const cleanContent = pendingAttachment.content.length > 10000 
-                ? pendingAttachment.content.substring(0, 10000) + "\n...[TRUNCATED]..." 
-                : pendingAttachment.content;
-            
-            messageContent = `${text}\n\n--- ATTACHED FILE: ${pendingAttachment.name} ---\n${cleanContent}\n--- END OF FILE ---`;
+            messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
         }
     }
 
-    // 1. UI Updates
-    chatInput.value = '';
-    chatInput.style.height = 'auto';
-    
-    // Clear attachment state
-    pendingAttachment = null;
-    renderPreview();
-    fileInput.value = '';
+    chatInput.value = ''; autoResizeInput();
+    pendingAttachment = null; renderPreview(); fileInput.value = '';
 
     addMessageToState('user', messageContent);
-    
     isProcessing = true;
-    btnSend.disabled = true;
-    
-    // Show blinking dots
+    btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
     showTypingIndicator(true);
 
-    // 2. Prepare Payload (Backend handles keys/urls)
     const messagesPayload = conversationHistory.map(m => {
         const apiMsg = { role: m.role, content: m.content };
         if (m.tool_calls) apiMsg.tool_calls = m.tool_calls;
@@ -382,60 +436,43 @@ async function sendMessage() {
         return apiMsg;
     });
 
-    // 3. Send to Backend Agent
     try {
         const response = await fetch('api/chat/completion', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: messagesPayload })
+            body: JSON.stringify({ 
+                messages: messagesPayload,
+                userLanguage: navigator.language 
+            })
         });
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || `API Error: ${response.statusText}`);
-        }
-
+        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
         const data = await response.json();
         const assistantMsg = data.choices[0].message;
 
         addMessageToState('assistant', assistantMsg.content, assistantMsg.tool_calls);
         trackEvent('chat_message_sent');
 
+        if (isVoice && assistantMsg.content) {
+            speakText(assistantMsg.content);
+        }
+
     } catch (error) {
-        console.error("Chat Error:", error);
-        // Add error directly to chat state to visualize it
+        console.error(error);
         addMessageToState('error', `Error: ${error.message}`);
     } finally {
         isProcessing = false;
-        btnSend.disabled = false;
-        // Hide blinking dots
+        btnSend.disabled = false; if(btnMic) btnMic.disabled = false; if(btnCam) btnCam.disabled = false;
         showTypingIndicator(false);
         chatInput.focus();
     }
 }
 
-/**
- * Shows or hides a blinking dots indicator.
- * @param {boolean} show
- */
 function showTypingIndicator(show) {
-    if (!chatHistory) return;
     const existing = document.getElementById('typing-indicator');
-    
-    if (show) {
-        if (!existing) {
-            const div = document.createElement('div');
-            div.id = 'typing-indicator';
-            div.className = 'typing-indicator-container';
-            div.innerHTML = `
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            `;
-            chatHistory.appendChild(div);
-            scrollToBottom();
-        }
-    } else {
-        if (existing) existing.remove();
-    }
+    if (show && !existing) {
+        const div = document.createElement('div'); div.id = 'typing-indicator'; div.className = 'typing-indicator-container';
+        div.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
+        chatHistory.appendChild(div); scrollToBottom();
+    } else if (!show && existing) existing.remove();
 }
