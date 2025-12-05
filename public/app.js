@@ -9,12 +9,10 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  */
-
 // ---  Module Imports ---
 import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js';
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
-
 import { initSvgView, updateMap, updateSvgTimelineUI, setSvgHistoryData as setSvgHistoryModuleData } from './view.svg.js';
 import { 
     initHistoryView, 
@@ -44,38 +42,28 @@ import {
 import { initPublishView, setPublishTheme, updateSimulatorStatuses } from './view.publish.js';
 //  Import floating widget init and toggle
 import { initChatView, toggleChatWidget } from './view.chat.js'; 
-
-
 document.addEventListener('DOMContentLoaded', () => {
     // ... (Variables and State) ...
     let recentlyPrunedPatterns = new Set();
     const PRUNE_IGNORE_DURATION_MS = 10000;
-    
     let isMultiBroker = false;
     let brokerConfigs = [];
-    
     let appBasePath = '/';
     let ws; 
-
     let subscribedTopicPatterns = ['#'];
-
     let isAppInitialized = false;
     let messageBuffer = [];
-
     let allHistoryEntries = [];
     let globalDbMin = 0;
     let globalDbMax = Date.now();
-    
     let mainTree, mapperTree, chartTree;
     let mainPayloadViewer;
     let selectedMainTreeNode = null; 
-
     // --- DOM Element Querying ---
     const datetimeContainer = document.getElementById('current-datetime');
     const darkModeToggle = document.getElementById('dark-mode-toggle');
     const btnConfigView = document.getElementById('btn-config-view'); 
     const brokerStatusContainer = document.getElementById('broker-status-container');
-
     const treeViewWrapper = document.querySelector('.tree-view-wrapper');
     const payloadContainer = document.getElementById('payload-display');
     const payloadMainArea = document.getElementById('payload-main-area');
@@ -84,21 +72,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const treeFilterInput = document.getElementById('tree-filter-input');
     const btnExpandAll = document.getElementById('btn-expand-all');
     const btnCollapseAll = document.getElementById('btn-collapse-all');
-
     const btnTreeView = document.getElementById('btn-tree-view');
     const btnMapView = document.getElementById('btn-map-view');
     const btnHistoryView = document.getElementById('btn-history-view');
     const btnMapperView = document.getElementById('btn-mapper-view');
     const btnChartView = document.getElementById('btn-chart-view');
     const btnPublishView = document.getElementById('btn-publish-view'); 
-    
     const treeView = document.getElementById('tree-view');
     const mapView = document.getElementById('map-view');
     const historyView = document.getElementById('history-view');
     const mapperView = document.getElementById('mapper-view');
     const chartView = document.getElementById('chart-view');
     const publishView = document.getElementById('publish-view'); 
-
     // ... (Other DOM queries same as before) ...
     const historyTotalMessages = document.getElementById('history-total-messages');
     const historyDbSize = document.getElementById('history-db-size');
@@ -111,8 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const chartFilterInput = document.getElementById('chart-filter-input');
     const btnChartExpandAll = document.getElementById('btn-chart-expand-all');
     const btnChartCollapseAll = document.getElementById('btn-chart-collapse-all');
-
-
     // --- Dark Theme Logic ---
     const enableDarkMode = () => {
         document.body.classList.add('dark-mode');
@@ -134,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
     darkModeToggle?.addEventListener('change', () => {
         darkModeToggle.checked ? enableDarkMode() : disableDarkMode();
     });
-
     // --- Tab Switching Logic (Updated for URL Routing) ---
     // Pass 'updateHistory' = false when called from popstate/init to avoid pushing duplicates
     function switchView(viewToShow, updateHistory = true) {
@@ -142,28 +124,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const views = [treeView, mapView, historyView, mapperView, chartView, publishView]; 
         const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView, btnChartView, btnPublishView]; 
         let targetView, targetButton;
-        
         // Map view IDs to URL slugs
         let slug = 'tree'; 
-
         if (viewToShow === 'map') { targetView = mapView; targetButton = btnMapView; slug = 'svg'; } // Use 'svg' in URL as requested
         else if (viewToShow === 'history') { targetView = historyView; targetButton = btnHistoryView; slug = 'history'; }
         else if (viewToShow === 'mapper') { targetView = mapperView; targetButton = btnMapperView; slug = 'mapper'; }
         else if (viewToShow === 'chart') { targetView = chartView; targetButton = btnChartView; slug = 'chart'; }
         else if (viewToShow === 'publish') { targetView = publishView; targetButton = btnPublishView; slug = 'publish'; } 
         else { targetView = treeView; targetButton = btnTreeView; slug = 'tree'; } // Default
-
         views.forEach(v => v?.classList.remove('active'));
         buttons.forEach(b => b?.classList.remove('active'));
         targetView?.classList.add('active');
         targetButton?.classList.add('active');
-        
         trackEvent(`view_switch_${viewToShow || 'tree'}`);
-
         if (viewToShow === 'history') {
             renderFilteredHistory();
         }
-
         // --- Handle URL Update ---
         if (updateHistory) {
             // Ensure basePath ends with slash for concatenation
@@ -175,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-    
     // Listen for Back/Forward buttons
     window.addEventListener('popstate', (event) => {
         if (event.state && event.state.view) {
@@ -185,35 +160,28 @@ document.addEventListener('DOMContentLoaded', () => {
             handleRoutingFromUrl();
         }
     });
-
     // Helper to determine view from URL
     function handleRoutingFromUrl() {
         const path = window.location.pathname;
         let viewToLoad = 'tree'; // Default
-
         // Normalize base path to not have trailing slash for comparison
         const normalizedBase = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
-        
         // Remove base path from current path to get the "route"
         // e.g. /myapp/chart/ -> /chart/
         let relativePath = path;
         if (path.startsWith(normalizedBase)) {
             relativePath = path.substring(normalizedBase.length);
         }
-        
         // Remove leading/trailing slashes for easier matching
         const cleanPath = relativePath.replace(/^\/|\/$/g, '');
-
         if (cleanPath === 'svg' || cleanPath === 'map') viewToLoad = 'map';
         else if (cleanPath === 'history') viewToLoad = 'history';
         else if (cleanPath === 'mapper') viewToLoad = 'mapper';
         else if (cleanPath === 'chart') viewToLoad = 'chart';
         else if (cleanPath === 'publish') viewToLoad = 'publish';
         else viewToLoad = 'tree';
-
         switchView(viewToLoad, false); // Don't push state on initial load/popstate
     }
-    
     btnTreeView?.addEventListener('click', () => switchView('tree'));
     btnMapView?.addEventListener('click', () => switchView('map'));
     btnHistoryView?.addEventListener('click', () => switchView('history'));
@@ -221,7 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnChartView?.addEventListener('click', () => switchView('chart'));
     btnPublishView?.addEventListener('click', () => switchView('publish')); 
     // [MODIFIED] Chat button listener removed
-
     // --- Real-Time Clock ---
     function updateClock() {
         if (!datetimeContainer) return;
@@ -229,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setInterval(updateClock, 1000);
     updateClock();
-
     // ... (Tree Click Handlers, Color Logic, Backend Range Request - Unchanged) ...
     // ... (Kept existing implementations of handleMainTreeClick, colorAllMapperTrees etc.) ...
     function handleMainTreeClick(event, nodeContainer, brokerId, topic) {
@@ -242,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedMainTreeNode) selectedMainTreeNode.classList.remove('selected');
             selectedMainTreeNode = nodeContainer;
             selectedMainTreeNode.classList.add('selected');
-            
             // [FIXED] Ensure live update is disabled so history panel shows
             if (livePayloadToggle && livePayloadToggle.checked) {
                 livePayloadToggle.checked = false;
@@ -251,7 +216,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Force re-evaluation of visibility in case it was hidden but unchecked
                 toggleRecentHistoryVisibility();
             }
-
             const payload = nodeContainer.dataset.payload;
             mainPayloadViewer.display(brokerId, topic, payload);
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -259,7 +223,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-    
     function handleMainTreeCheckboxClick(event, nodeContainer, brokerId, topic) {
         event.stopPropagation();
         const checkbox = event.target;
@@ -269,7 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
             li.querySelectorAll('.node-filter-checkbox').forEach(cb => cb.checked = isChecked);
         }
     }
-
     function colorAllMapperTrees() {
         if (!mainTree || !mapperTree) return; 
         const colorFn = (brokerId, topic, li) => {
@@ -284,7 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mainTree.colorTree(colorFn);
         mapperTree.colorTree(colorFn);
     }
-    
     function colorChartTree() {
         if (!chartTree) return; 
         const chartedVars = getChartedTopics(); 
@@ -305,26 +266,21 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         chartTree.colorTree(colorFn);
     }
-
     function requestHistoryRange(start, end, filter) {
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'get-history-range', start: start, end: end, filter: filter }));
         }
     }
-
     // --- WebSocket Connection & Logic ---
     (async () => {
         try {
             const configResponse = await fetch('api/config');
             if (!configResponse.ok) throw new Error('Failed to fetch config');
             const appConfig = await configResponse.json();
-            
             appBasePath = appConfig.basePath || '/';
             isMultiBroker = appConfig.isMultiBroker || false;
             brokerConfigs = appConfig.brokerConfigs || [];
-            
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            
             // [CRITICAL FIX] Ensure trailing slash for WebSocket URL
             // Many reverse proxies (like Redbird or Nginx) configured for directory mapping
             // will issue a 301 Redirect if the trailing slash is missing.
@@ -334,13 +290,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!cleanBasePath.endsWith('/')) {
                 cleanBasePath += '/';
             }
-            
             // Construct full URL. 
             // Note: If base path is just '/', cleanBasePath is '/'.
             const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
-            
             console.log("Connecting WebSocket to:", wsUrl); 
-            
             ws = new WebSocket(wsUrl);
             ws.onopen = () => finishInitialization(appConfig);
             ws.onmessage = async (event) => {
@@ -355,12 +308,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 isAppInitialized = false; 
                 setTimeout(startApp, 3000); 
             };
-
         } catch (error) {
             console.error("Failed to fetch initial app configuration:", error);
         }
     })();
-    
     // ... (processWsMessage, renderBrokerStatuses, updateSingleBrokerStatus - Unchanged) ...
     function processWsMessage(message) {
         try {
@@ -372,7 +323,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (newEntry.timestampMs > globalDbMax) globalDbMax = newEntry.timestampMs;
                     updateSvgTimelineUI(globalDbMin, globalDbMax);
                     updateChartSliderUI(globalDbMin, globalDbMax, false);
-                    
                     let ignoreForTreeUpdate = false;
                     for (const pattern of recentlyPrunedPatterns) {
                         try { if (mqttPatternToRegex(pattern).test(message.topic)) { ignoreForTreeUpdate = true; break; } } catch (e) {}
@@ -430,7 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) { console.error("Error processing message:", e, message); }
     }
-
     function renderBrokerStatuses(statusMap) {
         if (!brokerStatusContainer) return;
         brokerStatusContainer.innerHTML = ''; 
@@ -438,7 +387,6 @@ document.addEventListener('DOMContentLoaded', () => {
             createBrokerStatusElement(brokerId, info.status, info.error);
         }
     }
-    
     function createBrokerStatusElement(brokerId, status, error) {
         const item = document.createElement('div');
         item.className = `broker-status-item status-${status}`;
@@ -447,7 +395,6 @@ document.addEventListener('DOMContentLoaded', () => {
         item.innerHTML = `<span class="broker-dot"></span><span class="broker-name">${brokerId}</span>`;
         brokerStatusContainer.appendChild(item);
     }
-    
     function updateSingleBrokerStatus(brokerId, status, error) {
         let item = document.getElementById(`broker-status-${brokerId}`);
         if (!item) { createBrokerStatusElement(brokerId, status, error); return; }
@@ -455,21 +402,17 @@ document.addEventListener('DOMContentLoaded', () => {
         item.classList.add(`status-${status}`);
         if (error) item.title = `Error: ${error}`; else item.title = `${brokerId}: ${status}`;
     }
-
     async function startApp() {
         // Simple reload wrapper for reconnect logic
         window.location.reload();
     } 
-
     function finishInitialization(appConfig) {
         if (brokerConfigs.length > 0) {
             const allTopics = brokerConfigs.flatMap(b => b.topics || []);
             subscribedTopicPatterns = [...new Set(allTopics)];
         }
-
         btnTreeView?.classList.remove('active');
         treeView?.classList.remove('active');
-        
         // [MODIFIED] Logic to show/hide tabs based on config
         const views = [
             { enabled: appConfig.viewTreeEnabled, btn: btnTreeView, view: 'tree' },
@@ -479,7 +422,6 @@ document.addEventListener('DOMContentLoaded', () => {
             { enabled: appConfig.viewChartEnabled, btn: btnChartView, view: 'chart' },
             { enabled: appConfig.viewPublishEnabled, btn: btnPublishView, view: 'publish' },
         ];
-
         views.forEach(v => {
             if (v.enabled) {
                 v.btn.style.display = 'block';
@@ -487,12 +429,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 v.btn.style.display = 'none';
             }
         });
-        
         // [MODIFIED] Initial Routing Call
         handleRoutingFromUrl();
-
-        if (btnConfigView) btnConfigView.style.display = appConfig.viewConfigEnabled ? 'block' : 'none';
-        
+        // [CRITICAL FIX] Dynamically set absolute link for config page
+        if (btnConfigView) {
+            const safeBase = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
+            btnConfigView.href = `${safeBase}config.html`;
+            btnConfigView.style.display = appConfig.viewConfigEnabled ? 'block' : 'none';
+        }
         // --- Init View Managers ---
         mainPayloadViewer = createPayloadViewer({
             topicEl: document.getElementById('payload-topic'),
@@ -501,7 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
             placeholderEl: document.querySelector('.topic-history-log .history-placeholder'),
             isMultiBroker: isMultiBroker 
         });
-
         mainTree = createTreeManager(document.getElementById('mqtt-tree'), {
             treeId: 'main',
             onNodeClick: handleMainTreeClick, 
@@ -510,7 +453,6 @@ document.addEventListener('DOMContentLoaded', () => {
             allowFolderCollapse: true,
             isMultiBroker: isMultiBroker 
         });
-        
         mapperTree = createTreeManager(document.getElementById('mapper-tree'), {
             treeId: 'mapper',
             onNodeClick: (e, node, brokerId, topic) => { 
@@ -521,7 +463,6 @@ document.addEventListener('DOMContentLoaded', () => {
             allowFolderCollapse: true,
             isMultiBroker: isMultiBroker 
         });
-        
         chartTree = createTreeManager(document.getElementById('chart-tree'), {
             treeId: 'chart',
             onNodeClick: (e, node, brokerId, topic) => { 
@@ -532,14 +473,12 @@ document.addEventListener('DOMContentLoaded', () => {
             allowFolderCollapse: true,
             isMultiBroker: isMultiBroker 
         });
-
         initSvgView(appConfig);
         initHistoryView({ 
             isMultiBroker: isMultiBroker,
             brokerConfigs: brokerConfigs,
             requestRangeCallback: requestHistoryRange 
         }); 
-        
         initMapperView({
             pruneTopicFromFrontend: pruneTopicFromFrontend,
             getSubscribedTopics: () => subscribedTopicPatterns, 
@@ -552,7 +491,6 @@ document.addEventListener('DOMContentLoaded', () => {
             isMultiBroker: isMultiBroker,
             brokerConfigs: brokerConfigs 
         });
-
         initChartView({
             getHistory: () => allHistoryEntries,
             requestRangeCallback: requestHistoryRange, 
@@ -560,14 +498,12 @@ document.addEventListener('DOMContentLoaded', () => {
             maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
             isMultiBroker: isMultiBroker 
         });
-
         initPublishView({
             subscribedTopics: subscribedTopicPatterns, 
             simulatorListContainer: simulatorControls,
             isMultiBroker: isMultiBroker, 
             brokerConfigs: brokerConfigs 
         });
-
         //  Initialize Floating Chat Widget Logic
         if (appConfig.viewChatEnabled) {
             initChatView();
@@ -579,11 +515,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const fab = document.getElementById('btn-chat-fab');
             if (fab) fab.style.display = 'none';
         }
-        
         if (appConfig.isSimulatorEnabled) {
             fetch('api/simulator/status').then(res => res.json()).then(data => updateSimulatorStatuses(data.statuses));
         }
-        
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical'), direction: 'vertical', panelA: treeViewWrapper });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal'), direction: 'horizontal', panelA: payloadMainArea, containerEl: payloadContainer });
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-mapper'), direction: 'vertical', panelA: document.querySelector('.mapper-tree-wrapper') });
@@ -591,7 +525,6 @@ document.addEventListener('DOMContentLoaded', () => {
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-chart'), direction: 'vertical', panelA: document.querySelector('.chart-tree-wrapper') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal-chart'), direction: 'horizontal', panelA: document.getElementById('chart-payload-area'), containerEl: document.getElementById('chart-payload-container') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-publish'), direction: 'vertical', panelA: document.querySelector('.publish-panel-wrapper') });
-
         livePayloadToggle?.addEventListener('change', (event) => {
             if (event.target.checked && selectedMainTreeNode) {
                 selectedMainTreeNode.classList.remove('selected');
@@ -600,7 +533,6 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleRecentHistoryVisibility();
         });
         toggleRecentHistoryVisibility();
-        
         btnExpandAll?.addEventListener('click', () => mainTree.toggleAllFolders(false));
         btnCollapseAll?.addEventListener('click', () => mainTree.toggleAllFolders(true));
         treeFilterInput?.addEventListener('input', () => mainTree.applyFilter(treeFilterInput.value));
@@ -611,19 +543,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChartExpandAll?.addEventListener('click', () => chartTree.toggleAllFolders(false));
         btnChartCollapseAll?.addEventListener('click', () => chartTree.toggleAllFolders(true));
         chartFilterInput?.addEventListener('input', () => chartTree.applyFilter(chartFilterInput.value));
-
         isAppInitialized = true;
         messageBuffer.forEach(msg => processWsMessage(msg));
         messageBuffer = []; 
     }
-    
     function toggleRecentHistoryVisibility() {
         if (!topicHistoryContainer) return;
         const isLive = livePayloadToggle.checked;
         topicHistoryContainer.style.display = isLive ? 'none' : 'flex';
         document.getElementById('drag-handle-horizontal').style.display = isLive ? 'none' : 'flex';
     }
-
     function populateTreesFromHistory() {
         const uniqueTopicsMap = new Map();
         for (let i = allHistoryEntries.length - 1; i >= 0; i--) { 
@@ -635,29 +564,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mainTree) mainTree.rebuild(entries);
         if (mapperTree) mapperTree.rebuild(entries);
         if (chartTree) chartTree.rebuild(entries);
-        
         if (getTopicMappingStatus) colorAllMapperTrees();
         if (getChartedTopics) colorChartTree();
     }
-
     async function pruneTopicFromFrontend(topicPattern) {
         const regex = mqttPatternToRegex(topicPattern);
         allHistoryEntries = allHistoryEntries.filter(entry => !regex.test(entry.topic));
         setSvgHistoryModuleData(allHistoryEntries);
-        
         const newState = setHistoryData(allHistoryEntries, false, false); 
         updateChartSliderUI(globalDbMin, globalDbMax, true); 
         pruneChartedVariables(regex); 
-
         const targetMap = getMappedTargetTopics();
         const keysToRemove = [];
         for (const [key, value] of targetMap.entries()) {
             if (regex.test(value.topic)) keysToRemove.push(key);
         }
         keysToRemove.forEach(key => targetMap.delete(key));
-
         populateTreesFromHistory(); 
-
         if (selectedMainTreeNode && regex.test(selectedMainTreeNode.dataset.topic)) {
             selectedMainTreeNode.classList.remove('selected');
             selectedMainTreeNode = null;
