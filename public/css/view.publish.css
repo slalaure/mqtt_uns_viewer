@@ -1,13 +1,13 @@
 /* public/css/view.publish.css */
-
 main#publish-view {
     flex-direction: row;
     padding: 20px;
     box-sizing: border-box;
     gap: 20px;
     background-color: var(--color-bg);
+    /* [FIX] Force overflow hidden on container to respect layout boundaries */
+    overflow: hidden; 
 }
-
 .publish-panel-wrapper,
 .simulator-panel-wrapper {
     background-color: var(--color-bg-secondary);
@@ -18,31 +18,30 @@ main#publish-view {
     display: flex;
     flex-direction: column;
 }
-
 .publish-panel-wrapper {
     flex: 2; /* Publish panel takes 2/3 width */
     min-width: 0;
+    /* [FIX] Enable scrolling if content (like editor) is too tall */
+    overflow-y: auto;
 }
-
 .simulator-panel-wrapper {
     flex: 1; /* Simulator panel takes 1/3 width */
     min-width: 250px;
-    /*  Allow simulator panel to scroll if many simulators are added */
+    /* Allow simulator panel to scroll if many simulators are added */
     overflow-y: auto;
 }
-
 #publish-form {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    /* [FIX] Allow shrinking */
+    min-height: 0;
 }
-
 .publish-options-row {
     display: flex;
     gap: 20px;
     align-items: flex-end;
 }
-
 .publish-options-row .form-group {
     flex: 1;
 }
@@ -53,24 +52,24 @@ main#publish-view {
     align-items: center;
     gap: 5px;
 }
-
 #publish-payload-editor {
     width: 100%;
     box-sizing: border-box;
     border: 1px solid var(--color-border);
     border-radius: 4px;
     background-color: var(--color-code-bg);
-    min-height: 250px;
+    /* [FIX] Reduced min-height to ensure button remains visible on smaller screens */
+    min-height: 150px;
     flex-grow: 1; /* Allow editor to grow */
 }
-
 .publish-actions {
     margin-top: 20px;
     display: flex;
     align-items: center;
     gap: 15px;
+    /* [FIX] Prevent button area from being compressed */
+    flex-shrink: 0;
 }
-
 #publish-button {
     padding: 10px 20px;
     font-size: 1em;
@@ -89,7 +88,6 @@ main#publish-view {
     background-color: #aaa;
     cursor: not-allowed;
 }
-
 #publish-status {
     font-size: 0.9em;
     font-weight: 500;
@@ -100,8 +98,6 @@ main#publish-view {
 #publish-status.error {
     color: var(--color-danger);
 }
-
-
 /* --- Simulator Panel --- */
 .simulator-controls-container {
     margin-top: 20px;
@@ -111,7 +107,6 @@ main#publish-view {
     font-size: 0.9em;
     margin-top: 0;
 }
-
 /* [MOVED] This is now the main list container */
 .simulator-controls {
     display: flex;
@@ -120,8 +115,7 @@ main#publish-view {
     gap: 15px;
     /* Remove background and padding, it's just a list now */
 }
-
-/*  Styles for each individual simulator block */
+/* Styles for each individual simulator block */
 .simulator-instance-controls {
     background-color: var(--color-bg-accent);
     padding: 15px;
@@ -132,7 +126,6 @@ main#publish-view {
     grid-template-rows: auto auto auto; /* 3 rows */
     gap: 10px;
 }
-
 .simulator-name {
     grid-column: 1 / 3; /* Span both columns */
     grid-row: 1;
@@ -140,7 +133,6 @@ main#publish-view {
     font-size: 1.2em;
     color: var(--color-text);
 }
-
 .simulator-instance-controls .status-indicator {
     grid-column: 1 / 3; /* Span both columns */
     grid-row: 2;
@@ -150,7 +142,6 @@ main#publish-view {
     position: relative;
     color: var(--color-text); /* Use body text color */
 }
-
 .simulator-instance-controls .status-indicator::before {
     content: '';
     position: absolute;
@@ -170,8 +161,6 @@ main#publish-view {
     animation: pulse-green 2s infinite;
 }
 /* Keyframes already in base.css */
-
-
 .simulator-instance-controls button {
     background-color: var(--color-bg-secondary);
     color: var(--color-text);
@@ -191,12 +180,9 @@ main#publish-view {
     grid-column: 2;
     grid-row: 3;
 }
-
-
 .simulator-instance-controls button:hover {
     background-color: var(--color-bg-tertiary);
 }
-
 .simulator-instance-controls button:disabled {
     background-color: var(--color-bg-tertiary);
     color: var(--color-text-muted);
@@ -206,8 +192,6 @@ main#publish-view {
 .simulator-instance-controls button:disabled:hover {
     background-color: var(--color-bg-tertiary);
 }
-
-
 /* --- Mobile Responsive --- */
 @media (max-width: 768px) {
     main#publish-view {
@@ -215,21 +199,20 @@ main#publish-view {
         height: auto;
         gap: 10px;
         padding: 10px;
+        /* [FIX] Allow vertical scroll on mobile */
+        overflow: visible;
     }
-    
     /* Hide resizer on mobile */
     #drag-handle-vertical-publish {
         display: none;
     }
-    
     .publish-panel-wrapper,
     .simulator-panel-wrapper {
         flex: 1; /* Reset flex */
         min-width: 100%;
         padding: 15px;
-        overflow-y: visible; /*  Allow panel to grow */
+        overflow-y: visible; /* Allow panel to grow */
     }
-    
     .publish-options-row {
         flex-direction: column;
         gap: 10px;
@@ -238,7 +221,6 @@ main#publish-view {
     .publish-options-row .form-group-checkbox {
         padding-bottom: 0;
     }
-
     #publish-payload-editor {
         min-height: 200px;
     }
