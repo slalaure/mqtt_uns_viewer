@@ -32,7 +32,7 @@ export function createTreeManager(rootElement, options = {}) {
         allowFolderCollapse = true,
         isMultiBroker = false 
     } = options;
-    
+
     const rootNode = rootElement;
     let nodeMap = new Map(); // Stores references to <li> elements by topic
 
@@ -53,22 +53,20 @@ export function createTreeManager(rootElement, options = {}) {
 
         //  Create the topic path that will be displayed in the tree.
         const displayTopic = isMultiBroker ? `${safeBrokerId}/${topic}` : topic;
-        
         const parts = displayTopic.split('/');
+        
         let currentTopicPath = '';
         // Used to reconstruct the actual MQTT topic (without broker prefix if needed)
         let currentRealTopic = ''; 
-
         let currentUl = rootNode;
         const affectedNodes = [];
         const formattedTimestamp = new Date(timestamp).toLocaleTimeString('en-GB');
-
         let li; 
 
         for (let index = 0; index < parts.length; index++) {
             const part = parts[index];
             currentTopicPath += (index > 0 ? '/' : '') + part;
-            
+
             // Reconstruct the real topic for data attributes
             if (isMultiBroker) {
                 // If multi-broker, skip the first part (brokerId) for the topic string
@@ -80,11 +78,23 @@ export function createTreeManager(rootElement, options = {}) {
             }
 
             const isLastPart = index === parts.length - 1;
-            
             // The node ID must be unique *per tree*
             const partId = `node-${treeId}-${currentTopicPath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-
+            
             li = nodeMap.get(currentTopicPath); 
+
+            // --- FILTERING LOGIC ---
+            // If checkboxes are enabled, check if the current node exists and is unchecked.
+            // If it is unchecked, we assume the user wants to filter out this branch.
+            // We stop processing immediately, preventing updates or creation of children.
+            if (li && showCheckboxes) {
+                const checkbox = li.querySelector(':scope > .node-container > .node-filter-checkbox');
+                if (checkbox && !checkbox.checked) {
+                    return null; // Stop updating this branch
+                }
+            }
+            // -----------------------
+
             let isNewNode = false;
 
             if (!li) {
@@ -95,7 +105,7 @@ export function createTreeManager(rootElement, options = {}) {
 
                 const nodeContainer = document.createElement('div');
                 nodeContainer.className = 'node-container';
-
+                
                 let checkboxHtml = '';
                 if (showCheckboxes) {
                     checkboxHtml = `<input type="checkbox" class="node-filter-checkbox" checked>`;
@@ -106,25 +116,21 @@ export function createTreeManager(rootElement, options = {}) {
                     <span class="node-name"></span>
                     <span class="node-timestamp"></span>
                 `;
-
                 nodeContainer.querySelector('.node-name').textContent = part;
                 
-                // [FIXED] Store the specific path for this node level, NOT the full leaf topic.
-                // This ensures clicking a folder ("ratp") passes "ratp", not "ratp/uns/incidents".
-                // For the root folder in multi-broker mode, currentRealTopic might be empty, handle that.
+                // Store the specific path for this node level
                 const nodeSpecificTopic = (isMultiBroker && index === 0) ? '' : currentRealTopic;
-
                 nodeContainer.dataset.brokerId = safeBrokerId;
                 nodeContainer.dataset.topic = nodeSpecificTopic; 
-                
+
                 li.appendChild(nodeContainer);
 
                 // --- Find parent <ul> and append ---
                 const parentPathParts = parts.slice(0, index);
                 const parentDisplayTopic = parentPathParts.join('/');
                 const parentLi = nodeMap.get(parentDisplayTopic);
-                
                 let parentUl;
+
                 if (parentLi) {
                     // This is a child node
                     parentUl = parentLi.querySelector(':scope > ul');
@@ -140,10 +146,10 @@ export function createTreeManager(rootElement, options = {}) {
                         rootNode.appendChild(parentUl);
                     }
                 }
+
                 parentUl.appendChild(li);
-                
                 nodeMap.set(currentTopicPath, li);
-                
+
                 // Add listeners with correct closure data
                 if (onNodeClick) {
                     nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
@@ -156,6 +162,7 @@ export function createTreeManager(rootElement, options = {}) {
             const nodeContainer = li.querySelector('.node-container');
             const timestampSpan = nodeContainer.querySelector('.node-timestamp');
             if (timestampSpan) timestampSpan.textContent = formattedTimestamp;
+
             affectedNodes.push({ element: li, isNew: isNewNode });
 
             // Only set payload on the actual leaf node or updated node
@@ -174,6 +181,7 @@ export function createTreeManager(rootElement, options = {}) {
         if (enableAnimations) {
             const animationDelay = 150;
             const animationDuration = 1200;
+            
             affectedNodes.forEach((nodeInfo, index) => {
                 setTimeout(() => {
                     if (nodeInfo.isNew) nodeInfo.element.classList.remove('new-node');
@@ -182,7 +190,7 @@ export function createTreeManager(rootElement, options = {}) {
                 }, index * animationDelay);
             });
         }
-        
+
         return li; 
     }
 
@@ -198,16 +206,15 @@ export function createTreeManager(rootElement, options = {}) {
             rootUl.innerHTML = '';
         }
         nodeMap.clear();
-        
+
         const sortedEntries = entries.sort((a, b) => {
             const brokerA = a.broker_id || 'default';
             const brokerB = b.broker_id || 'default';
-            
             const topicA = isMultiBroker ? `${brokerA}/${a.topic}` : a.topic;
             const topicB = isMultiBroker ? `${brokerB}/${b.topic}` : b.topic;
             return topicA.localeCompare(topicB);
         });
-        
+
         let i = 0;
         for (const entry of sortedEntries) {
             i++;
@@ -229,7 +236,6 @@ export function createTreeManager(rootElement, options = {}) {
             const li = nodeContainer.closest('li');
             const brokerId = nodeContainer.dataset.brokerId;
             const topic = nodeContainer.dataset.topic;
-            
             if (brokerId !== undefined && topic !== undefined) {
                  colorLogicFn(brokerId, topic, li);
             }
@@ -243,7 +249,7 @@ export function createTreeManager(rootElement, options = {}) {
             folderLi.classList.toggle('collapsed', collapse);
         });
     }
-    
+
     function filterNode(node, filterText) {
         const nodeContainer = node.querySelector(':scope > .node-container');
         if (!nodeContainer) return false;
@@ -255,16 +261,15 @@ export function createTreeManager(rootElement, options = {}) {
         const isMatch = nodeName.includes(filterText) || 
                         originalTopic.includes(filterText) || 
                         (isMultiBroker && brokerId.includes(filterText));
-                        
+
         let hasVisibleChild = false;
-        
         const children = node.querySelectorAll(':scope > ul > li');
         children.forEach(child => {
             if (filterNode(child, filterText)) {
                 hasVisibleChild = true;
             }
         });
-        
+
         if (isMatch || hasVisibleChild) {
             node.classList.remove('filtered-out');
             if (hasVisibleChild && filterText) {
@@ -276,11 +281,10 @@ export function createTreeManager(rootElement, options = {}) {
             return false;
         }
     }
-    
+
     function applyFilter(filterText) {
         const rootUl = rootNode.querySelector(':scope > ul');
         if (!rootUl) return; 
-        
         const allNodes = rootUl.querySelectorAll(':scope > li');
         allNodes.forEach(node => filterNode(node, filterText.toLowerCase()));
     }
