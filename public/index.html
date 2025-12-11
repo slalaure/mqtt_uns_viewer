@@ -1,17 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
     <title>MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard</title>
     <meta name="description" content="Explore your MQTT data in real-time. A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
     <meta name="keywords" content="mqtt, uns, unified namespace, iiot, industry 4.0, sparkplug b, data visualization, real-time, dashboard, mqtt viewer, docker, duckdb, mcp, node.js">
     <meta name="author" content="Sebastien Lalaurette">
     <meta name="license" content="MIT">
     <link rel="canonical" href="https://www.mqttunsviewer.com">
-
     <meta property="og:title" content="MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard">
     <meta property="og:description" content="A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
     <meta property="og:url" content="https://www.mqttunsviewer.com">
@@ -44,15 +41,7 @@
       }
     }
     </script>
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "u3mhr7cn0n");
-    </script>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
     <link rel="stylesheet" href="css/view.svg.css">
@@ -67,19 +56,17 @@
     <script src="libs/chartjs-plugin-zoom.min.js"></script>
     <script src="libs/ace-min.js"></script>
 </head>
-
 <body>
     <header>
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v  1.5.0-beta17</p>
+                <p>v 1.5.0-beta18</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
         <div id="current-datetime" class="datetime-container"></div>
         <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">&#9881;</a>
-
         <div class="theme-switch-wrapper">
             <label class="theme-switch" for="dark-mode-toggle">
                 <input type="checkbox" id="dark-mode-toggle" />
@@ -87,9 +74,7 @@
             </label>
             <span class="theme-label">Dark Mode</span>
         </div>
-
         </header>
-
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
         <button id="btn-map-view" class="tab-button">SVG View</button>
@@ -98,7 +83,6 @@
         <button id="btn-chart-view" class="tab-button">Chart</button>
         <button id="btn-publish-view" class="tab-button">Publish</button> 
         </nav>
-
     <div class="view-container">
         <main id="tree-view" class="view active">
             <div class="tree-view-wrapper">
@@ -109,9 +93,7 @@
                 </div>
                 <div id="mqtt-tree" class="tree-container"></div>
             </div>
-
             <div class="resizer" id="drag-handle-vertical"></div>
-
             <div id="payload-display" class="payload-container">
                 <div id="payload-main-area">
                     <div class="payload-header">
@@ -124,9 +106,7 @@
                     <div id="payload-topic" class="payload-topic-display">No topic selected</div>
                     <pre id="payload-content">Select a topic to see its payload.</pre>
                 </div>
-
                 <div class="resizer-horizontal" id="drag-handle-horizontal"></div>
-
                 <div id="topic-history-container" class="topic-history-container">
                     <h3 class="topic-history-header">Recent History</h3>
                     <div id="topic-history-log" class="topic-history-log">
@@ -135,7 +115,6 @@
                 </div>
             </div>
         </main>
-
         <main id="map-view" class="view">
             <div class="map-view-container">
                 <div class="map-view-controls">
@@ -159,13 +138,11 @@
                 <div id="svg-content" class="svg-content"></div>
             </div>
         </main>
-
         <main id="history-view" class="view">
             <div class="history-status-bar">
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
                 <div>DB Size: <span id="history-db-size">--</span> / <span id="history-db-limit">--</span> MB</div>
             </div>
-
             <div class="history-controls">
                 <input type="text" id="history-search-input" placeholder="Filter by keyword in topic or payload...">
                 <div id="time-range-slider-container" class="time-slider-container">
@@ -179,14 +156,12 @@
                     </div>
                 </div>
             </div>
-
             <div id="historical-log-container" class="historical-log-container">
             </div>
             <div id="pruning-indicator" class="pruning-indicator">
                 <p>Cleaning database, please wait...</p>
             </div>
         </main>
-
         <main id="mapper-view" class="view">
             <div class="mapper-tree-wrapper">
                 <div class="tree-controls">
@@ -197,9 +172,7 @@
                 <div id="mapper-tree" class="tree-container">
                 </div>
             </div>
-
             <div class="resizer" id="drag-handle-vertical-mapper"></div>
-
             <div id="mapper-payload-container" class="payload-container">
                 <div id="mapper-payload-area" class="payload-main-area">
                     <div class="payload-header">
@@ -209,11 +182,8 @@
                     </div>
                     <pre id="mapper-payload-content"></pre>
                 </div>
-
                 <div class="resizer-horizontal" id="drag-handle-horizontal-mapper"></div>
-
                 <div id="mapper-transform-area" class="topic-history-container">
-                    
                     <div class="mapper-controls">
                         <div class="form-group">
                             <label for="mapper-version-select">Active Version:</label>
@@ -223,11 +193,9 @@
                         <button id="mapper-save-as-new-button" class="mapper-button">Save as New...</button>
                         <span id="mapper-save-status"></span>
                     </div>
-
                     <div id="mapper-transform-placeholder" class="history-placeholder">
                         <p>Select a topic in the Mapper tree to create or edit its transformation rules.</p>
                     </div>
-
                     <form id="mapper-transform-form" style="display: none;">
                         <div class="mapper-transform-header">
                             <div class="form-group">
@@ -236,14 +204,11 @@
                             </div>
                             <button type="button" id="mapper-add-target-button">Add Target</button>
                         </div>
-
                         <div id="mapper-targets-list">
                         </div>
-
                         <div id="mapper-targets-placeholder" class="history-placeholder" style="display: none;">
                             <p>No targets defined for this rule. Click "Add Target" to create one.</p>
                         </div>
-
                         <template id="mapper-target-template">
                             <div class="mapper-target-editor">
                                 <div class="target-editor-header">
@@ -259,7 +224,6 @@
                                     <input type="text" class="target-output-topic"
                                         placeholder="e.g., my_uns/facility/{{id}}">
                                 </div>
-
                                 <div class="form-group">
                                     <label class="target-code-label">Transform (JavaScript)</label>
                                     <div class="target-code-editor" spellcheck="false"></div>
@@ -276,12 +240,10 @@
                                 </div>
                             </div>
                         </template>
-
                     </form>
                 </div>
             </div>
         </main>
-
         <main id="chart-view" class="view">
             <div class="chart-tree-wrapper">
                 <div class="tree-controls">
@@ -292,9 +254,7 @@
                 <div id="chart-tree" class="tree-container">
                     </div>
             </div>
-
             <div class="resizer" id="drag-handle-vertical-chart"></div>
-
             <div id="chart-payload-container" class="payload-container">
                 <div id="chart-payload-area">
                     <div class="payload-header">
@@ -306,9 +266,7 @@
                         <p class="history-placeholder">No numeric properties found in this payload.</p>
                     </div>
                 </div>
-
                 <div class="resizer-horizontal" id="drag-handle-horizontal-chart"></div>
-
                 <div id="chart-main-area">
                     <div class="chart-config-bar">
                         <div class="form-group">
@@ -320,7 +278,6 @@
                         <button id="btn-chart-save-current" class="chart-button" title="Save">Save</button>
                         <button id="btn-chart-save-as" class="chart-button" title="Save As New...">Save As...</button>
                         <button id="btn-chart-delete-config" class="chart-button danger-button" title="Delete Selected Chart">Delete</button>
-                        
                         <div class="form-group">
                             <label for="chart-type-select">Type:</label>
                             <select id="chart-type-select">
@@ -333,7 +290,6 @@
                             <input type="checkbox" id="chart-connect-nulls-toggle" name="chart-connect-nulls-toggle">
                             <label for="chart-connect-nulls-toggle" class="checkbox-label">Connect Gaps</label>
                         </div>
-                        
                         <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
                             <label style="font-size: 0.75em; margin-bottom: 2px;">Start</label>
                             <input type="datetime-local" id="chart-start-date" style="padding: 4px; font-size: 0.85em;">
@@ -342,18 +298,13 @@
                             <label style="font-size: 0.75em; margin-bottom: 2px;">End</label>
                             <input type="datetime-local" id="chart-end-date" style="padding: 4px; font-size: 0.85em;">
                         </div>
-                        
                         <div id="chart-range-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
-
                         <button id="btn-chart-clear" class="chart-button" title="Clear All Selections">Clear All</button>
-                        
                         <button id="btn-chart-export-csv" class="chart-button" title="Export CSV">CSV</button>
                         <button id="btn-chart-export-png" class="chart-button" title="Export PNG">PNG</button>
                         <button id="btn-chart-fullscreen" class="chart-button" title="Toggle Fullscreen">&#x2922;</button>
-                        
                         <span id="chart-save-status"></span>
                     </div>
-                    
                     <div id="chart-time-range-slider-container" class="time-slider-container">
                         <div class="slider-track"></div>
                         <div class="slider-range" id="chart-slider-range"></div>
@@ -364,7 +315,6 @@
                             <div class="slider-label" id="chart-label-max"></div>
                         </div>
                     </div>
-
                     <div id="chart-canvas-container">
                         <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
                         <canvas id="chart-canvas" style="display: none;"></canvas>
@@ -372,7 +322,6 @@
                 </div>
             </div>
         </main>
-        
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
                 <h2>Manual Publish</h2>
@@ -381,7 +330,6 @@
                         <label for="publish-topic">Topic</label>
                         <input type="text" id="publish-topic" placeholder="e.g., stark_industries/malibu_facility/bms/main_power_feed" required>
                     </div>
-                    
                     <div class="publish-options-row">
                         <div class="form-group">
                             <label for="publish-format">Payload Format</label>
@@ -404,27 +352,22 @@
                             <label for="publish-retain" class="checkbox-label">Retain Message</label>
                         </div>
                     </div>
-
                     <div class="form-group">
                         <label for="publish-payload-editor">Payload</label>
                         <div id="publish-payload-editor" spellcheck="false"></div>
                     </div>
-                    
                     <div class="publish-actions">
                         <button type="submit" id="publish-button">Publish Message</button>
                         <span id="publish-status"></span>
                     </div>
                 </form>
             </div>
-            
             <div class="resizer" id="drag-handle-vertical-publish"></div>
-
             <div class="simulator-panel-wrapper">
                 <h2>Simulator</h2>
                 <div class="simulator-controls-container">
                     <p>Control the built-in data simulators.</p> <div id="simulator-list-container" class="simulator-controls">
                         </div>
-
                     <template id="simulator-control-template">
                         <div class="simulator-instance-controls">
                             <h3 class="simulator-name"></h3>
@@ -436,9 +379,7 @@
                 </div>
             </div>
         </main>
-
         </div>
-    
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
             <span>AI Assistant</span>
@@ -456,22 +397,18 @@
             </div>
         </div>
     </div>
-
     <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
         💬
     </button>
-    
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>
             <p id="delete-modal-text">What would you like to do with the rule for the target topic:</p>
             <p id="delete-modal-topic" class="modal-topic-display"></p>
-
             <div class="form-group">
                 <label for="delete-modal-pattern">Topic to prune (uses <code>+</code> and <code>#</code>)</label>
                 <input type="text" id="delete-modal-pattern" class="modal-input">
             </div>
-
             <div class="modal-actions">
                 <button id="modal-btn-cancel" class="modal-button">Cancel</button>
                 <button id="modal-btn-delete-rule" class="modal-button button-primary">Delete Rule Only</button>
@@ -480,16 +417,13 @@
             </div>
         </div>
     </div>
-    
     <footer class="app-footer">
         <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
                 rel="noopener noreferrer">github</a></p>
     </footer>
-
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
     <script src="view.publish.js" type="module"></script> 
     <script src="view.chat.js" type="module"></script>
 </body>
-
 </html>

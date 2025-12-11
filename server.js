@@ -37,6 +37,17 @@ const CERTS_PATH = path.join(DATA_PATH, 'certs');
 const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const API_KEYS_FILE_PATH = path.join(DATA_PATH, process.env.EXTERNAL_API_KEYS_FILE || 'api_keys.json');
+// --- Analytics Script ---
+// This script will only be injected if ANALYTICS_ENABLED=true
+const ANALYTICS_SCRIPT = `
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "u3mhr7cn0n");
+    </script>
+`;
 // --- Logger Setup ---
 const logger = pino({
     transport: {
@@ -116,7 +127,8 @@ const config = {
     MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0,
     API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null,
     EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED === 'true',
-    EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json'
+    EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json',
+    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true' // [NEW] Feature flag for analytics
 };
 // ---  Broker Configuration Parsing ---
 try {
@@ -164,6 +176,7 @@ try {
 }
 // --- Configuration Validation ---
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
+if (config.ANALYTICS_ENABLED) logger.info("✅ 📈 Analytics (Clarity) tracking is ENABLED.");
 // --- Normalize Base Path ---
 let basePath = config.BASE_PATH;
 if (!basePath.startsWith('/')) basePath = '/' + basePath;
@@ -202,7 +215,7 @@ const server = http.createServer(app);
 // Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
 
-// --- [NEW] CORS Middleware ---
+// --- CORS Middleware ---
 // Allows external tools like Microsoft Clarity to load fonts and assets
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -446,9 +459,20 @@ const serveSPA = (req, res) => {
         }
         // Ensure base path ends with a slash for the <base> tag logic to work correctly
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
-        // Inject <base href="..."> into the <head>
-        // We use a regex replacement to ensure it's placed early in the head
-        const modifiedHtml = data.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
+        
+        let modifiedHtml = data;
+        
+        // 1. Inject <base href="...">
+        modifiedHtml = modifiedHtml.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
+        
+        // 2. [NEW] Conditionally Inject Analytics Script
+        const analyticsPlaceholder = '';
+        if (config.ANALYTICS_ENABLED) {
+            modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ANALYTICS_SCRIPT);
+        } else {
+            modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); // Remove placeholder
+        }
+
         res.send(modifiedHtml);
     });
 };
