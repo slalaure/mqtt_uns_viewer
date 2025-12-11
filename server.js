@@ -201,6 +201,16 @@ const app = express();
 const server = http.createServer(app);
 // Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
+
+// --- [NEW] CORS Middleware ---
+// Allows external tools like Microsoft Clarity to load fonts and assets
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
+    next();
+});
+
 // ---  Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
@@ -304,7 +314,16 @@ db = new duckdb.Database(dbFile, (err) => {
 });
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
+    // If no auth configured, skip
     if (!config.HTTP_USER || !config.HTTP_PASSWORD) return next();
+    
+    // [OPTIONAL] You could still whitelist assets here if you ever re-enable Auth
+    const ext = path.extname(req.path).toLowerCase();
+    const allowedExts = ['.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf'];
+    if (allowedExts.includes(ext)) {
+        return next();
+    }
+
     const credentials = basicAuth(req);
     if (!credentials || credentials.name !== config.HTTP_USER || credentials.pass !== config.HTTP_PASSWORD) {
         res.setHeader('WWW-Authenticate', 'Basic realm="MQTT UNS Viewer"');
