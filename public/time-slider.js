@@ -10,9 +10,18 @@
  *
  * Reusable Time Slider Module
  * Encapsulates logic for single- and dual-handle time sliders.
+ * [UPDATED] Added Touch Event support for mobile devices.
  */
-
 import { formatTimestampForLabel } from './utils.js';
+
+/**
+ * Helper to get X coordinate from either MouseEvent or TouchEvent.
+ * @param {Event} event 
+ * @returns {number} The X client coordinate.
+ */
+function getClientX(event) {
+    return event.touches ? event.touches[0].clientX : event.clientX;
+}
 
 /**
  * Creates and manages a dual-handle time range slider.
@@ -24,7 +33,7 @@ import { formatTimestampForLabel } from './utils.js';
  * @param {HTMLElement} options.labelMinEl - The label for the minimum handle.
  * @param {HTMLElement} options.labelMaxEl - The label for the maximum handle.
  * @param {function} options.onDrag - (newMin, newMax) => void : Called continuously on drag.
- * @param {function} options.onDragEnd - (newMin, newMax) => void : Called on mouse up.
+ * @param {function} options.onDragEnd - (newMin, newMax) => void : Called on mouse/touch up.
  */
 export function createDualTimeSlider(options) {
     const { 
@@ -38,7 +47,7 @@ export function createDualTimeSlider(options) {
     let currentMin = 0;
     let currentMax = 0;
 
-    // Helper to get percentage from mouse X
+    // Helper to get percentage from X coord
     function getPercentage(clientX, rect) {
         let x = clientX - rect.left;
         let percent = (x / rect.width) * 100;
@@ -49,17 +58,25 @@ export function createDualTimeSlider(options) {
     function makeHandleDraggable(handle, isMin) {
         if (!handle || !containerEl) return;
 
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
+        const onDragStart = (e) => {
+            // Prevent scrolling on touch devices while dragging
+            if (e.cancelable) e.preventDefault();
             e.stopPropagation(); // Prevent triggering range drag
+
             const sliderRect = containerEl.getBoundingClientRect();
 
-            const onMouseMove = (moveEvent) => {
-                let percent = getPercentage(moveEvent.clientX, sliderRect);
+            const onDragMove = (moveEvent) => {
+                // Prevent scrolling during move
+                if (moveEvent.cancelable && moveEvent.type === 'touchmove') {
+                    moveEvent.preventDefault();
+                }
+
+                const clientX = getClientX(moveEvent);
+                let percent = getPercentage(clientX, sliderRect);
                 
                 const timeRange = maxTimestamp - minTimestamp;
                 if (timeRange <= 0) return;
-                
+
                 const newTimestamp = minTimestamp + (timeRange * percent / 100);
 
                 if (isMin) {
@@ -67,34 +84,44 @@ export function createDualTimeSlider(options) {
                 } else {
                     currentMax = Math.max(newTimestamp, currentMin);
                 }
-                
+
                 if (onDrag) onDrag(currentMin, currentMax);
             };
 
-            const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
+            const onDragEndHandler = () => {
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEndHandler);
+                document.removeEventListener('touchmove', onDragMove);
+                document.removeEventListener('touchend', onDragEndHandler);
+                document.removeEventListener('touchcancel', onDragEndHandler);
+
                 if (onDragEnd) onDragEnd(currentMin, currentMax);
             };
 
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+            // Register global move/up listeners
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEndHandler);
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('touchend', onDragEndHandler);
+            document.addEventListener('touchcancel', onDragEndHandler);
+        };
+
+        handle.addEventListener('mousedown', onDragStart);
+        handle.addEventListener('touchstart', onDragStart, { passive: false });
     }
 
     // --- Range Bar Dragging Logic ---
     function makeRangeDraggable() {
         if (!rangeEl || !containerEl) return;
-
         rangeEl.style.cursor = 'grab';
 
-        rangeEl.addEventListener('mousedown', (e) => {
-            e.preventDefault();
+        const onDragStart = (e) => {
+            if (e.cancelable) e.preventDefault();
             rangeEl.style.cursor = 'grabbing';
             
             const sliderRect = containerEl.getBoundingClientRect();
-            const startX = e.clientX;
-            
+            const startX = getClientX(e);
+
             // Store initial state to calculate delta
             const startMin = currentMin;
             const startMax = currentMax;
@@ -103,13 +130,17 @@ export function createDualTimeSlider(options) {
 
             if (totalSpan <= 0) return;
 
-            const onMouseMove = (moveEvent) => {
-                const currentX = moveEvent.clientX;
+            const onDragMove = (moveEvent) => {
+                if (moveEvent.cancelable && moveEvent.type === 'touchmove') {
+                    moveEvent.preventDefault();
+                }
+
+                const currentX = getClientX(moveEvent);
                 const pixelDelta = currentX - startX;
-                
+
                 // Convert pixel delta to time delta
                 const timeDelta = (pixelDelta / sliderRect.width) * totalSpan;
-                
+
                 let newMin = startMin + timeDelta;
                 let newMax = startMax + timeDelta;
 
@@ -129,21 +160,31 @@ export function createDualTimeSlider(options) {
                 if (onDrag) onDrag(currentMin, currentMax);
             };
 
-            const onMouseUp = () => {
+            const onDragEndHandler = () => {
                 rangeEl.style.cursor = 'grab';
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEndHandler);
+                document.removeEventListener('touchmove', onDragMove);
+                document.removeEventListener('touchend', onDragEndHandler);
+                document.removeEventListener('touchcancel', onDragEndHandler);
+
                 if (onDragEnd) onDragEnd(currentMin, currentMax);
             };
 
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEndHandler);
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('touchend', onDragEndHandler);
+            document.addEventListener('touchcancel', onDragEndHandler);
+        };
+
+        rangeEl.addEventListener('mousedown', onDragStart);
+        rangeEl.addEventListener('touchstart', onDragStart, { passive: false });
     }
-    
+
     makeHandleDraggable(handleMinEl, true);
     makeHandleDraggable(handleMaxEl, false);
-    makeRangeDraggable(); // Initialize range dragging
+    makeRangeDraggable();
 
     /**
      * Updates the UI of the slider.
@@ -155,9 +196,8 @@ export function createDualTimeSlider(options) {
         currentMax = newCurrentMax;
 
         if (!handleMinEl || !rangeEl || !labelMinEl) return;
-        
+
         const timeRange = maxTimestamp - minTimestamp;
-        
         let minPercent = 0;
         let maxPercent = 100;
 
@@ -165,7 +205,7 @@ export function createDualTimeSlider(options) {
             minPercent = ((currentMin - minTimestamp) / timeRange) * 100;
             maxPercent = ((currentMax - minTimestamp) / timeRange) * 100;
         }
-        
+
         // Visual Clamping to prevent elements flying off-screen
         minPercent = Math.max(0, Math.min(100, minPercent));
         maxPercent = Math.max(0, Math.min(100, maxPercent));
@@ -174,11 +214,11 @@ export function createDualTimeSlider(options) {
         handleMaxEl.style.left = `${maxPercent}%`;
         rangeEl.style.left = `${minPercent}%`;
         rangeEl.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
-        
+
         labelMinEl.textContent = formatTimestampForLabel(currentMin);
         labelMaxEl.textContent = formatTimestampForLabel(currentMax);
     }
-    
+
     return {
         updateUI
     };
@@ -195,53 +235,67 @@ export function createDualTimeSlider(options) {
  */
 export function createSingleTimeSlider(options) {
     const { containerEl, handleEl, labelEl, onDrag, onDragEnd } = options;
-
     let minTimestamp = 0;
     let maxTimestamp = 0;
     let currentTime = 0;
-    
+
     function makeDraggable() {
         if (!handleEl || !containerEl) return;
 
-        handleEl.addEventListener('mousedown', (e) => {
-            e.preventDefault();
+        const onDragStart = (e) => {
+            if (e.cancelable) e.preventDefault();
+            
             const sliderRect = containerEl.getBoundingClientRect();
 
-            const onMouseMove = (moveEvent) => {
-                let x = moveEvent.clientX - sliderRect.left;
+            const onDragMove = (moveEvent) => {
+                if (moveEvent.cancelable && moveEvent.type === 'touchmove') {
+                    moveEvent.preventDefault();
+                }
+
+                const clientX = getClientX(moveEvent);
+                let x = clientX - sliderRect.left;
                 let percent = (x / sliderRect.width) * 100;
                 percent = Math.max(0, Math.min(100, percent));
-                
+
                 const timeRange = maxTimestamp - minTimestamp;
                 if (timeRange <= 0) return;
-                
+
                 const newTimestamp = minTimestamp + (timeRange * percent / 100);
-                currentTime = newTimestamp; // Update internal current time
-                
+                currentTime = newTimestamp;
+
                 // Update UI elements
                 handleEl.style.left = `${percent}%`;
                 handleEl.dataset.timestamp = newTimestamp; // Store for persistence
                 labelEl.textContent = formatTimestampForLabel(newTimestamp);
-                
-                // Call continuous drag callback
+
                 if (onDrag) {
                     onDrag(newTimestamp);
                 }
             };
-            
-            const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
+
+            const onDragEndHandler = () => {
+                document.removeEventListener('mousemove', onDragMove);
+                document.removeEventListener('mouseup', onDragEndHandler);
+                document.removeEventListener('touchmove', onDragMove);
+                document.removeEventListener('touchend', onDragEndHandler);
+                document.removeEventListener('touchcancel', onDragEndHandler);
+
                 if (onDragEnd) {
                     onDragEnd(currentTime);
                 }
             };
 
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEndHandler);
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('touchend', onDragEndHandler);
+            document.addEventListener('touchcancel', onDragEndHandler);
+        };
+
+        handleEl.addEventListener('mousedown', onDragStart);
+        handleEl.addEventListener('touchstart', onDragStart, { passive: false });
     }
-    
+
     makeDraggable();
 
     /**
@@ -260,15 +314,14 @@ export function createSingleTimeSlider(options) {
         if (timeRange > 0) {
             currentPercent = ((currentTime - minTimestamp) / timeRange) * 100;
         }
-        
+
         // Visual Clamping
         currentPercent = Math.max(0, Math.min(100, currentPercent));
-        
         handleEl.style.left = `${currentPercent}%`;
         labelEl.textContent = formatTimestampForLabel(currentTime);
         handleEl.dataset.timestamp = currentTime;
     }
-    
+
     return {
         updateUI
     };
