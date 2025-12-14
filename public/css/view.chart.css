@@ -1,9 +1,7 @@
 /* public/css/view.chart.css */
-
 main#chart-view {
     flex-direction: row;
 }
-
 .chart-tree-wrapper {
     flex: 0 0 40%;
     min-width: 250px;
@@ -13,13 +11,11 @@ main#chart-view {
     border-right: 1px solid var(--color-border);
     background-color: var(--color-bg-secondary);
 }
-
 #chart-payload-container {
     /* Uses .payload-container base */
     padding: 0;
     background-color: var(--color-bg);
 }
-
 #chart-payload-area {
     /* Uses .payload-main-area base */
     flex: 0 0 40%; 
@@ -65,7 +61,6 @@ main#chart-view {
     background-color: var(--color-bg-accent);
 }
 
-
 /* --- #chart-tree Specifics --- */
 #chart-tree .node-filter-checkbox { display: none; }
 #chart-tree li { padding-left: 2px; }
@@ -76,17 +71,14 @@ main#chart-view {
 #chart-tree .selected .node-name::before { filter: brightness(0) invert(1); }
 body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) invert(0.2); }
 #chart-tree .selected .node-timestamp { color: var(--selected-text); opacity: 0.8; }
-
-/*  Added rules for collapse and filter */
+/* Added rules for collapse and filter */
 #chart-tree .is-folder.collapsed > ul { 
     display: none; 
 }
 #chart-tree .filtered-out { 
     display: none; 
 }
-
 #chart-tree .is-folder > .node-container { font-weight: 500; }
-
 
 /* --- Chart Variable List (Top-right) --- */
 .chart-variable-list {
@@ -128,7 +120,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     box-sizing: border-box;
     overflow: hidden; /* Prevent canvas from overflowing */
 }
-
 .chart-config-bar {
     display: flex;
     align-items: center;
@@ -165,15 +156,13 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 .chart-config-bar .chart-button:hover {
     background-color: var(--color-bg-accent);
 }
-
-/*  Style for the config select dropdown */
+/* Style for the config select dropdown */
 #chart-config-select {
     flex-grow: 1;
     min-width: 150px;
     max-width: 250px;
 }
-
-/*  Style for the new save/delete buttons */
+/* Style for the new save/delete buttons */
 #btn-chart-save-current {
     background-color: var(--color-primary);
     color: var(--color-header-text);
@@ -189,8 +178,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     font-size: 0.9em;
     margin-left: -5px; /* Pull it closer to save buttons */
 }
-
-
 #btn-chart-generate {
     background-color: var(--color-success);
     color: var(--color-header-text);
@@ -200,7 +187,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 #btn-chart-generate:hover {
     background-color: var(--color-success-hover);
 }
-
 #btn-chart-clear {
     background-color: var(--color-bg-tertiary);
     border: 1px solid var(--color-danger);
@@ -210,18 +196,15 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     background-color: var(--color-danger);
     color: #fff;
 }
-
 #btn-chart-fullscreen {
     font-size: 1.1em;
 }
-
 #chart-time-range-slider-container {
     flex-grow: 1;
     margin: 0 15px;
     min-width: 200px; /* Ensure slider has space */
     /* Base styles are in base.css */
 }
-
 #chart-canvas-container {
     flex-grow: 1;
     position: relative;
@@ -272,14 +255,12 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     color: var(--color-danger);
 }
 
-
 /* ---  Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     main#chart-view {
         flex-direction: column; /* Stack panels vertically */
         height: auto;
     }
-
     .chart-tree-wrapper {
         flex: 0 0 40vh; /* Tree takes 40% of viewport height */
         min-width: 100%; /* Full width */
@@ -287,33 +268,38 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
         height: 40vh;
         border-right: none;
     }
-    
     #chart-payload-container {
         flex-grow: 1; /* Payload/Chart area takes remaining space */
         min-height: 500px; /* Ensure it's usable */
         border-top: 1px solid var(--color-border);
     }
-    
     /* Re-enable and re-style the horizontal resizer for mobile */
     #drag-handle-horizontal-chart {
         display: flex; /* Show it */
         flex: 0 0 10px; /* Make it a bit thicker for touch */
     }
-
     #chart-payload-area {
         flex: 0 0 40%; /* Start at 40% */
         min-height: 150px;
         padding: 10px;
     }
-
     #chart-main-area {
         padding: 10px;
+        /* [FIX] Ensure container has layout stability in scroll mode */
+        min-height: 450px;
     }
     
+    /* [FIX] Explicit height for the canvas container on mobile
+       to prevent infinite resizing loops (flickering) */
+    #chart-canvas-container {
+        height: 350px; 
+        min-height: 350px;
+        flex-grow: 0; /* Stop trying to fill undefined height */
+    }
+
     .chart-config-bar {
         gap: 8px; /* Reduce gap */
     }
-    
     /* Make slider take full width on its own row */
     #chart-time-range-slider-container {
         flex-basis: 100%;

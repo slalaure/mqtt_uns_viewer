@@ -61,7 +61,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta19</p>
+                <p>v 1.5.0-beta20</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -289,6 +289,10 @@
                         <div class="form-group">
                             <input type="checkbox" id="chart-connect-nulls-toggle" name="chart-connect-nulls-toggle">
                             <label for="chart-connect-nulls-toggle" class="checkbox-label">Connect Gaps</label>
+                        </div>
+                        <div class="form-group">
+                            <input type="checkbox" id="chart-smart-axis-toggle" name="chart-smart-axis-toggle" checked>
+                            <label for="chart-smart-axis-toggle" class="checkbox-label" title="Group variables with similar names on the same axis">Smart Axis</label>
                         </div>
                         <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
                             <label style="font-size: 0.75em; margin-bottom: 2px;">Start</label>

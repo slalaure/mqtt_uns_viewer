@@ -8,31 +8,15 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * View module for the Chart tab.
+ * Handles configuration, data extraction (including primitives), and rendering.
  */
-
 // Import shared utilities
 import { formatTimestampForLabel, trackEvent } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 import { createDualTimeSlider }from './time-slider.js';
 
-// ... (DOM Elements Querying - Unchanged) ...
+// --- DOM Element Querying ---
 const chartVariableList = document.getElementById('chart-variable-list');
 const chartMainArea = document.getElementById('chart-main-area');
 const chartCanvas = document.getElementById('chart-canvas');
@@ -44,6 +28,7 @@ const btnChartClear = document.getElementById('btn-chart-clear');
 const chartTypeSelect = document.getElementById('chart-type-select');
 const chartConnectNulls = document.getElementById('chart-connect-nulls-toggle');
 const chartConfigSelect = document.getElementById('chart-config-select');
+const chartSmartAxis = document.getElementById('chart-smart-axis-toggle'); 
 const btnChartSaveCurrent = document.getElementById('btn-chart-save-current');
 const btnChartSaveAs = document.getElementById('btn-chart-save-as');
 const btnChartDeleteConfig = document.getElementById('btn-chart-delete-config');
@@ -64,26 +49,35 @@ let selectedChartBrokerId = null;
 let selectedChartTopic = null; 
 let lastGeneratedData = { labels: [], datasets: [] }; 
 let chartedVariables = new Map(); 
-
 let minTimestamp = 0;
 let maxTimestamp = 0;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
-
 let isChartLive = true; 
 let chartSaveTimer = null;
 let allChartConfigs = { configurations: [] }; 
 let currentConfigId = null; 
 let maxChartsLimit = 0; 
 let isMultiBroker = false; 
-
 let chartSlider = null; 
 let chartRefreshTimer = null; 
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
 
 // Configuration for Downsampling
-const MAX_POINTS_PER_SERIES = 1500; // Target number of points to display per series
+const MAX_POINTS_PER_SERIES = 1500; 
+
+// --- [MODIFIED] Semantic Color Palette ---
+const PALETTE_HUES = [
+    210, // Blue (Default 1)
+    120, // Green (Default 2)
+    30,  // Orange (Default 3)
+    270, // Purple (Default 4)
+    180, // Teal
+    60,  // Yellow
+    300, // Magenta
+    0    // Red (Last resort)
+];
 
 let payloadViewer = createPayloadViewer({
     topicEl: document.getElementById('chart-payload-topic'),
@@ -99,11 +93,7 @@ let appCallbacks = {
     colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"), 
 };
 
-/**
- * External refresh trigger (called by app.js when new data arrives)
- */
 export function refreshChart() {
-    // Data arrived, we can process and hide loader
     onGenerateChart(false); 
 }
 
@@ -145,14 +135,13 @@ function showChartLoader() {
 
 function hideChartLoader() {
     if (chartCanvas) chartCanvas.style.opacity = '1';
-    // Placeholder hiding is handled in render logic depending on data availability
 }
 
 export function initChartView(callbacks) {
     const { displayPayload, maxSavedChartConfigs, isMultiBroker: multiBrokerState, requestRangeCallback, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
     if (requestRangeCallback) appCallbacks.requestRangeCallback = requestRangeCallback;
-
+    
     maxChartsLimit = maxSavedChartConfigs || 0; 
     isMultiBroker = multiBrokerState || false; 
     
@@ -166,12 +155,15 @@ export function initChartView(callbacks) {
     btnChartExportPNG?.addEventListener('click', onExportPNG);
     btnChartExportCSV?.addEventListener('click', onExportCSV);
     btnChartClear?.addEventListener('click', onClearAll); 
+    
     chartConfigSelect?.addEventListener('change', onChartConfigChange);
     btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
     btnChartSaveAs?.addEventListener('click', onSaveAsNew);
     btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
+
     chartTypeSelect?.addEventListener('change', () => onGenerateChart(true));
     chartConnectNulls?.addEventListener('change', () => onGenerateChart(true));
+    chartSmartAxis?.addEventListener('change', () => onGenerateChart(true)); 
 
     if (chartRangeButtonsContainer) {
         const createRangeBtn = (text, hours) => {
@@ -222,8 +214,10 @@ export function initChartView(callbacks) {
                     const maxPercent = ((newMax - minTimestamp) / timeRange) * 100;
                     isChartLive = (maxPercent > 99.9);
                 }
+                
                 if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
                 if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
+                
                 if (chartSlider) {
                     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
                 }
@@ -238,6 +232,7 @@ export function initChartView(callbacks) {
             }
         });
     }
+
     loadChartConfig(); 
 }
 
@@ -246,10 +241,8 @@ function triggerDataFetch(start, end) {
     clearTimeout(chartRefreshTimer);
     chartRefreshTimer = setTimeout(() => {
         if (appCallbacks.requestRangeCallback) {
-            // Request backend data. The app.js will call refreshChart() when data arrives.
             appCallbacks.requestRangeCallback(start, end, null);
         } else {
-            // Fallback for standalone mode
             onGenerateChart();
         }
     }, 200);
@@ -283,7 +276,6 @@ export function handleChartNodeClick(event, nodeContainer, brokerId, topic) {
 export function updateChartSliderUI(min, max, isInitialLoad = false, force = false) {
     if (!chartSlider) return; 
     if (isUserInteracting && !force) return;
-    // Debounce high-frequency updates from live stream
     if (!isInitialLoad && !force && Date.now() - lastSliderUpdate < 1000) return;
     
     lastSliderUpdate = Date.now();
@@ -303,8 +295,9 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
 
     if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
     if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
+    
     if (chartTimeSliderContainer) chartTimeSliderContainer.style.display = (min === 0 && max === 0) ? 'none' : 'flex';
-
+    
     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     
     if (isChartLive && !isInitialLoad && !force && chartedVariables.size > 0) {
@@ -313,7 +306,6 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
 }
 
 // --- Helpers: Parsing ---
-
 function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return undefined;
     const parts = path.split(/\.|\[|\]/).filter(Boolean); 
@@ -332,6 +324,7 @@ function getNestedValue(obj, path) {
 
 function findNumericKeys(obj, path = '', list = []) {
     if (obj === null || typeof obj !== 'object') return list;
+    
     if (Array.isArray(obj)) {
         if (obj.length > 0 && obj.every(item => typeof item === 'object' && item.hasOwnProperty('name') && item.hasOwnProperty('value'))) {
             obj.forEach(metric => {
@@ -348,6 +341,7 @@ function findNumericKeys(obj, path = '', list = []) {
         }
         return list;
     }
+
     for (const key of Object.keys(obj)) {
         const newPath = path ? `${path}.${key}` : key;
         const value = obj[key];
@@ -367,25 +361,41 @@ function findNumericKeys(obj, path = '', list = []) {
 function populateChartVariables(payloadString) {
     if (!chartVariableList) return;
     chartVariableList.innerHTML = ''; 
+    
     if (!selectedChartTopic || !selectedChartBrokerId) {
          chartVariableList.innerHTML = '<p class="history-placeholder">No topic selected.</p>';
          return;
     }
+
     if (payloadString === null || payloadString === undefined) {
          chartVariableList.innerHTML = '<p class="history-placeholder">No payload for this topic.</p>';
          return;
     }
+
     try {
         const payload = JSON.parse(payloadString);
-        const numericKeys = findNumericKeys(payload);
+        let numericKeys = [];
+        if (typeof payload === 'number' || typeof payload === 'boolean') {
+             numericKeys.push({ path: "(value)", type: typeof payload });
+        } 
+        else if (typeof payload === 'string' && !isNaN(parseFloat(payload)) && isFinite(Number(payload))) {
+             numericKeys.push({ path: "(value)", type: "float (string)" });
+        }
+        else {
+             numericKeys = findNumericKeys(payload);
+        }
+
         if (numericKeys.length === 0) {
             chartVariableList.innerHTML = '<p class="history-placeholder">No numeric properties found in this payload.</p>';
             return;
         }
+
         numericKeys.forEach(key => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'chart-variable-item';
+            
             const varId = `${selectedChartBrokerId}|${selectedChartTopic}|${key.path}`;
+            
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.id = `chart-var-${varId.replace(/[^a-zA-Z0-9]/g, '_')}`; 
@@ -395,13 +405,16 @@ function populateChartVariables(payloadString) {
             checkbox.dataset.path = key.path; 
             checkbox.checked = chartedVariables.has(varId);
             checkbox.addEventListener('change', onChartVariableToggle);
+
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = key.path; 
+            
             const typeSpan = document.createElement('span');
             typeSpan.className = 'var-type';
             typeSpan.textContent = `(${key.type})`; 
             label.appendChild(typeSpan);
+
             itemDiv.appendChild(checkbox);
             itemDiv.appendChild(label);
             chartVariableList.appendChild(itemDiv);
@@ -430,6 +443,7 @@ function onClearAll() {
 function onChartVariableToggle(event) {
     const checkbox = event.target;
     const varId = checkbox.value; 
+    
     if (checkbox.checked) {
         chartedVariables.set(varId, {
             brokerId: checkbox.dataset.brokerId,
@@ -445,35 +459,22 @@ function onChartVariableToggle(event) {
     appCallbacks.colorChartTreeCallback();
 }
 
-/**
- * Downsample data using Bucket Averaging (simple and efficient).
- * Reduces data points to MAX_POINTS_PER_SERIES.
- */
 function downsampleData(data, targetCount) {
     if (data.length <= targetCount) return data;
-
     const sampled = [];
-    // Size of each bucket
     const bucketSize = Math.ceil(data.length / targetCount);
-
     for (let i = 0; i < data.length; i += bucketSize) {
-        // Get slice for this bucket
         const bucket = data.slice(i, i + bucketSize);
-        
-        // Calculate averages for this bucket
         let sumVal = 0;
         let sumTs = 0;
         let count = 0;
-
         for (const point of bucket) {
-            // Only average if value is valid number
             if (point && point.y !== null && point.y !== undefined) {
                 sumVal += point.y;
                 sumTs += point.x;
                 count++;
             }
         }
-
         if (count > 0) {
             sampled.push({
                 x: Math.round(sumTs / count),
@@ -484,17 +485,60 @@ function downsampleData(data, targetCount) {
     return sampled;
 }
 
-/**
- * Main Chart Generation Logic.
- * @param {boolean} showLoader - Force showing loader (useful for button clicks)
- */
+function isBooleanLike(dataPoints) {
+    if (!dataPoints || dataPoints.length === 0) return false;
+    for (const p of dataPoints) {
+        if (p.y !== 0 && p.y !== 1) return false;
+    }
+    return true;
+}
+
+function guessGroupKey(topic, path) {
+    const fullString = (topic + '/' + path).toLowerCase();
+    const keywords = [
+        'temperature', 'humidity', 'pressure', 'bar', 'psi', 'pascal',
+        'power', 'current', 'voltage', 'energy', 
+        'speed', 'vibration', 'level', 'percent', 'battery', 'soc', 
+        'heater', 'status', 'fire', 
+        'load', 'flow', 'rate', 'debit', 'throughput',
+        'concentration', 'ppm', 'ppb', 'mg', 'µg', 'aqi', 'co2', 'pm25'
+    ];
+    for (const kw of keywords) {
+        if (fullString.includes(kw)) return kw;
+    }
+    const topicParts = topic.split('/');
+    const lastPart = topicParts[topicParts.length - 1];
+    if (path === '(value)' || path.toLowerCase() === 'value') {
+        return lastPart.toLowerCase();
+    }
+    return (lastPart + '_' + path).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+}
+
+// [MODIFIED] Helper: Select hue based on index, optionally ignoring semantics if Smart Axis is off
+function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
+    const key = axisKey.toLowerCase();
+    // 1. Semantic Override (Only if enabled)
+    if (enableSemantic) {
+        if (key.includes('heater') || key.includes('fire')) return 0; // Red
+        if (key.includes('temperature')) return 15; // Red-Orange
+        if (key.includes('humidity') || key.includes('water')) return 210; // Blue
+        if (key.includes('pressure') || key.includes('bar') || key.includes('psi')) return 180; // Teal/Cyan
+        if (key.includes('flow') || key.includes('rate') || key.includes('debit')) return 240; // Indigo
+        if (key.includes('power') || key.includes('energy') || key.includes('voltage')) return 45; // Yellow/Gold
+        if (key.includes('concentration') || key.includes('ppm') || key.includes('aqi') || key.includes('co2')) return 300; // Magenta
+        if (key.includes('percent') || key.includes('level') || key.includes('battery')) return 120; // Green
+        if (key.includes('status')) return 270; // Purple
+    }
+    
+    // 2. Palette Rotation fallback
+    return PALETTE_HUES[axisIndex % PALETTE_HUES.length];
+}
+
 function onGenerateChart(showLoader = false) {
     trackEvent('chart_generate_refresh'); 
     if (isUserInteracting) return;
-
+    
     if (showLoader) showChartLoader();
-
-    // Use setTimeout to allow UI to render loader before heavy processing
     setTimeout(() => {
         processChartData();
     }, 10);
@@ -512,10 +556,8 @@ function processChartData() {
     }
 
     const allHistory = appCallbacks.getHistory(); 
-
-    // Filter strictly by requested range + small buffer
-    const timeFilteredHistory = allHistory.filter(entry =>
-        entry.timestampMs >= (currentMinTimestamp - 500) &&
+    const timeFilteredHistory = allHistory.filter(entry => 
+        entry.timestampMs >= (currentMinTimestamp - 500) && 
         entry.timestampMs <= (currentMaxTimestamp + 500)
     ); 
 
@@ -531,8 +573,10 @@ function processChartData() {
 
     const chartType = chartTypeSelect.value;
     const connectNulls = chartConnectNulls.checked;
+    const useSmartAxis = chartSmartAxis && chartSmartAxis.checked;
+    
     let datasets = [];
-    let labels = []; // Not strictly used for XY scatter/line, but kept for compatibility
+    let labels = []; 
     const isDarkMode = document.body.classList.contains('dark-mode');
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
     const textColor = isDarkMode ? '#e0e0e0' : '#333';
@@ -541,13 +585,12 @@ function processChartData() {
         x: {
             type: 'time',
             time: {
-                // [MODIFIED] Explicit format configuration to show date + time on large scales
                 tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
                 displayFormats: {
                     millisecond: 'HH:mm:ss.SSS',
                     second: 'HH:mm:ss',
                     minute: 'HH:mm',
-                    hour: 'dd/MM HH:mm', // Show date when zoomed out to hours
+                    hour: 'dd/MM HH:mm',
                     day: 'yyyy-MM-dd'
                 }
             },
@@ -561,6 +604,7 @@ function processChartData() {
     // --- PIE CHART LOGIC ---
     if (chartType === 'pie') {
         const totals = {};
+        
         chartedVariables.forEach((varInfo, varId) => {
             const topicParts = varInfo.topic.split('/');
             const cleanPath = varInfo.path.replace(/\[|\]/g, ''); 
@@ -568,16 +612,26 @@ function processChartData() {
             const label = `${brokerPrefix}${topicParts.slice(-2).join('/')} | ${cleanPath}`;
             totals[label] = 0;
         });
+
         for (const entry of timeFilteredHistory) {
             for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
                 if (entry.brokerId === brokerId && entry.topic === topic) {
                     try {
                         const payload = JSON.parse(entry.payload);
-                        let value = getNestedValue(payload, path);
+                        let value;
+                        if (path === "(value)") {
+                             if (typeof payload === 'boolean') value = payload ? 1 : 0;
+                             else if (typeof payload === 'number') value = payload;
+                             else if (typeof payload === 'string') value = parseFloat(payload);
+                        } else {
+                             value = getNestedValue(payload, path);
+                        }
+                        
                         if (typeof value === 'string') {
                             const numVal = parseFloat(value);
                             if (!isNaN(numVal) && isFinite(Number(value))) value = numVal; 
                         }
+
                         if (typeof value === 'number') {
                             const topicParts = topic.split('/');
                             const cleanPath = path.replace(/\[|\]/g, ''); 
@@ -589,6 +643,7 @@ function processChartData() {
                 }
             }
         }
+
         datasets = [{
             data: Object.values(totals),
             backgroundColor: Object.keys(totals).map((_, i) => `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`),
@@ -597,27 +652,84 @@ function processChartData() {
     } 
     // --- LINE / BAR CHART LOGIC ---
     else {
-        let i = 0;
+        const axisGroups = new Map(); 
+        const axisMap = new Map(); 
+
         for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
-            const color = `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`;
+            const topicParts = topic.split('/');
+            const cleanPath = path.replace(/\[|\]/g, '');
+            let axisKey;
+            
+            if (useSmartAxis) {
+                axisKey = guessGroupKey(topic, cleanPath);
+            } else {
+                axisKey = varId; 
+            }
+            
+            if (!axisGroups.has(axisKey)) axisGroups.set(axisKey, 0);
+            axisGroups.set(axisKey, axisGroups.get(axisKey) + 1);
+        }
+
+        const axisCounters = new Map();
+        const distinctAxes = Array.from(axisGroups.keys());
+
+        for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
             const topicParts = topic.split('/');
             const cleanPath = path.replace(/\[|\]/g, ''); 
-            const brokerPrefix = isMultiBroker ? `[${brokerId}] ` : '';
-            const label = `${brokerPrefix}${topicParts.slice(-2).join('/')} | ${cleanPath}`;
-            const yAxisId = `y${i}`; 
-            const position = (i % 2 === 0) ? 'left' : 'right'; 
+            const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
             
-            // Collect raw data points
+            let axisKey;
+            if (useSmartAxis) {
+                axisKey = guessGroupKey(topic, cleanPath);
+            } else {
+                axisKey = varId; 
+            }
+
+            if (!axisMap.has(axisKey)) {
+                axisMap.set(axisKey, `y${axisMap.size}`);
+            }
+            const yAxisId = axisMap.get(axisKey);
+
+            if (!axisCounters.has(axisKey)) axisCounters.set(axisKey, 0);
+            const indexInGroup = axisCounters.get(axisKey);
+            axisCounters.set(axisKey, indexInGroup + 1);
+            const totalInGroup = axisGroups.get(axisKey);
+
+            // --- Semantic Color Logic ---
+            const axisIndex = distinctAxes.indexOf(axisKey);
+            
+            // [MODIFIED] Disable semantic coloring if Smart Axis is OFF
+            const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
+            
+            // Generate lightness variation for items on same axis
+            const lightness = 45 + (indexInGroup * (30 / Math.max(1, totalInGroup)));
+            const color = `hsl(${hue}, 85%, ${lightness}%)`;
+
+            const axisPositionIndex = Array.from(axisMap.values()).indexOf(yAxisId);
+            const position = (axisPositionIndex % 2 === 0) ? 'left' : 'right'; 
+
             let rawPoints = [];
             for (const entry of timeFilteredHistory) {
                 if (entry.brokerId === brokerId && entry.topic === topic) {
                     try {
                         const payload = JSON.parse(entry.payload);
-                        let value = getNestedValue(payload, path);
+                        let value;
+                        if (path === "(value)") {
+                            if (typeof payload === 'boolean') value = payload ? 1 : 0;
+                            else if (typeof payload === 'number') value = payload;
+                            else if (typeof payload === 'string') {
+                                const parsed = parseFloat(payload);
+                                if (!isNaN(parsed)) value = parsed;
+                            }
+                        } else {
+                            value = getNestedValue(payload, path);
+                        }
+                        
                         if (typeof value === 'string') {
                             const numVal = parseFloat(value);
                             if (!isNaN(numVal) && isFinite(Number(value))) value = numVal;
                         }
+
                         if (typeof value === 'number') {
                             rawPoints.push({ x: entry.timestampMs, y: value });
                         }
@@ -625,52 +737,92 @@ function processChartData() {
                 }
             }
 
-            // Sort by time before downsampling
             rawPoints.sort((a, b) => a.x - b.x);
+            const isBool = isBooleanLike(rawPoints);
 
-            // --- DOWNSAMPLING ---
             let processedPoints = rawPoints;
             if (rawPoints.length > MAX_POINTS_PER_SERIES) {
-                console.log(`[Chart] Downsampling series '${label}' from ${rawPoints.length} to ~${MAX_POINTS_PER_SERIES} points.`);
                 processedPoints = downsampleData(rawPoints, MAX_POINTS_PER_SERIES);
             }
 
             datasets.push({
                 label: label,
-                data: processedPoints, // {x, y} format for Chart.js time scale
+                data: processedPoints, 
                 borderColor: color,
                 backgroundColor: color,
                 fill: false,
                 spanGaps: connectNulls,
                 tension: 0.1,
                 yAxisID: yAxisId,
-                pointRadius: processedPoints.length > 200 ? 0 : 3 // Hide points if dense
+                pointRadius: processedPoints.length > 200 ? 0 : 3 
             });
 
-            dynamicScales[yAxisId] = {
-                type: 'linear',
-                position: position,
-                grid: { drawOnChartArea: (i === 0) },
-                ticks: { color: color },
-            };
-            i++;
+            if (!dynamicScales[yAxisId]) {
+                const axisBaseColor = `hsl(${hue}, 100%, 40%)`; 
+                dynamicScales[yAxisId] = {
+                    type: 'linear',
+                    display: true,
+                    position: position,
+                    // [CRITICAL] Stack logic: only if smart axis ON
+                    // If OFF, 'stack' property is removed (undefined) to allow overlapping.
+                    stack: useSmartAxis ? ((position === 'left') ? 'left-stack' : 'right-stack') : undefined, 
+                    stackWeight: 1, 
+                    title: {
+                        display: true,
+                        text: useSmartAxis ? axisKey.toUpperCase() : label, 
+                        color: axisBaseColor, 
+                        font: { size: 11, weight: 'bold' }
+                    },
+                    grid: { drawOnChartArea: (axisPositionIndex === 0) }, 
+                    ticks: { color: axisBaseColor }
+                };
+                
+                // [FIXED] Force boolean scale constraints even if Smart Axis is OFF
+                if (isBool) {
+                    dynamicScales[yAxisId].min = 0;
+                    dynamicScales[yAxisId].max = 1.2; 
+                    dynamicScales[yAxisId].ticks.stepSize = 1;
+                    dynamicScales[yAxisId].beginAtZero = true;
+                }
+            }
+        }
+
+        if (connectNulls && datasets.length > 0) {
+            let maxDataTimestamp = 0;
+            datasets.forEach(ds => {
+                if (ds.data.length > 0) {
+                    const lastPt = ds.data[ds.data.length - 1];
+                    if (lastPt.x > maxDataTimestamp) maxDataTimestamp = lastPt.x;
+                }
+            });
+            const prolongTarget = isChartLive ? currentMaxTimestamp : maxDataTimestamp;
+            if (prolongTarget > 0) {
+                datasets.forEach(ds => {
+                    if (ds.data.length > 0) {
+                        const lastPt = ds.data[ds.data.length - 1];
+                        if (lastPt.x < prolongTarget) {
+                            ds.data.push({ x: prolongTarget, y: lastPt.y });
+                        }
+                    }
+                });
+            }
         }
     }
 
     if (chartInstance) chartInstance.destroy();
+    
     chartPlaceholder.style.display = 'none';
     chartCanvas.style.display = 'block';
     
     chartInstance = new Chart(chartCanvas, {
         type: chartType,
-        data: { datasets: datasets }, // No global labels needed for Time Scale with XY data
+        data: { datasets: datasets }, 
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: (chartType === 'pie') ? {} : dynamicScales,
             plugins: {
                 legend: { labels: { color: textColor } },
-                // [MODIFIED] Added Zoom Plugin Configuration
                 zoom: {
                     zoom: {
                         drag: {
@@ -698,7 +850,6 @@ function processChartData() {
                     intersect: false,
                     callbacks: {
                         title: (context) => {
-                            // Format timestamp in tooltip
                             if (context[0] && context[0].parsed.x) {
                                 return new Date(context[0].parsed.x).toLocaleString();
                             }
@@ -708,12 +859,12 @@ function processChartData() {
                 }
             },
             animation: false,
-            parsing: false, // Improved performance for explicit {x,y} structure
-            normalized: true // Data is pre-sorted
+            parsing: false, 
+            normalized: true 
         }
     });
-    lastGeneratedData = { labels, datasets };
     
+    lastGeneratedData = { labels, datasets };
     hideChartLoader();
 }
 
@@ -730,6 +881,7 @@ function toggleChartFullscreen() {
 function onExportPNG() {
     trackEvent('chart_export_png'); 
     if (!chartInstance) { alert("Please generate a chart first."); return; }
+    
     const a = document.createElement('a');
     a.href = chartInstance.toBase64Image();
     a.download = `multi_topic_chart.png`;
@@ -738,14 +890,14 @@ function onExportPNG() {
 
 function onExportCSV() {
     trackEvent('chart_export_csv'); 
-    // Export currently displayed data from the chart instance to ensure we get processed/downsampled data
     if (!chartInstance || !chartInstance.data.datasets || chartInstance.data.datasets.length === 0) {
         alert("Please generate a chart first.");
         return;
     }
+
     const chartType = chartTypeSelect.value;
     let csvContent = "data:text/csv;charset=utf-8,";
-    
+
     if (chartType === 'pie') {
         csvContent += "Variable,Total\r\n";
         chartInstance.data.labels.forEach((label, index) => {
@@ -755,15 +907,13 @@ function onExportCSV() {
     } else {
         const headers = ['timestamp', ...chartInstance.data.datasets.map(d => `"${d.label}"`)];
         csvContent += headers.join(',') + '\r\n';
-        
-        // Collect all unique timestamps from all datasets
+
         const allTimestamps = new Set();
         chartInstance.data.datasets.forEach(ds => {
             ds.data.forEach(point => allTimestamps.add(point.x));
         });
         const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
 
-        // Map data for quick lookup: datasetIndex -> timestamp -> value
         const dataMap = chartInstance.data.datasets.map(ds => {
             const map = new Map();
             ds.data.forEach(p => map.set(p.x, p.y));
@@ -778,7 +928,7 @@ function onExportCSV() {
             csvContent += row.join(',') + '\r\n';
         });
     }
-    
+
     const encodedUri = encodeURI(csvContent);
     const a = document.createElement('a');
     a.href = encodedUri;
@@ -801,6 +951,7 @@ async function loadChartConfig() {
     try {
         const response = await fetch('api/chart/config');
         if (!response.ok) throw new Error('Failed to fetch chart config');
+        
         let savedConfig = await response.json(); 
         if (Array.isArray(savedConfig)) {
             allChartConfigs = { configurations: [{ id: `chart_${Date.now()}`, name: "Migrated Chart", chartType: "line", connectNulls: false, variables: savedConfig.map(v => ({ brokerId: 'default', topic: v.topic, path: v.path })) }] };
@@ -810,6 +961,7 @@ async function loadChartConfig() {
         } else {
             allChartConfigs = { configurations: [] }; 
         }
+
         populateChartConfigSelect(); 
         if (allChartConfigs.configurations.length > 0) {
             chartConfigSelect.value = allChartConfigs.configurations[0].id; 
@@ -829,6 +981,7 @@ function populateChartConfigSelect() {
     newOption.value = "";
     newOption.textContent = "-- New Chart --";
     chartConfigSelect.appendChild(newOption);
+
     allChartConfigs.configurations.forEach(config => {
         const option = document.createElement('option');
         option.value = config.id;
@@ -842,12 +995,14 @@ function onChartConfigChange() {
     const configId = chartConfigSelect.value;
     currentConfigId = configId;
     if (!configId) { onClearAll(); return; }
+
     const config = allChartConfigs.configurations.find(c => c.id === configId);
     if (!config) { onClearAll(); return; }
-    
+
     chartTypeSelect.value = config.chartType || 'line';
     chartConnectNulls.checked = config.connectNulls || false;
     chartedVariables.clear();
+    
     if (Array.isArray(config.variables)) {
         config.variables.forEach(v => {
             const brokerId = v.brokerId || 'default_broker'; 
@@ -855,12 +1010,15 @@ function onChartConfigChange() {
             chartedVariables.set(varId, { ...v, brokerId: brokerId });
         });
     }
+    
     onGenerateChart();
     appCallbacks.colorChartTreeCallback();
+    
     if(selectedChartTopic && selectedChartBrokerId) {
         const node = document.querySelector(`.node-container[data-topic="${selectedChartTopic}"][data-broker-id="${selectedChartBrokerId}"]`);
         if(node) populateChartVariables(node.dataset.payload);
     }
+    
     showChartSaveStatus(`Loaded '${config.name}'`, 'success');
 }
 
@@ -885,12 +1043,15 @@ async function saveAllChartConfigs(configObject, showStatus = true) {
 async function onSaveCurrent() {
     trackEvent('chart_save_current'); 
     if (!currentConfigId) { onSaveAsNew(); return; }
+    
     const config = allChartConfigs.configurations.find(c => c.id === currentConfigId);
     if (!config) { showChartSaveStatus('Error: Config not found', 'error'); return; }
+
     config.name = chartConfigSelect.options[chartConfigSelect.selectedIndex].text; 
     config.chartType = chartTypeSelect.value;
     config.connectNulls = chartConnectNulls.checked;
     config.variables = Array.from(chartedVariables.values());
+
     await saveAllChartConfigs(allChartConfigs);
 }
 
@@ -900,8 +1061,10 @@ async function onSaveAsNew() {
         alert(`Limit reached (${maxChartsLimit}). Delete a chart first.`);
         return; 
     }
+
     const name = prompt("Enter a name for this new chart configuration:");
     if (!name || name.trim().length === 0) return; 
+
     const newConfig = {
         id: `chart_${Date.now()}`,
         name: name.trim(),
@@ -909,8 +1072,10 @@ async function onSaveAsNew() {
         connectNulls: chartConnectNulls.checked,
         variables: Array.from(chartedVariables.values()) 
     };
+
     allChartConfigs.configurations.push(newConfig);
     currentConfigId = newConfig.id; 
+    
     const success = await saveAllChartConfigs(allChartConfigs);
     if (success) populateChartConfigSelect();
 }
@@ -919,6 +1084,7 @@ async function onDeleteConfig() {
     trackEvent('chart_delete_config'); 
     if (!currentConfigId) { alert("No chart selected."); return; }
     if (!confirm(`Delete chart?`)) return;
+
     allChartConfigs.configurations = allChartConfigs.configurations.filter(c => c.id !== currentConfigId);
     const success = await saveAllChartConfigs(allChartConfigs);
     if (success) { onClearAll(); populateChartConfigSelect(); }
