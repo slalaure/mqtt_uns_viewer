@@ -47,8 +47,17 @@ const HTTP_PORT = process.env.MCP_PORT || 3000;
 const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http'
 //  Read API Key from environment
 const MCP_API_KEY = process.env.MCP_API_KEY || null;
-// --- [END MODIFIED] ---
 
+// [NEW] Granular Tool Permissions (Default: true)
+const TOOL_FLAGS = {
+    ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',
+    ENABLE_SEMANTIC: process.env.LLM_TOOL_ENABLE_SEMANTIC !== 'false',
+    ENABLE_PUBLISH: process.env.LLM_TOOL_ENABLE_PUBLISH !== 'false',
+    ENABLE_FILES: process.env.LLM_TOOL_ENABLE_FILES !== 'false',
+    ENABLE_SIMULATOR: process.env.LLM_TOOL_ENABLE_SIMULATOR !== 'false',
+    ENABLE_MAPPER: process.env.LLM_TOOL_ENABLE_MAPPER !== 'false',
+    ENABLE_ADMIN: process.env.LLM_TOOL_ENABLE_ADMIN !== 'false'
+};
 
 // --- Load UNS Model Manifest ---
 const __filename = fileURLToPath(import.meta.url);
@@ -125,685 +134,686 @@ async function createMcpServer() {
     description: "A server to control and query the MQTT Unified Namespace web visualizer application. Includes model-aware search, simulation controls, and tools to read/write new scenarios and SVG views.",
   });
 
-  // ---  Project & File System Tools (For creating scenarios/views) ---
-
-  server.registerTool(
-    "list_project_files",
-    {
-      title: "List Project Files",
-      description: "Lists key files in the project's root and `data` directories. Used to find simulator code (`simulator-*.js`), SVG files (`*.svg`), or **custom SVG binding scripts (`*.svg.js`)** to read.",
-      inputSchema: {},
-      outputSchema: { root_files: z.array(z.string()), data_files: z.array(z.string()) }
-    },
-    async () => {
-      try {
-        const rootFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.json') || f.endsWith('.md'));
-        const dataFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js'));
-        return { 
-          content: [{ type: "text", text: `Found ${rootFiles.length} root files and ${dataFiles.length} data files.` }],
-          structuredContent: { root_files: rootFiles, data_files: dataFiles } 
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-      }
-    }
-  );
-
-  server.registerTool(
-    "get_file_content",
-    {
-      title: "Get File Content",
-      description: "Reads the content of a *single* file from the project's root or `data` directory. Useful for reading existing SVG views (e.g., 'data/paris-metro.svg') or simulator code (e.g., 'simulator-stark.js') to learn patterns.",
-      inputSchema: { 
-        filename: z.string().describe("The relative path to the file (e.g., 'simulator-stark.js' or 'data/paris_metro.svg').")
-      },
-      outputSchema: { filename: z.string(), content: z.string() }
-    },
-    async ({ filename }) => {
-      try {
-        // Security: Prevent path traversal
-        const resolvedPath = path.resolve(__dirname, filename);
-        
-        // Allow reading from root directory OR data directory
-        if (!resolvedPath.startsWith(__dirname)) {
-           return { content: [{ type: "text", text: "Error: Path traversal detected. Only files within the project root can be read." }], isError: true };
+  // ---  FILES Tools ---
+  if (TOOL_FLAGS.ENABLE_FILES) {
+      server.registerTool(
+        "list_project_files",
+        {
+          title: "List Project Files",
+          description: "Lists key files in the project's root and `data` directories. Used to find simulator code (`simulator-*.js`), SVG files (`*.svg`), or **custom SVG binding scripts (`*.svg.js`)** to read.",
+          inputSchema: {},
+          outputSchema: { root_files: z.array(z.string()), data_files: z.array(z.string()) }
+        },
+        async () => {
+          try {
+            const rootFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.json') || f.endsWith('.md'));
+            const dataFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js'));
+            return { 
+              content: [{ type: "text", text: `Found ${rootFiles.length} root files and ${dataFiles.length} data files.` }],
+              structuredContent: { root_files: rootFiles, data_files: dataFiles } 
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+          }
         }
-        
-        const content = fs.readFileSync(resolvedPath, 'utf8');
-        return { 
-          content: [{ type: "text", text: `Content of ${filename} (first 200 chars): ${content.substring(0, 200)}...` }],
-          structuredContent: { filename: filename, content: content } 
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-      }
-    }
-  );
+      );
 
-  server.registerTool(
-    "save_file_to_data_directory",
-    {
-      title: "Save File to 'data' Directory",
-      description: "Saves text content to a new file *only* in the `data/` directory. Use this to create new SVG views or new simulation scenarios. **For a new SVG view, you must save both the `.svg` file and its corresponding `.svg.js` custom logic file (e.g., 'data/my_view.svg' and 'data/my_view.svg.js').** New `.svg` files appear in the dropdown immediately. New simulator `.js` files require a server restart to be loaded (use the `restart_application_server` tool).",
-      inputSchema: {
-        filename: z.string().describe("The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."),
-        content: z.string().describe("The full text content (JavaScript or SVG) to save.")
-      },
-      outputSchema: { success: z.boolean(), path: z.string() }
-    },
-    async ({ filename, content }) => {
-      try {
-        // Security: Ensure we only write to the dataDir
-        const resolvedPath = path.resolve(DATA_DIR, filename);
-        
-        if (!resolvedPath.startsWith(DATA_DIR)) {
-          return { content: [{ type: "text", text: "Error: Path traversal detected. Files can only be saved to the 'data' directory." }], isError: true };
+      server.registerTool(
+        "get_file_content",
+        {
+          title: "Get File Content",
+          description: "Reads the content of a *single* file from the project's root or `data` directory. Useful for reading existing SVG views (e.g., 'data/paris-metro.svg') or simulator code (e.g., 'simulator-stark.js') to learn patterns.",
+          inputSchema: { 
+            filename: z.string().describe("The relative path to the file (e.g., 'simulator-stark.js' or 'data/paris_metro.svg').")
+          },
+          outputSchema: { filename: z.string(), content: z.string() }
+        },
+        async ({ filename }) => {
+          try {
+            // Security: Prevent path traversal
+            const resolvedPath = path.resolve(__dirname, filename);
+            
+            // Allow reading from root directory OR data directory
+            if (!resolvedPath.startsWith(__dirname)) {
+               return { content: [{ type: "text", text: "Error: Path traversal detected. Only files within the project root can be read." }], isError: true };
+            }
+            
+            const content = fs.readFileSync(resolvedPath, 'utf8');
+            return { 
+              content: [{ type: "text", text: `Content of ${filename} (first 200 chars): ${content.substring(0, 200)}...` }],
+              structuredContent: { filename: filename, content: content } 
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+          }
         }
-        
-        fs.writeFileSync(resolvedPath, content, 'utf8');
-        
-        // If updating uns_model.json, reload it in memory
-        if (filename === 'uns_model.json') {
-            loadUnsModel();
+      );
+
+      server.registerTool(
+        "save_file_to_data_directory",
+        {
+          title: "Save File to 'data' Directory",
+          description: "Saves text content to a new file *only* in the `data/` directory. Use this to create new SVG views or new simulation scenarios. **For a new SVG view, you must save both the `.svg` file and its corresponding `.svg.js` custom logic file (e.g., 'data/my_view.svg' and 'data/my_view.svg.js').** New `.svg` files appear in the dropdown immediately. New simulator `.js` files require a server restart to be loaded (use the `restart_application_server` tool).",
+          inputSchema: {
+            filename: z.string().describe("The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."),
+            content: z.string().describe("The full text content (JavaScript or SVG) to save.")
+          },
+          outputSchema: { success: z.boolean(), path: z.string() }
+        },
+        async ({ filename, content }) => {
+          try {
+            // Security: Ensure we only write to the dataDir
+            const resolvedPath = path.resolve(DATA_DIR, filename);
+            
+            if (!resolvedPath.startsWith(DATA_DIR)) {
+              return { content: [{ type: "text", text: "Error: Path traversal detected. Files can only be saved to the 'data' directory." }], isError: true };
+            }
+            
+            fs.writeFileSync(resolvedPath, content, 'utf8');
+            
+            // If updating uns_model.json, reload it in memory
+            if (filename === 'uns_model.json') {
+                loadUnsModel();
+            }
+
+            const savedPath = `data/${filename}`;
+            return { 
+              content: [{ type: "text", text: `File saved successfully to ${savedPath}` }],
+              structuredContent: { success: true, path: savedPath } 
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+          }
         }
-
-        const savedPath = `data/${filename}`;
-        return { 
-          content: [{ type: "text", text: `File saved successfully to ${savedPath}` }],
-          structuredContent: { success: true, path: savedPath } 
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
-      }
-    }
-  );
-
-
-  // ---  Model-Querying Tools ---
-
-  server.registerTool(
-    "get_model_definition",
-    {
-      title: "Get UNS Model Definition",
-      description: "Searches the factory's Unified Namespace (UNS) Model Manifest for a specific concept or keyword (e.g., 'maintenance', 'workorder', 'temperature'). Returns the data schema, topic templates, and description for that concept.",
-      inputSchema: {
-        concept: z.string().describe("The concept or keyword to search for (e.g., 'maintenance', 'erp', 'vibration').")
-      },
-      outputSchema: { definitions: z.array(z.any()) }
-    },
-    async ({ concept }) => {
-      // Reload to ensure fresh data
-      loadUnsModel();
-
-      if (unsModel.length === 0) {
-        return { content: [{ type: "text", text: "Error: The UNS Model Manifest (uns_model.json) is not loaded." }], isError: true };
-      }
-      const lowerConcept = concept.toLowerCase();
-      const results = unsModel.filter(model => 
-        model.concept.toLowerCase().includes(lowerConcept) ||
-        (model.keywords && model.keywords.some(k => k.toLowerCase().includes(lowerConcept)))
       );
       
-      const output = { definitions: results };
-      return {
-        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-        structuredContent: output
-      };
-    }
-  );
-
-  // [NEW TOOL] Update UNS Model
-  server.registerTool(
-    "update_uns_model",
-    {
-      title: "Update UNS Model Manifest",
-      description: "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
-      inputSchema: {
-        model_json: z.string().describe("The full JSON string representing the new model array. Must be a valid JSON array of definition objects.")
-      },
-      outputSchema: { success: z.boolean(), message: z.string() }
-    },
-    async ({ model_json }) => {
-      try {
-        let newModel;
-        try {
-            newModel = JSON.parse(model_json);
-        } catch (e) {
-            return { content: [{ type: "text", text: "Error: Invalid JSON format." }], isError: true };
+      server.registerTool(
+        "get_available_svg_views",
+        {
+          title: "Get Available SVG Views",
+          description: "Lists all .svg files available in the /data directory that can be displayed in the 'SVG View' tab.",
+          inputSchema: {},
+          outputSchema: { svg_files: z.array(z.string()) }
+        },
+        async () => {
+          try {
+            const response = await axios.get(`${API_BASE_URL}/svg/list`);
+            const output = { svg_files: response.data };
+             return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+          }
         }
+      );
+  }
 
-        if (!Array.isArray(newModel)) {
-            return { content: [{ type: "text", text: "Error: Model must be a JSON Array." }], isError: true };
-        }
 
-        fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
-        loadUnsModel(); // Reload in memory
+  // ---  SEMANTIC / MODEL Tools ---
+  if (TOOL_FLAGS.ENABLE_SEMANTIC) {
+      server.registerTool(
+        "get_model_definition",
+        {
+          title: "Get UNS Model Definition",
+          description: "Searches the factory's Unified Namespace (UNS) Model Manifest for a specific concept or keyword (e.g., 'maintenance', 'workorder', 'temperature'). Returns the data schema, topic templates, and description for that concept.",
+          inputSchema: {
+            concept: z.string().describe("The concept or keyword to search for (e.g., 'maintenance', 'erp', 'vibration').")
+          },
+          outputSchema: { definitions: z.array(z.any()) }
+        },
+        async ({ concept }) => {
+          // Reload to ensure fresh data
+          loadUnsModel();
 
-        return { 
-          content: [{ type: "text", text: "UNS Model Manifest updated successfully." }],
-          structuredContent: { success: true, message: "Model updated." } 
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: `Error updating model: ${error.message}` }], isError: true };
-      }
-    }
-  );
-
-  //  Added optional broker_id
-  server.registerTool(
-    "search_uns_concept",
-    {
-      title: "Search by UNS Concept (Semantic Search)",
-      description: "Performs a precise, structured search for MQTT messages based on a known UNS concept and specific data filters.",
-      inputSchema: { 
-        concept: z.string().describe("The UNS concept to search for (e.g., 'Work Order', 'Maintenance Request')."),
-        filters: z.record(z.string()).optional().describe("An object of key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."),
-        broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
-      },
-      outputSchema: { results: z.array(z.any()) }
-    },
-    async ({ concept, filters, broker_id }) => {
-      try {
-        // 1. Find the model definition
-        loadUnsModel(); // Ensure fresh
-        if (unsModel.length === 0) {
+          if (unsModel.length === 0) {
             return { content: [{ type: "text", text: "Error: The UNS Model Manifest (uns_model.json) is not loaded." }], isError: true };
+          }
+          const lowerConcept = concept.toLowerCase();
+          const results = unsModel.filter(model => 
+            model.concept.toLowerCase().includes(lowerConcept) ||
+            (model.keywords && model.keywords.some(k => k.toLowerCase().includes(lowerConcept)))
+          );
+          
+          const output = { definitions: results };
+          return {
+            content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+            structuredContent: output
+          };
         }
-        const lowerConcept = concept.toLowerCase();
-        const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
-        
-        if (!model) {
-            return { content: [{ type: "text", text: `Error: Concept '${concept}' not found in UNS Model Manifest.` }], isError: true };
-        }
-        
-        const topic_template = model.topic_template;
+      );
 
-        //  Call the API with new body structure
-        const body = {
-          topic_template,
-          filters,
-          broker_id //  Pass broker_id
-        };
-        const response = await axios.post(`${API_BASE_URL}/context/search/model`, body);
-        const output = { results: response.data };
-        return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
-
-  server.registerTool(
-    "infer_schema",
-    {
-      title: "Infer Schema from Topic",
-      description: "Analyzes recent messages for a given topic pattern (e.g., 'stark_industries/security/%') and returns the inferred JSON payload schema.",
-      inputSchema: { 
-        topic_pattern: z.string().describe("The topic pattern to analyze, using SQL LIKE syntax (e.g., 'stark_industries/security/%').")
-      },
-      outputSchema: { inferred_schema: z.record(z.string()) }
-    },
-    async ({ topic_pattern }) => {
-        try {
-            // Use the search/model endpoint to get recent messages for the pattern
-            const response = await axios.post(`${API_BASE_URL}/context/search/model`, { topic_template: topic_pattern });
-            const messages = response.data; // This is an array of { topic, payload, timestamp }
-            
-            if (!messages || messages.length === 0) {
-                return { content: [{ type: "text", text: "No messages found for this pattern." }] };
+      server.registerTool(
+        "search_uns_concept",
+        {
+          title: "Search by UNS Concept (Semantic Search)",
+          description: "Performs a precise, structured search for MQTT messages based on a known UNS concept and specific data filters.",
+          inputSchema: { 
+            concept: z.string().describe("The UNS concept to search for (e.g., 'Work Order', 'Maintenance Request')."),
+            filters: z.record(z.string()).optional().describe("An object of key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."),
+            broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
+          },
+          outputSchema: { results: z.array(z.any()) }
+        },
+        async ({ concept, filters, broker_id }) => {
+          try {
+            // 1. Find the model definition
+            loadUnsModel(); // Ensure fresh
+            if (unsModel.length === 0) {
+                return { content: [{ type: "text", text: "Error: The UNS Model Manifest (uns_model.json) is not loaded." }], isError: true };
             }
+            const lowerConcept = concept.toLowerCase();
+            const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
+            
+            if (!model) {
+                return { content: [{ type: "text", text: `Error: Concept '${concept}' not found in UNS Model Manifest.` }], isError: true };
+            }
+            
+            const topic_template = model.topic_template;
 
-            // Use the helper function to infer the schema
-            const schema = _inferSchema(messages);
-            const output = { inferred_schema: schema };
+            //  Call the API with new body structure
+            const body = {
+              topic_template,
+              filters,
+              broker_id //  Pass broker_id
+            };
+            const response = await axios.post(`${API_BASE_URL}/context/search/model`, body);
+            const output = { results: response.data };
             return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
               structuredContent: output
             };
-        } catch (error) {
+          } catch (error) {
             const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
             return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+          }
         }
-    }
-  );
+      );
 
+      server.registerTool(
+        "infer_schema",
+        {
+          title: "Infer Schema from Topic",
+          description: "Analyzes recent messages for a given topic pattern (e.g., 'stark_industries/security/%') and returns the inferred JSON payload schema.",
+          inputSchema: { 
+            topic_pattern: z.string().describe("The topic pattern to analyze, using SQL LIKE syntax (e.g., 'stark_industries/security/%').")
+          },
+          outputSchema: { inferred_schema: z.record(z.string()) }
+        },
+        async ({ topic_pattern }) => {
+            try {
+                // Use the search/model endpoint to get recent messages for the pattern
+                const response = await axios.post(`${API_BASE_URL}/context/search/model`, { topic_template: topic_pattern });
+                const messages = response.data; // This is an array of { topic, payload, timestamp }
+                
+                if (!messages || messages.length === 0) {
+                    return { content: [{ type: "text", text: "No messages found for this pattern." }] };
+                }
 
-  // ---  Data-Retrieval Tools ---
-
-  //  Added optional brokerId
-  server.registerTool(
-    "search_data_fulltext",
-    {
-      title: "Search (Full-Text)",
-      description: "Performs a simple full-text search for a keyword across all topic names and payload contents.",
-      inputSchema: { 
-        keyword: z.string().describe("The keyword to search for (e.g., 'maintenance', 'error')."),
-        broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
-      },
-      outputSchema: { results: z.array(z.any()) }
-    },
-    async ({ keyword, broker_id }) => {
-      try {
-        const encodedKeyword = encodeURIComponent(keyword);
-        let url = `${API_BASE_URL}/context/search?q=${encodedKeyword}`;
-        if (broker_id) {
-            url += `&brokerId=${encodeURIComponent(broker_id)}`; //  Add brokerId to query
+                // Use the helper function to infer the schema
+                const schema = _inferSchema(messages);
+                const output = { inferred_schema: schema };
+                return {
+                  content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+                  structuredContent: output
+                };
+            } catch (error) {
+                const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+                return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+            }
         }
-        
-        const response = await axios.get(url);
-        const output = { results: response.data };
-        return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
+      );
+  }
 
-  //  Added optional brokerId
-  server.registerTool(
-    "get_latest_message",
-    {
-      title: "Get Latest Message",
-      description: "Retrieves the most recent message for a single, *exact* MQTT topic.",
-      inputSchema: { 
-        topic: z.string().describe("The full MQTT topic name (e.g., 'stark_industries/malibu_facility/erp/workorder')"),
-        broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
-      },
-      outputSchema: { message: z.any() }
-    },
-    async ({ topic, broker_id }) => {
-      try {
-        const encodedTopic = encodeURIComponent(topic);
-        let url = `${API_BASE_URL}/context/topic/${encodedTopic}`;
-        if (broker_id) {
-            url += `?brokerId=${encodeURIComponent(broker_id)}`; //  Add brokerId to query
+  // ---  READ Tools ---
+  if (TOOL_FLAGS.ENABLE_READ) {
+      server.registerTool(
+        "search_data_fulltext",
+        {
+          title: "Search (Full-Text)",
+          description: "Performs a simple full-text search for a keyword across all topic names and payload contents.",
+          inputSchema: { 
+            keyword: z.string().describe("The keyword to search for (e.g., 'maintenance', 'error')."),
+            broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
+          },
+          outputSchema: { results: z.array(z.any()) }
+        },
+        async ({ keyword, broker_id }) => {
+          try {
+            const encodedKeyword = encodeURIComponent(keyword);
+            let url = `${API_BASE_URL}/context/search?q=${encodedKeyword}`;
+            if (broker_id) {
+                url += `&brokerId=${encodeURIComponent(broker_id)}`; //  Add brokerId to query
+            }
+            
+            const response = await axios.get(url);
+            const output = { results: response.data };
+            return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+            return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+          }
         }
+      );
 
-        const response = await axios.get(url);
-        const output = { message: response.data };
-        return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
+      server.registerTool(
+        "get_latest_message",
+        {
+          title: "Get Latest Message",
+          description: "Retrieves the most recent message for a single, *exact* MQTT topic.",
+          inputSchema: { 
+            topic: z.string().describe("The full MQTT topic name (e.g., 'stark_industries/malibu_facility/erp/workorder')"),
+            broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
+          },
+          outputSchema: { message: z.any() }
+        },
+        async ({ topic, broker_id }) => {
+          try {
+            const encodedTopic = encodeURIComponent(topic);
+            let url = `${API_BASE_URL}/context/topic/${encodedTopic}`;
+            if (broker_id) {
+                url += `?brokerId=${encodeURIComponent(broker_id)}`; //  Add brokerId to query
+            }
 
-  //  Added optional brokerId
-  server.registerTool(
-    "get_topic_history",
-    {
-      title: "Get Topic History",
-      description: "Retrieves recent historical messages for a specified *exact* MQTT topic.",
-      inputSchema: { 
-        topic: z.string().describe("The full MQTT topic name to get history for."),
-        broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1')."),
-        limit: z.number().optional().describe("The maximum number of messages to return. Defaults to 20.")
-      },
-      outputSchema: { history: z.array(z.any()) }
-    },
-    async ({ topic, broker_id, limit }) => {
-      try {
-        const encodedTopic = encodeURIComponent(topic);
-        const params = new URLSearchParams();
-        if (broker_id) {
-            params.append('brokerId', broker_id); 
+            const response = await axios.get(url);
+            const output = { message: response.data };
+            return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+            return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+          }
         }
-        if (limit) {
-            params.append('limit', limit);
+      );
+
+      server.registerTool(
+        "get_topic_history",
+        {
+          title: "Get Topic History",
+          description: "Retrieves recent historical messages for a specified *exact* MQTT topic.",
+          inputSchema: { 
+            topic: z.string().describe("The full MQTT topic name to get history for."),
+            broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1')."),
+            limit: z.number().optional().describe("The maximum number of messages to return. Defaults to 20.")
+          },
+          outputSchema: { history: z.array(z.any()) }
+        },
+        async ({ topic, broker_id, limit }) => {
+          try {
+            const encodedTopic = encodeURIComponent(topic);
+            const params = new URLSearchParams();
+            if (broker_id) {
+                params.append('brokerId', broker_id); 
+            }
+            if (limit) {
+                params.append('limit', limit);
+            }
+            
+            const queryString = params.toString() ? `?${params.toString()}` : '';
+            const url = `${API_BASE_URL}/context/history/${encodedTopic}${queryString}`;
+            
+            const response = await axios.get(url);
+            const output = { history: response.data };
+            return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+            return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+          }
         }
-        
-        const queryString = params.toString() ? `?${params.toString()}` : '';
-        const url = `${API_BASE_URL}/context/history/${encodedTopic}${queryString}`;
-        
-        const response = await axios.get(url);
-        const output = { history: response.data };
-        return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
-  
-  //  Output schema updated
-  server.registerTool(
-    "get_topics_list",
-    {
-      title: "Get All Topics (Flat List)",
-      description: "Returns a flat list of all unique MQTT topics currently known, including their broker ID.",
-      inputSchema: {}, // No input
-      outputSchema: { topics: z.array(z.object({ broker_id: z.string(), topic: z.string() })) }
-    },
-    async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/context/topics`);
-        const output = { topics: response.data }; //  Data is now [{ broker_id, topic }, ...]
-         return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
-      }
-    }
-  );
+      );
+      
+      server.registerTool(
+        "get_topics_list",
+        {
+          title: "Get All Topics (Flat List)",
+          description: "Returns a flat list of all unique MQTT topics currently known, including their broker ID.",
+          inputSchema: {}, // No input
+          outputSchema: { topics: z.array(z.object({ broker_id: z.string(), topic: z.string() })) }
+        },
+        async () => {
+          try {
+            const response = await axios.get(`${API_BASE_URL}/context/topics`);
+            const output = { topics: response.data }; //  Data is now [{ broker_id, topic }, ...]
+             return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+          }
+        }
+      );
 
-  // ---  Admin, Simulator & Publish Tools ---
+      server.registerTool(
+        "get_application_status",
+        {
+          title: "Get Application Status",
+          description: "Provides a high-level overview of the application's status (MQTT connection, DB stats).",
+          inputSchema: {}, // No input
+          outputSchema: { status: z.any() }
+        },
+        async () => {
+          try {
+            const response = await axios.get(`${API_BASE_URL}/context/status`);
+            const output = { status: response.data };
+             return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+          }
+        }
+      );
+  }
 
-  server.registerTool(
-    "get_application_status",
-    {
-      title: "Get Application Status",
-      description: "Provides a high-level overview of the application's status (MQTT connection, DB stats).",
-      inputSchema: {}, // No input
-      outputSchema: { status: z.any() }
-    },
-    async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/context/status`);
-        const output = { status: response.data };
-         return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
-      }
-    }
-  );
+  // ---  SIMULATOR Tools ---
+  if (TOOL_FLAGS.ENABLE_SIMULATOR) {
+      server.registerTool(
+        "get_simulator_status",
+        {
+          title: "Get Simulator Status",
+          description: "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
+          inputSchema: {}, // No input
+          outputSchema: { statuses: z.record(z.string()) }
+        },
+        async () => {
+          try {
+            const response = await axios.get(`${API_BASE_URL}/simulator/status`);
+            const output = response.data; 
+             return {
+              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+          }
+        }
+      );
 
-  server.registerTool(
-    "get_simulator_status",
-    {
-      title: "Get Simulator Status",
-      description: "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
-      inputSchema: {}, // No input
-      outputSchema: { statuses: z.record(z.string()) }
-    },
-    async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/simulator/status`);
-        const output = response.data; // { "statuses": { "stark_industries": "running", ... } }
-         return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
-      }
-    }
-  );
+      server.registerTool(
+        "start_simulator",
+        {
+          title: "Start Simulator",
+          description: "Starts a specific MQTT data simulator by name. Simulators publish to the *primary* broker.",
+          inputSchema: {
+            scenario_name: z.string().describe("The name of the scenario to start (e.g., 'stark_industries', 'death_star', 'paris_metro').")
+          },
+          outputSchema: { status: z.any() }
+        },
+        async ({ scenario_name }) => {
+          try {
+            const response = await axios.post(`${API_BASE_URL}/simulator/start/${scenario_name}`);
+            const output = { status: response.data };
+            return { 
+              content: [{ type: "text", text: `Simulator [${scenario_name}] started: ` + JSON.stringify(output) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+          }
+        }
+      );
 
-  server.registerTool(
-    "start_simulator",
-    {
-      title: "Start Simulator",
-      description: "Starts a specific MQTT data simulator by name. Simulators publish to the *primary* broker.",
-      inputSchema: {
-        scenario_name: z.string().describe("The name of the scenario to start (e.g., 'stark_industries', 'death_star', 'paris_metro').")
-      },
-      outputSchema: { status: z.any() }
-    },
-    async ({ scenario_name }) => {
-      try {
-        const response = await axios.post(`${API_BASE_URL}/simulator/start/${scenario_name}`);
-        const output = { status: response.data };
-        return { 
-          content: [{ type: "text", text: `Simulator [${scenario_name}] started: ` + JSON.stringify(output) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
-      }
-    }
-  );
+      server.registerTool(
+        "stop_simulator",
+         {
+          title: "Stop Simulator",
+          description: "Stops a specific MQTT data simulator by name.",
+          inputSchema: {
+            scenario_name: z.string().describe("The name of the scenario to stop (e.g., 'stark_industries', 'death_star', 'paris_metro').")
+          },
+          outputSchema: { status: z.any() }
+        },
+        async ({ scenario_name }) => {
+          try {
+            const response = await axios.post(`${API_BASE_URL}/simulator/stop/${scenario_name}`);
+            const output = { status: response.data };
+            return { 
+              content: [{ type: "text", text: `Simulator [${scenario_name}] stopped: ` + JSON.stringify(output) }],
+              structuredContent: output
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
+          }
+        }
+      );
+  }
 
-  server.registerTool(
-    "stop_simulator",
-     {
-      title: "Stop Simulator",
-      description: "Stops a specific MQTT data simulator by name.",
-      inputSchema: {
-        scenario_name: z.string().describe("The name of the scenario to stop (e.g., 'stark_industries', 'death_star', 'paris_metro').")
-      },
-      outputSchema: { status: z.any() }
-    },
-    async ({ scenario_name }) => {
-      try {
-        const response = await axios.post(`${API_BASE_URL}/simulator/stop/${scenario_name}`);
-        const output = { status: response.data };
-        return { 
-          content: [{ type: "text", text: `Simulator [${scenario_name}] stopped: ` + JSON.stringify(output) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
-      }
-    }
-  );
+  // ---  ADMIN Tools ---
+  if (TOOL_FLAGS.ENABLE_ADMIN) {
+      server.registerTool(
+        "update_uns_model",
+        {
+          title: "Update UNS Model Manifest",
+          description: "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
+          inputSchema: {
+            model_json: z.string().describe("The full JSON string representing the new model array. Must be a valid JSON array of definition objects.")
+          },
+          outputSchema: { success: z.boolean(), message: z.string() }
+        },
+        async ({ model_json }) => {
+          try {
+            let newModel;
+            try {
+                newModel = JSON.parse(model_json);
+            } catch (e) {
+                return { content: [{ type: "text", text: "Error: Invalid JSON format." }], isError: true };
+            }
 
-  //  Added from previous step
-  server.registerTool(
-    "restart_application_server",
-    {
-      title: "Restart Application Server",
-      description: "Triggers a graceful restart of the main MQTT UNS Viewer web server. This is necessary to load new `simulator-*.js` files or apply changes to `.env` configuration.",
-      inputSchema: {}, // No input
-      outputSchema: { message: z.string() }
-    },
-    async () => {
-      try {
-        // This endpoint is on the config API, which might be disabled
-        // We'll call it and handle the error if it's 403
-        const response = await axios.post(`${API_BASE_URL}/env/restart`);
-        const output = response.data;
-        return { 
-          content: [{ type: "text", text: `Server restart initiated: ${output.message}` }],
-          structuredContent: output
-        };
-      } catch (error) {
-         if (error.response && error.response.status === 403) {
-             return { content: [{ type: "text", text: "Error: Restart failed. The Configuration API (VIEW_CONFIG_ENABLED) must be enabled in the .env file to use this tool." }], isError: true };
-         }
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
+            if (!Array.isArray(newModel)) {
+                return { content: [{ type: "text", text: "Error: Model must be a JSON Array." }], isError: true };
+            }
 
-  //  Added optional broker_id
-  server.registerTool(
-    "publish_message",
-    {
-      title: "Publish MQTT Message",
-      description: "Publishes a message to an MQTT broker. If broker_id is not specified, publishes to the *primary* broker.",
-      inputSchema: { 
-        topic: z.string().describe("The full MQTT topic name to publish to."),
-        payload: z.string().describe("The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."),
-        format: z.enum(['string', 'json', 'sparkplugb']).describe("The format of the payload."),
-        broker_id: z.string().optional().describe("Optional. The ID of the broker to publish to (e.g., 'broker_1')."),
-        qos: z.number().min(0).max(2).optional().default(0).describe("The QoS level (0, 1, or 2)."),
-        retain: z.boolean().optional().default(false).describe("Whether to set the retain flag.")
-      },
-      outputSchema: { success: z.boolean(), message: z.string() }
-    },
-    async ({ topic, payload, format, broker_id, qos, retain }) => {
-      try {
-        //  Add broker_id to body
-        const body = { topic, payload, format, qos, retain, brokerId: broker_id }; 
-        const response = await axios.post(`${API_BASE_URL}/publish/message`, body);
-        const output = response.data;
-        return {
-          content: [{ type: "text", text: `Publish successful: ${output.message}` }],
-          structuredContent: output
-        };
-      } catch (error) {
-        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-        return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-      }
-    }
-  );
+            fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
+            loadUnsModel(); // Reload in memory
 
-  //  Tool to list available SVG files
-  server.registerTool(
-    "get_available_svg_views",
-    {
-      title: "Get Available SVG Views",
-      description: "Lists all .svg files available in the /data directory that can be displayed in the 'SVG View' tab.",
-      inputSchema: {},
-      outputSchema: { svg_files: z.array(z.string()) }
-    },
-    async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/svg/list`);
-        const output = { svg_files: response.data };
-         return {
-          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-          structuredContent: output
-        };
-      } catch (error) {
-        return { content: [{ type: "text", text: "Error: " + error.message }], isError: true };
-      }
-    }
-  );
+            return { 
+              content: [{ type: "text", text: "UNS Model Manifest updated successfully." }],
+              structuredContent: { success: true, message: "Model updated." } 
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: `Error updating model: ${error.message}` }], isError: true };
+          }
+        }
+      );
 
-  //  Added optional broker_id
-  server.registerTool(
-    "prune_topic_history",
-    {
-      title: "Prune Topic History",
-      description: "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
-      inputSchema: {
-        topic_pattern: z.string().describe("The topic pattern to prune, using MQTT wildcards (+, #)."),
-        broker_id: z.string().optional().describe("Optional. The ID of the broker to prune from (e.g., 'broker_1').")
-      },
-      outputSchema: { success: z.boolean(), count: z.number() }
-    },
-    async ({ topic_pattern, broker_id }) => {
-        try {
+      server.registerTool(
+        "restart_application_server",
+        {
+          title: "Restart Application Server",
+          description: "Triggers a graceful restart of the main MQTT UNS Viewer web server. This is necessary to load new `simulator-*.js` files or apply changes to `.env` configuration.",
+          inputSchema: {}, // No input
+          outputSchema: { message: z.string() }
+        },
+        async () => {
+          try {
+            // This endpoint is on the config API, which might be disabled
+            // We'll call it and handle the error if it's 403
+            const response = await axios.post(`${API_BASE_URL}/env/restart`);
+            const output = response.data;
+            return { 
+              content: [{ type: "text", text: `Server restart initiated: ${output.message}` }],
+              structuredContent: output
+            };
+          } catch (error) {
+             if (error.response && error.response.status === 403) {
+                 return { content: [{ type: "text", text: "Error: Restart failed. The Configuration API (VIEW_CONFIG_ENABLED) must be enabled in the .env file to use this tool." }], isError: true };
+             }
+            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+            return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+          }
+        }
+      );
+
+      server.registerTool(
+        "prune_topic_history",
+        {
+          title: "Prune Topic History",
+          description: "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
+          inputSchema: {
+            topic_pattern: z.string().describe("The topic pattern to prune, using MQTT wildcards (+, #)."),
+            broker_id: z.string().optional().describe("Optional. The ID of the broker to prune from (e.g., 'broker_1').")
+          },
+          outputSchema: { success: z.boolean(), count: z.number() }
+        },
+        async ({ topic_pattern, broker_id }) => {
+            try {
+                //  Add broker_id to body
+                const body = { topicPattern: topic_pattern, broker_id: broker_id };
+                const response = await axios.post(`${API_BASE_URL}/context/prune-topic`, body);
+                const output = response.data;
+                return {
+                  content: [{ type: "text", text: `Prune successful. Deleted ${output.count} entries.` }],
+                  structuredContent: output
+                };
+            } catch (error) {
+                const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+                return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+            }
+        }
+      );
+  }
+
+  // ---  PUBLISH Tools ---
+  if (TOOL_FLAGS.ENABLE_PUBLISH) {
+      server.registerTool(
+        "publish_message",
+        {
+          title: "Publish MQTT Message",
+          description: "Publishes a message to an MQTT broker. If broker_id is not specified, publishes to the *primary* broker.",
+          inputSchema: { 
+            topic: z.string().describe("The full MQTT topic name to publish to."),
+            payload: z.string().describe("The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."),
+            format: z.enum(['string', 'json', 'sparkplugb']).describe("The format of the payload."),
+            broker_id: z.string().optional().describe("Optional. The ID of the broker to publish to (e.g., 'broker_1')."),
+            qos: z.number().min(0).max(2).optional().default(0).describe("The QoS level (0, 1, or 2)."),
+            retain: z.boolean().optional().default(false).describe("Whether to set the retain flag.")
+          },
+          outputSchema: { success: z.boolean(), message: z.string() }
+        },
+        async ({ topic, payload, format, broker_id, qos, retain }) => {
+          try {
             //  Add broker_id to body
-            const body = { topicPattern: topic_pattern, broker_id: broker_id };
-            const response = await axios.post(`${API_BASE_URL}/context/prune-topic`, body);
+            const body = { topic, payload, format, qos, retain, brokerId: broker_id }; 
+            const response = await axios.post(`${API_BASE_URL}/publish/message`, body);
             const output = response.data;
             return {
-              content: [{ type: "text", text: `Prune successful. Deleted ${output.count} entries.` }],
+              content: [{ type: "text", text: `Publish successful: ${output.message}` }],
               structuredContent: output
             };
-        } catch (error) {
+          } catch (error) {
             const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
             return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+          }
         }
-    }
-  );
+      );
+  }
 
-  server.registerTool(
-    "get_mapper_config",
-    {
-      title: "Get Mapper Configuration",
-      description: "Retrieves the entire (JSON) configuration for the Topic Mapper engine, including all versions and rules.",
-      inputSchema: {},
-      outputSchema: { config: z.any() }
-    },
-    async () => {
-        try {
-            // Use internal helper
-            const output = await getMapperConfigInternal();
-            return {
-              content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-              structuredContent: output
-            };
-        } catch (error) {
-            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-            return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
-        }
-    }
-  );
-  
-  //  Updated description to include brokerId
-  server.registerTool(
-    "update_mapper_rule",
-    {
-      title: "Update Mapper Rule",
-      description: "Adds or updates a mapping rule. Rules are topic-based and apply to messages from *all* brokers. Inside the code, `msg.brokerId` can be used to handle logic differently for each broker.",
-      inputSchema: { 
-        sourceTopic: z.string().describe("The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."),
-        targetTopic: z.string().describe("The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."),
-        targetCode: z.string().describe(
-          "The ASYNC JavaScript code for the transformation. " +
-          "You have access to 'msg' (msg.topic, msg.payload, msg.brokerId) and 'db' (await db.all(sql), await db.get(sql)). " +
-          "SQL must be read-only (SELECT). " +
-          "Example: 'const row = await db.get(`SELECT * FROM mqtt_events WHERE broker_id = \\\'${msg.brokerId}\\\' LIMIT 1`); msg.payload.latest_val = row.payload; return msg;'"
-        )
-      },
-      outputSchema: { status: z.string(), message: z.string() }
-    },
-    async ({ sourceTopic, targetTopic, targetCode }) => {
-        try {
-            // 1. Get the current config
-            const config = await getMapperConfigInternal();
-            
-            // 2. Find the active version
-            const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
-            if (!activeVersion) {
-                return { content: [{ type: "text", text: "Error: Could not find active mapper version." }], isError: true };
-            }
-
-            // 3. Find the rule for the source topic, or create it
-            let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
-            if (!rule) {
-                rule = {
-                    sourceTopic: sourceTopic.trim(),
-                    targets: []
+  // ---  MAPPER Tools ---
+  if (TOOL_FLAGS.ENABLE_MAPPER) {
+      server.registerTool(
+        "get_mapper_config",
+        {
+          title: "Get Mapper Configuration",
+          description: "Retrieves the entire (JSON) configuration for the Topic Mapper engine, including all versions and rules.",
+          inputSchema: {},
+          outputSchema: { config: z.any() }
+        },
+        async () => {
+            try {
+                // Use internal helper
+                const output = await getMapperConfigInternal();
+                return {
+                  content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+                  structuredContent: output
                 };
-                activeVersion.rules.push(rule);
+            } catch (error) {
+                const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+                return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
             }
-
-            // 4. [FIX] Sanitize code from LLM to prevent syntax errors
-            // This replaces the invisible non-breaking space (U+000A) with a regular space
-            const sanitizedCode = targetCode
-                .replace(/\u00A0/g, " ") 
-                .trim();
-            
-            // 5. Create the new target
-            const newTarget = {
-                id: `tgt_${Date.now()}`,
-                enabled: true,
-                outputTopic: targetTopic.trim(),
-                mode: "js",
-                code: sanitizedCode // Use sanitized code
-            };
-            
-            // 6. Add the new target to the rule
-            rule.targets.push(newTarget);
-
-            // 7. Save the *entire* modified config object
-            const saveResult = await saveMapperConfigInternal(config);
-            
-            return {
-              content: [{ type: "text", text: `Mapper rule updated successfully for source ${sourceTopic}.` }],
-              structuredContent: saveResult
-            };
-        } catch (error) {
-            const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-            return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
         }
-    }
-  );
+      );
+      
+      server.registerTool(
+        "update_mapper_rule",
+        {
+          title: "Update Mapper Rule",
+          description: "Adds or updates a mapping rule. Rules are topic-based and apply to messages from *all* brokers. Inside the code, `msg.brokerId` can be used to handle logic differently for each broker.",
+          inputSchema: { 
+            sourceTopic: z.string().describe("The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."),
+            targetTopic: z.string().describe("The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."),
+            targetCode: z.string().describe(
+              "The ASYNC JavaScript code for the transformation. " +
+              "You have access to 'msg' (msg.topic, msg.payload, msg.brokerId) and 'db' (await db.all(sql), await db.get(sql)). " +
+              "SQL must be read-only (SELECT). " +
+              "Example: 'const row = await db.get(`SELECT * FROM mqtt_events WHERE broker_id = \\'${msg.brokerId}\\' LIMIT 1`); msg.payload.latest_val = row.payload; return msg;'"
+            )
+          },
+          outputSchema: { status: z.string(), message: z.string() }
+        },
+        async ({ sourceTopic, targetTopic, targetCode }) => {
+            try {
+                // 1. Get the current config
+                const config = await getMapperConfigInternal();
+                
+                // 2. Find the active version
+                const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
+                if (!activeVersion) {
+                    return { content: [{ type: "text", text: "Error: Could not find active mapper version." }], isError: true };
+                }
+
+                // 3. Find the rule for the source topic, or create it
+                let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
+                if (!rule) {
+                    rule = {
+                        sourceTopic: sourceTopic.trim(),
+                        targets: []
+                    };
+                    activeVersion.rules.push(rule);
+                }
+
+                // 4. [FIX] Sanitize code from LLM to prevent syntax errors
+                // This replaces the invisible non-breaking space (U+000A) with a regular space
+                const sanitizedCode = targetCode
+                    .replace(/\u00A0/g, " ") 
+                    .trim();
+                
+                // 5. Create the new target
+                const newTarget = {
+                    id: `tgt_${Date.now()}`,
+                    enabled: true,
+                    outputTopic: targetTopic.trim(),
+                    mode: "js",
+                    code: sanitizedCode // Use sanitized code
+                };
+                
+                // 6. Add the new target to the rule
+                rule.targets.push(newTarget);
+
+                // 7. Save the *entire* modified config object
+                const saveResult = await saveMapperConfigInternal(config);
+                
+                return {
+                  content: [{ type: "text", text: `Mapper rule updated successfully for source ${sourceTopic}.` }],
+                  structuredContent: saveResult
+                };
+            } catch (error) {
+                const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+                return { content: [{ type: "text", text: `Error: ${errorMessage}` }], isError: true };
+            }
+        }
+      );
+  }
 
 
   return server;

@@ -128,7 +128,18 @@ const config = {
     API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null,
     EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED === 'true',
     EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json',
-    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true' // [NEW] Feature flag for analytics
+    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true', // [NEW] Feature flag for analytics
+    
+    // [NEW] Granular AI Tool Permissions (Default to TRUE)
+    AI_TOOLS: {
+        ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',         // Read DB, topics, history
+        ENABLE_SEMANTIC: process.env.LLM_TOOL_ENABLE_SEMANTIC !== 'false', // Model search, schema inference
+        ENABLE_PUBLISH: process.env.LLM_TOOL_ENABLE_PUBLISH !== 'false',   // Publish MQTT messages
+        ENABLE_FILES: process.env.LLM_TOOL_ENABLE_FILES !== 'false',       // Read/Write files
+        ENABLE_SIMULATOR: process.env.LLM_TOOL_ENABLE_SIMULATOR !== 'false', // Start/Stop simulators
+        ENABLE_MAPPER: process.env.LLM_TOOL_ENABLE_MAPPER !== 'false',     // Config mapper
+        ENABLE_ADMIN: process.env.LLM_TOOL_ENABLE_ADMIN !== 'false'        // Update model, prune history
+    }
 };
 // ---  Broker Configuration Parsing ---
 try {
@@ -214,7 +225,6 @@ const app = express();
 const server = http.createServer(app);
 // Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
-
 // --- CORS Middleware ---
 // Allows external tools like Microsoft Clarity to load fonts and assets
 app.use((req, res, next) => {
@@ -223,7 +233,6 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
     next();
 });
-
 // ---  Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
@@ -329,14 +338,12 @@ db = new duckdb.Database(dbFile, (err) => {
 const authMiddleware = (req, res, next) => {
     // If no auth configured, skip
     if (!config.HTTP_USER || !config.HTTP_PASSWORD) return next();
-    
     // [OPTIONAL] You could still whitelist assets here if you ever re-enable Auth
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf'];
     if (allowedExts.includes(ext)) {
         return next();
     }
-
     const credentials = basicAuth(req);
     if (!credentials || credentials.name !== config.HTTP_USER || credentials.pass !== config.HTTP_PASSWORD) {
         res.setHeader('WWW-Authenticate', 'Basic realm="MQTT UNS Viewer"');
@@ -414,7 +421,8 @@ mainRouter.use('/api/context', (req, res, next) => {
 });
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
 if (config.VIEW_CHAT_ENABLED) {
-    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager));
+    // [MODIFIED] Added mapperEngine to arguments
+    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
 if (config.VIEW_CONFIG_ENABLED) {
     // [MODIFIED] Added 'dataManager' parameter to configApi require
@@ -459,12 +467,9 @@ const serveSPA = (req, res) => {
         }
         // Ensure base path ends with a slash for the <base> tag logic to work correctly
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
-        
         let modifiedHtml = data;
-        
         // 1. Inject <base href="...">
         modifiedHtml = modifiedHtml.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
-        
         // 2. [NEW] Conditionally Inject Analytics Script
         const analyticsPlaceholder = '';
         if (config.ANALYTICS_ENABLED) {
@@ -472,7 +477,6 @@ const serveSPA = (req, res) => {
         } else {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); // Remove placeholder
         }
-
         res.send(modifiedHtml);
     });
 };
