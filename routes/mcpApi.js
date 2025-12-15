@@ -11,6 +11,7 @@
  * MCP API - Context & History Endpoints
  * [MODIFIED] Restored specific DEBUG logs and logic for 'search/model'.
  * [MODIFIED] Added db.serialize() to prevent DuckDB locking errors.
+ * [MODIFIED] Added 'startDate' and 'endDate' support for time filtering.
  */
 const express = require('express');
 
@@ -45,6 +46,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             const mainConnection = getMainConnection();
             const simulatorStatuses = getSimulatorInterval(); 
             const isSimRunning = Object.values(simulatorStatuses).some(s => s === 'running');
+            
             res.json({
                 mqtt_connected: mainConnection ? mainConnection.connected : false,
                 simulator_status: isSimRunning ? 'running' : 'stopped', 
@@ -95,12 +97,17 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     router.get('/search', (req, res) => {
         const query = req.query.q;
-        const brokerId = req.query.brokerId; 
+        const brokerId = req.query.brokerId;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
+
         if (!query || query.length < 3) {
             return res.status(400).json({ error: "Search query must be at least 3 characters long." });
         }
+
         const safeSearchTerm = `%${escapeSQL(query)}%`;
         const limit = 5000;
+
         let whereClauses = [
             `(
                 topic ILIKE '${safeSearchTerm}'
@@ -113,9 +120,17 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                    ))
             )`
         ];
+
         if (brokerId) {
             whereClauses.push(`broker_id = '${escapeSQL(brokerId)}'`);
         }
+        if (startDate) {
+            whereClauses.push(`timestamp >= '${escapeSQL(startDate)}'`);
+        }
+        if (endDate) {
+            whereClauses.push(`timestamp <= '${escapeSQL(endDate)}'`);
+        }
+
         const sqlQuery = `
             SELECT topic, payload, timestamp, broker_id
             FROM mqtt_events
@@ -123,7 +138,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             ORDER BY timestamp DESC
             LIMIT ${limit};
         `;
-        
+
         db.serialize(() => {
             db.all(sqlQuery, (err, rows) => {
                 if (err) {
@@ -145,24 +160,28 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     router.post('/search/model', (req, res) => {
         const { topic_template, filters, broker_id } = req.body; 
+        
         if (!topic_template) {
             return res.status(400).json({ error: "Missing 'topic_template'." });
         }
+
         const safe_topic = escapeSQL(topic_template);
         const limit = 5000;
         
         // [RESTORED LOGIC]
         const useOptimizedQuery = config.DB_BATCH_INSERT_ENABLED === true;
-        
+
         let whereClauses = [`topic LIKE '${safe_topic}'`];
         
         if (broker_id) {
             whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
         }
+
         if (filters && typeof filters === 'object') {
             for (const [key, value] of Object.entries(filters)) {
                 const safe_key = "'" + escapeSQL(key) + "'";
                 const safe_value = "'" + escapeSQL(value) + "'";
+                
                 if (useOptimizedQuery) {
                     whereClauses.push(`(payload->>${safe_key}) = ${safe_value}`);
                 } else {
@@ -170,6 +189,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                 }
             }
         }
+
         const sqlQuery = `
             SELECT topic, payload, timestamp, broker_id
             FROM mqtt_events
@@ -177,14 +197,14 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             ORDER BY timestamp DESC
             LIMIT ${limit};
         `;
-        
+
         // [RESTORED LOGGING]
         if(useOptimizedQuery) {
             console.log(`[DEBUG] Model Search Query (Optimized): ${sqlQuery.replace(/\s+/g, ' ')}`);
         } else {
             console.log(`[DEBUG] Model Search Query (Legacy): ${sqlQuery.replace(/\s+/g, ' ')}`);
         }
-        
+
         db.serialize(() => {
             db.all(sqlQuery, (err, rows) => {
                 if (err) {
@@ -205,13 +225,13 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     router.post('/prune-topic', (req, res) => {
         const { topicPattern, broker_id } = req.body;
         if (!topicPattern) return res.status(400).json({ error: "Missing 'topicPattern'." });
-        
+
         const sqlPattern = mqttToSqlLike(topicPattern);
         let whereClauses = [`topic LIKE '${sqlPattern}'`];
         if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-        
+
         const query = `DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')};`;
-        
+
         db.serialize(() => {
             db.run(query, function(err) { 
                 if (err) {
@@ -230,16 +250,19 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     router.get('/topic/:topic(*)', (req, res) => {
         const topic = req.params.topic;
         const brokerId = req.query.brokerId; 
-        if (!topic) return res.status(400).json({ error: "Topic not specified." });
         
+        if (!topic) return res.status(400).json({ error: "Topic not specified." });
+
         let query = `SELECT * FROM mqtt_events WHERE topic = ?`;
         let params = [topic];
+
         if (brokerId) {
             query += " AND broker_id = ?";
             params.push(brokerId);
         }
+
         query += " ORDER BY timestamp DESC LIMIT 1";
-        
+
         db.serialize(() => {
             // [FIX] Use spread operator ...params
             db.all(query, ...params, (err, rows) => {
@@ -263,18 +286,32 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         const topic = req.params.topic;
         const brokerId = req.query.brokerId; 
         const limit = parseInt(req.query.limit, 10) || 20;
-        
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
+
         if (!topic) return res.status(400).json({ error: "Topic not specified." });
-        
+
         let query = `SELECT * FROM mqtt_events WHERE topic = ?`;
         let params = [topic];
+
         if (brokerId) {
             query += " AND broker_id = ?";
             params.push(brokerId);
         }
+        
+        if (startDate) {
+            query += " AND timestamp >= ?";
+            params.push(startDate);
+        }
+        
+        if (endDate) {
+            query += " AND timestamp <= ?";
+            params.push(endDate);
+        }
+
         query += " ORDER BY timestamp DESC LIMIT ?";
         params.push(limit);
-        
+
         db.serialize(() => {
             // [FIX] Use spread operator ...params
             db.all(query, ...params, (err, rows) => {

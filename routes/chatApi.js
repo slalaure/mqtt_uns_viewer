@@ -12,17 +12,37 @@
  * [MODIFIED] Added robustness for empty tools and better error logging.
  * [MODIFIED] Implements Granular Tool Permissions via config.AI_TOOLS.
  * [MODIFIED] Implements db.serialize() to prevent deadlocks.
+ * [MODIFIED] Added 'chrono-node' for natural language time filtering.
  */
 const express = require('express');
 const axios = require('axios');
 const mqttMatch = require('mqtt-match'); 
 const fs = require('fs');
 const path = require('path');
+const chrono = require('chrono-node');
 
 // Helper to escape SQL string
 const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/'/g, "''");
+};
+
+// Helper to parse natural language time expression into SQL bounds
+const parseTimeWindow = (timeExpression) => {
+    if (!timeExpression || typeof timeExpression !== 'string') return null;
+    
+    const results = chrono.parse(timeExpression);
+    if (results.length === 0) return null;
+
+    const firstResult = results[0];
+    let start = firstResult.start.date();
+    let end = firstResult.end ? firstResult.end.date() : new Date(); // Default end to Now if not specified
+
+    // If only one date is found (e.g. "since yesterday"), chrono might treat it as an instant.
+    // Logic: If the expression implies a "since" or duration, start is the parsed date, end is Now.
+    // If exact date "on Dec 12", start is 00:00, end should be 23:59 (handled by range if chrono detects it, or we assume specific point)
+    
+    return { start, end };
 };
 
 // Helper to infer schema
@@ -113,11 +133,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             type: "function",
             function: {
                 name: "search_data",
-                description: "Search for messages containing specific keywords. IMPORTANT: Data is mostly in ENGLISH. If the user asks in French, translate keywords to English. Do not send full sentences, only 1-3 distinct keywords.",
+                description: "Search for messages containing specific keywords with optional time filtering. IMPORTANT: Data is mostly in ENGLISH. Translate keywords if needed.",
                 parameters: {
                     type: "object",
                     properties: {
                         query: { type: "string", description: "Space-separated English keywords (e.g., 'maintenance cmms')." },
+                        time_expression: { type: "string", description: "Natural language time range (e.g., 'last 24 hours', 'since yesterday', 'between 2023-10-01 and 2023-10-05')." },
                         limit: { type: "number" }
                     },
                     required: ["query"]
@@ -128,11 +149,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             type: "function",
             function: {
                 name: "get_topic_history",
-                description: "Get recent messages for a topic. Use this to inspect JSON structure.",
+                description: "Get historical messages for a topic, optionally filtered by a time range.",
                 parameters: {
                     type: "object",
                     properties: {
                         topic: { type: "string" },
+                        time_expression: { type: "string", description: "Natural language time range (e.g., 'last week', 'from 2pm to 4pm')." },
                         limit: { type: "number" }
                     },
                     required: ["topic"]
@@ -373,17 +395,30 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-        search_data: async ({ query, limit }) => {
+        search_data: async ({ query, time_expression, limit }) => {
              return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
-                const conditions = words.map(word => {
+                
+                let whereClauses = words.map(word => {
                     const safeWord = `%${word.replace(/'/g, "''")}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
-                const whereClause = conditions.join(' AND ');
+
+                // Handle Time Expression
+                const timeWindow = parseTimeWindow(time_expression);
+                if (timeWindow) {
+                    const startIso = timeWindow.start.toISOString();
+                    const endIso = timeWindow.end.toISOString();
+                    whereClauses.push(`timestamp >= '${startIso}'`);
+                    whereClauses.push(`timestamp <= '${endIso}'`);
+                    logger.info(`[ChatAPI:search_data] Time filter: ${startIso} to ${endIso}`);
+                }
+
+                const whereClause = whereClauses.join(' AND ');
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClause} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
+                
                 logger.info(`[ChatAPI:search_data] 1. Query: ${query}`);
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
@@ -395,14 +430,29 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-        get_topic_history: async ({ topic, limit }) => {
+        get_topic_history: async ({ topic, time_expression, limit }) => {
             return new Promise((resolve, reject) => {
                 logger.info(`[ChatAPI:get_topic_history] 1. Topic: ${topic}`);
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
-                const sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ? ORDER BY timestamp DESC LIMIT ${safeLimit}`;
+                let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
+                let params = [topic];
+
+                // Handle Time Expression
+                const timeWindow = parseTimeWindow(time_expression);
+                if (timeWindow) {
+                    const startIso = timeWindow.start.toISOString();
+                    const endIso = timeWindow.end.toISOString();
+                    sql += ` AND timestamp >= ? AND timestamp <= ?`;
+                    params.push(startIso, endIso);
+                    logger.info(`[ChatAPI:get_topic_history] Time filter: ${startIso} to ${endIso}`);
+                }
+
+                sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
+
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_topic_history] 2. Inside Serialize");
-                    db.all(sql, [topic], (err, rows) => {
+                    // Using spread operator for dynamic params
+                    db.all(sql, ...params, (err, rows) => {
                         logger.info("[ChatAPI:get_topic_history] 3. Query Finished");
                         if (err) return reject(err);
                         resolve(rows);
@@ -419,7 +469,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 logger.info(`[ChatAPI:get_latest_message] 1. Topic: ${topic}`);
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_latest_message] 2. Inside Serialize");
-                    db.all(sql, params, (err, rows) => {
+                    db.all(sql, ...params, (err, rows) => {
                         logger.info("[ChatAPI:get_latest_message] 3. Query Finished");
                         if (err) return reject(err);
                         resolve(rows[0] || null);
@@ -456,14 +506,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
             if (!model) return { error: `Concept '${concept}' not found in model.` };
+            
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
+            
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+            
             if (filters) {
                 for (const [key, value] of Object.entries(filters)) {
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
+            
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -503,13 +557,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
+                
                 const usedBrokerId = targetBrokerConfig.id;
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
+                
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
+                
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
+                
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
+                
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) resolve({ error: err.message });
                     else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
@@ -550,11 +609,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
+            
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
             }
+            
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
             const newTarget = {
                 id: `tgt_${Date.now()}`,
@@ -564,6 +625,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
+            
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -573,6 +635,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+                
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -605,7 +668,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
-        
+
         logger.info(`[ChatAPI] 📡 Calling LLM Endpoint: ${apiUrl}`);
         logger.info(`[ChatAPI] 🧠 Model: ${config.LLM_MODEL}`);
 
@@ -632,7 +695,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         };
 
         const conversation = [systemMessage, ...messages];
-        
+
         // [FIX] Robust Payload Construction
         // Only include tools if they exist to prevent 400 Bad Request on some providers
         const requestPayload = {
@@ -676,8 +739,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                     let fnArgs = {};
                     try { fnArgs = JSON.parse(toolCall.function.arguments); } catch (e) {}
+                    
                     let toolResult = "";
-
                     try {
                         if (toolImplementations[fnName]) {
                             const result = await toolImplementations[fnName](fnArgs);
@@ -720,7 +783,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (error.response && error.response.data) {
                 // Log full body for debugging
                 console.error("[ChatAPI] ❌ Upstream Error Body:", JSON.stringify(error.response.data, null, 2));
-                
                 // Try to extract useful user-facing message
                 if (error.response.data.error && error.response.data.error.message) {
                     msg = error.response.data.error.message;

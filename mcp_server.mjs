@@ -8,7 +8,9 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
-  
+ * MCP Server
+ * A Model Context Protocol server exposing UNS Viewer capabilities to AI agents.
+ * [MODIFIED] Added 'chrono-node' support for natural language time filtering.
  */
 // --- Imports (ESM) ---
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,6 +23,7 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import * as chrono from "chrono-node";
 
 // ---  Configuration ---
 //  Read the main app host from environment (for Docker networking)
@@ -110,6 +113,20 @@ function _inferSchema(messages) {
     }
     return schema;
 }
+
+// Helper to parse natural language time expression into ISO bounds
+const parseTimeWindow = (timeExpression) => {
+    if (!timeExpression || typeof timeExpression !== 'string') return null;
+    
+    const results = chrono.parse(timeExpression);
+    if (results.length === 0) return null;
+
+    const firstResult = results[0];
+    let start = firstResult.start.date();
+    let end = firstResult.end ? firstResult.end.date() : new Date(); // Default end to Now if not specified
+
+    return { start: start.toISOString(), end: end.toISOString() };
+};
 
 // ---  Internal helper to get config for other tools ---
 const getMapperConfigInternal = async () => {
@@ -372,19 +389,28 @@ async function createMcpServer() {
         "search_data_fulltext",
         {
           title: "Search (Full-Text)",
-          description: "Performs a simple full-text search for a keyword across all topic names and payload contents.",
+          description: "Performs a full-text search for keywords across all topic names and payload contents, optionally filtered by a natural language time range.",
           inputSchema: { 
             keyword: z.string().describe("The keyword to search for (e.g., 'maintenance', 'error')."),
+            time_expression: z.string().optional().describe("Natural language time range (e.g., 'last 24 hours', 'since yesterday', 'between 2023-10-01 and 2023-10-05')."),
             broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
           },
           outputSchema: { results: z.array(z.any()) }
         },
-        async ({ keyword, broker_id }) => {
+        async ({ keyword, time_expression, broker_id }) => {
           try {
             const encodedKeyword = encodeURIComponent(keyword);
             let url = `${API_BASE_URL}/context/search?q=${encodedKeyword}`;
             if (broker_id) {
                 url += `&brokerId=${encodeURIComponent(broker_id)}`; //  Add brokerId to query
+            }
+            
+            // Handle Time Expression
+            const timeWindow = parseTimeWindow(time_expression);
+            if (timeWindow) {
+                url += `&startDate=${encodeURIComponent(timeWindow.start)}`;
+                url += `&endDate=${encodeURIComponent(timeWindow.end)}`;
+                console.error(`[MCP] Filtered Search: ${timeWindow.start} -> ${timeWindow.end}`);
             }
             
             const response = await axios.get(url);
@@ -436,15 +462,16 @@ async function createMcpServer() {
         "get_topic_history",
         {
           title: "Get Topic History",
-          description: "Retrieves recent historical messages for a specified *exact* MQTT topic.",
+          description: "Retrieves historical messages for a specified *exact* MQTT topic, optionally filtered by a natural language time range.",
           inputSchema: { 
             topic: z.string().describe("The full MQTT topic name to get history for."),
+            time_expression: z.string().optional().describe("Natural language time range (e.g., 'last week', 'from 2pm to 4pm')."),
             broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1')."),
             limit: z.number().optional().describe("The maximum number of messages to return. Defaults to 20.")
           },
           outputSchema: { history: z.array(z.any()) }
         },
-        async ({ topic, broker_id, limit }) => {
+        async ({ topic, time_expression, broker_id, limit }) => {
           try {
             const encodedTopic = encodeURIComponent(topic);
             const params = new URLSearchParams();
@@ -453,6 +480,14 @@ async function createMcpServer() {
             }
             if (limit) {
                 params.append('limit', limit);
+            }
+            
+            // Handle Time Expression
+            const timeWindow = parseTimeWindow(time_expression);
+            if (timeWindow) {
+                params.append('startDate', timeWindow.start);
+                params.append('endDate', timeWindow.end);
+                console.error(`[MCP] Filtered History: ${timeWindow.start} -> ${timeWindow.end}`);
             }
             
             const queryString = params.toString() ? `?${params.toString()}` : '';
@@ -522,7 +557,7 @@ async function createMcpServer() {
         "get_simulator_status",
         {
           title: "Get Simulator Status",
-          description: "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
+          description: "Get status of simulators.",
           inputSchema: {}, // No input
           outputSchema: { statuses: z.record(z.string()) }
         },
