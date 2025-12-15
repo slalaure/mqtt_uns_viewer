@@ -9,10 +9,8 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint) - Full Parity with MCP Server
- * [MODIFIED] Added robustness for empty tools and better error logging.
- * [MODIFIED] Implements Granular Tool Permissions via config.AI_TOOLS.
- * [MODIFIED] Implements db.serialize() to prevent deadlocks.
- * [MODIFIED] Added 'chrono-node' for natural language time filtering.
+ * [MODIFIED] Added 'create_dynamic_view' tool to generate SVG+JS dashboards.
+ * [MODIFIED] Updated System Prompt with Developer Documentation for SVGs.
  */
 const express = require('express');
 const axios = require('axios');
@@ -36,12 +34,8 @@ const parseTimeWindow = (timeExpression) => {
 
     const firstResult = results[0];
     let start = firstResult.start.date();
-    let end = firstResult.end ? firstResult.end.date() : new Date(); // Default end to Now if not specified
+    let end = firstResult.end ? firstResult.end.date() : new Date(); 
 
-    // If only one date is found (e.g. "since yesterday"), chrono might treat it as an instant.
-    // Logic: If the expression implies a "since" or duration, start is the parsed date, end is Now.
-    // If exact date "on Dec 12", start is 00:00, end should be 23:59 (handled by range if chrono detects it, or we assume specific point)
-    
     return { start, end };
 };
 
@@ -77,6 +71,7 @@ const TOOL_PERMISSIONS = {
     'list_project_files': 'ENABLE_FILES',
     'get_file_content': 'ENABLE_FILES',
     'save_file_to_data_directory': 'ENABLE_FILES',
+    'create_dynamic_view': 'ENABLE_FILES', // [NEW] Permission category
     'get_available_svg_views': 'ENABLE_FILES',
     'get_simulator_status': 'ENABLE_SIMULATOR',
     'start_simulator': 'ENABLE_SIMULATOR',
@@ -111,7 +106,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- 1. Tool Definitions ---
     const allTools = [
-        // --- System & Status ---
+        // ... (Existing tools kept as is: get_application_status, list_topics, search_data, etc.) ...
         {
             type: "function",
             function: {
@@ -291,6 +286,23 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
             }
         },
+        // --- [NEW] Advanced View Creation Tool ---
+        {
+            type: "function",
+            function: {
+                name: "create_dynamic_view",
+                description: "Creates a new interactive SVG dashboard by saving TWO files: the SVG graphic (.svg) and its logic script (.svg.js). Use this when the user asks for a 'diagram', 'synoptic', or 'view' of data. Ensure you have identified the relevant MQTT topics first.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        view_name: { type: "string", description: "Filename without extension (e.g., 'pump_station')." },
+                        svg_content: { type: "string", description: "The complete XML SVG code. Must include unique IDs for dynamic elements." },
+                        js_content: { type: "string", description: "The JavaScript code using 'window.registerSvgBindings({...})' to animate the SVG based on MQTT data." }
+                    },
+                    required: ["view_name", "svg_content", "js_content"]
+                }
+            }
+        },
         {
             type: "function",
             function: {
@@ -368,6 +380,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- 2. Tool Implementations ---
     const toolImplementations = {
+        // ... (Existing implementations: get_application_status, list_topics, search_data, get_topic_history, get_latest_message, get_model_definition, update_uns_model, search_uns_concept, infer_schema, publish_message, list_project_files, get_file_content) ...
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
                 logger.info("[ChatAPI:get_application_status] 1. Starting request");
@@ -402,24 +415,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 if (words.length === 0) return resolve([]);
                 
                 let whereClauses = words.map(word => {
-                    const safeWord = `%${word.replace(/'/g, "''")}%`;
+                    const safeWord = `%${escapeSQL(word)}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
 
-                // Handle Time Expression
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
-                    const startIso = timeWindow.start.toISOString();
-                    const endIso = timeWindow.end.toISOString();
-                    whereClauses.push(`timestamp >= '${startIso}'`);
-                    whereClauses.push(`timestamp <= '${endIso}'`);
-                    logger.info(`[ChatAPI:search_data] Time filter: ${startIso} to ${endIso}`);
+                    whereClauses.push(`timestamp >= '${timeWindow.start.toISOString()}'`);
+                    whereClauses.push(`timestamp <= '${timeWindow.end.toISOString()}'`);
                 }
 
-                const whereClause = whereClauses.join(' AND ');
-                const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClause} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
-                logger.info(`[ChatAPI:search_data] 1. Query: ${query}`);
+                const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
                     db.all(sql, (err, rows) => {
@@ -432,23 +438,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         },
         get_topic_history: async ({ topic, time_expression, limit }) => {
             return new Promise((resolve, reject) => {
-                logger.info(`[ChatAPI:get_topic_history] 1. Topic: ${topic}`);
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
 
-                // Handle Time Expression
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
-                    const startIso = timeWindow.start.toISOString();
-                    const endIso = timeWindow.end.toISOString();
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
-                    params.push(startIso, endIso);
-                    logger.info(`[ChatAPI:get_topic_history] Time filter: ${startIso} to ${endIso}`);
+                    params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
 
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_topic_history] 2. Inside Serialize");
                     // Using spread operator for dynamic params
@@ -477,6 +477,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
+        // ... (Semantic tools kept as is) ...
         get_model_definition: async ({ concept }) => {
             logger.info(`[ChatAPI:get_model_definition] Concept: ${concept}`);
             loadUnsModel();
@@ -506,18 +507,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
             if (!model) return { error: `Concept '${concept}' not found in model.` };
-            
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
-            
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-            
             if (filters) {
                 for (const [key, value] of Object.entries(filters)) {
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
-            
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -546,6 +543,19 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
+        update_uns_model: async ({ model_json }) => {
+            return new Promise((resolve) => {
+                try {
+                    const newModel = JSON.parse(model_json);
+                    if (!Array.isArray(newModel)) return resolve({ error: "Model must be a JSON Array." });
+                    fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
+                    resolve({ success: true, message: "UNS Model Manifest updated successfully." });
+                } catch (error) {
+                    resolve({ error: `Error updating model: ${error.message}` });
+                }
+            });
+        },
+        // ... (Publish & File tools) ...
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
@@ -557,18 +567,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
-                
                 const usedBrokerId = targetBrokerConfig.id;
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
-                
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
-                
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
-                
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
-                
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) resolve({ error: err.message });
                     else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
@@ -595,10 +600,37 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             fs.writeFileSync(resolvedPath, content, 'utf8');
             return { success: true, path: `data/${filename}` };
         },
+        // [NEW] Implementation for create_dynamic_view
+        create_dynamic_view: async ({ view_name, svg_content, js_content }) => {
+            try {
+                // Ensure nice filenames
+                const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
+                const svgFilename = `${baseName}.svg`;
+                const jsFilename = `${baseName}.svg.js`;
+                
+                const svgPath = path.join(DATA_PATH, svgFilename);
+                const jsPath = path.join(DATA_PATH, jsFilename);
+
+                // Write SVG
+                fs.writeFileSync(svgPath, svg_content, 'utf8');
+                // Write JS
+                fs.writeFileSync(jsPath, js_content, 'utf8');
+
+                logger.info(`[ChatAPI] Created dynamic view '${baseName}' in /data.`);
+                return { 
+                    success: true, 
+                    message: `View '${baseName}' created successfully. Two files saved: data/${svgFilename} and data/${jsFilename}. Go to the SVG View tab to select it.` 
+                };
+            } catch (err) {
+                logger.error({ err }, "[ChatAPI] create_dynamic_view error");
+                return { error: err.message };
+            }
+        },
         get_available_svg_views: async () => {
             const files = fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg'));
             return { svg_files: files };
         },
+        // ... (Mapper & Simulator Tools kept as is) ...
         get_mapper_config: async () => {
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             return { config: mapperEngine.getMappings() };
@@ -609,13 +641,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
-            
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
             }
-            
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
             const newTarget = {
                 id: `tgt_${Date.now()}`,
@@ -625,17 +655,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
-            
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
         prune_topic_history: async ({ topic_pattern, broker_id }) => {
             return new Promise((resolve) => {
-                logger.info(`[ChatAPI:prune] Pattern: ${topic_pattern}`);
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-                
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -682,12 +709,41 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             content: `You are an expert UNS Architect and Operator.
             SYSTEM CONTEXT:
             ${brokerContext}
+            
+            DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
+            When the user asks for a diagram, use 'create_dynamic_view'.
+            1. You MUST generate valid SVG XML with unique 'id' attributes for dynamic elements.
+            2. You MUST generate a matching JavaScript file using this API signature:
+            
+            \`\`\`javascript
+            window.registerSvgBindings({
+              // Called once when SVG loads
+              initialize: (svgRoot) => {
+                 // Cache DOM elements here (e.g., using svgRoot.getElementById)
+                 console.log("SVG initialized");
+              },
+              // Called on EVERY MQTT message
+              update: (brokerId, topic, payload, svgRoot) => {
+                 // Check if topic matches your elements
+                 // Example: if (topic === 'my/sensor') { ... }
+                 // 'payload' is usually a JSON object (automatically parsed).
+                 // Manipulate SVG: element.setAttribute('fill', 'red') or element.textContent = ...
+              },
+              // Called when leaving the view or resetting history
+              reset: (svgRoot) => {
+                 // Reset visuals to default state
+              }
+            });
+            \`\`\`
+            
             CAPABILITIES:
             - READ: Inspect database, search data, infer schemas, view files.
-            - WRITE: Create simulators, SVG views, map topics, publish messages.
+            - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
             - MANAGE: Update UNS Model, Prune History.
             DATA LANGUAGE: English (translate user queries if needed).
             INSTRUCTIONS:
+            - Use 'search_data' to find relevant topics before creating a view.
+            - Use 'create_dynamic_view' to build dashboards.
             - Check broker permissions before publishing or starting sims.
             - When creating mapping rules, ensure target topic is valid.
             - Use 'infer_schema' before creating complex mappings if schema is unknown.
@@ -761,7 +817,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     });
                 }
 
-                // [FIX] Ensure follow-up request also handles tools correctly
                 const followUpPayload = { 
                     model: config.LLM_MODEL, 
                     messages: conversationWithTools 

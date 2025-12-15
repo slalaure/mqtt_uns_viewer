@@ -11,6 +11,7 @@
  * MCP Server
  * A Model Context Protocol server exposing UNS Viewer capabilities to AI agents.
  * [MODIFIED] Added 'chrono-node' support for natural language time filtering.
+ * [MODIFIED] Added 'create_dynamic_view' tool to create SVG+JS dashboards.
  */
 // --- Imports (ESM) ---
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -237,6 +238,41 @@ async function createMcpServer() {
             return { 
               content: [{ type: "text", text: `File saved successfully to ${savedPath}` }],
               structuredContent: { success: true, path: savedPath } 
+            };
+          } catch (error) {
+            return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+          }
+        }
+      );
+
+      // --- [NEW] create_dynamic_view Tool ---
+      server.registerTool(
+        "create_dynamic_view",
+        {
+          title: "Create Dynamic Dashboard (SVG + JS)",
+          description: "Creates a new interactive SVG dashboard by saving TWO files: the SVG graphic (.svg) and its logic script (.svg.js). Use this when the user asks for a 'diagram', 'synoptic', or 'view' of data. Ensure you have identified the relevant MQTT topics first.",
+          inputSchema: {
+            view_name: z.string().describe("Filename without extension (e.g., 'pump_station')."),
+            svg_content: z.string().describe("The complete XML SVG code. Must include unique IDs for dynamic elements."),
+            js_content: z.string().describe("The JavaScript code using 'window.registerSvgBindings({...})' to animate the SVG based on MQTT data.")
+          },
+          outputSchema: { success: z.boolean(), message: z.string() }
+        },
+        async ({ view_name, svg_content, js_content }) => {
+          try {
+            const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
+            const svgFilename = `${baseName}.svg`;
+            const jsFilename = `${baseName}.svg.js`;
+            
+            const svgPath = path.join(DATA_DIR, svgFilename);
+            const jsPath = path.join(DATA_DIR, jsFilename);
+
+            fs.writeFileSync(svgPath, svg_content, 'utf8');
+            fs.writeFileSync(jsPath, js_content, 'utf8');
+
+            return { 
+              content: [{ type: "text", text: `Created dynamic view '${baseName}'. Saved data/${svgFilename} and data/${jsFilename}.` }],
+              structuredContent: { success: true, message: `View '${baseName}' created successfully.` } 
             };
           } catch (error) {
             return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
