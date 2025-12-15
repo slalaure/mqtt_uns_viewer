@@ -9,7 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint) - Full Parity with MCP Server
- * [MODIFIED] Restored original Prompt Engineering descriptions and Debug Logs.
+ * [MODIFIED] Added robustness for empty tools and better error logging.
  * [MODIFIED] Implements Granular Tool Permissions via config.AI_TOOLS.
  * [MODIFIED] Implements db.serialize() to prevent deadlocks.
  */
@@ -89,7 +89,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
     loadUnsModel();
 
-    // --- 1. Tool Definitions (Restored Full Descriptions) ---
+    // --- 1. Tool Definitions ---
     const allTools = [
         // --- System & Status ---
         {
@@ -113,8 +113,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             type: "function",
             function: {
                 name: "search_data",
-                // [RESTORED] Original Prompt Engineering instruction
-                description: "Search for messages containing specific keywords. IMPORTANT: Data is mostly in ENGLISH. If the user asks in French, translate keywords to English (e.g., 'panne' -> 'error', 'maintenance' -> 'maintenance'). Do not send full sentences, only 1-3 distinct keywords.",
+                description: "Search for messages containing specific keywords. IMPORTANT: Data is mostly in ENGLISH. If the user asks in French, translate keywords to English. Do not send full sentences, only 1-3 distinct keywords.",
                 parameters: {
                     type: "object",
                     properties: {
@@ -219,7 +218,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             type: "function",
             function: {
                 name: "publish_message",
-                // [RESTORED] Broker Permissions hint
                 description: "Publish a NEW MQTT message. You MUST check 'Broker Permissions' in system prompt to choose the correct topic prefix and broker_id.",
                 parameters: {
                     type: "object",
@@ -378,7 +376,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         search_data: async ({ query, limit }) => {
              return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
-                // Improved Search: Split query into words
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
                 const conditions = words.map(word => {
@@ -387,7 +384,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
                 const whereClause = conditions.join(' AND ');
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClause} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
                 logger.info(`[ChatAPI:search_data] 1. Query: ${query}`);
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
@@ -460,11 +456,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
             if (!model) return { error: `Concept '${concept}' not found in model.` };
-            
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-            
             if (filters) {
                 for (const [key, value] of Object.entries(filters)) {
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
@@ -501,7 +495,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
-                // 1. Identify Broker
                 let targetBrokerConfig = config.BROKER_CONFIGS[0];
                 if (broker_id) {
                     targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
@@ -511,25 +504,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
                 const usedBrokerId = targetBrokerConfig.id;
-                
-                // 2. Permission Check
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
-
-                // 3. Connect & Publish
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
-
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
-                
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) resolve({ error: err.message });
                     else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
                 });
             });
         },
-        // ... (File & Simulator tools remain identical)
         list_project_files: async () => {
             logger.info("[ChatAPI] Listing files...");
             const rootFiles = fs.readdirSync(path.join(__dirname, '..')).filter(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.md'));
@@ -564,13 +550,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
-            
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
             }
-            
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
             const newTarget = {
                 id: `tgt_${Date.now()}`,
@@ -589,7 +573,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-                
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -615,7 +598,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
 
     router.post('/completion', async (req, res) => {
-        // ... (Completion logic identical to previous, ensuring all enabledTools are passed)
         const { messages } = req.body;
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
@@ -623,6 +605,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
+        
+        logger.info(`[ChatAPI] 📡 Calling LLM Endpoint: ${apiUrl}`);
+        logger.info(`[ChatAPI] 🧠 Model: ${config.LLM_MODEL}`);
 
         const brokerContext = config.BROKER_CONFIGS.map(b => {
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
@@ -647,14 +632,21 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         };
 
         const conversation = [systemMessage, ...messages];
+        
+        // [FIX] Robust Payload Construction
+        // Only include tools if they exist to prevent 400 Bad Request on some providers
         const requestPayload = {
             model: config.LLM_MODEL,
             messages: conversation,
-            tools: enabledTools,
-            tool_choice: "auto", 
             stream: false,
             temperature: 0.1 
         };
+
+        if (enabledTools.length > 0) {
+            requestPayload.tools = enabledTools;
+            requestPayload.tool_choice = "auto";
+        }
+
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -667,10 +659,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (message1.tool_calls && message1.tool_calls.length > 0) {
                 logger.info(`[ChatAPI] 🛠️ Executing tools: ${message1.tool_calls.map(t => t.function.name).join(', ')}`);
                 const conversationWithTools = [...conversation, message1];
-                
+
                 for (const toolCall of message1.tool_calls) {
                     const fnName = toolCall.function.name;
                     const permissionKey = TOOL_PERMISSIONS[fnName];
+
                     if (permissionKey && config.AI_TOOLS && config.AI_TOOLS[permissionKey] === false) {
                          conversationWithTools.push({
                             tool_call_id: toolCall.id,
@@ -683,8 +676,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                     let fnArgs = {};
                     try { fnArgs = JSON.parse(toolCall.function.arguments); } catch (e) {}
-                    
                     let toolResult = "";
+
                     try {
                         if (toolImplementations[fnName]) {
                             const result = await toolImplementations[fnName](fnArgs);
@@ -696,7 +689,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
                         toolResult = JSON.stringify({ error: err.message });
                     }
-                    
+
                     conversationWithTools.push({
                         tool_call_id: toolCall.id,
                         role: "tool",
@@ -704,20 +697,38 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         content: toolResult
                     });
                 }
-                
-                const response2 = await axios.post(apiUrl, { 
+
+                // [FIX] Ensure follow-up request also handles tools correctly
+                const followUpPayload = { 
                     model: config.LLM_MODEL, 
                     messages: conversationWithTools 
-                }, { headers });
-                
+                };
+                if (enabledTools.length > 0) {
+                    followUpPayload.tools = enabledTools;
+                    followUpPayload.tool_choice = "auto";
+                }
+
+                const response2 = await axios.post(apiUrl, followUpPayload, { headers });
                 return res.json(response2.data);
             } else {
                 return res.json(response1.data);
             }
         } catch (error) {
+            // [FIX] Enhanced Error Logging
             const status = error.response ? error.response.status : 500;
-            const msg = error.response?.data?.error?.message || error.message;
-            logger.error({ status, msg }, "[ChatAPI] HTTP Error");
+            let msg = error.message;
+            if (error.response && error.response.data) {
+                // Log full body for debugging
+                console.error("[ChatAPI] ❌ Upstream Error Body:", JSON.stringify(error.response.data, null, 2));
+                
+                // Try to extract useful user-facing message
+                if (error.response.data.error && error.response.data.error.message) {
+                    msg = error.response.data.error.message;
+                } else if (error.response.data.error) {
+                     msg = JSON.stringify(error.response.data.error);
+                }
+            }
+            logger.error({ status, msg, url: apiUrl }, "[ChatAPI] HTTP Error");
             return res.status(status).json({ error: msg });
         }
     });

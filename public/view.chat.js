@@ -34,8 +34,9 @@ let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
-// --- Storage Key State ---
+// --- Storage & Path State ---
 let storageKey = 'chat_history'; // Default key
+let appBasePath = ''; // [NEW] Store base path for API calls
 
 // --- Voice State ---
 let recognition = null;
@@ -50,10 +51,15 @@ let availableVoices = [];
 
 /**
  * Initializes the Chat View.
- * @param {string} basePath - The base path of the application to scope localStorage.
+ * @param {string} basePath - The base path of the application.
  */
 export function initChatView(basePath) {
-    // Generate scoped key based on path (e.g., /admin -> chat_history_admin)
+    // 1. Store and normalize base path for API calls
+    appBasePath = basePath || '';
+    if (appBasePath === '/') appBasePath = '';
+    if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
+
+    // 2. Generate scoped key based on path (e.g., /admin -> chat_history_admin)
     if (basePath && basePath !== '/' && basePath !== '') {
         const cleanPath = basePath.replace(/^\/|\/$/g, '').replace(/\//g, '_');
         if (cleanPath) {
@@ -394,7 +400,12 @@ async function sendMessage(fromVoice = false) {
     isProcessing = true;
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
     showTypingIndicator(true);
-    const messagesPayload = conversationHistory.map(m => {
+
+    // [FIX] Filter out messages with invalid roles (like 'error') before sending
+    // This prevents the "Invalid role: error" 400 Bad Request loop
+    const validHistory = conversationHistory.filter(m => m.role !== 'error');
+
+    const messagesPayload = validHistory.map(m => {
         const apiMsg = { role: m.role, content: m.content };
         if (m.tool_calls) apiMsg.tool_calls = m.tool_calls;
         if (m.tool_call_id) apiMsg.tool_call_id = m.tool_call_id;
@@ -402,7 +413,10 @@ async function sendMessage(fromVoice = false) {
         return apiMsg;
     });
     try {
-        const response = await fetch('api/chat/completion', {
+        // [FIX] Use absolute URL constructed from basePath to prevent relative path errors
+        const url = `${appBasePath}/api/chat/completion`;
+        
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
