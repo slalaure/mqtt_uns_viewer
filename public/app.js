@@ -506,7 +506,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         //  Initialize Floating Chat Widget Logic
         if (appConfig.viewChatEnabled) {
-            initChatView();
+            // [FIXED] Pass the appBasePath to ensure scoped chat history
+            initChatView(appConfig.basePath);
             // Only show the FAB if enabled
             const fab = document.getElementById('btn-chat-fab');
             if (fab) fab.style.display = 'flex';
