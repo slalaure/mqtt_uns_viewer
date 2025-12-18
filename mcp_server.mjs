@@ -241,7 +241,7 @@ async function createMcpServer() {
           }
         }
       );
-
+      
       // --- [NEW] create_dynamic_view Tool ---
       server.registerTool(
         "create_dynamic_view",
@@ -944,9 +944,11 @@ async function main() {
         res.status(401).json({ error: "Unauthorized" });
     };
 
-    // [FIX] Use BASE_PATH to construct the MCP route
-    // If BASE_PATH is '/buu', the route will be '/buu/mcp'
-    const MCP_ROUTE = path.posix.join(BASE_PATH, 'mcp');
+    // [FIX] Use BASE_PATH to construct the MCP route and ensure valid slash
+    let MCP_ROUTE = path.posix.join(BASE_PATH, 'mcp');
+    if (!MCP_ROUTE.startsWith('/')) {
+        MCP_ROUTE = '/' + MCP_ROUTE;
+    }
     console.error(`✅ Binding MCP endpoint to: ${MCP_ROUTE}`);
 
     app.post(MCP_ROUTE, mcpAuthMiddleware, async (req, res) => { 
