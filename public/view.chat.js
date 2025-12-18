@@ -37,7 +37,6 @@ let pendingAttachment = null;
 // --- Storage & Path State ---
 let storageKey = 'chat_history'; // Default key
 let appBasePath = ''; // [NEW] Store base path for API calls
-
 // --- Voice State ---
 let recognition = null;
 let isListening = false;
@@ -49,23 +48,31 @@ let currentUtterance = null;
 // Cache for voices
 let availableVoices = [];
 
+// [NEW] Callbacks
+let onFileCreatedCallback = null;
+
 /**
  * Initializes the Chat View.
  * @param {string} basePath - The base path of the application.
+ * @param {function} onFileCreated - Optional callback when AI creates a file.
  */
-export function initChatView(basePath) {
+export function initChatView(basePath, onFileCreated) {
     // 1. Store and normalize base path for API calls
     appBasePath = basePath || '';
     if (appBasePath === '/') appBasePath = '';
     if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
-
-    // 2. Generate scoped key based on path (e.g., /admin -> chat_history_admin)
+    
+    // 2. Generate scoped key based on path
     if (basePath && basePath !== '/' && basePath !== '') {
         const cleanPath = basePath.replace(/^\/|\/$/g, '').replace(/\//g, '_');
         if (cleanPath) {
             storageKey = `chat_history_${cleanPath}`;
             console.log(`[ChatView] Using scoped history key: ${storageKey}`);
         }
+    }
+
+    if (onFileCreated) {
+        onFileCreatedCallback = onFileCreated;
     }
 
     injectUploadUI();
@@ -342,7 +349,6 @@ function loadHistory() {
     catch { conversationHistory = []; }
     if(conversationHistory.length===0) addMessageToState('system', 'Hello! I am your UNS Assistant.');
 }
-
 function saveHistory() { localStorage.setItem(storageKey, JSON.stringify(conversationHistory)); }
 function addMessageToState(role, content, toolCalls=null) {
     const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
@@ -415,11 +421,9 @@ async function sendMessage(fromVoice = false) {
     isProcessing = true;
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
     showTypingIndicator(true);
-
     // [FIX] Filter out messages with invalid roles (like 'error') before sending
     // This prevents the "Invalid role: error" 400 Bad Request loop
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
-
     const messagesPayload = validHistory.map(m => {
         const apiMsg = { role: m.role, content: m.content };
         if (m.tool_calls) apiMsg.tool_calls = m.tool_calls;
@@ -430,7 +434,6 @@ async function sendMessage(fromVoice = false) {
     try {
         // [FIX] Use absolute URL constructed from basePath to prevent relative path errors
         const url = `${appBasePath}/api/chat/completion`;
-        
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -441,7 +444,26 @@ async function sendMessage(fromVoice = false) {
         });
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
         const data = await response.json();
+        
         const assistantMsg = data.choices[0].message;
+        
+        // [FIX] Detect if a tool was used to create a file
+        if (assistantMsg.tool_calls) {
+            const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'save_file_to_data_directory');
+            if (hasCreatedFile && onFileCreatedCallback) {
+                console.log("[ChatView] Detected file creation. Triggering refresh.");
+                // Delay slightly to ensure backend write is complete
+                setTimeout(() => onFileCreatedCallback(), 1000);
+            }
+        }
+
+        // If content is null but we have tool calls, we should display something
+        // The backend handles the tool execution loop, so 'content' typically contains the final answer
+        // IF 'content' is still null, it means the LLM didn't summarize the action.
+        if (assistantMsg.content === null && assistantMsg.tool_calls) {
+             assistantMsg.content = "✅ Operation completed.";
+        }
+
         addMessageToState('assistant', assistantMsg.content, assistantMsg.tool_calls);
         trackEvent('chat_message_sent');
         if (isVoice && assistantMsg.content) {

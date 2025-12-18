@@ -26,11 +26,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 // Import shared utilities
 import { formatTimestampForLabel, trackEvent } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
-
 // --- DOM Element Querying ---
 const svgContent = document.getElementById('svg-content');
 const svgHistoryToggle = document.getElementById('svg-history-toggle');
@@ -40,7 +38,6 @@ const svgLabel = document.getElementById('svg-label');
 const btnSvgFullscreen = document.getElementById('btn-svg-fullscreen');
 const mapView = document.getElementById('map-view');
 const svgSelectDropdown = document.getElementById('svg-select-dropdown');
-
 // --- Module-level State ---
 let svgInitialTextValues = new Map();
 let allHistoryEntries = [];
@@ -51,7 +48,6 @@ let svgSlider = null;
 let appBasePath = '/'; 
 let isMultiBroker = false; // Will be set on init
 const BINDINGS_SCRIPT_ID = 'custom-svg-bindings-script';
-
 // API for custom bindings  to accept brokerId
 let customSvgBindings = {
     isLoaded: false,
@@ -59,44 +55,38 @@ let customSvgBindings = {
     update: (brokerId, topic, payloadObject, svgRoot) => {},
     reset: (svgRoot) => {}
 };
-
 /**
  * Allows an external script (svg-bindings.js) to register its logic.
  */
 window.registerSvgBindings = function(bindings) {
     if (!bindings) return;
-    
     customSvgBindings.isLoaded = true;
     if (bindings.initialize) customSvgBindings.initialize = bindings.initialize;
     if (bindings.update) customSvgBindings.update = bindings.update;
     if (bindings.reset) customSvgBindings.reset = bindings.reset;
     console.log("Custom SVG bindings registered.");
 }
-
 /**
  * Initializes the SVG View functionality.
  */
 export function initSvgView(appConfig) {
     appBasePath = appConfig.basePath; 
     isMultiBroker = appConfig.isMultiBroker; // Store multi-broker state
-    
-    populateSvgListAndLoadDefault(appConfig.svgFilePath);
+    // Initial load
+    refreshSvgList(appConfig.svgFilePath);
     
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
+    svgSelectDropdown?.addEventListener('change', onSvgFileChange);
 
     svgHistoryToggle?.addEventListener('change', (e) => {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
-        
         trackEvent(isSvgHistoryMode ? 'svg_history_on' : 'svg_history_off');
-        
         replaySvgHistory(currentMaxTimestamp);
-
         if (svgSlider) {
             svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
         }
     });
-
     if (svgHandle) {
         svgSlider = createSingleTimeSlider({
             containerEl: svgTimelineSlider,
@@ -111,7 +101,6 @@ export function initSvgView(appConfig) {
         });
     }  
 }
-
 /**
  * Receives the full history log from the main app.
  */
@@ -120,50 +109,50 @@ export function setSvgHistoryData(entries) {
 }
 
 /**
- * Fetches the list of SVGs, populates the dropdown, and loads the default.
+ * [NEW] Publicly exported function to refresh the dropdown.
+ * Can be called by Chat View when a new file is created.
  */
-async function populateSvgListAndLoadDefault(defaultSvgFile) {
+export async function refreshSvgList(targetFilenameToSelect = null) {
     if (!svgSelectDropdown) return;
     
-    let defaultFileFound = false;
+    // Preserve current selection if no target specified
+    const currentSelection = targetFilenameToSelect || svgSelectDropdown.value;
+
     try {
         const response = await fetch('api/svg/list');
         if (!response.ok) throw new Error('Failed to fetch SVG list');
-        
         const svgFiles = await response.json();
         
         svgSelectDropdown.innerHTML = '';
         if (svgFiles.length === 0) {
             svgSelectDropdown.innerHTML = '<option value="">No SVGs found</option>';
+            return;
         }
 
+        let matchFound = false;
         svgFiles.forEach(filename => {
             const option = document.createElement('option');
             option.value = filename;
             option.textContent = filename;
-            if (filename === defaultSvgFile) {
+            if (filename === currentSelection) {
                 option.selected = true;
-                defaultFileFound = true;
+                matchFound = true;
             }
             svgSelectDropdown.appendChild(option);
         });
-        
-        if (!defaultFileFound && svgFiles.length > 0) {
+
+        // If we have files but the target/current one isn't there, pick the first
+        if (!matchFound && svgFiles.length > 0) {
             svgSelectDropdown.value = svgFiles[0];
-            defaultSvgFile = svgFiles[0];
+            await loadSvgPlan(svgFiles[0]);
+        } else if (matchFound) {
+            // Reload the view to ensure we have the latest content
+            await loadSvgPlan(currentSelection);
         }
 
     } catch (error) {
         console.error("Could not populate SVG list:", error);
         svgSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
-    }
-
-    svgSelectDropdown.addEventListener('change', onSvgFileChange);
-    
-    if (defaultSvgFile) {
-        await loadSvgPlan(defaultSvgFile);
-    } else {
-        svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No SVG files found in the /data directory.</p>`;
     }
 }
 
@@ -173,12 +162,9 @@ async function populateSvgListAndLoadDefault(defaultSvgFile) {
 async function onSvgFileChange(event) {
     const filename = event.target.value;
     if (!filename) return;
-    
     trackEvent('svg_file_change');
     await loadSvgPlan(filename);
 }
-
-
 /**
  * Dynamically loads the custom svg-bindings.js script *by name*.
  */
@@ -190,22 +176,18 @@ async function loadCustomBindingsScript(bindingFilename) {
         update: (brokerId, topic, payloadObject, svgRoot) => {},
         reset: (svgRoot) => {}
     };
-    
     // 2. Remove old script tag if it exists
     const oldScript = document.getElementById(BINDINGS_SCRIPT_ID);
     if (oldScript) {
         oldScript.remove();
     }
-    
     // 3. Create new script tag
     const script = document.createElement('script');
     script.id = BINDINGS_SCRIPT_ID;
     script.type = 'module';
-    
     // 4. Set src to the new API endpoint with the 'name' param
     const apiBasePath = (appBasePath === '/') ? '' : appBasePath;
     script.src = `${apiBasePath}/api/svg/bindings.js?name=${encodeURIComponent(bindingFilename)}&v=${Date.now()}`;
-    
     // 5. Add to head and await load
     return new Promise((resolve) => {
         script.onload = () => {
@@ -219,16 +201,13 @@ async function loadCustomBindingsScript(bindingFilename) {
         document.head.appendChild(script);
     });
 }
-
 /**
  * Scans the SVG for [data-key] elements to use with default logic.
  */
 function scanForDataKeys() {
     const dataElements = svgContent.querySelectorAll('[data-key]');
-    
     dataElements.forEach(el => {
         const keyPath = el.dataset.key;
-        
         if (el.tagName === 'text' || el.tagName === 'tspan') {
             svgInitialTextValues.set(el, { type: 'text', value: el.textContent });
         } else if (el.tagName === 'path' && (keyPath === 'status')) {
@@ -243,7 +222,6 @@ function scanForDataKeys() {
         }
     });
 }
-
 /**
  * Loads a specific view.svg file from the server.
  */
@@ -252,29 +230,22 @@ async function loadSvgPlan(filename) {
         svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No SVG file selected.</p>`;
         return;
     }
-    
     try {
-        const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}`); 
+        // [FIX] Add timestamp to prevent caching when Chat overwrites the file
+        const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}&t=${Date.now()}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
         const svgText = await response.text();
         if (svgContent) {
             svgContent.innerHTML = svgText;
-            
             svgInitialTextValues.clear();
-
             const bindingFilename = filename + '.js'; 
             await loadCustomBindingsScript(bindingFilename);
-            
             const svgRoot = svgContent.querySelector('svg');
             if (!svgRoot) return;
-
             if (customSvgBindings.isLoaded) {
                 customSvgBindings.initialize(svgRoot);
             }
-            
             scanForDataKeys();
-            
             const replayTime = isSvgHistoryMode 
                 ? parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp) 
                 : currentMaxTimestamp;
@@ -285,14 +256,12 @@ async function loadSvgPlan(filename) {
         if (svgContent) svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG file '${filename}' could not be loaded.</p>`;
     }
 }
-
 /**
  * Toggles fullscreen mode for the SVG map view.
  */
 function toggleFullscreen() {
     trackEvent('svg_fullscreen_toggle');
     if (!mapView) return;
-    
     if (!document.fullscreenElement) {
         mapView.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
@@ -303,7 +272,6 @@ function toggleFullscreen() {
         }
     }
 }
-
 /**
  * [HELPER] Safely gets a nested value from an object.
  */
@@ -311,7 +279,6 @@ function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return null;
     return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
 }
-
 /**
  * Checks if a value triggers an alarm.
  */
@@ -322,22 +289,18 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
     if (alarmType === 'NEQ') {
         return String(currentValue) !== String(alarmThreshold);
     }
-
     const value = parseFloat(currentValue);
     const threshold = parseFloat(alarmThreshold);
     if (isNaN(value) || isNaN(threshold)) return false;
-
     switch (alarmType) {
         case 'H': return value > threshold;
         case 'L': return value < threshold;
         default: return false;
     }
 }
-
 function updateAlarmPlaceholder() {
     // This function is no longer needed as logic is generic
 }
-
 /**
  * Updates a single SVG element with a new value.
  * This is the "default" logic, used when no custom bindings.js is found.
@@ -345,7 +308,6 @@ function updateAlarmPlaceholder() {
 function updateSvgElement(el, keyPath, value) {
     // --- 1. SPECIAL VISUALS (by ID or data-key) ---
     const numericValue = parseFloat(value);
-    
     if (el.id === 'shield-visual-effect' && keyPath === 'power' && !isNaN(numericValue)) {
         const opacity = Math.max(0, Math.min(1, (numericValue / 100.0) * 0.7 + 0.1));
         const width = 2 + (numericValue / 100.0) * 8;
@@ -353,18 +315,15 @@ function updateSvgElement(el, keyPath, value) {
         el.setAttribute('stroke-width', width.toFixed(2));
         return; 
     }
-    
     if (el.id === 'laser-charge-visual' && keyPath === 'value' && !isNaN(numericValue)) {
         const maxWidth = 140; 
         const chargeWidth = Math.max(0, (numericValue / 100.0) * maxWidth);
         el.setAttribute('width', chargeWidth.toFixed(2));
         return; 
     }
-    
     // --- 2. TEXT COLOR (by keyPath or value) ---
     if (el.tagName === 'text' || el.tagName === 'tspan') {
         let isStatus = false;
-        
         if (keyPath === 'alert_level' || keyPath === 'global_status') {
             isStatus = true;
             if (value === 'red' || value === 'INTERRUPTED') el.setAttribute('fill', '#f85149');
@@ -382,13 +341,11 @@ function updateSvgElement(el, keyPath, value) {
                 el.setAttribute('fill', '#d29922'); // Yellow for 'standby', 'charging', 'transit', 'perturbed', 'stopped_station' etc.
             }
         }
-        
         if (el.getAttribute('fill') === '#f85149' && !el.classList.contains('text-data')) {
             el.classList.add('alarm-text'); 
         } else {
             el.classList.remove('alarm-text');
         }
-
         // --- 3. DEFAULT TEXT UPDATE ---
         if (typeof value === 'number' && !Number.isInteger(value)) {
             el.textContent = parseFloat(value).toFixed(2);
@@ -396,11 +353,9 @@ function updateSvgElement(el, keyPath, value) {
             el.textContent = value;
         }
     }
-    
     // --- 4. ALARM LINE (Alarm check) ---
     const alarmType = el.dataset.alarmType;
     const alarmValue = el.dataset.alarmValue;
-    
     if (alarmType && alarmValue) {
         const alarmLineGroup = el.closest('.alarm-line');
         if (alarmLineGroup) {
@@ -412,10 +367,8 @@ function updateSvgElement(el, keyPath, value) {
         }
     }
 }
-
-
 /**
- *  Main update router function.
+ * Main update router function.
  * Now accepts brokerId and routes to custom bindings or default logic.
  * @param {string} brokerId - The broker ID.
  * @param {string} topic - The MQTT topic.
@@ -426,7 +379,6 @@ export function updateMap(brokerId, topic, payload) {
     if (!svgContent) return;
     const svgRoot = svgContent.querySelector('svg');
     if (!svgRoot) return;
-
     let payloadObject;
     let isJson = false;
     try {
@@ -435,7 +387,6 @@ export function updateMap(brokerId, topic, payload) {
     } catch (e) { 
         payloadObject = payload; // It's a raw string
     }
-    
     if (customSvgBindings.isLoaded) {
         // Pass brokerId to custom binding
         try {
@@ -449,66 +400,50 @@ export function updateMap(brokerId, topic, payload) {
             const specificId = isMultiBroker 
                 ? `${brokerId}-${topic.replace(/\//g, '-')}` 
                 : topic.replace(/\//g, '-');
-            
             const genericId = topic.replace(/\//g, '-');
-
             defaultUpdateLogic(specificId, genericId, payloadObject);
         }
     }
 }
-
 /**
- *  Default handler for simple id-to-data-key mapping.
+ * Default handler for simple id-to-data-key mapping.
  * Supports finding elements by specific broker ID OR fallback to generic topic ID.
  */
 function defaultUpdateLogic(specificId, genericId, data) {
     // Find elements matching either specific ID or generic ID
     const groupElements = svgContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`);
-    
     if (groupElements.length === 0) return;
-
     groupElements.forEach(groupElement => {
         const dataElements = groupElement.querySelectorAll('[data-key]');
-        
         dataElements.forEach(el => {
             const keyPath = el.dataset.key; 
             const value = getNestedValue(data, keyPath);
-            
             if (value !== null && value !== undefined) {
                 updateSvgElement(el, keyPath, value);
             }
         });
-        
         groupElement.classList.add('highlight-svg-default');
         setTimeout(() => groupElement.classList.remove('highlight-svg-default'), 500);
     });
 }
-
 /**
  * Updates the UI of the SVG timeline slider
  */
 export function updateSvgTimelineUI(min, max) {
     if (!svgSlider) return;
-    
     currentMinTimestamp = min;
     currentMaxTimestamp = max;
-
     if (!isSvgHistoryMode) return; 
-
     const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
-    
     svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentTimestamp);
 }
-
 /**
- *  Replays the SVG state up to a specific point in time.
+ * Replays the SVG state up to a specific point in time.
  */
 function replaySvgHistory(replayUntilTimestamp) {
     if (!svgContent) return;
-
     const svgRoot = svgContent.querySelector('svg');
     if (!svgRoot) return;
-
     // 1. Reset SVG to its initial state (using default logic)
     svgInitialTextValues.forEach((state, element) => {
         if (state.type === 'text') {
@@ -522,7 +457,6 @@ function replaySvgHistory(replayUntilTimestamp) {
         }
     });
     svgContent.querySelectorAll('.alarm-line').forEach(el => el.style.visibility = 'hidden');
-    
     if (customSvgBindings.isLoaded) {
         try {
             customSvgBindings.reset(svgRoot);
@@ -530,11 +464,8 @@ function replaySvgHistory(replayUntilTimestamp) {
             console.error("Error in custom SVG binding 'reset' function:", err);
         }
     }
-
     // 2. Filter messages up to the replay timestamp
     const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
-    
-    
     // 3. Determine the final state of each topic *per broker*.
     const finalState = new Map();
     for (let i = entriesToReplay.length - 1; i >= 0; i--) {
@@ -544,7 +475,6 @@ function replaySvgHistory(replayUntilTimestamp) {
                 finalState.set(key, entry); // Store the full entry
         }
     }
-
     // 4. Apply the final state to the SVG view
     finalState.forEach((entry, key) => {
         const { brokerId, topic, payload } = entry;
@@ -556,7 +486,6 @@ function replaySvgHistory(replayUntilTimestamp) {
         } catch (e) { 
             payloadObject = payload;
         }
-        
         if (customSvgBindings.isLoaded) {
             try {
                 customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
@@ -570,7 +499,6 @@ function replaySvgHistory(replayUntilTimestamp) {
                     ? `${brokerId}-${topic.replace(/\//g, '-')}` 
                     : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');
-
                 defaultUpdateLogic(specificId, genericId, payloadObject);
             }
         }
