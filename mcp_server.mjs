@@ -49,6 +49,20 @@ const TRANSPORT_MODE = process.env.MCP_TRANSPORT || "stdio"; // 'stdio' ou 'http
 //  Read API Key from environment
 const MCP_API_KEY = process.env.MCP_API_KEY || null;
 
+// [NEW] Read HTTP Credentials for internal API calls (Basic Auth)
+const HTTP_USER = process.env.HTTP_USER;
+const HTTP_PASSWORD = process.env.HTTP_PASSWORD;
+
+// Prepare Axios Config with Auth if credentials are present
+const axiosConfig = {};
+if (HTTP_USER && HTTP_PASSWORD) {
+    axiosConfig.auth = {
+        username: HTTP_USER,
+        password: HTTP_PASSWORD
+    };
+    console.error(`🔐 MCP Server will use Basic Auth to contact Main API (${HTTP_USER}:***)`);
+}
+
 // [NEW] Granular Tool Permissions (Default: true)
 const TOOL_FLAGS = {
     ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',
@@ -128,13 +142,15 @@ const parseTimeWindow = (timeExpression) => {
 
 // ---  Internal helper to get config for other tools ---
 const getMapperConfigInternal = async () => {
-    const response = await axios.get(`${API_BASE_URL}/mapper/config`);
+    // [FIX] Use axiosConfig for Auth
+    const response = await axios.get(`${API_BASE_URL}/mapper/config`, axiosConfig);
     return response.data;
 };
 
 // ---  Internal helper to save config for other tools ---
 const saveMapperConfigInternal = async (config) => {
-    const response = await axios.post(`${API_BASE_URL}/mapper/config`, config);
+    // [FIX] Use axiosConfig for Auth
+    const response = await axios.post(`${API_BASE_URL}/mapper/config`, config, axiosConfig);
     return response.data;
 };
 
@@ -287,7 +303,8 @@ async function createMcpServer() {
         },
         async () => {
           try {
-            const response = await axios.get(`${API_BASE_URL}/svg/list`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(`${API_BASE_URL}/svg/list`, axiosConfig);
             const output = { svg_files: response.data };
              return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -368,7 +385,8 @@ async function createMcpServer() {
               filters,
               broker_id //  Pass broker_id
             };
-            const response = await axios.post(`${API_BASE_URL}/context/search/model`, body);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.post(`${API_BASE_URL}/context/search/model`, body, axiosConfig);
             const output = { results: response.data };
             return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -394,7 +412,8 @@ async function createMcpServer() {
         async ({ topic_pattern }) => {
             try {
                 // Use the search/model endpoint to get recent messages for the pattern
-                const response = await axios.post(`${API_BASE_URL}/context/search/model`, { topic_template: topic_pattern });
+                // [FIX] Use axiosConfig for Auth
+                const response = await axios.post(`${API_BASE_URL}/context/search/model`, { topic_template: topic_pattern }, axiosConfig);
                 const messages = response.data; // This is an array of { topic, payload, timestamp }
                 
                 if (!messages || messages.length === 0) {
@@ -422,15 +441,14 @@ async function createMcpServer() {
         "search_data_fulltext",
         {
           title: "Search (Full-Text)",
-          description: "Performs a full-text search for keywords across all topic names and payload contents, optionally filtered by a natural language time range.",
+          description: "Performs a simple full-text search for a keyword across all topic names and payload contents.",
           inputSchema: { 
             keyword: z.string().describe("The keyword to search for (e.g., 'maintenance', 'error')."),
-            time_expression: z.string().optional().describe("Natural language time range (e.g., 'last 24 hours', 'since yesterday', 'between 2023-10-01 and 2023-10-05')."),
             broker_id: z.string().optional().describe("Optional. The ID of the broker to search (e.g., 'broker_1').")
           },
           outputSchema: { results: z.array(z.any()) }
         },
-        async ({ keyword, time_expression, broker_id }) => {
+        async ({ keyword, broker_id }) => {
           try {
             const encodedKeyword = encodeURIComponent(keyword);
             let url = `${API_BASE_URL}/context/search?q=${encodedKeyword}`;
@@ -441,12 +459,12 @@ async function createMcpServer() {
             // Handle Time Expression
             const timeWindow = parseTimeWindow(time_expression);
             if (timeWindow) {
-                url += `&startDate=${encodeURIComponent(timeWindow.start)}`;
-                url += `&endDate=${encodeURIComponent(timeWindow.end)}`;
-                console.error(`[MCP] Filtered Search: ${timeWindow.start} -> ${timeWindow.end}`);
+                  url += `&startDate=${encodeURIComponent(timeWindow.start)}`;
+                  url += `&endDate=${encodeURIComponent(timeWindow.end)}`;
+                  console.error(`[MCP] Filtered Search: ${timeWindow.start} -> ${timeWindow.end}`);
             }
-            
-            const response = await axios.get(url);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(url, axiosConfig);
             const output = { results: response.data };
             return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -478,7 +496,8 @@ async function createMcpServer() {
                 url += `?brokerId=${encodeURIComponent(broker_id)}`; //  Add brokerId to query
             }
 
-            const response = await axios.get(url);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(url, axiosConfig);
             const output = { message: response.data };
             return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -526,7 +545,8 @@ async function createMcpServer() {
             const queryString = params.toString() ? `?${params.toString()}` : '';
             const url = `${API_BASE_URL}/context/history/${encodedTopic}${queryString}`;
             
-            const response = await axios.get(url);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(url, axiosConfig);
             const output = { history: response.data };
             return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -549,7 +569,8 @@ async function createMcpServer() {
         },
         async () => {
           try {
-            const response = await axios.get(`${API_BASE_URL}/context/topics`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(`${API_BASE_URL}/context/topics`, axiosConfig);
             const output = { topics: response.data }; //  Data is now [{ broker_id, topic }, ...]
              return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -571,7 +592,8 @@ async function createMcpServer() {
         },
         async () => {
           try {
-            const response = await axios.get(`${API_BASE_URL}/context/status`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(`${API_BASE_URL}/context/status`, axiosConfig);
             const output = { status: response.data };
              return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -596,7 +618,8 @@ async function createMcpServer() {
         },
         async () => {
           try {
-            const response = await axios.get(`${API_BASE_URL}/simulator/status`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.get(`${API_BASE_URL}/simulator/status`, axiosConfig);
             const output = response.data; 
              return {
               content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -620,7 +643,8 @@ async function createMcpServer() {
         },
         async ({ scenario_name }) => {
           try {
-            const response = await axios.post(`${API_BASE_URL}/simulator/start/${scenario_name}`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.post(`${API_BASE_URL}/simulator/start/${scenario_name}`, {}, axiosConfig);
             const output = { status: response.data };
             return { 
               content: [{ type: "text", text: `Simulator [${scenario_name}] started: ` + JSON.stringify(output) }],
@@ -644,7 +668,8 @@ async function createMcpServer() {
         },
         async ({ scenario_name }) => {
           try {
-            const response = await axios.post(`${API_BASE_URL}/simulator/stop/${scenario_name}`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.post(`${API_BASE_URL}/simulator/stop/${scenario_name}`, {}, axiosConfig);
             const output = { status: response.data };
             return { 
               content: [{ type: "text", text: `Simulator [${scenario_name}] stopped: ` + JSON.stringify(output) }],
@@ -707,7 +732,8 @@ async function createMcpServer() {
           try {
             // This endpoint is on the config API, which might be disabled
             // We'll call it and handle the error if it's 403
-            const response = await axios.post(`${API_BASE_URL}/env/restart`);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.post(`${API_BASE_URL}/env/restart`, {}, axiosConfig);
             const output = response.data;
             return { 
               content: [{ type: "text", text: `Server restart initiated: ${output.message}` }],
@@ -738,7 +764,8 @@ async function createMcpServer() {
             try {
                 //  Add broker_id to body
                 const body = { topicPattern: topic_pattern, broker_id: broker_id };
-                const response = await axios.post(`${API_BASE_URL}/context/prune-topic`, body);
+                // [FIX] Use axiosConfig for Auth
+                const response = await axios.post(`${API_BASE_URL}/context/prune-topic`, body, axiosConfig);
                 const output = response.data;
                 return {
                   content: [{ type: "text", text: `Prune successful. Deleted ${output.count} entries.` }],
@@ -773,7 +800,8 @@ async function createMcpServer() {
           try {
             //  Add broker_id to body
             const body = { topic, payload, format, qos, retain, brokerId: broker_id }; 
-            const response = await axios.post(`${API_BASE_URL}/publish/message`, body);
+            // [FIX] Use axiosConfig for Auth
+            const response = await axios.post(`${API_BASE_URL}/publish/message`, body, axiosConfig);
             const output = response.data;
             return {
               content: [{ type: "text", text: `Publish successful: ${output.message}` }],
@@ -893,7 +921,8 @@ async function createMcpServer() {
 async function main() {
   // 1. Ensure the main web server (server.js) is running
   try {
-    await axios.get(`${API_BASE_URL}/config`); 
+    // [FIX] Use axiosConfig for Auth
+    await axios.get(`${API_BASE_URL}/config`, axiosConfig); 
     console.error(`✅ MCP Server connected to main API at: ${API_BASE_URL}/config`);
   } catch (error) {
     console.error("-------------------------------------------------------------------");
