@@ -8,10 +8,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * MCP Server
- * A Model Context Protocol server exposing UNS Viewer capabilities to AI agents.
- * [MODIFIED] Added 'chrono-node' support for natural language time filtering.
- * [MODIFIED] Added 'create_dynamic_view' tool to create SVG+JS dashboards.
+  
  */
 // --- Imports (ESM) ---
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -593,7 +590,7 @@ async function createMcpServer() {
         "get_simulator_status",
         {
           title: "Get Simulator Status",
-          description: "Get status of simulators.",
+          description: "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
           inputSchema: {}, // No input
           outputSchema: { statuses: z.record(z.string()) }
         },
@@ -947,7 +944,12 @@ async function main() {
         res.status(401).json({ error: "Unauthorized" });
     };
 
-    app.post("/mcp", mcpAuthMiddleware, async (req, res) => { 
+    // [FIX] Use BASE_PATH to construct the MCP route
+    // If BASE_PATH is '/buu', the route will be '/buu/mcp'
+    const MCP_ROUTE = path.posix.join(BASE_PATH, 'mcp');
+    console.error(`✅ Binding MCP endpoint to: ${MCP_ROUTE}`);
+
+    app.post(MCP_ROUTE, mcpAuthMiddleware, async (req, res) => { 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
@@ -962,7 +964,7 @@ async function main() {
     });
 
     app.listen(HTTP_PORT, () => {
-      console.log(`🤖 MCP Server (HTTP) started and listening on http://localhost:${HTTP_PORT}/mcp`);
+      console.log(`🤖 MCP Server (HTTP) started and listening on http://localhost:${HTTP_PORT}${MCP_ROUTE}`);
     });
 
   } else {

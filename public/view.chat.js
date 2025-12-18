@@ -323,11 +323,26 @@ export function toggleChatWidget(show) {
     fabButton.style.display = show ? 'none' : 'flex';
     if(show) setTimeout(() => { scrollToBottom(); chatInput.focus(); }, 300);
 }
+
+// [FIX] Sanitizing history on load to remove corrupted data from storage
 function loadHistory() {
-    try { conversationHistory = JSON.parse(localStorage.getItem(storageKey) || '[]'); renderHistory(); } 
+    try { 
+        let rawHistory = JSON.parse(localStorage.getItem(storageKey) || '[]'); 
+        // Automatically filter out messages with 'error' role that cause 400 Bad Request
+        conversationHistory = rawHistory.filter(msg => msg.role !== 'error');
+        
+        // If we found and removed errors, update storage immediately
+        if (conversationHistory.length !== rawHistory.length) {
+            console.log(`[Chat] Sanitized ${rawHistory.length - conversationHistory.length} corrupted messages from history.`);
+            saveHistory();
+        }
+        
+        renderHistory(); 
+    } 
     catch { conversationHistory = []; }
     if(conversationHistory.length===0) addMessageToState('system', 'Hello! I am your UNS Assistant.');
 }
+
 function saveHistory() { localStorage.setItem(storageKey, JSON.stringify(conversationHistory)); }
 function addMessageToState(role, content, toolCalls=null) {
     const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
@@ -434,7 +449,12 @@ async function sendMessage(fromVoice = false) {
         }
     } catch (error) {
         console.error(error);
-        addMessageToState('error', `Error: ${error.message}`);
+        // [FIX] Detailed Network Error Handling
+        let errorMsg = `Error: ${error.message}`;
+        if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+            errorMsg = "Network Error: Could not reach server. Please check your connection.";
+        }
+        addMessageToState('error', errorMsg);
     } finally {
         isProcessing = false;
         btnSend.disabled = false; if(btnMic) btnMic.disabled = false; if(btnCam) btnCam.disabled = false;
