@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="600" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            /* --- General Styles --- */
+            .bg { fill: #f0f4f8; }
+            body.dark-mode .bg { fill: #2c2c2c; }
+            
+            .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 24px; font-weight: 600; fill: #007bff; }
+            body.dark-mode .title { fill: #3391ff; }
+
+            .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 16px; font-weight: 500; fill: #555; }
+            body.dark-mode .subtitle { fill: #bbb; }
+
+            /* --- Process Equipment --- */
+            .process-box { fill: #ffffff; stroke: #9ab; stroke-width: 2; rx: 8; }
+            body.dark-mode .process-box { fill: #3a3a3a; stroke: #555; }
+            
+            .tank { fill: #ffffff; stroke: #007bff; stroke-width: 2; }
+            body.dark-mode .tank { fill: #3a3a3a; stroke: #3391ff; }
+
+            /* --- Labels & Values --- */
+            .instrument-label { font-family: 'Courier New', Courier, monospace; font-size: 13px; fill: #333; }
+            body.dark-mode .instrument-label { fill: #e0e0e0; }
+            
+            .instrument-value { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; fill: #0056b3; }
+            body.dark-mode .instrument-value { fill: #5caaff; }
+            
+            /* Unit label (smaller, next to value) */
+            .unit-label { font-family: 'Courier New', Courier, monospace; font-size: 12px; fill: #444; }
+            body.dark-mode .unit-label { fill: #ccc; }
+
+            .status-label { font-family: 'Courier New', Courier, monospace; font-size: 12px; fill: #666; }
+            body.dark-mode .status-label { fill: #aaa; }
+            
+            .status-value { font-family: 'Courier New', Courier, monospace; font-size: 12px; font-weight: bold; fill: #111; }
+            body.dark-mode .status-value { fill: #fff; }
+
+            /* --- Flow Lines --- */
+            .flow-line { fill: none; stroke: #888; stroke-width: 3; }
+            body.dark-mode .flow-line { stroke: #666; }
+            
+            .flow-arrow { fill: #888; }
+            body.dark-mode .flow-arrow { fill: #666; }
+            
+            .gas-in { stroke: #f39c12; } /* Orange for raw gas */
+            .gas-purified { stroke: #2ecc71; } /* Green for purified */
+            .gas-lbg { stroke: #3498db; } /* Blue for LBG */
+            
+            .gas-in-arrow { fill: #f39c12; }
+            .gas-purified-arrow { fill: #2ecc71; }
+            .gas-lbg-arrow { fill: #3498db; }
+        </style>
+        
+        <marker id="arrow-gas-in" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="gas-in-arrow" />
+        </marker>
+        <marker id="arrow-gas-purified" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="gas-purified-arrow" />
+        </marker>
+        <marker id="arrow-gas-lbg" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="gas-lbg-arrow" />
+        </marker>
+    </defs>
+
+    <rect width="100%" height="100%" class="bg" />
+
+    <text x="500" y="40" text-anchor="middle" class="title">Synoptique Liquéfacteur Biogaz (LBG) - GASUM TURKU TBF</text>
+
+    <text x="30" y="275" class="instrument-label">Biogaz Brut</text>
+    <path class="flow-line gas-in" d="M 0,270 H 80" marker-end="url(#arrow-gas-in)" />
+
+    <path class="flow-line gas-in" d="M 180,270 H 220" marker-end="url(#arrow-gas-in)" />
+    
+    <path class="flow-line gas-purified" d="M 320,270 H 360" marker-end="url(#arrow-gas-purified)" />
+
+    <path class="flow-line gas-purified" d="M 480,270 H 520" marker-end="url(#arrow-gas-purified)" />
+    
+    <path class="flow-line gas-lbg" d="M 680,270 H 750" marker-end="url(#arrow-gas-lbg)" />
+
+
+    <g id="dt-iot-bgs-maintained-GASUM_TURKU_TBF-full">
+        <text x="200" y="80" text-anchor="middle" class="subtitle">1. Épuration du Biogaz</text>
+        
+        <rect x="80" y="150" width="100" height="240" class="process-box" />
+        <text x="130" y="140" text-anchor="middle" class="instrument-label">Sécheurs</text>
+        <rect x="95" y="170" width="70" height="70" class="tank" />
+        <text x="130" y="195" text-anchor="middle" class="instrument-label">Dryer 1</text>
+        <text x="130" y="255" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.DRYER_1_S3200" class="status-value">0</tspan></text>
+        
+        <rect x="95" y="290" width="70" height="70" class="tank" />
+        <text x="130" y="315" text-anchor="middle" class="instrument-label">Dryer 2</text>
+        <text x="130" y="375" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.DRYER_2_S3200" class="status-value">0</tspan></text>
+
+        <rect x="220" y="150" width="100" height="240" class="process-box" />
+        <text x="270" y="140" text-anchor="middle" class="instrument-label">Adsorbeurs</text>
+        <rect x="235" y="170" width="70" height="50" class="tank" />
+        <text x="270" y="195" text-anchor="middle" class="instrument-label">Adsorber 1</text>
+        <text x="270" y="235" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.ADSORBER_1_S4200" class="status-value">0</tspan></text>
+        
+        <rect x="235" y="250" width="70" height="50" class="tank" />
+        <text x="270" y="275" text-anchor="middle" class="instrument-label">Adsorber 2</text>
+        <text x="270" y="315" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.ADSORBER_2_S4200" class="status-value">0</tspan></text>
+        
+        <rect x="235" y="330" width="70" height="50" class="tank" />
+        <text x="270" y="355" text-anchor="middle" class="instrument-label">Adsorber 3</text>
+        <text x="270" y="395" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.ADSORBER_3_S4200" class="status-value">0</tspan></text>
+
+        <rect x="360" y="150" width="120" height="240" class="process-box" />
+        <text x="420" y="140" text-anchor="middle" class="instrument-label">Analyseur</text>
+        
+        <text x="370" y="180" class="instrument-label">Pureté CH4:</text>
+        <text x="410" y="200" text-anchor="middle" class="instrument-label"><tspan data-key="variables.ANALYSER_CH4" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+        
+        <text x="370" y="240" class="instrument-label">Impureté CO2:</text>
+        <text x="410" y="260" text-anchor="middle" class="instrument-label"><tspan data-key="variables.ANALYSER_CO2" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+        
+        <text x="370" y="300" class="instrument-label">Impureté H2O:</text>
+        <text x="410" y="320" text-anchor="middle" class="instrument-label"><tspan data-key="variables.ANALYSER_HO2" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+
+        <text x="600" y="80" text-anchor="middle" class="subtitle">2. Liquéfaction</text>
+        <rect x="520" y="150" width="160" height="240" class="process-box" />
+        <text x="600" y="140" text-anchor="middle" class="instrument-label">Liquéfacteur</text>
+        
+        <text x="530" y="180" class="instrument-label">Main Comp. Speed:</text>
+        <text x="590" y="200" text-anchor="middle" class="instrument-label"><tspan data-key="variables.MC_SPEED" class="instrument-value">0</tspan><tspan class="unit-label"> RPM</tspan></text>
+        
+        <text x="530" y="240" class="instrument-label">MTC Comp. Speed:</text>
+        <text x="590" y="260" text-anchor="middle" class="instrument-label"><tspan data-key="variables.MTC_SPEED" class="instrument-value">0</tspan><tspan class="unit-label"> RPM</tspan></text>
+        
+        <text x="530" y="300" class="instrument-label">T° Sortie LBG:</text>
+        <text x="590" y="320" text-anchor="middle" class="instrument-label"><tspan data-key="variables.TT102" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan></text>
+        
+        <text x="530" y="360" class="instrument-label">T° Boucle Froid:</text>
+        <text x="590" y="380" text-anchor="middle" class="instrument-label"><tspan data-key="variables.TT203" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan></text>
+
+        <text x="825" y="80" text-anchor="middle" class="subtitle">3. Stockage LBG</text>
+        
+        <path class="tank" d="M 750 150 A 50 50 0 0 1 900 150 L 900 370 A 50 50 0 0 1 750 370 L 750 150 Z" />
+        <rect x="750" y="360" width="150" height="30" class="tank" />
+        <text x="825" y="140" text-anchor="middle" class="instrument-label">Cuve Stockage LBG</text>
+        
+        <text x="760" y="200" class="instrument-label">STORAGE_LEVEL(%):</text>
+        <text x="825" y="225" text-anchor="middle" class="instrument-label"><tspan data-key="variables.STORAGE_LEVEL" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+        
+        <text x="760" y="260" class="instrument-label">STORAGE_PRESSURE:</text>
+        <text x="825" y="285" text-anchor="middle" class="instrument-label"><tspan data-key="variables.STORAGE_PRESSURE" class="instrument-value">0.00</tspan><tspan class="unit-label"> bars</tspan></text>
+
+        <text x="760" y="320" class="instrument-label">STORAGE_LEVEL(Nm3):</text>
+        <text x="825" y="345" text-anchor="middle" class="instrument-label"><tspan data-key="variables.STORAGE_LEVEL_NM3" class="instrument-value">0</tspan><tspan class="unit-label"> Nm3</tspan></text>
+    </g>
+
+
+    <g id="dt-iot-bgs-maintained-GASUM_TURKU_TBF-updates">
+        <text x="200" y="80" text-anchor="middle" class="subtitle">1. Épuration du Biogaz</text>
+        
+        <rect x="80" y="150" width="100" height="240" class="process-box" />
+        <text x="130" y="140" text-anchor="middle" class="instrument-label">Sécheurs</text>
+        <rect x="95" y="170" width="70" height="70" class="tank" />
+        <text x="130" y="195" text-anchor="middle" class="instrument-label">Dryer 1</text>
+        <text x="130" y="255" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.DRYER_1_S3200" class="status-value">0</tspan></text>
+        
+        <rect x="95" y="290" width="70" height="70" class="tank" />
+        <text x="130" y="315" text-anchor="middle" class="instrument-label">Dryer 2</text>
+        <text x="130" y="375" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.DRYER_2_S3200" class="status-value">0</tspan></text>
+
+        <rect x="220" y="150" width="100" height="240" class="process-box" />
+        <text x="270" y="140" text-anchor="middle" class="instrument-label">Adsorbeurs</text>
+        <rect x="235" y="170" width="70" height="50" class="tank" />
+        <text x="270" y="195" text-anchor="middle" class="instrument-label">Adsorber 1</text>
+        <text x="270" y="235" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.ADSORBER_1_S4200" class="status-value">0</tspan></text>
+        
+        <rect x="235" y="250" width="70" height="50" class="tank" />
+        <text x="270" y="275" text-anchor="middle" class="instrument-label">Adsorber 2</text>
+        <text x="270" y="315" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.ADSORBER_2_S4200" class="status-value">0</tspan></text>
+        
+        <rect x="235" y="330" width="70" height="50" class="tank" />
+        <text x="270" y="355" text-anchor="middle" class="instrument-label">Adsorber 3</text>
+        <text x="270" y="395" text-anchor="middle" class="status-label">Status: <tspan data-key="variables.ADSORBER_3_S4200" class="status-value">0</tspan></text>
+
+        <rect x="360" y="150" width="120" height="240" class="process-box" />
+        <text x="420" y="140" text-anchor="middle" class="instrument-label">Analyseur</text>
+        
+        <text x="370" y="180" class="instrument-label">Pureté CH4:</text>
+        <text x="410" y="200" text-anchor="middle" class="instrument-label"><tspan data-key="variables.ANALYSER_CH4" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+        
+        <text x="370" y="240" class="instrument-label">Impureté CO2:</text>
+        <text x="410" y="260" text-anchor="middle" class="instrument-label"><tspan data-key="variables.ANALYSER_CO2" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+        
+        <text x="370" y="300" class="instrument-label">Impureté H2O:</text>
+        <text x="410" y="320" text-anchor="middle" class="instrument-label"><tspan data-key="variables.ANALYSER_HO2" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+
+        <text x="600" y="80" text-anchor="middle" class="subtitle">2. Liquéfaction</text>
+        <rect x="520" y="150" width="160" height="240" class="process-box" />
+        <text x="600" y="140" text-anchor="middle" class="instrument-label">Liquéfacteur</text>
+        
+        <text x="530" y="180" class="instrument-label">Main Comp. Speed:</text>
+        <text x="590" y="200" text-anchor="middle" class="instrument-label"><tspan data-key="variables.MC_SPEED" class="instrument-value">0</tspan><tspan class="unit-label"> RPM</tspan></text>
+        
+        <text x="530" y="240" class="instrument-label">MTC Comp. Speed:</text>
+        <text x="590" y="260" text-anchor="middle" class="instrument-label"><tspan data-key="variables.MTC_SPEED" class="instrument-value">0</tspan><tspan class="unit-label"> RPM</tspan></text>
+        
+        <text x="530" y="300" class="instrument-label">T° Sortie LBG:</text>
+        <text x="590" y="320" text-anchor="middle" class="instrument-label"><tspan data-key="variables.TT102" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan></text>
+        
+        <text x="530" y="360" class="instrument-label">T° Boucle Froid:</text>
+        <text x="590" y="380" text-anchor="middle" class="instrument-label"><tspan data-key="variables.TT203" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan></text>
+
+        <text x="825" y="80" text-anchor="middle" class="subtitle">3. Stockage LBG</text>
+        
+        <path class="tank" d="M 750 150 A 50 50 0 0 1 900 150 L 900 370 A 50 50 0 0 1 750 370 L 750 150 Z" />
+        <rect x="750" y="360" width="150" height="30" class="tank" />
+        <text x="825" y="140" text-anchor="middle" class="instrument-label">Cuve Stockage LBG</text>
+        
+        <text x="760" y="200" class="instrument-label">STORAGE_LEVEL(%):</text>
+        <text x="825" y="225" text-anchor="middle" class="instrument-label"><tspan data-key="variables.STORAGE_LEVEL" class="instrument-value">0.00</tspan><tspan class="unit-label"> %</tspan></text>
+        
+        <text x="760" y="260" class="instrument-label">STORAGE_PRESSURE:</text>
+        <text x="825" y="285" text-anchor="middle" class="instrument-label"><tspan data-key="variables.STORAGE_PRESSURE" class="instrument-value">0.00</tspan><tspan class="unit-label"> bars</tspan></text>
+
+        <text x="760" y="320" class="instrument-label">STORAGE_LEVEL(Nm3):</text>
+        <text x="825" y="345" text-anchor="middle" class="instrument-label"><tspan data-key="variables.STORAGE_LEVEL_NM3" class="instrument-value">0</tspan><tspan class="unit-label"> Nm3</tspan></text>
+    </g>
+
+</svg>

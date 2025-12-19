@@ -1,0 +1,131 @@
+# ---  Multi-Broker Configuration ---
+# Define all MQTT broker connections as a JSON array.
+# The 'id' MUST be unique for each broker.
+#
+#  Permission Model:
+# - 'subscribe': List of topic patterns to listen to (e.g., ["#", "factory/A/#"]).
+# - 'publish': List of topic patterns allowed for publishing (e.g., ["commands/#"]).
+#              Set to [] (empty array) to make the broker READ-ONLY.
+#
+MQTT_BROKERS='[{"id":"mqttunsviewer.com","host":"www.mqttunsviewer.com","port":1883,"protocol":"mqtt","clientId":"my-web-visualizer-app-dev-b1","username":"","password":"","subscribe":["#"],"publish":[],"certFilename":"","keyFilename":"","caFilename":"flashmq-ca.crt","alpnProtocol":"","rejectUnauthorized":true},{"id":"awsiot","host":"a3dron10uzesqj-ats.iot.eu-west-1.amazonaws.com","port":443,"protocol":"mqtts","clientId":"my-web-visualizer-app-dev-b1","username":"","password":"","subscribe":["dt/logs/prod/#","dt/iot/#","dt/apps/#","dt/alarms/prod/#"],"publish":["uns/#"],"certFilename":"certificate.pem.crt","keyFilename":"private.pem.key","caFilename":"AmazonRootCA1.pem","alpnProtocol":"x-amzn-mqtt-ca","rejectUnauthorized":true},{"id":"flashmq.org","host":"demo.flashmq.org","port":8883,"protocol":"mqtts","clientId":"my-web-visualizer-app-dev-b1","username":"","password":"","subscribe":["mqttunsviewer/#"],"publish":["mqttunsviewer/#"],"certFilename":"","keyFilename":"","caFilename":"flashmq-ca.crt","alpnProtocol":"","rejectUnauthorized":true}]'
+
+
+# --- Application & Simulator ---
+SIMULATOR_ENABLED=true
+PORT=8080
+
+# --- Sparkplug B Support ---
+# Set to 'true' to enable decoding of Sparkplug B Protobuf payloads.
+# The topic must start with 'spBv1.0/' for decoding to be attempted.
+SPARKPLUG_ENABLED=true
+
+# --- Database Configuration ---
+# Maximum database size in Megabytes.
+# If exceeded, the oldest data will be pruned.
+# Leave empty or comment out to disable the limit.
+DUCKDB_MAX_SIZE_MB=100
+
+# Number of old messages to delete when the size limit is reached.
+DUCKDB_PRUNE_CHUNK_SIZE=5000
+
+#  How many messages to insert in a single batch transaction.
+# A smaller size (e.g., 1000) reduces memory spikes but increases DB write frequency.
+# A larger size (e.g., 10000) is more efficient but uses more memory per batch.
+DB_INSERT_BATCH_SIZE=5000
+
+# How often (in milliseconds) the batch insert process should run.
+DB_BATCH_INTERVAL_MS=2000
+
+# ---  Perennial Storage Configuration (Optional) ---
+# Driver for long-term data storage.
+# Options: 'none', 'timescale'
+# Set to 'none' to disable dual-write and only use DuckDB.
+PERENNIAL_DRIVER=none
+
+# --- TimescaleDB / PostgreSQL Settings ---
+# (Only used if PERENNIAL_DRIVER=timescale)
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=postgres
+PG_PASSWORD=password
+PG_DATABASE=mqtt_uns_viewer
+# [Optional] The table name to use in TimescaleDB
+PG_TABLE_NAME=mqtt_events
+# [Optional] How many messages to batch insert into TimescaleDB at once
+PG_INSERT_BATCH_SIZE=1000
+# [Optional] How often (in ms) to run the TimescaleDB batch insert
+PG_BATCH_INTERVAL_MS=5000
+
+
+# Username for HTTP Basic Auth. Leave empty to disable.
+HTTP_USER=
+# Password for HTTP Basic Auth. Leave empty to disable.
+HTTP_PASSWORD=
+
+# Base path for reverse proxy deployment
+# The path where the application is served from (e.g., /myapp).
+# Must start with a slash and should NOT end with a slash.
+# Leave empty or as "/" to run at the domain root.
+BASE_PATH=/
+
+# --- View & UI Configuration ---
+# Enable or disable specific view tabs in the UI
+VIEW_TREE_ENABLED=true
+VIEW_SVG_ENABLED=true
+VIEW_HISTORY_ENABLED=true
+VIEW_MAPPER_ENABLED=true
+VIEW_CHART_ENABLED=true
+VIEW_PUBLISH_ENABLED=true
+VIEW_CHAT_ENABLED=true
+
+# The path to the *default* SVG file to load, relative to the 'data' directory.
+# Other .svg files in the 'data' directory will be selectable from a dropdown.
+SVG_FILE_PATH=death_star.svg
+
+# --- Demo & Security Configuration ---
+# Set to 'false' to hide the config page link and block its API/page access.
+# Set to 'false' to disable the web-based configuration editor (/config.html)
+VIEW_CONFIG_ENABLED=true
+
+# Limits for demo mode. Set to 0 or leave empty to disable the limit.
+MAX_SAVED_CHART_CONFIGS=10
+MAX_SAVED_MAPPER_VERSIONS=10
+
+# Ip addresses allowed to connect the APIs
+API_ALLOWED_IPS=
+
+
+# --- External API Settings ---
+# Set to 'true' to enable the external publish API at /api/external/publish
+EXTERNAL_API_ENABLED=false
+# The filename in the /data directory that stores API keys and permissions.
+EXTERNAL_API_KEYS_FILE=api_keys.json
+
+
+# MCP server config
+# stdio or http
+MCP_TRANSPORT=http
+# port for http
+MCP_PORT=3000
+
+
+# API Key for securing the /mcp HTTP endpoint. Leave empty to disable.
+MCP_API_KEY=
+
+# --- LLM / AI Chat Assistant Configuration ---
+# Configuration for the server-side AI agent.
+# Defaults to Google Gemini via OpenAI-compatible endpoint.
+
+# API URL for the LLM provider.
+# Examples:
+# Google Gemini: https://generativelanguage.googleapis.com/v1beta/openai/
+# OpenAI: https://api.openai.com/v1/
+# Local (LM Studio): http://localhost:1234/v1/
+LLM_API_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+
+# Your API Key for the LLM provider.
+LLM_API_KEY=AIzaSyDUxCrc1DDQVxZ4QrdAqzQGkX06yNytlf0
+
+# The model to use.
+# Examples: gemini-2.5-flash, gpt-4o, etc.
+LLM_MODEL=gemini-2.5-flash

@@ -20,3 +20,8 @@ data/certs/private.pem.key
 data/mqtt_events.duckdb
 data/mqtt_events.duckdb.wal
 build_docker_image.sh
+.repomix/config/repomixtestbundle-repomix.config.json
+repomix-output.xml
+.repomix/bundles.json
+repomix.config.json
+docker-compose.yml.demo

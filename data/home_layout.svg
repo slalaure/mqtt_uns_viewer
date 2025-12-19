@@ -1,0 +1,54 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'>
+  <!-- Background -->
+  <rect width='100%' height='100%' fill='#f0f0f0'/>
+
+  <!-- House Outline -->
+  <rect x='100' y='200' width='600' height='400' fill='none' stroke='#333' stroke-width='2'/>
+  <text x='400' y='180' font-size='24' text-anchor='middle' fill='#333'>Home Layout</text>
+
+  <!-- Rooms -->
+  <g id='rooms'>
+    <!-- Bedroom 1 -->
+    <rect x='120' y='220' width='150' height='150' fill='#e0f7fa' stroke='#006064' stroke-width='1'/>
+    <text x='195' y='205' font-size='14' text-anchor='middle' fill='#006064'>Bedroom 1</text>
+
+    <!-- Bedroom 2 -->
+    <rect x='290' y='220' width='150' height='150' fill='#e0f7fa' stroke='#006064' stroke-width='1'/>
+    <text x='365' y='205' font-size='14' text-anchor='middle' fill='#006064'>Bedroom 2</text>
+
+    <!-- Living Room -->
+    <rect x='120' y='390' width='320' height='150' fill='#e0f7fa' stroke='#006064' stroke-width='1'/>
+    <text x='180' y='375' font-size='14' text-anchor='middle' fill='#006064'>Living Room</text>
+
+    <!-- Kitchen -->
+    <rect x='470' y='220' width='130' height='150' fill='#e0f7fa' stroke='#006064' stroke-width='1'/>
+    <text x='530' y='205' font-size='14' text-anchor='middle' fill='#006064'>Kitchen</text>
+
+    <!-- Entrance -->
+    <rect x='120' y='220' width='100' height='50' fill='#e0f7fa' stroke='#006064' stroke-width='1'/>
+    <text x='170' y='205' font-size='12' text-anchor='middle' fill='#006064'>Entrance</text>
+
+    <!-- Garden -->
+    <rect x='620' y='390' width='180' height='150' fill='#e0f7fa' stroke='#006064' stroke-width='1'/>
+    <text x='710' y='375' font-size='14' text-anchor='middle' fill='#006064'>Garden</text>
+  </g>
+
+  <!-- Devices -->
+  <g id='devices'>
+    <!-- Heaters -->
+    <circle id='heater_bedroom1' cx='195' cy='300' r='10' fill='#ff9800'/>
+    <circle id='heater_bedroom2' cx='370' cy='300' r='10' fill='#ff9800'/>
+    <circle id='heater_living' cx='280' cy='470' r='10' fill='#ff9800'/>
+    <circle id='heater_kitchen' cx='530' cy='300' r='10' fill='#ff9800'/>
+    <circle id='heater_entrance' cx='170' cy='250' r='8' fill='#ff9800'/>
+
+    <!-- Lights -->
+    <circle id='light_living1' cx='220' cy='440' r='6' fill='#8bc34a'/>
+    <circle id='light_living2' cx='340' cy='440' r='6' fill='#8bc34a'/>
+    <circle id='light_garden' cx='710' cy='470' r='6' fill='#8bc34a'/>
+
+    <!-- Sensors -->
+    <rect id='sensor_bedroom1' x='185' y='280' width='10' height='10' fill='#2196f3'/>
+    <rect id='sensor_bedroom2' x='360' y='280' width='10' height='10' fill='#2196f3'/>
+  </g>
+</svg>

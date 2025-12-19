@@ -1,0 +1,399 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="700" viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            /* --- General Styles --- */
+            .bg { fill: #f0f4f8; }
+            body.dark-mode .bg { fill: #2c2c2c; }
+            
+            .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 24px; font-weight: 600; fill: #007bff; }
+            body.dark-mode .title { fill: #3391ff; }
+
+            .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 16px; font-weight: 500; fill: #555; }
+            body.dark-mode .subtitle { fill: #bbb; }
+
+            /* --- Process Equipment --- */
+            .process-box { fill: #ffffff; stroke: #9ab; stroke-width: 2; rx: 8; }
+            body.dark-mode .process-box { fill: #3a3a3a; stroke: #555; }
+            
+            .tank { fill: #ffffff; stroke: #007bff; stroke-width: 2; }
+            body.dark-mode .tank { fill: #3a3a3a; stroke: #3391ff; }
+
+            .alarm-box { fill: #fff8f8; stroke: #e56b6f; stroke-width: 2; rx: 8; }
+            body.dark-mode .alarm-box { fill: #4a2a2a; stroke: #e06c75; }
+
+            /* --- Labels & Values --- */
+            .instrument-label { font-family: 'Courier New', Courier, monospace; font-size: 13px; fill: #333; }
+            body.dark-mode .instrument-label { fill: #e0e0e0; }
+            
+            .instrument-value { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; fill: #0056b3; }
+            body.dark-mode .instrument-value { fill: #5caaff; }
+            
+            .unit-label { font-family: 'Courier New', Courier, monospace; font-size: 12px; fill: #444; }
+            body.dark-mode .unit-label { fill: #ccc; }
+
+            .alarm-title { font-size: 16px; font-weight: bold; fill: #c82333; }
+            body.dark-mode .alarm-title { fill: #e06c75; }
+
+            .alarm-label { font-size: 12px; font-family: 'Courier New', Courier, monospace; fill: #333; }
+            body.dark-mode .alarm-label { fill: #e0e0e0; }
+            
+            .alarm-value { font-size: 12px; font-family: 'Courier New', Courier, monospace; font-weight: bold; fill: #c82333; } /* Changed color to red */
+            body.dark-mode .alarm-value { fill: #e06c75; }
+
+            /* --- Flow Lines --- */
+            .flow-line { fill: none; stroke: #888; stroke-width: 3; }
+            body.dark-mode .flow-line { stroke: #666; }
+            
+            .flow-arrow { fill: #888; }
+            body.dark-mode .flow-arrow { fill: #666; }
+            
+            .gas-in { stroke: #f39c12; } /* Orange for raw gas */
+            .gas-purified { stroke: #2ecc71; } /* Green for purified */
+        </style>
+        
+        <marker id="arrow-gas-in" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="gas-in-arrow" />
+        </marker>
+        <marker id="arrow-gas-purified" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" class="gas-purified-arrow" />
+        </marker>
+    </defs>
+
+    <rect width="100%" height="100%" class="bg" />
+
+    <text x="500" y="40" text-anchor="middle" class="title">Synoptique Épuration Biogaz (BUU) - GASUM TURKU</text>
+
+    <path class="flow-line gas-in" d="M 90, 190 H 130" marker-end="url(#arrow-gas-in)" />
+    <path class="flow-line gas-in" d="M 270, 190 H 310" marker-end="url(#arrow-gas-in)" />
+    <path class="flow-line gas-in" d="M 450, 190 H 490" marker-end="url(#arrow-gas-in)" />
+    <path class="flow-line gas-purified" d="M 630, 190 H 670" marker-end="url(#arrow-gas-purified)" />
+    <path class="flow-line gas-purified" d="M 810, 190 H 850" marker-end="url(#arrow-gas-purified)" />
+    <path class="flow-line gas-purified" d="M 990, 190 H 1030" marker-end="url(#arrow-gas-purified)" />
+    
+    <g id="dt-iot-bgs-maintained-GASUM_TURKU_BUU-full">
+    
+        <rect x="130" y="100" width="140" height="230" class="process-box" />
+        <text x="200" y="90" text-anchor="middle" class="subtitle">Aspiration Biogaz</text>
+        
+        <text x="140" y="130" class="instrument-label">P. Aspiration (AI_PT0101):</text>
+        <text x="200" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT0101" class="instrument-value">0.00</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <text x="140" y="180" class="instrument-label">T. Aspiration (AI_TT0101):</text>
+        <text x="200" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_TT0101" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan>
+        </text>
+
+        <text x="140" y="230" class="instrument-label">Vitesse Surpresseur (VFD1101):</text>
+        <text x="200" y="250" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.VFD1101" class="instrument-value">0.0</tspan><tspan class="unit-label"> %</tspan>
+        </text>
+
+        <text x="140" y="280" class="instrument-label">P. Refoulement (AI_PT0102):</text>
+        <text x="200" y="300" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT0102" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <rect x="310" y="100" width="140" height="150" class="process-box" />
+        <text x="380" y="90" text-anchor="middle" class="subtitle">Laveur H2S</text>
+
+        <text x="320" y="130" class="instrument-label">Débit Biogaz (AI_FT0102):</text>
+        <text x="380" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_FT0102" class="instrument-value">0.0</tspan><tspan class="unit-label"> Nm3/h</tspan>
+        </text>
+
+        <text x="320" y="180" class="instrument-label">T. Entrée Laveur (AI_TT1101):</text>
+        <text x="380" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_TT1101" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan>
+        </text>
+        
+        <rect x="490" y="100" width="140" height="150" class="process-box" />
+        <text x="560" y="90" text-anchor="middle" class="subtitle">Colonnes Épuration</text>
+
+        <text x="500" y="130" class="instrument-label">P. Colonne 1 (AI_PT3211A):</text>
+        <text x="560" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT3211A" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <text x="500" y="180" class="instrument-label">P. Colonne 2 (AI_PT3221A):</text>
+        <text x="560" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT3221A" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+        
+        <rect x="670" y="100" width="140" height="230" class="process-box" />
+        <text x="740" y="90" text-anchor="middle" class="subtitle">Gazomètres</text>
+
+        <text x="680" y="130" class="instrument-label">P. Gazo Amont (AI_PT5001):</text>
+        <text x="740" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT5001" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <text x="680" y="180" class="instrument-label">P. Gazo Aval (AI_PT5101):</text>
+        <text x="740" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT5101" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+        
+        <text x="680" y="230" class="instrument-label">T. Gazo Aval (AI_TT5101):</text>
+        <text x="740" y="250" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_TT5101" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan>
+        </text>
+        
+        <text x="680" y="280" class="instrument-label">Niveau Digesteur (Dig_Gas_Bag_LT):</text>
+        <text x="740" y="300" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.Dig_Gas_Bag_LT" class="instrument-value">0.0</tspan><tspan class="unit-label"> %</tspan>
+        </text>
+        
+        <rect x="850" y="100" width="140" height="150" class="process-box" />
+        <text x="920" y="90" text-anchor="middle" class="subtitle">Analyseur</text>
+        
+        <text x="860" y="130" class="instrument-label">P. Entrée (AI_PT4301):</text>
+        <text x="920" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT4301" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+        
+        <text x="860" y="180" class="instrument-label">Analyseur O2 (Dig_Up_AI_O2):</text>
+        <text x="920" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.Dig_Up_AI_O2" class="instrument-value">0.0</tspan><tspan class="unit-label"> %</tspan>
+        </text>
+
+        <rect x="1030" y="100" width="140" height="150" class="process-box" />
+        <text x="1100" y="90" text-anchor="middle" class="subtitle">Injection</text>
+
+        <text x="1040" y="130" class="instrument-label">Compteur CH4 Jour:</text>
+        <text x="1100" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.6000_CPT_CH4_J" class="instrument-value">0</tspan><tspan class="unit-label"> Nm3</tspan>
+        </text>
+        
+        <text x="1040" y="180" class="instrument-label">Compteur Injection:</text>
+        <text x="1100" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.6000_CPT_INJ" class="instrument-value">0</tspan><tspan class="unit-label"> Nm3</tspan>
+        </text>
+        
+        <rect x="850" y="350" width="320" height="300" class="alarm-box" />
+        <text x="1010" y="380" text-anchor="middle" class="alarm-title">Alarmes Actives</text>
+
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="420" class="alarm-label">P. Aspiration Biogaz (HH: 450):</text>
+            <text x="1080" y="420" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT0101" data-alarm-type="HH" data-alarm-value="450">0.00</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="450" class="alarm-label">P. Refoulement Biogaz (HH: 350):</text>
+            <text x="1080" y="450" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT0102" data-alarm-type="HH" data-alarm-value="350">0.00</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="480" class="alarm-label">Débit Biogaz (LL: 5.0):</text>
+            <text x="1080" y="480" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_FT0102" data-alarm-type="LL" data-alarm-value="5.0">0.0</tspan>
+                <tspan class="unit-label"> Nm3/h</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="510" class="alarm-label">T. Entrée Laveur (H: 70.0):</text>
+            <text x="1080" y="510" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_TT1101" data-alarm-type="H" data-alarm-value="70.0">0.0</tspan>
+                <tspan class="unit-label"> °C</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="540" class="alarm-label">P. Entrée Analyseur (L: 5.0):</text>
+            <text x="1080" y="540" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT4301" data-alarm-type="L" data-alarm-value="5.0">0.0</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="570" class="alarm-label">P. Gazo Amont (H: 80.0):</text>
+            <text x="1080" y="570" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT5001" data-alarm-type="H" data-alarm-value="80.0">0.0</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="600" class="alarm-label">P. Gazo Aval (H: 40.0):</text>
+            <text x="1080" y="600" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT5101" data-alarm-type="H" data-alarm-value="40.0">0.0</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <text id="no-alarms-text" x="1010" y="490" text-anchor="middle" class="instrument-label" style="display: block;">(Aucune alarme active)</text>
+
+    </g>
+    
+    <g id="dt-iot-bgs-maintained-GASUM_TURKU_BUU-updates">
+    
+        <rect x="130" y="100" width="140" height="230" class="process-box" />
+        <text x="200" y="90" text-anchor="middle" class="subtitle">Aspiration Biogaz</text>
+        
+        <text x="140" y="130" class="instrument-label">P. Aspiration (AI_PT0101):</text>
+        <text x="200" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT0101" class="instrument-value">0.00</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <text x="140" y="180" class="instrument-label">T. Aspiration (AI_TT0101):</text>
+        <text x="200" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_TT0101" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan>
+        </text>
+
+        <text x="140" y="230" class="instrument-label">Vitesse Surpresseur (VFD1101):</text>
+        <text x="200" y="250" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.VFD1101" class="instrument-value">0.0</tspan><tspan class="unit-label"> %</tspan>
+        </text>
+
+        <text x="140" y="280" class="instrument-label">P. Refoulement (AI_PT0102):</text>
+        <text x="200" y="300" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT0102" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <rect x="310" y="100" width="140" height="150" class="process-box" />
+        <text x="380" y="90" text-anchor="middle" class="subtitle">Laveur H2S</text>
+
+        <text x="320" y="130" class="instrument-label">Débit Biogaz (AI_FT0102):</text>
+        <text x="380" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_FT0102" class="instrument-value">0.0</tspan><tspan class="unit-label"> Nm3/h</tspan>
+        </text>
+
+        <text x="320" y="180" class="instrument-label">T. Entrée Laveur (AI_TT1101):</text>
+        <text x="380" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_TT1101" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan>
+        </text>
+        
+        <rect x="490" y="100" width="140" height="150" class="process-box" />
+        <text x="560" y="90" text-anchor="middle" class="subtitle">Colonnes Épuration</text>
+
+        <text x="500" y="130" class="instrument-label">P. Colonne 1 (AI_PT3211A):</text>
+        <text x="560" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT3211A" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <text x="500" y="180" class="instrument-label">P. Colonne 2 (AI_PT3221A):</text>
+        <text x="560" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT3221A" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+        
+        <rect x="670" y="100" width="140" height="230" class="process-box" />
+        <text x="740" y="90" text-anchor="middle" class="subtitle">Gazomètres</text>
+
+        <text x="680" y="130" class="instrument-label">P. Gazo Amont (AI_PT5001):</text>
+        <text x="740" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT5001" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+
+        <text x="680" y="180" class="instrument-label">P. Gazo Aval (AI_PT5101):</text>
+        <text x="740" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT5101" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+        
+        <text x="680" y="230" class="instrument-label">T. Gazo Aval (AI_TT5101):</text>
+        <text x="740" y="250" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_TT5101" class="instrument-value">0.0</tspan><tspan class="unit-label"> °C</tspan>
+        </text>
+        
+        <text x="680" y="280" class="instrument-label">Niveau Digesteur (Dig_Gas_Bag_LT):</text>
+        <text x="740" y="300" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.Dig_Gas_Bag_LT" class="instrument-value">0.0</tspan><tspan class="unit-label"> %</tspan>
+        </text>
+        
+        <rect x="850" y="100" width="140" height="150" class="process-box" />
+        <text x="920" y="90" text-anchor="middle" class="subtitle">Analyseur</text>
+        
+        <text x="860" y="130" class="instrument-label">P. Entrée (AI_PT4301):</text>
+        <text x="920" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.AI_PT4301" class="instrument-value">0.0</tspan><tspan class="unit-label"> mbar</tspan>
+        </text>
+        
+        <text x="860" y="180" class="instrument-label">Analyseur O2 (Dig_Up_AI_O2):</text>
+        <text x="920" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.Dig_Up_AI_O2" class="instrument-value">0.0</tspan><tspan class="unit-label"> %</tspan>
+        </text>
+
+        <rect x="1030" y="100" width="140" height="150" class="process-box" />
+        <text x="1100" y="90" text-anchor="middle" class="subtitle">Injection</text>
+
+        <text x="1040" y="130" class="instrument-label">Compteur CH4 Jour:</text>
+        <text x="1100" y="150" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.6000_CPT_CH4_J" class="instrument-value">0</tspan><tspan class="unit-label"> Nm3</tspan>
+        </text>
+        
+        <text x="1040" y="180" class="instrument-label">Compteur Injection:</text>
+        <text x="1100" y="200" text-anchor="middle" class="instrument-label">
+            <tspan data-key="variables.6000_CPT_INJ" class="instrument-value">0</tspan><tspan class="unit-label"> Nm3</tspan>
+        </text>
+        
+        <rect x="850" y="350" width="320" height="300" class="alarm-box" />
+        <text x="1010" y="380" text-anchor="middle" class="alarm-title">Alarmes Actives</text>
+
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="420" class="alarm-label">P. Aspiration Biogaz (HH: 450):</text>
+            <text x="1080" y="420" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT0101" data-alarm-type="HH" data-alarm-value="450">0.00</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="450" class="alarm-label">P. Refoulement Biogaz (HH: 350):</text>
+            <text x="1080" y="450" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT0102" data-alarm-type="HH" data-alarm-value="350">0.00</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="480" class="alarm-label">Débit Biogaz (LL: 5.0):</text>
+            <text x="1080" y="480" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_FT0102" data-alarm-type="LL" data-alarm-value="5.0">0.0</tspan>
+                <tspan class="unit-label"> Nm3/h</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="510" class="alarm-label">T. Entrée Laveur (H: 70.0):</text>
+            <text x="1080" y="510" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_TT1101" data-alarm-type="H" data-alarm-value="70.0">0.0</tspan>
+                <tspan class="unit-label"> °C</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="540" class="alarm-label">P. Entrée Analyseur (L: 5.0):</text>
+            <text x="1080" y="540" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT4301" data-alarm-type="L" data-alarm-value="5.0">0.0</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="570" class="alarm-label">P. Gazo Amont (H: 80.0):</text>
+            <text x="1080" y="570" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT5001" data-alarm-type="H" data-alarm-value="80.0">0.0</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+
+        <g class="alarm-line" style="display: none;">
+            <text x="860" y="600" class="alarm-label">P. Gazo Aval (H: 40.0):</text>
+            <text x="1080" y="600" class="alarm-label">
+                <tspan class="alarm-value" data-key="variables.AI_PT5101" data-alarm-type="H" data-alarm-value="40.0">0.0</tspan>
+                <tspan class="unit-label"> mbar</tspan>
+            </text>
+        </g>
+        
+        <text id="no-alarms-text" x="1010" y="490" text-anchor="middle" class="instrument-label" style="display: block;">(Aucune alarme active)</text>
+
+    </g>
+</svg>

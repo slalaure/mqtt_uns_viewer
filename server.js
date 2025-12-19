@@ -129,7 +129,6 @@ const config = {
     EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED === 'true',
     EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json',
     ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true', // [NEW] Feature flag for analytics
-    
     // [NEW] Granular AI Tool Permissions (Default to TRUE)
     AI_TOOLS: {
         ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',         // Read DB, topics, history
@@ -233,7 +232,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
     next();
 });
-// ---  Mapper Engine Setup ---
+// --- Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
     wsManager.broadcast, 
@@ -357,7 +356,10 @@ const ipFilterMiddleware = (req, res, next) => {
     res.status(403).json({ error: `Access denied for IP ${req.ip}` });
 };
 const mainRouter = express.Router();
-mainRouter.use(express.json());
+
+// [FIXED] Increased limit for JSON payloads (Base64 images)
+mainRouter.use(express.json({ limit: '50mb' }));
+
 app.set('trust proxy', true);
 // Simulator
 simulatorManager.init(logger, (topic, payload) => {

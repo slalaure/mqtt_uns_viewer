@@ -463,10 +463,24 @@ async function sendMessage(fromVoice = false) {
     showTypingIndicator(true);
 
     // [FIX] Filter out messages with invalid roles (like 'error') before sending
-    // This prevents the "Invalid role: error" 400 Bad Request loop
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
-    const messagesPayload = validHistory.map(m => {
-        const apiMsg = { role: m.role, content: m.content };
+    
+    // [OPTIMIZATION] Filter out old images to save token context
+    const messagesPayload = validHistory.map((m, index) => {
+        const isLastUserMessage = (index === validHistory.length - 1);
+        
+        let safeContent = m.content;
+        
+        // Check if content is array (contains image)
+        if (Array.isArray(m.content)) {
+            // If it's NOT the last message, strip the image part to save tokens
+            if (!isLastUserMessage) {
+                const textPart = m.content.find(p => p.type === 'text');
+                safeContent = textPart ? textPart.text : "[Image Removed from History]";
+            }
+        }
+
+        const apiMsg = { role: m.role, content: safeContent };
         if (m.tool_calls) apiMsg.tool_calls = m.tool_calls;
         if (m.tool_call_id) apiMsg.tool_call_id = m.tool_call_id;
         if (m.name) apiMsg.name = m.name;
@@ -501,8 +515,6 @@ async function sendMessage(fromVoice = false) {
         }
 
         // If content is null but we have tool calls, we should display something
-        // The backend handles the tool execution loop, so 'content' typically contains the final answer
-        // IF 'content' is still null, it means the LLM didn't summarize the action.
         if (assistantMsg.content === null && assistantMsg.tool_calls) {
              assistantMsg.content = "✅ Operation completed.";
         }
