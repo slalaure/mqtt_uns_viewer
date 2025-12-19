@@ -506,6 +506,13 @@ app.get('/', (req, res) => {
 server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
 });
+
+// [CRITICAL FIX] Increase Timeout to support long-running LLM Agent Chains
+// Default is 2 minutes (120000). Set to 10 minutes (600000).
+server.timeout = 600000;
+server.keepAliveTimeout = 600000;
+server.headersTimeout = 600005; // Must be slightly higher than keepAliveTimeout
+
 // --- Graceful Shutdown Logic ---
 async function gracefulShutdown() {
     if (isShuttingDown) return;
