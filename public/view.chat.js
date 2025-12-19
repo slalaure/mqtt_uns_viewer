@@ -13,6 +13,7 @@
  * Optimized for Chrome "Google" Voices & Safari compatibility.
  */
 import { trackEvent } from './utils.js';
+
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-widget-container');
 const chatHistory = document.getElementById('chat-history');
@@ -21,6 +22,7 @@ const btnSend = document.getElementById('btn-send-chat');
 const btnClear = document.getElementById('btn-chat-clear');
 const btnMinimize = document.getElementById('btn-chat-minimize');
 const fabButton = document.getElementById('btn-chat-fab');
+
 // --- New Elements ---
 let fileInput = null;
 let previewContainer = null;
@@ -29,14 +31,17 @@ let btnCam = null;
 let cameraModal = null; 
 let cameraVideo = null; 
 let cameraStream = null; 
+
 // --- State ---
 let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
+
 // --- Storage & Path State ---
 let storageKey = 'chat_history'; // Default key
 let appBasePath = ''; // [NEW] Store base path for API calls
+
 // --- Voice State ---
 let recognition = null;
 let isListening = false;
@@ -61,7 +66,7 @@ export function initChatView(basePath, onFileCreated) {
     appBasePath = basePath || '';
     if (appBasePath === '/') appBasePath = '';
     if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
-    
+
     // 2. Generate scoped key based on path
     if (basePath && basePath !== '/' && basePath !== '') {
         const cleanPath = basePath.replace(/^\/|\/$/g, '').replace(/\//g, '_');
@@ -79,6 +84,7 @@ export function initChatView(basePath, onFileCreated) {
     injectVoiceUI(); 
     injectCameraUI(); 
     loadHistory();
+
     // [FIX] Pre-load voices aggressively for Chrome/Safari
     if ('speechSynthesis' in window) {
         const loadVoices = () => {
@@ -89,9 +95,11 @@ export function initChatView(basePath, onFileCreated) {
         // Chrome fires this when voices are ready
         window.speechSynthesis.onvoiceschanged = loadVoices;
     }
+
     fabButton?.addEventListener('click', () => toggleChatWidget(true));
     btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
     btnSend?.addEventListener('click', () => sendMessage(false));
+    
     chatInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -99,6 +107,7 @@ export function initChatView(basePath, onFileCreated) {
         }
         autoResizeInput();
     });
+
     btnClear?.addEventListener('click', () => {
         if (confirm('Clear conversation history?')) {
             conversationHistory = [];
@@ -109,10 +118,12 @@ export function initChatView(basePath, onFileCreated) {
         }
     });
 }
+
 function autoResizeInput() {
     chatInput.style.height = 'auto';
     chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
 }
+
 function injectCameraUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
@@ -123,6 +134,7 @@ function injectCameraUI() {
     btnCam.className = 'chat-icon-btn';
     if (btnMic) inputArea.insertBefore(btnCam, btnMic);
     else inputArea.insertBefore(btnCam, btnSend);
+
     cameraModal = document.createElement('div');
     cameraModal.className = 'chat-camera-modal';
     cameraModal.style.display = 'none';
@@ -141,6 +153,7 @@ function injectCameraUI() {
     document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
     btnCam.addEventListener('click', openCamera);
 }
+
 async function openCamera() {
     if (!window.isSecureContext) {
         alert("Camera requires HTTPS or localhost.");
@@ -157,10 +170,12 @@ async function openCamera() {
         }
     } catch (err) { alert("Camera error: " + err.message); }
 }
+
 function closeCamera() {
     if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
     if (cameraModal) cameraModal.style.display = 'none';
 }
+
 function takePicture() {
     if (!cameraVideo || !cameraStream) return;
     const canvas = document.createElement('canvas');
@@ -171,21 +186,25 @@ function takePicture() {
     closeCamera();
     renderPreview();
 }
+
 function injectVoiceUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
     btnMic = document.createElement('button');
     btnMic.id = 'btn-chat-mic';
     btnMic.innerHTML = '🎤'; 
     btnMic.title = 'Voice Input (Click to Start/Stop)';
     btnMic.className = 'chat-icon-btn';
     inputArea.insertBefore(btnMic, btnSend);
+
     recognition = new SpeechRecognition();
     recognition.continuous = true; 
     recognition.interimResults = true;
     recognition.lang = navigator.language || 'en-US';
+
     recognition.onstart = () => {
         isListening = true;
         btnMic.classList.add('listening');
@@ -243,6 +262,7 @@ function injectVoiceUI() {
         }
     });
 }
+
 /**
  * [FIX] Enhanced Speak Text
  * - Prioritizes "Google" voices for better quality.
@@ -259,14 +279,17 @@ function speakText(text) {
         .replace(/\[(.*?)\]\(.*?\)/g, '$1') 
         .replace(/```[\s\S]*?```/g, 'Code block skipped.') 
         .replace(/<[^>]*>/g, '');
+
     currentUtterance = new SpeechSynthesisUtterance(cleanText);
     const targetLang = navigator.language || 'en-US';
     currentUtterance.lang = targetLang;
     currentUtterance.rate = 1.0; // Standard speed for natural voices
+
     // Ensure voices are loaded
     if (availableVoices.length === 0) {
         availableVoices = window.speechSynthesis.getVoices();
     }
+
     // Voice Selection Strategy (Priority Order)
     // 1. Exact language match AND contains "Google" (High Quality Chrome)
     // 2. Exact language match
@@ -282,16 +305,19 @@ function speakText(text) {
     if (!voice) {
         voice = availableVoices.find(v => v.lang.startsWith(targetLang.substring(0, 2)));
     }
+
     if (voice) {
         console.log(`[TTS] Speaking with voice: ${voice.name} (${voice.lang})`);
         currentUtterance.voice = voice;
     } else {
         console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
     }
+
     currentUtterance.onend = () => { currentUtterance = null; };
     currentUtterance.onerror = (e) => { console.error("TTS Error:", e); currentUtterance = null; };
     window.speechSynthesis.speak(currentUtterance);
 }
+
 function injectUploadUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
@@ -309,6 +335,7 @@ function injectUploadUI() {
     previewContainer.id = 'chat-file-preview'; previewContainer.style.display = 'none';
     document.querySelector('.chat-body')?.insertBefore(previewContainer, inputArea);
 }
+
 function handleFileSelect(e) {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
@@ -318,12 +345,14 @@ function handleFileSelect(e) {
     };
     if (file.type.startsWith('image/')) reader.readAsDataURL(file); else reader.readAsText(file);
 }
+
 function renderPreview() {
     if(!pendingAttachment) { previewContainer.style.display='none'; return; }
     previewContainer.style.display='flex';
     previewContainer.innerHTML = `<div class="preview-item">${pendingAttachment.type==='image'?`<img src="${pendingAttachment.content}">`:`<div class="file-icon">📄</div>`}<span class="file-name">${pendingAttachment.name}</span><button class="btn-remove-attachment">×</button></div>`;
     previewContainer.querySelector('.btn-remove-attachment').onclick = () => { pendingAttachment=null; fileInput.value=''; renderPreview(); };
 }
+
 export function toggleChatWidget(show) {
     isWidgetOpen = show;
     chatContainer.classList.toggle('active', show);
@@ -337,32 +366,35 @@ function loadHistory() {
         let rawHistory = JSON.parse(localStorage.getItem(storageKey) || '[]'); 
         // Automatically filter out messages with 'error' role that cause 400 Bad Request
         conversationHistory = rawHistory.filter(msg => msg.role !== 'error');
-        
         // If we found and removed errors, update storage immediately
         if (conversationHistory.length !== rawHistory.length) {
             console.log(`[Chat] Sanitized ${rawHistory.length - conversationHistory.length} corrupted messages from history.`);
             saveHistory();
         }
-        
         renderHistory(); 
     } 
     catch { conversationHistory = []; }
     if(conversationHistory.length===0) addMessageToState('system', 'Hello! I am your UNS Assistant.');
 }
+
 function saveHistory() { localStorage.setItem(storageKey, JSON.stringify(conversationHistory)); }
+
 function addMessageToState(role, content, toolCalls=null) {
     const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
     conversationHistory.push(msg);
     if(conversationHistory.length>30) conversationHistory=conversationHistory.slice(-30);
     saveHistory(); appendMessageToUI(msg);
 }
+
 function renderHistory() { chatHistory.innerHTML=''; conversationHistory.forEach(appendMessageToUI); scrollToBottom(); }
 function scrollToBottom() { chatHistory.scrollTop = chatHistory.scrollHeight; }
+
 function appendMessageToUI(msg) {
     if (!chatHistory) return;
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
     let contentToFormat = msg.content;
+
     if (Array.isArray(msg.content)) {
         let htmlParts = '';
         msg.content.forEach(part => {
@@ -378,6 +410,7 @@ function appendMessageToUI(msg) {
         if (msg.role === 'tool') div.classList.add('system'), div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
         else div.innerHTML = htmlContent;
     }
+
     if (msg.role === 'assistant' && msg.content && !Array.isArray(msg.content)) {
         const speakerBtn = document.createElement('button');
         speakerBtn.className = 'btn-message-speak';
@@ -388,6 +421,7 @@ function appendMessageToUI(msg) {
     chatHistory.appendChild(div);
     scrollToBottom();
 }
+
 function formatMessageContent(text) {
     if (!text) return '';
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -396,6 +430,7 @@ function formatMessageContent(text) {
                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
                .replace(/\n/g, '<br>');
 }
+
 async function sendMessage(fromVoice = false) {
     if (isProcessing) return;
     window.speechSynthesis.cancel();
@@ -403,10 +438,12 @@ async function sendMessage(fromVoice = false) {
         userWantMicActive = false;
         if(recognition) recognition.stop();
     }
+    
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
+
     let messageContent = text;
     if (pendingAttachment) {
         if (pendingAttachment.type === 'image') {
@@ -415,12 +452,16 @@ async function sendMessage(fromVoice = false) {
             messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
         }
     }
+
     chatInput.value = ''; autoResizeInput();
     pendingAttachment = null; renderPreview(); fileInput.value = '';
+    
     addMessageToState('user', messageContent);
     isProcessing = true;
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
+    
     showTypingIndicator(true);
+
     // [FIX] Filter out messages with invalid roles (like 'error') before sending
     // This prevents the "Invalid role: error" 400 Bad Request loop
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
@@ -431,6 +472,7 @@ async function sendMessage(fromVoice = false) {
         if (m.name) apiMsg.name = m.name;
         return apiMsg;
     });
+
     try {
         // [FIX] Use absolute URL constructed from basePath to prevent relative path errors
         const url = `${appBasePath}/api/chat/completion`;
@@ -442,14 +484,15 @@ async function sendMessage(fromVoice = false) {
                 userLanguage: navigator.language 
             })
         });
+
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+        
         const data = await response.json();
-        
         const assistantMsg = data.choices[0].message;
-        
+
         // [FIX] Detect if a tool was used to create a file
         if (assistantMsg.tool_calls) {
-            const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'save_file_to_data_directory');
+            const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'save_file_to_data_directory' || tool.function.name === 'create_dynamic_view');
             if (hasCreatedFile && onFileCreatedCallback) {
                 console.log("[ChatView] Detected file creation. Triggering refresh.");
                 // Delay slightly to ensure backend write is complete
@@ -469,6 +512,7 @@ async function sendMessage(fromVoice = false) {
         if (isVoice && assistantMsg.content) {
             speakText(assistantMsg.content);
         }
+
     } catch (error) {
         console.error(error);
         // [FIX] Detailed Network Error Handling
@@ -484,6 +528,7 @@ async function sendMessage(fromVoice = false) {
         chatInput.focus();
     }
 }
+
 function showTypingIndicator(show) {
     const existing = document.getElementById('typing-indicator');
     if (show && !existing) {

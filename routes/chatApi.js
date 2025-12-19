@@ -8,9 +8,8 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Chat API (LLM Agent Endpoint) - Full Parity with MCP Server
- * [MODIFIED] Added 'create_dynamic_view' tool to generate SVG+JS dashboards.
- * [MODIFIED] Updated System Prompt with Developer Documentation for SVGs.
+ * Chat API (LLM Agent Endpoint)
+ * Implements a Multi-Turn Agent Loop for autonomous tool execution.
  */
 const express = require('express');
 const axios = require('axios');
@@ -28,14 +27,11 @@ const escapeSQL = (str) => {
 // Helper to parse natural language time expression into SQL bounds
 const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
-    
     const results = chrono.parse(timeExpression);
     if (results.length === 0) return null;
-
     const firstResult = results[0];
     let start = firstResult.start.date();
     let end = firstResult.end ? firstResult.end.date() : new Date(); 
-
     return { start, end };
 };
 
@@ -71,7 +67,7 @@ const TOOL_PERMISSIONS = {
     'list_project_files': 'ENABLE_FILES',
     'get_file_content': 'ENABLE_FILES',
     'save_file_to_data_directory': 'ENABLE_FILES',
-    'create_dynamic_view': 'ENABLE_FILES', // [NEW] Permission category
+    'create_dynamic_view': 'ENABLE_FILES',
     'get_available_svg_views': 'ENABLE_FILES',
     'get_simulator_status': 'ENABLE_SIMULATOR',
     'start_simulator': 'ENABLE_SIMULATOR',
@@ -106,7 +102,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- 1. Tool Definitions ---
     const allTools = [
-        // ... (Existing tools kept as is: get_application_status, list_topics, search_data, etc.) ...
         {
             type: "function",
             function: {
@@ -133,7 +128,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     type: "object",
                     properties: {
                         query: { type: "string", description: "Space-separated English keywords (e.g., 'maintenance cmms')." },
-                        time_expression: { type: "string", description: "Natural language time range (e.g., 'last 24 hours', 'since yesterday', 'between 2023-10-01 and 2023-10-05')." },
+                        time_expression: { type: "string", description: "Natural language time range (e.g., 'last 24 hours', 'since yesterday')." },
                         limit: { type: "number" }
                     },
                     required: ["query"]
@@ -181,7 +176,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     type: "object",
                     properties: {
                         concept: { type: "string", description: "The concept (e.g., 'Work Order')." },
-                        filters: { type: "object", description: "Key-value pairs to filter payload (e.g., {'status': 'RELEASED'})." },
+                        filters: { type: "object", description: "Key-value pairs to filter payload." },
                         broker_id: { type: "string", description: "Optional. Broker ID." }
                     },
                     required: ["concept"]
@@ -367,6 +362,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         {
             type: "function",
             function: { name: "stop_simulator", description: "Stop simulator.", parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } }
+        },
+        {
+            type: "function",
+            function: {
+                name: "restart_application_server",
+                description: "Triggers a restart of the main server.",
+                parameters: { type: "object", properties: {}, required: [] }
+            }
         }
     ];
 
@@ -380,7 +383,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- 2. Tool Implementations ---
     const toolImplementations = {
-        // ... (Existing implementations: get_application_status, list_topics, search_data, get_topic_history, get_latest_message, get_model_definition, update_uns_model, search_uns_concept, infer_schema, publish_message, list_project_files, get_file_content) ...
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
                 logger.info("[ChatAPI:get_application_status] 1. Starting request");
@@ -413,18 +415,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
-                
                 let whereClauses = words.map(word => {
                     const safeWord = `%${escapeSQL(word)}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
-
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     whereClauses.push(`timestamp >= '${timeWindow.start.toISOString()}'`);
                     whereClauses.push(`timestamp <= '${timeWindow.end.toISOString()}'`);
                 }
-
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
@@ -441,13 +440,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
-
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
                     params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
-
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_topic_history] 2. Inside Serialize");
@@ -477,7 +474,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-        // ... (Semantic tools kept as is) ...
         get_model_definition: async ({ concept }) => {
             logger.info(`[ChatAPI:get_model_definition] Concept: ${concept}`);
             loadUnsModel();
@@ -600,14 +596,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             fs.writeFileSync(resolvedPath, content, 'utf8');
             return { success: true, path: `data/${filename}` };
         },
-        // [NEW] Implementation for create_dynamic_view
         create_dynamic_view: async ({ view_name, svg_content, js_content }) => {
             try {
                 // Ensure nice filenames
                 const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
                 const svgFilename = `${baseName}.svg`;
                 const jsFilename = `${baseName}.svg.js`;
-                
                 const svgPath = path.join(DATA_PATH, svgFilename);
                 const jsPath = path.join(DATA_PATH, jsFilename);
 
@@ -630,7 +624,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const files = fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg'));
             return { svg_files: files };
         },
-        // ... (Mapper & Simulator Tools kept as is) ...
         get_mapper_config: async () => {
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             return { config: mapperEngine.getMappings() };
@@ -684,6 +677,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const res = simulatorManager.stopSimulator(name);
             wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
             return res;
+        },
+        restart_application_server: async () => {
+            setTimeout(() => process.exit(0), 1000);
+            return { message: "Server restarting..." };
         }
     };
 
@@ -709,12 +706,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             content: `You are an expert UNS Architect and Operator.
             SYSTEM CONTEXT:
             ${brokerContext}
-            
             DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
             When the user asks for a diagram, use 'create_dynamic_view'.
             1. You MUST generate valid SVG XML with unique 'id' attributes for dynamic elements.
             2. You MUST generate a matching JavaScript file using this API signature:
-            
             \`\`\`javascript
             window.registerSvgBindings({
               // Called once when SVG loads
@@ -735,7 +730,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
               }
             });
             \`\`\`
-            
             CAPABILITIES:
             - READ: Inspect database, search data, infer schemas, view files.
             - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
@@ -750,89 +744,97 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             - Use 'search_uns_concept' for semantic queries.`
         };
 
-        const conversation = [systemMessage, ...messages];
-
-        // [FIX] Robust Payload Construction
-        // Only include tools if they exist to prevent 400 Bad Request on some providers
-        const requestPayload = {
-            model: config.LLM_MODEL,
-            messages: conversation,
-            stream: false,
-            temperature: 0.1 
-        };
-
-        if (enabledTools.length > 0) {
-            requestPayload.tools = enabledTools;
-            requestPayload.tool_choice = "auto";
-        }
-
-        const headers = { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.LLM_API_KEY}`
-        };
+        // --- Agentic Loop Configuration ---
+        const MAX_TURNS = 5; // Allow up to 5 hops (Think -> Tool -> Result -> Think -> Tool -> ...)
+        let currentMessages = [systemMessage, ...messages];
+        let turnCount = 0;
 
         try {
-            const response1 = await axios.post(apiUrl, requestPayload, { headers });
-            const message1 = response1.data.choices[0].message;
+            while (turnCount < MAX_TURNS) {
+                // Construct request payload
+                const requestPayload = {
+                    model: config.LLM_MODEL,
+                    messages: currentMessages,
+                    stream: false,
+                    temperature: 0.1
+                };
 
-            if (message1.tool_calls && message1.tool_calls.length > 0) {
-                logger.info(`[ChatAPI] 🛠️ Executing tools: ${message1.tool_calls.map(t => t.function.name).join(', ')}`);
-                const conversationWithTools = [...conversation, message1];
+                if (enabledTools.length > 0) {
+                    requestPayload.tools = enabledTools;
+                    requestPayload.tool_choice = "auto";
+                }
 
-                for (const toolCall of message1.tool_calls) {
+                const headers = { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.LLM_API_KEY}`
+                };
+
+                logger.debug(`[ChatAPI] 🧠 Agent Turn ${turnCount + 1}: Calling LLM...`);
+                const response = await axios.post(apiUrl, requestPayload, { headers });
+                const assistantMsg = response.data.choices[0].message;
+
+                // IMPORTANT: Add the Assistant's response (with potential tool calls) to history
+                currentMessages.push(assistantMsg);
+
+                // If no tool calls, we are done! Return the final response to the client.
+                if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+                    logger.debug(`[ChatAPI] 🏁 Final Answer reached at turn ${turnCount + 1}`);
+                    return res.json(response.data);
+                }
+
+                // If tools are called, execute them
+                logger.debug(`[ChatAPI] 🛠️ Executing ${assistantMsg.tool_calls.length} tool(s)...`);
+                
+                // Parallel execution of tools in this turn
+                const toolPromises = assistantMsg.tool_calls.map(async (toolCall) => {
                     const fnName = toolCall.function.name;
-                    const permissionKey = TOOL_PERMISSIONS[fnName];
-
-                    if (permissionKey && config.AI_TOOLS && config.AI_TOOLS[permissionKey] === false) {
-                         conversationWithTools.push({
-                            tool_call_id: toolCall.id,
-                            role: "tool",
-                            name: fnName,
-                            content: JSON.stringify({ error: `Tool '${fnName}' is disabled by configuration.` })
-                        });
-                        continue;
-                    }
-
                     let fnArgs = {};
                     try { fnArgs = JSON.parse(toolCall.function.arguments); } catch (e) {}
                     
-                    let toolResult = "";
+                    let resultContent = "";
                     try {
                         if (toolImplementations[fnName]) {
+                            logger.debug(`[ChatAPI] Executing tool: ${fnName}`);
                             const result = await toolImplementations[fnName](fnArgs);
-                            toolResult = JSON.stringify(result);
+                            resultContent = JSON.stringify(result);
                         } else {
-                            toolResult = JSON.stringify({ error: "Tool not implemented" });
+                            resultContent = JSON.stringify({ error: `Tool '${fnName}' not implemented` });
                         }
                     } catch (err) {
-                        logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
-                        toolResult = JSON.stringify({ error: err.message });
+                        logger.error({ err }, `[ChatAPI] Tool execution error for ${fnName}`);
+                        resultContent = JSON.stringify({ error: err.message });
                     }
 
-                    conversationWithTools.push({
+                    // Return the tool message object required by OpenAI format
+                    return {
                         tool_call_id: toolCall.id,
                         role: "tool",
                         name: fnName,
-                        content: toolResult
-                    });
-                }
+                        content: resultContent
+                    };
+                });
 
-                const followUpPayload = { 
-                    model: config.LLM_MODEL, 
-                    messages: conversationWithTools 
-                };
-                if (enabledTools.length > 0) {
-                    followUpPayload.tools = enabledTools;
-                    followUpPayload.tool_choice = "auto";
-                }
-
-                const response2 = await axios.post(apiUrl, followUpPayload, { headers });
-                return res.json(response2.data);
-            } else {
-                return res.json(response1.data);
+                const toolMessages = await Promise.all(toolPromises);
+                
+                // Add all tool results to history
+                currentMessages.push(...toolMessages);
+                
+                // Continue to next turn (LLM will see tool outputs and decide next step)
+                turnCount++;
             }
+
+            // If we exit loop without returning, we hit max turns
+            logger.warn("[ChatAPI] 🛑 Max turns reached. Forcing final thought.");
+            return res.json({ 
+                choices: [{ 
+                    message: { 
+                        role: 'assistant', 
+                        content: "I reached the maximum number of steps (5) without finishing. I might be stuck in a loop. Please refine your request." 
+                    } 
+                }] 
+            });
+
         } catch (error) {
-            // [FIX] Enhanced Error Logging
             const status = error.response ? error.response.status : 500;
             let msg = error.message;
             if (error.response && error.response.data) {
@@ -845,7 +847,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                      msg = JSON.stringify(error.response.data.error);
                 }
             }
-            logger.error({ status, msg, url: apiUrl }, "[ChatAPI] HTTP Error");
+            logger.error({ status, msg }, "[ChatAPI] HTTP Error");
             return res.status(status).json({ error: msg });
         }
     });
