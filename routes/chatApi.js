@@ -34,6 +34,7 @@ const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
     const results = chrono.parse(timeExpression);
     if (results.length === 0) return null;
+    
     const firstResult = results[0];
     let start = firstResult.start.date();
     let end = firstResult.end ? firstResult.end.date() : new Date(); 
@@ -49,6 +50,7 @@ function _inferSchema(messages) {
         try {
             const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
             if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) continue;
+            
             for (const [key, value] of Object.entries(payload)) {
                 if (!schema[key]) schema[key] = typeof value;
             }
@@ -89,6 +91,9 @@ const sendChunk = (res, type, content) => {
     // Prevent writing to a closed stream
     if (res.writableEnded || !res.writable) return;
     res.write(JSON.stringify({ type, content }) + '\n');
+    
+    // [CRITICAL FIX] Flush the buffer immediately to bypass proxy buffering (if supported by environment)
+    if (res.flush) res.flush();
 };
 
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
@@ -455,14 +460,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
-
+                
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
                     params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
-
+                
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
+                
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_topic_history] 2. Inside Serialize");
                     // Using spread operator for dynamic params
@@ -520,7 +526,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
             if (!model) return { error: `Concept '${concept}' not found in model.` };
-
+            
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
@@ -530,7 +536,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
-
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -587,7 +592,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                 const usedBrokerId = targetBrokerConfig.id;
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
-                
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
 
                 const connection = getBrokerConnection(usedBrokerId);
@@ -677,7 +681,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
-
+            
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -719,6 +723,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     router.post('/completion', async (req, res) => {
         const { messages } = req.body;
         if (!messages) return res.status(400).json({ error: "Missing messages." });
+        
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
 
         let apiUrl = config.LLM_API_URL;
@@ -727,8 +732,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
         // Set Headers for Streaming Response
         res.setHeader('Content-Type', 'application/x-ndjson');
-        res.setHeader('Cache-Control', 'no-cache');
+        
+        // [CRITICAL FIX] Disable Proxy Buffering
+        res.setHeader('Cache-Control', 'no-cache, no-transform'); // no-transform prevents compression
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Key for Nginx
+        res.flushHeaders(); // Force headers to be sent immediately
 
         // Initial Heartbeat
         sendChunk(res, 'status', 'Processing request...');
@@ -743,7 +752,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             content: `You are an expert UNS Architect and Operator.
             SYSTEM CONTEXT:
             ${brokerContext}
-
             DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
             When the user asks for a diagram, use 'create_dynamic_view'.
             1. You MUST generate valid SVG XML with unique 'id' attributes for dynamic elements.
@@ -768,14 +776,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
               }
             });
             \`\`\`
-
             CAPABILITIES:
             - READ: Inspect database, search data, infer schemas, view files.
             - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
             - MANAGE: Update UNS Model, Prune History.
-
             DATA LANGUAGE: English (translate user queries if needed).
-
             INSTRUCTIONS:
             - Use 'search_data' to find relevant topics before creating a view.
             - Use 'create_dynamic_view' to build dashboards (generate SVG XML + JS Bindings).
@@ -799,7 +804,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
                 turnCount++;
                 sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`);
-
+                
                 const requestPayload = {
                     model: config.LLM_MODEL,
                     messages: conversation,
@@ -811,6 +816,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                 // [CRITICAL] Added Timeout to prevent hanging
                 const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
+                
                 const message = response.data.choices[0].message;
 
                 // Case 1: The model wants to call tools
