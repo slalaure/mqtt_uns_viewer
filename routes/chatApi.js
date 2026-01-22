@@ -9,7 +9,8 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
- * Implements a Multi-Turn Agent Loop for autonomous tool execution.
+ * Implements a Multi-Turn Loop (Max 5 steps) to handle complex agentic workflows.
+ * Added explicit timeouts to Axios calls to prevent indefinite hanging.
  */
 const express = require('express');
 const axios = require('axios');
@@ -17,6 +18,10 @@ const mqttMatch = require('mqtt-match');
 const fs = require('fs');
 const path = require('path');
 const chrono = require('chrono-node');
+
+// --- Constants ---
+const MAX_AGENT_TURNS = 8; // Limit recursion to prevent infinite loops
+const LLM_TIMEOUT_MS = 120000; // 120s timeout for LLM generation
 
 // Helper to escape SQL string
 const escapeSQL = (str) => {
@@ -77,6 +82,13 @@ const TOOL_PERMISSIONS = {
     'update_uns_model': 'ENABLE_ADMIN',
     'prune_topic_history': 'ENABLE_ADMIN',
     'restart_application_server': 'ENABLE_ADMIN'
+};
+
+// Helper to send NDJSON chunks
+const sendChunk = (res, type, content) => {
+    // Prevent writing to a closed stream
+    if (res.writableEnded || !res.writable) return;
+    res.write(JSON.stringify({ type, content }) + '\n');
 };
 
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
@@ -381,7 +393,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         return true;
     });
 
-    // --- 2. Tool Implementations ---
+    // --- 2. Tool Implementations (Promises) ---
     const toolImplementations = {
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
@@ -415,15 +427,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
+                
                 let whereClauses = words.map(word => {
                     const safeWord = `%${escapeSQL(word)}%`;
-                    return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
+                    return `(topic ILIKE '%${safeWord}%' OR CAST(payload AS VARCHAR) ILIKE '%${safeWord}%')`;
                 });
+
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     whereClauses.push(`timestamp >= '${timeWindow.start.toISOString()}'`);
                     whereClauses.push(`timestamp <= '${timeWindow.end.toISOString()}'`);
                 }
+
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
@@ -440,11 +455,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
+
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
                     params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
+
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_topic_history] 2. Inside Serialize");
@@ -503,14 +520,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
             if (!model) return { error: `Concept '${concept}' not found in model.` };
+
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+            
             if (filters) {
                 for (const [key, value] of Object.entries(filters)) {
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
+
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -555,6 +575,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
+                
                 let targetBrokerConfig = config.BROKER_CONFIGS[0];
                 if (broker_id) {
                     targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
@@ -563,13 +584,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
+
                 const usedBrokerId = targetBrokerConfig.id;
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
+                
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
+
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
+
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
+
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) resolve({ error: err.message });
                     else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
@@ -631,14 +657,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         update_mapper_rule: async ({ sourceTopic, targetTopic, targetCode }) => {
             logger.info("[ChatAPI] Updating mapper rule...");
             if (!mapperEngine) return { error: "Mapper Engine not available." };
+            
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
+
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
             }
+
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
             const newTarget = {
                 id: `tgt_${Date.now()}`,
@@ -648,6 +677,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
+
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -656,6 +686,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+                
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -684,6 +715,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
 
+    // --- 3. Streamed POST Endpoint ---
     router.post('/completion', async (req, res) => {
         const { messages } = req.body;
         if (!messages) return res.status(400).json({ error: "Missing messages." });
@@ -693,8 +725,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
 
-        logger.info(`[ChatAPI] 📡 Calling LLM Endpoint: ${apiUrl}`);
-        logger.info(`[ChatAPI] 🧠 Model: ${config.LLM_MODEL}`);
+        // Set Headers for Streaming Response
+        res.setHeader('Content-Type', 'application/x-ndjson');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        // Initial Heartbeat
+        sendChunk(res, 'status', 'Processing request...');
 
         const brokerContext = config.BROKER_CONFIGS.map(b => {
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
@@ -706,6 +743,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             content: `You are an expert UNS Architect and Operator.
             SYSTEM CONTEXT:
             ${brokerContext}
+
             DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
             When the user asks for a diagram, use 'create_dynamic_view'.
             1. You MUST generate valid SVG XML with unique 'id' attributes for dynamic elements.
@@ -730,125 +768,111 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
               }
             });
             \`\`\`
+
             CAPABILITIES:
             - READ: Inspect database, search data, infer schemas, view files.
             - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
             - MANAGE: Update UNS Model, Prune History.
+
             DATA LANGUAGE: English (translate user queries if needed).
+
             INSTRUCTIONS:
             - Use 'search_data' to find relevant topics before creating a view.
-            - Use 'create_dynamic_view' to build dashboards.
+            - Use 'create_dynamic_view' to build dashboards (generate SVG XML + JS Bindings).
             - Check broker permissions before publishing or starting sims.
             - When creating mapping rules, ensure target topic is valid.
             - Use 'infer_schema' before creating complex mappings if schema is unknown.
             - Use 'search_uns_concept' for semantic queries.`
         };
 
-        // --- Agentic Loop Configuration ---
-        const MAX_TURNS = 5; // Allow up to 5 hops (Think -> Tool -> Result -> Think -> Tool -> ...)
-        let currentMessages = [systemMessage, ...messages];
+        let conversation = [systemMessage, ...messages];
+        const headers = { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.LLM_API_KEY}`
+        };
+
+        // --- AGENT LOOP ---
         let turnCount = 0;
+        let finalMessageSent = false;
 
         try {
-            while (turnCount < MAX_TURNS) {
-                // Construct request payload
+            while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
+                turnCount++;
+                sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`);
+
                 const requestPayload = {
                     model: config.LLM_MODEL,
-                    messages: currentMessages,
-                    stream: false,
-                    temperature: 0.1
+                    messages: conversation,
+                    stream: false, 
+                    temperature: 0.1,
+                    tools: enabledTools.length > 0 ? enabledTools : undefined,
+                    tool_choice: enabledTools.length > 0 ? "auto" : undefined
                 };
 
-                if (enabledTools.length > 0) {
-                    requestPayload.tools = enabledTools;
-                    requestPayload.tool_choice = "auto";
-                }
+                // [CRITICAL] Added Timeout to prevent hanging
+                const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
+                const message = response.data.choices[0].message;
 
-                const headers = { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${config.LLM_API_KEY}`
-                };
-
-                logger.debug(`[ChatAPI] 🧠 Agent Turn ${turnCount + 1}: Calling LLM...`);
-                const response = await axios.post(apiUrl, requestPayload, { headers });
-                const assistantMsg = response.data.choices[0].message;
-
-                // IMPORTANT: Add the Assistant's response (with potential tool calls) to history
-                currentMessages.push(assistantMsg);
-
-                // If no tool calls, we are done! Return the final response to the client.
-                if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-                    logger.debug(`[ChatAPI] 🏁 Final Answer reached at turn ${turnCount + 1}`);
-                    return res.json(response.data);
-                }
-
-                // If tools are called, execute them
-                logger.debug(`[ChatAPI] 🛠️ Executing ${assistantMsg.tool_calls.length} tool(s)...`);
-                
-                // Parallel execution of tools in this turn
-                const toolPromises = assistantMsg.tool_calls.map(async (toolCall) => {
-                    const fnName = toolCall.function.name;
-                    let fnArgs = {};
-                    try { fnArgs = JSON.parse(toolCall.function.arguments); } catch (e) {}
+                // Case 1: The model wants to call tools
+                if (message.tool_calls && message.tool_calls.length > 0) {
+                    conversation.push(message); // Add assistant's message to history
                     
-                    let resultContent = "";
-                    try {
-                        if (toolImplementations[fnName]) {
-                            logger.debug(`[ChatAPI] Executing tool: ${fnName}`);
-                            const result = await toolImplementations[fnName](fnArgs);
-                            resultContent = JSON.stringify(result);
-                        } else {
-                            resultContent = JSON.stringify({ error: `Tool '${fnName}' not implemented` });
+                    for (const toolCall of message.tool_calls) {
+                        const fnName = toolCall.function.name;
+                        sendChunk(res, 'tool_start', { name: fnName });
+                        
+                        let result;
+                        let duration = 0;
+                        const startTime = Date.now();
+
+                        try {
+                            if (toolImplementations[fnName]) {
+                                let args = {};
+                                try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
+                                result = await toolImplementations[fnName](args);
+                                result = JSON.stringify(result);
+                            } else {
+                                result = JSON.stringify({ error: "Tool not implemented on server." });
+                            }
+                        } catch (err) {
+                            logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
+                            result = JSON.stringify({ error: err.message });
                         }
-                    } catch (err) {
-                        logger.error({ err }, `[ChatAPI] Tool execution error for ${fnName}`);
-                        resultContent = JSON.stringify({ error: err.message });
+                        
+                        duration = Date.now() - startTime;
+                        sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration });
+
+                        conversation.push({
+                            tool_call_id: toolCall.id,
+                            role: "tool",
+                            name: fnName,
+                            content: result
+                        });
                     }
-
-                    // Return the tool message object required by OpenAI format
-                    return {
-                        tool_call_id: toolCall.id,
-                        role: "tool",
-                        name: fnName,
-                        content: resultContent
-                    };
-                });
-
-                const toolMessages = await Promise.all(toolPromises);
-                
-                // Add all tool results to history
-                currentMessages.push(...toolMessages);
-                
-                // Continue to next turn (LLM will see tool outputs and decide next step)
-                turnCount++;
+                    // Loop continues...
+                } 
+                // Case 2: The model generated a final text response
+                else {
+                    sendChunk(res, 'message', message);
+                    finalMessageSent = true;
+                }
             }
 
-            // If we exit loop without returning, we hit max turns
-            logger.warn("[ChatAPI] 🛑 Max turns reached. Forcing final thought.");
-            return res.json({ 
-                choices: [{ 
-                    message: { 
-                        role: 'assistant', 
-                        content: "I reached the maximum number of steps (5) without finishing. I might be stuck in a loop. Please refine your request." 
-                    } 
-                }] 
-            });
+            if (!finalMessageSent) {
+                sendChunk(res, 'error', "Max agent turns reached. Stopping execution.");
+            }
 
         } catch (error) {
-            const status = error.response ? error.response.status : 500;
-            let msg = error.message;
-            if (error.response && error.response.data) {
-                // Log full body for debugging
-                console.error("[ChatAPI] ❌ Upstream Error Body:", JSON.stringify(error.response.data, null, 2));
-                // Try to extract useful user-facing message
-                if (error.response.data.error && error.response.data.error.message) {
-                    msg = error.response.data.error.message;
-                } else if (error.response.data.error) {
-                     msg = JSON.stringify(error.response.data.error);
-                }
+            const msg = error.response?.data?.error?.message || error.message;
+            if (msg.includes("timeout")) {
+                logger.error("LLM Timeout");
+                sendChunk(res, 'error', "The AI took too long to respond (Timeout).");
+            } else {
+                logger.error({ err: msg }, "[ChatAPI] Stream Error");
+                sendChunk(res, 'error', msg);
             }
-            logger.error({ status, msg }, "[ChatAPI] HTTP Error");
-            return res.status(status).json({ error: msg });
+        } finally {
+            res.end();
         }
     });
 

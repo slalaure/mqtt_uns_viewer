@@ -48,13 +48,17 @@ let isListening = false;
 let wasLastInputVoice = false; 
 let finalTranscript = ''; 
 let userWantMicActive = false;
+
 // Global reference for TTS to prevent Garbage Collection
 let currentUtterance = null; 
 // Cache for voices
 let availableVoices = [];
 
-// [NEW] Callbacks
 let onFileCreatedCallback = null;
+
+// --- Streaming UI ---
+let currentLogDiv = null; // [MODIFIED] Renamed from currentStatusDiv to indicate persistence
+let hasToolActivity = false; // [NEW] Track if tools were used
 
 /**
  * Initializes the Chat View.
@@ -99,7 +103,6 @@ export function initChatView(basePath, onFileCreated) {
     fabButton?.addEventListener('click', () => toggleChatWidget(true));
     btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
     btnSend?.addEventListener('click', () => sendMessage(false));
-    
     chatInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -107,7 +110,6 @@ export function initChatView(basePath, onFileCreated) {
         }
         autoResizeInput();
     });
-
     btnClear?.addEventListener('click', () => {
         if (confirm('Clear conversation history?')) {
             conversationHistory = [];
@@ -127,11 +129,13 @@ function autoResizeInput() {
 function injectCameraUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
+
     btnCam = document.createElement('button');
     btnCam.id = 'btn-chat-cam';
     btnCam.innerHTML = '📷';
     btnCam.title = 'Take Photo';
     btnCam.className = 'chat-icon-btn';
+    
     if (btnMic) inputArea.insertBefore(btnCam, btnMic);
     else inputArea.insertBefore(btnCam, btnSend);
 
@@ -148,9 +152,11 @@ function injectCameraUI() {
         </div>
     `;
     document.body.appendChild(cameraModal);
+
     cameraVideo = document.getElementById('chat-camera-feed');
     document.getElementById('btn-camera-cancel').addEventListener('click', closeCamera);
     document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
+
     btnCam.addEventListener('click', openCamera);
 }
 
@@ -160,6 +166,7 @@ async function openCamera() {
         return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return alert("Camera not supported");
+    
     try {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         cameraVideo.srcObject = cameraStream;
@@ -190,6 +197,7 @@ function takePicture() {
 function injectVoiceUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -210,6 +218,7 @@ function injectVoiceUI() {
         btnMic.classList.add('listening');
         chatInput.placeholder = "Listening... (Click mic to stop)";
     };
+
     recognition.onend = () => {
         isListening = false;
         if (userWantMicActive) {
@@ -222,6 +231,7 @@ function injectVoiceUI() {
             }
         }
     };
+
     recognition.onresult = (event) => {
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -235,6 +245,7 @@ function injectVoiceUI() {
         autoResizeInput();
         chatInput.scrollTop = chatInput.scrollHeight;
     };
+
     recognition.onerror = (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             userWantMicActive = false;
@@ -242,6 +253,7 @@ function injectVoiceUI() {
             btnMic.classList.remove('listening');
         }
     };
+
     btnMic.addEventListener('click', () => {
         if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             alert("Voice input requires HTTPS security.");
@@ -272,6 +284,7 @@ function injectVoiceUI() {
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
+
     let cleanText = text
         .replace(/\*\*/g, '') 
         .replace(/`/g, '')    
@@ -321,16 +334,20 @@ function speakText(text) {
 function injectUploadUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
+
     fileInput = document.createElement('input');
     fileInput.type = 'file'; fileInput.id = 'chat-file-input'; fileInput.style.display = 'none';
     fileInput.addEventListener('change', handleFileSelect);
     inputArea.appendChild(fileInput);
+
     const btnAttach = document.createElement('button');
     btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
     btnAttach.addEventListener('click', () => fileInput.click());
+
     if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
     else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
     else inputArea.insertBefore(btnAttach, chatInput);
+
     previewContainer = document.createElement('div');
     previewContainer.id = 'chat-file-preview'; previewContainer.style.display = 'none';
     document.querySelector('.chat-body')?.insertBefore(previewContainer, inputArea);
@@ -366,6 +383,7 @@ function loadHistory() {
         let rawHistory = JSON.parse(localStorage.getItem(storageKey) || '[]'); 
         // Automatically filter out messages with 'error' role that cause 400 Bad Request
         conversationHistory = rawHistory.filter(msg => msg.role !== 'error');
+        
         // If we found and removed errors, update storage immediately
         if (conversationHistory.length !== rawHistory.length) {
             console.log(`[Chat] Sanitized ${rawHistory.length - conversationHistory.length} corrupted messages from history.`);
@@ -393,8 +411,7 @@ function appendMessageToUI(msg) {
     if (!chatHistory) return;
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
-    let contentToFormat = msg.content;
-
+    
     if (Array.isArray(msg.content)) {
         let htmlParts = '';
         msg.content.forEach(part => {
@@ -431,16 +448,54 @@ function formatMessageContent(text) {
                .replace(/\n/g, '<br>');
 }
 
+// --- NEW PERSISTENT LOG UI ---
+// Creates a new log container for the current process
+function createLogDiv() {
+    const div = document.createElement('div');
+    div.className = 'chat-message system status-log';
+    div.style.textAlign = 'left'; // Ensure text is aligned left for list
+    div.style.fontSize = '0.85em';
+    div.style.lineHeight = '1.5';
+    chatHistory.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
+// Appends a line to the current log container
+function appendToLog(container, text, type = 'info') {
+    if (!container) return;
+    const line = document.createElement('div');
+    
+    if (type === 'tool_start') {
+        line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${text}`;
+    } else if (type === 'tool_result') {
+        line.innerHTML = `✅ ${text}`;
+        line.style.color = 'var(--color-success)';
+    } else if (type === 'error') {
+        line.innerHTML = `⚠️ ${text}`;
+        line.style.color = 'var(--color-danger)';
+    } else {
+        // Default / Status
+        line.innerHTML = `<small style="opacity:0.8">${text}</small>`;
+    }
+    
+    container.appendChild(line);
+    scrollToBottom();
+}
+
+// --- STREAMING SEND MESSAGE ---
 async function sendMessage(fromVoice = false) {
     if (isProcessing) return;
     window.speechSynthesis.cancel();
+    
     if (userWantMicActive || isListening) {
         userWantMicActive = false;
         if(recognition) recognition.stop();
     }
-    
+
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
+    
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
 
@@ -458,29 +513,16 @@ async function sendMessage(fromVoice = false) {
     
     addMessageToState('user', messageContent);
     isProcessing = true;
+    hasToolActivity = false; // Reset tool flag
+    
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
     
-    showTypingIndicator(true);
+    // [MODIFIED] Create a persistent log container for this interaction
+    currentLogDiv = createLogDiv();
 
-    // [FIX] Filter out messages with invalid roles (like 'error') before sending
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
-    
-    // [OPTIMIZATION] Filter out old images to save token context
-    const messagesPayload = validHistory.map((m, index) => {
-        const isLastUserMessage = (index === validHistory.length - 1);
-        
-        let safeContent = m.content;
-        
-        // Check if content is array (contains image)
-        if (Array.isArray(m.content)) {
-            // If it's NOT the last message, strip the image part to save tokens
-            if (!isLastUserMessage) {
-                const textPart = m.content.find(p => p.type === 'text');
-                safeContent = textPart ? textPart.text : "[Image Removed from History]";
-            }
-        }
-
-        const apiMsg = { role: m.role, content: safeContent };
+    const messagesPayload = validHistory.map(m => {
+        const apiMsg = { role: m.role, content: m.content };
         if (m.tool_calls) apiMsg.tool_calls = m.tool_calls;
         if (m.tool_call_id) apiMsg.tool_call_id = m.tool_call_id;
         if (m.name) apiMsg.name = m.name;
@@ -488,7 +530,6 @@ async function sendMessage(fromVoice = false) {
     });
 
     try {
-        // [FIX] Use absolute URL constructed from basePath to prevent relative path errors
         const url = `${appBasePath}/api/chat/completion`;
         const response = await fetch(url, {
             method: 'POST',
@@ -500,52 +541,94 @@ async function sendMessage(fromVoice = false) {
         });
 
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-        
-        const data = await response.json();
-        const assistantMsg = data.choices[0].message;
 
-        // [FIX] Detect if a tool was used to create a file
-        if (assistantMsg.tool_calls) {
-            const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'save_file_to_data_directory' || tool.function.name === 'create_dynamic_view');
-            if (hasCreatedFile && onFileCreatedCallback) {
-                console.log("[ChatView] Detected file creation. Triggering refresh.");
-                // Delay slightly to ensure backend write is complete
-                setTimeout(() => onFileCreatedCallback(), 1000);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let assistantMsg = null;
+        let buffer = "";
+
+        // Helper to process a line of NDJSON
+        const processLine = (line) => {
+            if (!line.trim()) return;
+            try {
+                const chunk = JSON.parse(line);
+                if (chunk.type === 'status') {
+                    // Append status update (Thinking..., Synthesizing...)
+                    appendToLog(currentLogDiv, chunk.content);
+                } else if (chunk.type === 'tool_start') {
+                    // Append tool start
+                    appendToLog(currentLogDiv, `Executing: ${chunk.content.name}...`, 'tool_start');
+                    hasToolActivity = true;
+                } else if (chunk.type === 'tool_result') {
+                    // [MODIFIED] Append tool result with duration
+                    const durationStr = chunk.content.duration ? `(${chunk.content.duration}ms)` : '';
+                    appendToLog(currentLogDiv, `Completed: ${chunk.content.name} ${durationStr}`, 'tool_result');
+                } else if (chunk.type === 'message') {
+                    assistantMsg = chunk.content;
+                } else if (chunk.type === 'error') {
+                    throw new Error(chunk.content);
+                }
+            } catch (e) {
+                if (e.message.startsWith('API Error') || e.message.startsWith('Error')) throw e;
+                console.warn("Stream parse error:", e);
+            }
+        };
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (value) {
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep partial line
+                lines.forEach(processLine);
+            }
+            if (done) {
+                if (buffer.trim()) processLine(buffer);
+                break;
             }
         }
 
-        // If content is null but we have tool calls, we should display something
-        if (assistantMsg.content === null && assistantMsg.tool_calls) {
-             assistantMsg.content = "✅ Operation completed.";
+        // [MODIFIED] Do NOT remove the log div. It stays as history of the "thought process".
+        currentLogDiv = null; // Detach reference for next message
+
+        // Handle case where tools ran but no final message (e.g. backend summary failed)
+        if (!assistantMsg && hasToolActivity) {
+            assistantMsg = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
         }
 
-        addMessageToState('assistant', assistantMsg.content, assistantMsg.tool_calls);
-        trackEvent('chat_message_sent');
-        if (isVoice && assistantMsg.content) {
-            speakText(assistantMsg.content);
+        if (assistantMsg) {
+            // Check for file creation tool usage
+            if (assistantMsg.tool_calls && onFileCreatedCallback) {
+                const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
+                if (hasCreatedFile) setTimeout(() => onFileCreatedCallback(), 1000);
+            }
+            
+            // OpenAI/Gemini might return null content if only tools were called in the final turn
+            if (assistantMsg.content === null) {
+                 assistantMsg.content = "✅ Operation completed.";
+            }
+
+            addMessageToState('assistant', assistantMsg.content, assistantMsg.tool_calls);
+            trackEvent('chat_message_sent');
+            if (isVoice && assistantMsg.content) {
+                speakText(assistantMsg.content);
+            }
+        } else if (!hasToolActivity) {
+            // No message and no tools? That's an error.
+            throw new Error("Empty response from server.");
         }
 
     } catch (error) {
         console.error(error);
-        // [FIX] Detailed Network Error Handling
-        let errorMsg = `Error: ${error.message}`;
-        if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-            errorMsg = "Network Error: Could not reach server. Please check your connection.";
+        if (currentLogDiv) {
+             appendToLog(currentLogDiv, `Error: ${error.message}`, 'error');
+             currentLogDiv = null;
+        } else {
+             addMessageToState('error', `Error: ${error.message}`);
         }
-        addMessageToState('error', errorMsg);
     } finally {
         isProcessing = false;
         btnSend.disabled = false; if(btnMic) btnMic.disabled = false; if(btnCam) btnCam.disabled = false;
-        showTypingIndicator(false);
         chatInput.focus();
     }
-}
-
-function showTypingIndicator(show) {
-    const existing = document.getElementById('typing-indicator');
-    if (show && !existing) {
-        const div = document.createElement('div'); div.id = 'typing-indicator'; div.className = 'typing-indicator-container';
-        div.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
-        chatHistory.appendChild(div); scrollToBottom();
-    } else if (!show && existing) existing.remove();
 }
