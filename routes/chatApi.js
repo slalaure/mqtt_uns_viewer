@@ -734,10 +734,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         res.setHeader('Content-Type', 'application/x-ndjson');
         
         // [CRITICAL FIX] Disable Proxy Buffering
-        res.setHeader('Cache-Control', 'no-cache, no-transform'); // no-transform prevents compression
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Key for Nginx
-        res.flushHeaders(); // Force headers to be sent immediately
+        res.setHeader('X-Accel-Buffering', 'no'); // Key for Nginx/Ingress
+        
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (res.flushHeaders) res.flushHeaders(); // Explicit flush headers
+
+        // [CRITICAL FIX 2] Padding to force Proxy buffer flush (4KB)
+        // Proxies like Nginx often buffer the first 4KB before streaming.
+        const padding = " ".repeat(4096); 
+        res.write(`{"type":"ping","content":"padding_ignored"}${padding}\n`);
+        if (res.flush) res.flush();
 
         // Initial Heartbeat
         sendChunk(res, 'status', 'Processing request...');
