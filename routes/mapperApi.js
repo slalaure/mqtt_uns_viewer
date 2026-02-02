@@ -8,53 +8,136 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * API for managing Mappings Config (V2).
+ * Mapper API
+ * Handles metrics, live config updates, and saved versions.
+ * Implements User-Scoped storage for Saved Versions.
  */
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = (mapperEngine) => {
     const router = express.Router();
+    
+    // We assume the mapper engine runs from the root or has access to data.
+    // We'll resolve the Data path relative to the process CWD for now, 
+    // or we can safely assume ./data exists based on server.js logic.
+    const DATA_DIR = path.join(process.cwd(), 'data');
+    const GLOBAL_VERSIONS_DIR = path.join(DATA_DIR, 'mapper_versions');
 
-    // GET /api/mapper/config
-    // Retrieve the entire versioned config object
-    router.get('/config', (req, res) => {
-        try {
-            const config = mapperEngine.getMappings();
-            res.json(config);
-        } catch (err) {
-            res.status(500).json({ error: "Failed to get mappings config." });
+    // Ensure global versions directory exists
+    if (!fs.existsSync(GLOBAL_VERSIONS_DIR)) {
+        try { fs.mkdirSync(GLOBAL_VERSIONS_DIR, { recursive: true }); } catch (e) {}
+    }
+
+    /**
+     * Helper: Get the directory for storing mapper versions.
+     * @param {object} req 
+     * @returns {string} Path to directory
+     */
+    function getVersionsDir(req) {
+        if (req.user && req.user.id) {
+            const userDir = path.join(DATA_DIR, 'sessions', req.user.id, 'mapper_versions');
+            if (!fs.existsSync(userDir)) {
+                try { fs.mkdirSync(userDir, { recursive: true }); } catch (e) {}
+            }
+            return userDir;
         }
+        return GLOBAL_VERSIONS_DIR;
+    }
+
+    // --- Metrics (Global) ---
+    router.get('/metrics', (req, res) => {
+        res.json(mapperEngine.getMetrics());
     });
 
-    // POST /api/mapper/config
-    // Save/update the entire versioned config object
+    // --- Active Config (Global) ---
+    // Returns the currently running configuration in memory
+    router.get('/config', (req, res) => {
+        res.json(mapperEngine.getConfig());
+    });
+
+    // --- Update Active Config (Global) ---
+    // Applies a new configuration to the live engine
     router.post('/config', (req, res) => {
         try {
-            const newConfig = req.body;
-            if (!newConfig || !Array.isArray(newConfig.versions) || !newConfig.activeVersionId) {
-                return res.status(400).json({ error: "Invalid payload. Expected a valid config object." });
-            }
-            const result = mapperEngine.saveMappings(newConfig);
-            if (result.success) {
-                res.json({ status: "ok", message: `Saved config.` });
-            } else {
-                res.status(500).json({ error: result.error || "Failed to save config." });
-            }
-        } catch (err) {
-            res.status(500).json({ error: "Server error while saving config." });
+            mapperEngine.setConfig(req.body);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
         }
     });
 
-    // GET /api/mapper/metrics
-    // Retrieve all current in-memory metrics
-    router.get('/metrics', (req, res) => {
-         try {
-            const metrics = mapperEngine.getMetrics();
-            res.json(metrics);
-        } catch (err) {
-            res.status(500).json({ error: "Failed to get metrics." });
+    // --- Saved Versions (User Scoped) ---
+
+    // List saved versions
+    router.get('/versions', (req, res) => {
+        const dir = getVersionsDir(req);
+        fs.readdir(dir, (err, files) => {
+            if (err) {
+                return res.status(500).json({ error: "Failed to list versions" });
+            }
+            // Filter only JSON files and remove extension
+            const versions = files
+                .filter(f => f.endsWith('.json'))
+                .map(f => f.replace('.json', ''));
+            res.json(versions);
+        });
+    });
+
+    // Save a version
+    router.post('/version/:name', (req, res) => {
+        const name = req.params.name;
+        // Basic sanitization
+        if (!name || name.includes('/') || name.includes('\\')) {
+            return res.status(400).json({ error: "Invalid version name" });
+        }
+
+        const dir = getVersionsDir(req);
+        const filePath = path.join(dir, `${name}.json`);
+        const config = req.body;
+
+        fs.writeFile(filePath, JSON.stringify(config, null, 2), (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true });
+        });
+    });
+
+    // Load a version (Returns JSON, client must then POST to /config to apply it)
+    router.get('/version/:name', (req, res) => {
+        const name = req.params.name;
+        const dir = getVersionsDir(req);
+        const filePath = path.join(dir, `${name}.json`);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: "Version not found" });
+        }
+
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) return res.status(500).json({ error: err.message });
+            try {
+                res.json(JSON.parse(data));
+            } catch (e) {
+                res.status(500).json({ error: "Invalid file content" });
+            }
+        });
+    });
+
+    // Delete a version
+    router.delete('/version/:name', (req, res) => {
+        const name = req.params.name;
+        const dir = getVersionsDir(req);
+        const filePath = path.join(dir, `${name}.json`);
+
+        if (fs.existsSync(filePath)) {
+            fs.unlink(filePath, (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true });
+            });
+        } else {
+            res.status(404).json({ error: "Version not found" });
         }
     });
-    
+
     return router;
 };

@@ -16,31 +16,7 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard">
     <meta name="twitter:description" content="A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "MQTT UNS Viewer",
-      "applicationCategory": ["DeveloperApplication", "BusinessApplication"],
-      "operatingSystem": "Cross-platform (Web, Docker)",
-      "description": "A lightweight, real-time web application to visualize MQTT topic trees, dynamic SVG graphics, and history based on Unified Namespace (UNS) and Sparkplug B messages.",
-      "keywords": "mqtt, uns, unified namespace, iiot, industry 4.0, sparkplug b, data visualization, real-time, dashboard, mqtt viewer, docker, duckdb, mcp, node.js",
-      "url": "https://www.mqttunsviewer.com",
-      "author": {
-        "@type": "Person",
-        "name": "Sebastien Lalaurette"
-      },
-      "mainEntityOfPage": {
-        "@type": "WebPage",
-        "@id": "https://github.com/slalaure/mqtt_uns_viewer"
-      },
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
-    }
-    </script>
+    
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
@@ -61,7 +37,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta30</p>
+                <p>v 1.5.0-beta31</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -74,7 +50,7 @@
             </label>
             <span class="theme-label">Dark Mode</span>
         </div>
-        </header>
+    </header>
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
         <button id="btn-map-view" class="tab-button">SVG View</button>
@@ -82,7 +58,8 @@
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
         <button id="btn-publish-view" class="tab-button">Publish</button> 
-        </nav>
+        <button id="btn-admin-view" class="tab-button" style="display: none; border-bottom-color: var(--color-danger);">Admin</button>
+    </nav>
     <div class="view-container">
         <main id="tree-view" class="view active">
             <div class="tree-view-wrapper">
@@ -121,7 +98,7 @@
                     <div class="form-group" style="margin: 0;">
                         <label for="svg-select-dropdown" style="font-size: 0.9em; margin-bottom: 2px;">Select View:</label>
                         <select id="svg-select-dropdown" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
-                            </select>
+                        </select>
                     </div>
                     <div class="history-toggle-container">
                         <input type="checkbox" id="svg-history-toggle" name="svg-history-toggle">
@@ -383,6 +360,30 @@
                 </div>
             </div>
         </main>
+        <main id="admin-view" class="view">
+            <div class="payload-container" style="padding: 20px; overflow-y: auto;">
+                <div class="payload-header">
+                    <h2>User Management</h2>
+                    <button id="btn-admin-refresh" class="mapper-button">Refresh List</button>
+                </div>
+                <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                            <tr>
+                                <th style="padding: 10px; font-weight: 500;">Username</th>
+                                <th style="padding: 10px; font-weight: 500;">Display Name</th>
+                                <th style="padding: 10px; font-weight: 500;">Email</th>
+                                <th style="padding: 10px; font-weight: 500;">Role</th>
+                                <th style="padding: 10px; font-weight: 500;">Last Login</th>
+                                <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-table-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
         </div>
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
@@ -425,6 +426,7 @@
         <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
                 rel="noopener noreferrer">github</a></p>
     </footer>
+    <script src="view.login.js" type="module"></script>
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
     <script src="view.publish.js" type="module"></script> 

@@ -22,6 +22,14 @@ const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const mqttMatch = require('mqtt-match');
+
+// --- Auth Imports ---
+const session = require('express-session');
+const FileStore = require('session-file-store')(session); 
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
 // --- Module Imports  ---
 const wsManager = require('./websocket-manager');
 const mqttHandler = require('./mqtt-handler');
@@ -29,6 +37,8 @@ const { createMqttClient } = require('./mqtt_client');
 const simulatorManager = require('./simulator');
 const dataManager = require('./database/dataManager');
 const externalApiRouter = require('./routes/externalApi'); 
+const userManager = require('./database/userManager'); // Import User Manager
+
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
@@ -37,6 +47,13 @@ const CERTS_PATH = path.join(DATA_PATH, 'certs');
 const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const API_KEYS_FILE_PATH = path.join(DATA_PATH, process.env.EXTERNAL_API_KEYS_FILE || 'api_keys.json');
+const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
+
+// Ensure sessions directory exists
+if (!fs.existsSync(SESSIONS_PATH)) {
+    try { fs.mkdirSync(SESSIONS_PATH, { recursive: true }); } catch (e) {}
+}
+
 // --- Analytics Script ---
 // This script will only be injected if ANALYTICS_ENABLED=true
 const ANALYTICS_SCRIPT = `
@@ -48,6 +65,7 @@ const ANALYTICS_SCRIPT = `
         })(window, document, "clarity", "script", "u3mhr7cn0n");
     </script>
 `;
+
 // --- Logger Setup ---
 const logger = pino({
     transport: {
@@ -55,6 +73,7 @@ const logger = pino({
         options: { colorize: true }
     }
 });
+
 // --- Initial .env File Setup ---
 if (!fs.existsSync(ENV_PATH)) {
     logger.info("✅ No .env file found in 'data' directory. Creating one from project root .env.example...");
@@ -67,12 +86,14 @@ if (!fs.existsSync(ENV_PATH)) {
     }
 }
 require('dotenv').config({ path: ENV_PATH });
+
 // --- Initial charts.json File Setup ---
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
     try {
         fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2));
     } catch (err) { /* ignore */ }
 }
+
 // --- Helper Function for Sparkplug (handles BigInt) ---
 function longReplacer(key, value) {
     if (typeof value === 'bigint') {
@@ -80,12 +101,14 @@ function longReplacer(key, value) {
     }
     return value;
 }
+
 // --- Global Variables ---
 let activeConnections = new Map(); 
 let brokerStatuses = new Map(); 
 let isPruning = false;
 let apiKeysConfig = { keys: [] };
 let isShuttingDown = false; // Global shutdown flag
+
 // --- Configuration from Environment ---
 const config = {
     BROKER_CONFIGS: [],
@@ -128,18 +151,26 @@ const config = {
     API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null,
     EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED === 'true',
     EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json',
-    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true', // [NEW] Feature flag for analytics
-    // [NEW] Granular AI Tool Permissions (Default to TRUE)
+    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true', 
     AI_TOOLS: {
-        ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',         // Read DB, topics, history
-        ENABLE_SEMANTIC: process.env.LLM_TOOL_ENABLE_SEMANTIC !== 'false', // Model search, schema inference
-        ENABLE_PUBLISH: process.env.LLM_TOOL_ENABLE_PUBLISH !== 'false',   // Publish MQTT messages
-        ENABLE_FILES: process.env.LLM_TOOL_ENABLE_FILES !== 'false',       // Read/Write files
-        ENABLE_SIMULATOR: process.env.LLM_TOOL_ENABLE_SIMULATOR !== 'false', // Start/Stop simulators
-        ENABLE_MAPPER: process.env.LLM_TOOL_ENABLE_MAPPER !== 'false',     // Config mapper
-        ENABLE_ADMIN: process.env.LLM_TOOL_ENABLE_ADMIN !== 'false'        // Update model, prune history
-    }
+        ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',         
+        ENABLE_SEMANTIC: process.env.LLM_TOOL_ENABLE_SEMANTIC !== 'false', 
+        ENABLE_PUBLISH: process.env.LLM_TOOL_ENABLE_PUBLISH !== 'false',   
+        ENABLE_FILES: process.env.LLM_TOOL_ENABLE_FILES !== 'false',       
+        ENABLE_SIMULATOR: process.env.LLM_TOOL_ENABLE_SIMULATOR !== 'false', 
+        ENABLE_MAPPER: process.env.LLM_TOOL_ENABLE_MAPPER !== 'false',     
+        ENABLE_ADMIN: process.env.LLM_TOOL_ENABLE_ADMIN !== 'false'        
+    },
+    // Auth Config
+    SESSION_SECRET: process.env.SESSION_SECRET || 'dev_secret_key_change_me',
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    PUBLIC_URL: process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`,
+    // [NEW] Admin Credentials
+    ADMIN_USERNAME: process.env.ADMIN_USERNAME,
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 };
+
 // ---  Broker Configuration Parsing ---
 try {
     if (process.env.MQTT_BROKERS) {
@@ -184,13 +215,16 @@ try {
     logger.error({ err }, "❌ Unexpected error during broker configuration parsing. Proceeding without brokers.");
     config.BROKER_CONFIGS = [];
 }
+
 // --- Configuration Validation ---
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.ANALYTICS_ENABLED) logger.info("✅ 📈 Analytics (Clarity) tracking is ENABLED.");
+
 // --- Normalize Base Path ---
 let basePath = config.BASE_PATH;
 if (!basePath.startsWith('/')) basePath = '/' + basePath;
 if (basePath.endsWith('/') && basePath.length > 1) basePath = basePath.slice(0, -1);
+
 // ---  Load External API Keys ---
 if (config.EXTERNAL_API_ENABLED) {
     const keysFilePath = path.join(DATA_PATH, config.EXTERNAL_API_KEYS_FILE);
@@ -203,35 +237,94 @@ if (config.EXTERNAL_API_ENABLED) {
         logger.error("❌ Failed to load API keys.");
     }
 }
+
 // ---  Helper to get connections ---
 function getPrimaryConnection() {
     if (activeConnections.size === 0) return null;
-    // Get the first available connection
     return activeConnections.values().next().value || null;
 }
 function getBrokerConnection(brokerId) {
     if (!brokerId) return getPrimaryConnection();
     return activeConnections.get(brokerId) || null;
 }
+
 // --- Helper to update and broadcast broker status ---
 function updateBrokerStatus(brokerId, status, error = null) {
     const info = { status, error, timestamp: Date.now() };
     brokerStatuses.set(brokerId, info);
     wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
 }
+
 // --- Express App & Server Setup ---
 const app = express();
 const server = http.createServer(app);
+
 // Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
+
+// --- Session & Passport Setup ---
+app.use(session({
+    store: new FileStore({ path: SESSIONS_PATH, ttl: 86400 }), // 1 day persistence
+    secret: config.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // Secure should be true in HTTPS
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport Serialization
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await userManager.findById(id);
+        done(null, user);
+    } catch (err) {
+        done(err);
+    }
+});
+
+// Local Strategy
+passport.use(new LocalStrategy(async (username, password, done) => {
+    try {
+        const user = await userManager.findByUsername(username);
+        if (!user) { return done(null, false, { message: 'Incorrect username.' }); }
+        
+        const isValid = await userManager.verifyPassword(password, user.password_hash);
+        if (!isValid) { return done(null, false, { message: 'Incorrect password.' }); }
+        
+        return done(null, user);
+    } catch (err) { return done(err); }
+}));
+
+// Google Strategy
+if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
+    logger.info("✅ Google OAuth Strategy Enabled.");
+    passport.use(new GoogleStrategy({
+        clientID: config.GOOGLE_CLIENT_ID,
+        clientSecret: config.GOOGLE_CLIENT_SECRET,
+        callbackURL: `${config.PUBLIC_URL}${basePath === '/' ? '' : basePath}/auth/google/callback`
+    },
+    async (accessToken, refreshToken, profile, done) => {
+        try {
+            const user = await userManager.findOrCreateGoogleUser(profile);
+            return done(null, user);
+        } catch (err) { return done(err); }
+    }));
+}
+
 // --- CORS Middleware ---
-// Allows external tools like Microsoft Clarity to load fonts and assets
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
     next();
 });
+
 // --- Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
@@ -240,17 +333,28 @@ const mapperEngine = require('./mapper_engine')(
     longReplacer,
     config 
 );
+
 // ---  DuckDB Setup (Centralized Initialization) ---
 const dbFile = DB_PATH;
 const dbWalFile = dbFile + '.wal';
 let db; 
+
 db = new duckdb.Database(dbFile, (err) => {
     if (err) {
         logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
         process.exit(1);
     }
     logger.info("✅ 🦆 DuckDB database connected.");
-    // 1. Ensure table exists
+
+    // 1. Initialize User Manager Table (Passing Sessions Path now)
+    userManager.init(db, logger, SESSIONS_PATH);
+
+    // [NEW] 2. Ensure Admin User Exists
+    if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
+        userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
+    }
+
+    // 3. Ensure table exists
     db.exec(`
         CREATE TABLE IF NOT EXISTS mqtt_events (
             timestamp TIMESTAMPTZ,
@@ -262,7 +366,8 @@ db = new duckdb.Database(dbFile, (err) => {
             logger.error({ err: createErr }, "❌ FATAL: Failed to ensure table 'mqtt_events' exists.");
             return; 
         }
-        // 2. Schema Migration Check
+        
+        // 4. Schema Migration Check
         db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
             if (columns) {
                 const hasBrokerId = columns.some(col => col.name === 'broker_id');
@@ -275,12 +380,15 @@ db = new duckdb.Database(dbFile, (err) => {
             }
         });
     });
+
     mapperEngine.setDb(db);
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
+    
     setInterval(performMaintenance, 15000);
-    // 7.  Connect to ALL MQTT Brokers
+
+    // Connect to ALL MQTT Brokers
     config.BROKER_CONFIGS.forEach(brokerConfig => {
         const brokerId = brokerConfig.id;
         const connection = createMqttClient(brokerConfig, logger, CERTS_PATH);
@@ -290,6 +398,7 @@ db = new duckdb.Database(dbFile, (err) => {
             return; // Skip this broker
         }
         activeConnections.set(brokerId, connection);
+        
         // Initialize the handler logic once
         const handleMessage = mqttHandler.init(
             logger,
@@ -299,6 +408,7 @@ db = new duckdb.Database(dbFile, (err) => {
             dataManager, 
             broadcastDbStatus
         );
+
         // --- Event Listeners ---
         connection.on('connect', () => {
             logger.info(`✅ MQTT Broker '${brokerId}' connected.`);
@@ -312,20 +422,25 @@ db = new duckdb.Database(dbFile, (err) => {
                 });
             }
         });
+
         connection.on('message', (topic, payload) => {
             handleMessage(brokerId, topic, payload); 
         });
+
         connection.on('reconnect', () => {
             logger.info(`🔄 MQTT Broker '${brokerId}' reconnecting...`);
             updateBrokerStatus(brokerId, 'connecting');
         });
+
         connection.on('offline', () => {
             updateBrokerStatus(brokerId, 'offline');
         });
+
         connection.on('error', (err) => {
             logger.error(`❌ MQTT Error on '${brokerId}': ${err.message}`);
             updateBrokerStatus(brokerId, 'error', err.message);
         });
+
         connection.on('close', () => {
             if (!isShuttingDown) {
                updateBrokerStatus(brokerId, 'disconnected');
@@ -333,34 +448,49 @@ db = new duckdb.Database(dbFile, (err) => {
         });
     });
 });
+
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
-    // If no auth configured, skip
-    if (!config.HTTP_USER || !config.HTTP_PASSWORD) return next();
-    // [OPTIONAL] You could still whitelist assets here if you ever re-enable Auth
+    // 1. Allow if session is active (Passport)
+    if (req.isAuthenticated()) return next();
+
+    // 2. Allow if Asset file (css, js, etc) - Strict whitelisting
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf'];
-    if (allowedExts.includes(ext)) {
-        return next();
-    }
-    const credentials = basicAuth(req);
-    if (!credentials || credentials.name !== config.HTTP_USER || credentials.pass !== config.HTTP_PASSWORD) {
+    if (allowedExts.includes(ext)) return next();
+
+    // 3. Fallback to Basic Auth if Configured (for API/M2M or legacy usage)
+    if (config.HTTP_USER && config.HTTP_PASSWORD) {
+        const credentials = basicAuth(req);
+        if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
+            return next();
+        }
         res.setHeader('WWW-Authenticate', 'Basic realm="MQTT UNS Viewer"');
         return res.status(401).send('Authentication required.');
     }
-    return next();
+
+    // 4. If no Basic Auth configured, we redirect to login page (index.html handles this)
+    // BUT we need to ensure we don't loop redirecting /auth routes
+    if (req.path.startsWith('/auth') || req.path === '/login') {
+        return next();
+    }
+
+    // Default: Allow if no auth configured at all, otherwise block
+    if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
+
+    return res.status(401).send('Unauthorized. Please log in.');
 };
+
 let ALLOWED_IPS = config.API_ALLOWED_IPS ? config.API_ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const ipFilterMiddleware = (req, res, next) => {
     if (ALLOWED_IPS.length === 0 || ALLOWED_IPS.includes(req.ip)) return next();
     res.status(403).json({ error: `Access denied for IP ${req.ip}` });
 };
+
 const mainRouter = express.Router();
-
-// [FIXED] Increased limit for JSON payloads (Base64 images)
 mainRouter.use(express.json({ limit: '50mb' }));
-
 app.set('trust proxy', true);
+
 // Simulator
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
@@ -368,22 +498,32 @@ simulatorManager.init(logger, (topic, payload) => {
         conn.publish(topic, payload, { qos: 1 });
     }
 }, config.IS_SPARKPLUG_ENABLED);
+
+// --- Auth Routes ---
+mainRouter.use('/auth', require('./routes/authApi')(logger));
+
+// --- [NEW] Admin Routes ---
+mainRouter.use('/api/admin', require('./routes/adminApi')(logger));
+
 // --- API Routes ---
 mainRouter.get('/api/svg/file', (req, res) => {
     const filePath = path.join(DATA_PATH, path.basename(req.query.name || ''));
     if (fs.existsSync(filePath) && filePath.endsWith('.svg')) res.sendFile(filePath);
     else res.status(404).send('Not found');
 });
+
 mainRouter.get('/api/svg/list', (req, res) => {
     try {
         res.json(fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg')));
     } catch { res.status(500).json([]); }
 });
+
 mainRouter.get('/api/svg/bindings.js', (req, res) => {
     const filePath = path.join(DATA_PATH, path.basename(req.query.name || ''));
     if (fs.existsSync(filePath)) { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(filePath); }
     else { res.setHeader('Content-Type', 'application/javascript'); res.send('// No bindings'); }
 });
+
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
@@ -403,6 +543,7 @@ mainRouter.get('/api/config', (req, res) => {
         svgFilePath: config.SVG_FILE_PATH
     });
 });
+
 if (config.IS_SIMULATOR_ENABLED) {
     mainRouter.get('/api/simulator/status', (req, res) => res.json({ statuses: simulatorManager.getStatuses() }));
     mainRouter.post('/api/simulator/start/:name', (req, res) => {
@@ -416,50 +557,57 @@ if (config.IS_SIMULATOR_ENABLED) {
         res.json(r);
     });
 }
+
 mainRouter.use('/api/context', (req, res, next) => {
     if (!db) return res.status(503).json({ error: "DB not ready" });
     const dbManager = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     require('./routes/mcpApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next);
 });
+
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
+
 if (config.VIEW_CHAT_ENABLED) {
-    // [MODIFIED] Added mapperEngine to arguments
     mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
+
 if (config.VIEW_CONFIG_ENABLED) {
-    // [MODIFIED] Added 'dataManager' parameter to configApi require
     mainRouter.use('/api/env', ipFilterMiddleware, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager));
 }
+
 mainRouter.use('/api/mapper', ipFilterMiddleware, require('./routes/mapperApi')(mapperEngine));
 mainRouter.use('/api/chart', ipFilterMiddleware, require('./routes/chartApi')(CHART_CONFIG_PATH, logger));
+
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
     const conn = getBrokerConnection(brokerId);
     if (!conn || !conn.connected) return res.status(503).json({ error: "Broker not connected" });
+    
     let finalPayload = payload;
     if (format === 'json' || typeof payload === 'object') {
         try { finalPayload = JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload); } catch(e) {}
     } else if (format === 'sparkplugb') {
         try { finalPayload = spBv10Codec.encodePayload(JSON.parse(payload)); } catch(e) { return res.status(400).json({ error: e.message }); }
     }
+    
     conn.publish(topic, finalPayload, { qos: parseInt(qos)||0, retain: !!retain }, (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
+
 if (config.EXTERNAL_API_ENABLED) {
     mainRouter.use('/api/external', ipFilterMiddleware, require('./routes/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer));
 }
+
 if (!config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', (req, res) => res.status(403).send('Disabled'));
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
+
 // Disable internal redirect for static files to allow Redbird to handle slashes
-// [CRITICAL FIX] Disable 'index' option to prevent express.static from hijacking root URL
-// This ensures that the root URL falls through to the SPA handler which injects the <base> tag.
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false, index: false }));
-// [MODIFIED] Helper to serve index.html with dynamic base tag injection.
-// This fixes 404 errors on assets when reloading deep routes (e.g. /webapp/history/).
+
+// Helper to serve index.html with dynamic base tag injection.
 const serveSPA = (req, res) => {
     const indexPath = path.join(__dirname, 'public', 'index.html');
     fs.readFile(indexPath, 'utf8', (err, data) => {
@@ -467,61 +615,85 @@ const serveSPA = (req, res) => {
             logger.error({ err }, "Failed to read index.html");
             return res.status(500).send("Server Error");
         }
-        // Ensure base path ends with a slash for the <base> tag logic to work correctly
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
         let modifiedHtml = data;
+        
         // 1. Inject <base href="...">
         modifiedHtml = modifiedHtml.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
-        // 2. [NEW] Conditionally Inject Analytics Script
+        
+        // 2. Inject User Session State (Global Variable)
+        let userState = 'null';
+        if (req.isAuthenticated && req.isAuthenticated()) {
+            userState = JSON.stringify({
+                id: req.user.id,
+                username: req.user.username,
+                displayName: req.user.display_name,
+                avatar: req.user.avatar_url,
+                role: req.user.role // Inject role for frontend checks
+            });
+        }
+        modifiedHtml = modifiedHtml.replace('</head>', `<script>window.currentUser = ${userState};</script>\n</head>`);
+
+        // 3. Analytics
         const analyticsPlaceholder = '';
         if (config.ANALYTICS_ENABLED) {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ANALYTICS_SCRIPT);
         } else {
-            modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); // Remove placeholder
+            modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); 
         }
+        
         res.send(modifiedHtml);
     });
 };
-// [MODIFIED] Apply the dynamic SPA handler to all client routes
-const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish'];
+
+// Apply the dynamic SPA handler to all client routes
+const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish', 'login', 'admin'];
 clientRoutes.forEach(route => {
     mainRouter.get('/' + route, serveSPA);
     mainRouter.get('/' + route + '/', serveSPA);
 });
+
+// Protect SPA with Auth Middleware
 app.use(authMiddleware);
+
 // Hybrid Routing Strategy
-// 1. Mount on the specific basePath (for local dev or pass-through proxies)
 app.use(basePath, mainRouter);
-// 2. Mount on root '/' (for stripping proxies like Redbird/Traefik)
 if (basePath !== '/') {
     logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/' to support path-stripping proxies.`);
     app.use('/', mainRouter);
 }
+
 // Handle Reverse Proxy Trailing Slash logic + Default to /tree/
 app.get('/', (req, res) => {
-    const target = basePath === '/' ? '/tree/' : basePath + '/tree/';
-    res.redirect(target);
+    if (req.isAuthenticated()) {
+        const target = basePath === '/' ? '/tree/' : basePath + '/tree/';
+        res.redirect(target);
+    } else {
+        // Serve login page logic (handled by SPA/Frontend later)
+        serveSPA(req, res);
+    }
 });
+
 // --- Server Start ---
 server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
 });
 
-// [CRITICAL FIX] Increase Timeout to support long-running LLM Agent Chains
-// Default is 2 minutes (120000). Set to 10 minutes (600000).
 server.timeout = 600000;
 server.keepAliveTimeout = 600000;
-server.headersTimeout = 600005; // Must be slightly higher than keepAliveTimeout
+server.headersTimeout = 600005;
 
 // --- Graceful Shutdown Logic ---
 async function gracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     logger.info("\n✅ Gracefully shutting down...");
+    
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
+
     try {
         dataManager.stop();
         simulatorManager.getStatuses();
@@ -545,10 +717,11 @@ async function gracefulShutdown() {
         process.exit(1);
     }
 }
+
 // --- Process Signal Handling ---
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
-// --- Catch Unhandled Exceptions/Rejections ---
+
 process.on('uncaughtException', (err) => {
     logger.fatal({ err }, "❌ FATAL: Uncaught Exception. Shutting down...");
     gracefulShutdown();

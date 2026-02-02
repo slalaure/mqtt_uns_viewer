@@ -11,6 +11,7 @@
  * View module for the Floating AI Chat Assistant.
  * Includes Continuous Voice Input and Language-Aware Output.
  * Optimized for Chrome "Google" Voices & Safari compatibility.
+ * [NEW] User-Scoped Server-Side History Sync.
  */
 import { trackEvent } from './utils.js';
 
@@ -39,8 +40,7 @@ let isWidgetOpen = false;
 let pendingAttachment = null;
 
 // --- Storage & Path State ---
-let storageKey = 'chat_history'; // Default key
-let appBasePath = ''; // [NEW] Store base path for API calls
+let appBasePath = ''; // Store base path for API calls
 
 // --- Voice State ---
 let recognition = null;
@@ -53,12 +53,11 @@ let userWantMicActive = false;
 let currentUtterance = null; 
 // Cache for voices
 let availableVoices = [];
-
 let onFileCreatedCallback = null;
 
 // --- Streaming UI ---
-let currentLogDiv = null; // [MODIFIED] Renamed from currentStatusDiv to indicate persistence
-let hasToolActivity = false; // [NEW] Track if tools were used
+let currentLogDiv = null; 
+let hasToolActivity = false; 
 
 /**
  * Initializes the Chat View.
@@ -71,15 +70,6 @@ export function initChatView(basePath, onFileCreated) {
     if (appBasePath === '/') appBasePath = '';
     if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
 
-    // 2. Generate scoped key based on path
-    if (basePath && basePath !== '/' && basePath !== '') {
-        const cleanPath = basePath.replace(/^\/|\/$/g, '').replace(/\//g, '_');
-        if (cleanPath) {
-            storageKey = `chat_history_${cleanPath}`;
-            console.log(`[ChatView] Using scoped history key: ${storageKey}`);
-        }
-    }
-
     if (onFileCreated) {
         onFileCreatedCallback = onFileCreated;
     }
@@ -87,6 +77,8 @@ export function initChatView(basePath, onFileCreated) {
     injectUploadUI();
     injectVoiceUI(); 
     injectCameraUI(); 
+    
+    // Load History from Server
     loadHistory();
 
     // [FIX] Pre-load voices aggressively for Chrome/Safari
@@ -110,10 +102,11 @@ export function initChatView(basePath, onFileCreated) {
         }
         autoResizeInput();
     });
+
     btnClear?.addEventListener('click', () => {
         if (confirm('Clear conversation history?')) {
             conversationHistory = [];
-            saveHistory();
+            saveHistory(); // Sync to server
             renderHistory();
             trackEvent('chat_clear_history');
             window.speechSynthesis.cancel();
@@ -156,7 +149,7 @@ function injectCameraUI() {
     cameraVideo = document.getElementById('chat-camera-feed');
     document.getElementById('btn-camera-cancel').addEventListener('click', closeCamera);
     document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
-
+    
     btnCam.addEventListener('click', openCamera);
 }
 
@@ -171,6 +164,7 @@ async function openCamera() {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         cameraVideo.srcObject = cameraStream;
         cameraModal.style.display = 'flex';
+        
         if (userWantMicActive) {
             userWantMicActive = false;
             recognition?.stop();
@@ -189,6 +183,7 @@ function takePicture() {
     canvas.width = cameraVideo.videoWidth;
     canvas.height = cameraVideo.videoHeight;
     canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+    
     pendingAttachment = { type: 'image', content: canvas.toDataURL('image/jpeg', 0.8), name: `capture_${Date.now()}.jpg` };
     closeCamera();
     renderPreview();
@@ -206,6 +201,7 @@ function injectVoiceUI() {
     btnMic.innerHTML = '🎤'; 
     btnMic.title = 'Voice Input (Click to Start/Stop)';
     btnMic.className = 'chat-icon-btn';
+    
     inputArea.insertBefore(btnMic, btnSend);
 
     recognition = new SpeechRecognition();
@@ -275,12 +271,6 @@ function injectVoiceUI() {
     });
 }
 
-/**
- * [FIX] Enhanced Speak Text
- * - Prioritizes "Google" voices for better quality.
- * - Handles language matching strictly.
- * - Ensures voices are loaded before speaking.
- */
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -296,18 +286,12 @@ function speakText(text) {
     currentUtterance = new SpeechSynthesisUtterance(cleanText);
     const targetLang = navigator.language || 'en-US';
     currentUtterance.lang = targetLang;
-    currentUtterance.rate = 1.0; // Standard speed for natural voices
+    currentUtterance.rate = 1.0; 
 
-    // Ensure voices are loaded
     if (availableVoices.length === 0) {
         availableVoices = window.speechSynthesis.getVoices();
     }
 
-    // Voice Selection Strategy (Priority Order)
-    // 1. Exact language match AND contains "Google" (High Quality Chrome)
-    // 2. Exact language match
-    // 3. Approximate language match (fr-FR vs fr-CA) AND contains "Google"
-    // 4. Approximate language match
     let voice = availableVoices.find(v => v.lang === targetLang && v.name.includes('Google'));
     if (!voice) {
         voice = availableVoices.find(v => v.lang === targetLang);
@@ -377,31 +361,54 @@ export function toggleChatWidget(show) {
     if(show) setTimeout(() => { scrollToBottom(); chatInput.focus(); }, 300);
 }
 
-// [FIX] Sanitizing history on load to remove corrupted data from storage
-function loadHistory() {
-    try { 
-        let rawHistory = JSON.parse(localStorage.getItem(storageKey) || '[]'); 
-        // Automatically filter out messages with 'error' role that cause 400 Bad Request
-        conversationHistory = rawHistory.filter(msg => msg.role !== 'error');
-        
-        // If we found and removed errors, update storage immediately
-        if (conversationHistory.length !== rawHistory.length) {
-            console.log(`[Chat] Sanitized ${rawHistory.length - conversationHistory.length} corrupted messages from history.`);
-            saveHistory();
+// --- History Persistence (Server Side) ---
+
+async function loadHistory() {
+    try {
+        const res = await fetch(`${appBasePath}/api/chat/history`);
+        if (res.ok) {
+            let serverHistory = await res.json();
+            // Automatically filter out messages with 'error' role
+            conversationHistory = serverHistory.filter(msg => msg.role !== 'error');
+            
+            if (conversationHistory.length !== serverHistory.length) {
+                console.log(`[Chat] Sanitized ${serverHistory.length - conversationHistory.length} corrupted messages.`);
+                saveHistory();
+            }
+            renderHistory();
+        } else {
+            console.warn("Failed to load chat history from server.");
+            conversationHistory = [];
         }
-        renderHistory(); 
-    } 
-    catch { conversationHistory = []; }
-    if(conversationHistory.length===0) addMessageToState('system', 'Hello! I am your UNS Assistant.');
+    } catch (e) {
+        console.error("Error loading chat history:", e);
+        conversationHistory = [];
+    }
+
+    if (conversationHistory.length === 0) {
+        addMessageToState('system', 'Hello! I am your UNS Assistant.');
+    }
 }
 
-function saveHistory() { localStorage.setItem(storageKey, JSON.stringify(conversationHistory)); }
+async function saveHistory() {
+    // Debounce or fire-and-forget
+    try {
+        await fetch(`${appBasePath}/api/chat/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(conversationHistory)
+        });
+    } catch (e) {
+        console.error("Failed to sync chat history to server:", e);
+    }
+}
 
 function addMessageToState(role, content, toolCalls=null) {
     const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
     conversationHistory.push(msg);
     if(conversationHistory.length>30) conversationHistory=conversationHistory.slice(-30);
-    saveHistory(); appendMessageToUI(msg);
+    saveHistory(); 
+    appendMessageToUI(msg);
 }
 
 function renderHistory() { chatHistory.innerHTML=''; conversationHistory.forEach(appendMessageToUI); scrollToBottom(); }
@@ -449,11 +456,10 @@ function formatMessageContent(text) {
 }
 
 // --- NEW PERSISTENT LOG UI ---
-// Creates a new log container for the current process
 function createLogDiv() {
     const div = document.createElement('div');
     div.className = 'chat-message system status-log';
-    div.style.textAlign = 'left'; // Ensure text is aligned left for list
+    div.style.textAlign = 'left'; 
     div.style.fontSize = '0.85em';
     div.style.lineHeight = '1.5';
     chatHistory.appendChild(div);
@@ -461,11 +467,9 @@ function createLogDiv() {
     return div;
 }
 
-// Appends a line to the current log container
 function appendToLog(container, text, type = 'info') {
     if (!container) return;
     const line = document.createElement('div');
-    
     if (type === 'tool_start') {
         line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${text}`;
     } else if (type === 'tool_result') {
@@ -475,10 +479,8 @@ function appendToLog(container, text, type = 'info') {
         line.innerHTML = `⚠️ ${text}`;
         line.style.color = 'var(--color-danger)';
     } else {
-        // Default / Status
         line.innerHTML = `<small style="opacity:0.8">${text}</small>`;
     }
-    
     container.appendChild(line);
     scrollToBottom();
 }
@@ -513,11 +515,9 @@ async function sendMessage(fromVoice = false) {
     
     addMessageToState('user', messageContent);
     isProcessing = true;
-    hasToolActivity = false; // Reset tool flag
-    
+    hasToolActivity = false; 
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
-    
-    // [MODIFIED] Create a persistent log container for this interaction
+
     currentLogDiv = createLogDiv();
 
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
@@ -547,20 +547,16 @@ async function sendMessage(fromVoice = false) {
         let assistantMsg = null;
         let buffer = "";
 
-        // Helper to process a line of NDJSON
         const processLine = (line) => {
             if (!line.trim()) return;
             try {
                 const chunk = JSON.parse(line);
                 if (chunk.type === 'status') {
-                    // Append status update (Thinking..., Synthesizing...)
                     appendToLog(currentLogDiv, chunk.content);
                 } else if (chunk.type === 'tool_start') {
-                    // Append tool start
                     appendToLog(currentLogDiv, `Executing: ${chunk.content.name}...`, 'tool_start');
                     hasToolActivity = true;
                 } else if (chunk.type === 'tool_result') {
-                    // [MODIFIED] Append tool result with duration
                     const durationStr = chunk.content.duration ? `(${chunk.content.duration}ms)` : '';
                     appendToLog(currentLogDiv, `Completed: ${chunk.content.name} ${durationStr}`, 'tool_result');
                 } else if (chunk.type === 'message') {
@@ -579,7 +575,7 @@ async function sendMessage(fromVoice = false) {
             if (value) {
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
-                buffer = lines.pop(); // Keep partial line
+                buffer = lines.pop(); 
                 lines.forEach(processLine);
             }
             if (done) {
@@ -588,33 +584,29 @@ async function sendMessage(fromVoice = false) {
             }
         }
 
-        // [MODIFIED] Do NOT remove the log div. It stays as history of the "thought process".
-        currentLogDiv = null; // Detach reference for next message
+        currentLogDiv = null; 
 
-        // Handle case where tools ran but no final message (e.g. backend summary failed)
         if (!assistantMsg && hasToolActivity) {
             assistantMsg = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
         }
 
         if (assistantMsg) {
-            // Check for file creation tool usage
             if (assistantMsg.tool_calls && onFileCreatedCallback) {
                 const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
                 if (hasCreatedFile) setTimeout(() => onFileCreatedCallback(), 1000);
             }
-            
-            // OpenAI/Gemini might return null content if only tools were called in the final turn
+
             if (assistantMsg.content === null) {
                  assistantMsg.content = "✅ Operation completed.";
             }
 
             addMessageToState('assistant', assistantMsg.content, assistantMsg.tool_calls);
             trackEvent('chat_message_sent');
+            
             if (isVoice && assistantMsg.content) {
                 speakText(assistantMsg.content);
             }
         } else if (!hasToolActivity) {
-            // No message and no tools? That's an error.
             throw new Error("Empty response from server.");
         }
 

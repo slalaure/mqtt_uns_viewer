@@ -11,6 +11,7 @@
  * Chat API (LLM Agent Endpoint)
  * Implements a Multi-Turn Loop (Max 5 steps) to handle complex agentic workflows.
  * Added explicit timeouts to Axios calls to prevent indefinite hanging.
+ * [NEW] Added User-Scoped History Persistence.
  */
 const express = require('express');
 const axios = require('axios');
@@ -34,7 +35,6 @@ const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
     const results = chrono.parse(timeExpression);
     if (results.length === 0) return null;
-    
     const firstResult = results[0];
     let start = firstResult.start.date();
     let end = firstResult.end ? firstResult.end.date() : new Date(); 
@@ -50,7 +50,6 @@ function _inferSchema(messages) {
         try {
             const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
             if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) continue;
-            
             for (const [key, value] of Object.entries(payload)) {
                 if (!schema[key]) schema[key] = typeof value;
             }
@@ -91,7 +90,6 @@ const sendChunk = (res, type, content) => {
     // Prevent writing to a closed stream
     if (res.writableEnded || !res.writable) return;
     res.write(JSON.stringify({ type, content }) + '\n');
-    
     // [CRITICAL FIX] Flush the buffer immediately to bypass proxy buffering (if supported by environment)
     if (res.flush) res.flush();
 };
@@ -100,6 +98,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     const router = express.Router();
     const DATA_PATH = path.join(__dirname, '..', 'data');
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
+    const SESSIONS_DIR = path.join(DATA_PATH, 'sessions'); // Define sessions path
 
     // Helper to load model
     let unsModel = [];
@@ -116,6 +115,54 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
     loadUnsModel();
+
+    // --- User Scoped History Helpers ---
+    const getUserChatPath = (req) => {
+        if (req.user && req.user.id) {
+            const userDir = path.join(SESSIONS_DIR, req.user.id);
+            // Ensure directory exists
+            if (!fs.existsSync(userDir)) {
+                try { fs.mkdirSync(userDir, { recursive: true }); } catch (e) {}
+            }
+            return path.join(userDir, 'chat_history.json');
+        }
+        // Fallback for non-authenticated or generic
+        return path.join(DATA_PATH, 'chat_history_global.json');
+    };
+
+    // --- History Routes (Sync) ---
+    
+    // GET /api/chat/history
+    router.get('/history', (req, res) => {
+        const filepath = getUserChatPath(req);
+        if (fs.existsSync(filepath)) {
+            try {
+                const history = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+                res.json(history);
+            } catch (e) {
+                logger.error({ err: e }, "Failed to read chat history");
+                res.json([]);
+            }
+        } else {
+            res.json([]);
+        }
+    });
+
+    // POST /api/chat/history
+    router.post('/history', (req, res) => {
+        const history = req.body;
+        if (!Array.isArray(history)) {
+            return res.status(400).json({ error: "History must be an array" });
+        }
+        const filepath = getUserChatPath(req);
+        fs.writeFile(filepath, JSON.stringify(history, null, 2), (err) => {
+            if (err) {
+                logger.error({ err }, "Failed to save chat history");
+                return res.status(500).json({ error: "Save failed" });
+            }
+            res.json({ success: true });
+        });
+    });
 
     // --- 1. Tool Definitions ---
     const allTools = [
@@ -435,7 +482,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 
                 let whereClauses = words.map(word => {
                     const safeWord = `%${escapeSQL(word)}%`;
-                    return `(topic ILIKE '%${safeWord}%' OR CAST(payload AS VARCHAR) ILIKE '%${safeWord}%')`;
+                    return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
 
                 const timeWindow = parseTimeWindow(time_expression);
@@ -445,6 +492,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
 
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
+                
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
                     db.all(sql, (err, rows) => {
@@ -460,13 +508,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
-                
+
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
                     params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
-                
+
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                 
                 db.serialize(() => {
@@ -486,6 +534,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 let params = [topic];
                 if (broker_id) { sql += " AND broker_id = ?"; params.push(broker_id); }
                 sql += " ORDER BY timestamp DESC LIMIT 1";
+                
                 logger.info(`[ChatAPI:get_latest_message] 1. Topic: ${topic}`);
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_latest_message] 2. Inside Serialize");
@@ -523,12 +572,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         search_uns_concept: async ({ concept, filters, broker_id }) => {
             loadUnsModel();
             logger.info(`[ChatAPI:search_uns_concept] 1. Concept: ${concept}`);
+            
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
+            
             if (!model) return { error: `Concept '${concept}' not found in model.` };
             
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
+            
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
             
             if (filters) {
@@ -536,6 +588,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
+
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -551,6 +604,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         infer_schema: async ({ topic_pattern }) => {
             logger.info(`[ChatAPI:infer_schema] 1. Pattern: ${topic_pattern}`);
             const safePattern = escapeSQL(topic_pattern).replace(/%/g, '\\%').replace(/#/g, '%').replace(/\+/g, '%');
+            
             return new Promise((resolve, reject) => {
                 const sql = `SELECT payload FROM mqtt_events WHERE topic LIKE '${safePattern}' ORDER BY timestamp DESC LIMIT 20`;
                 db.serialize(() => {
@@ -580,7 +634,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
-                
                 let targetBrokerConfig = config.BROKER_CONFIGS[0];
                 if (broker_id) {
                     targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
@@ -632,6 +685,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
                 const svgFilename = `${baseName}.svg`;
                 const jsFilename = `${baseName}.svg.js`;
+                
                 const svgPath = path.join(DATA_PATH, svgFilename);
                 const jsPath = path.join(DATA_PATH, jsFilename);
 
@@ -661,7 +715,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         update_mapper_rule: async ({ sourceTopic, targetTopic, targetCode }) => {
             logger.info("[ChatAPI] Updating mapper rule...");
             if (!mapperEngine) return { error: "Mapper Engine not available." };
-            
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
@@ -681,7 +734,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
-            
+
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -723,7 +776,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     router.post('/completion', async (req, res) => {
         const { messages } = req.body;
         if (!messages) return res.status(400).json({ error: "Missing messages." });
-        
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
 
         let apiUrl = config.LLM_API_URL;
@@ -737,8 +789,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no'); // Key for Nginx/Ingress
-        
         res.setHeader('X-Content-Type-Options', 'nosniff');
+        
         if (res.flushHeaders) res.flushHeaders(); // Explicit flush headers
 
         // [CRITICAL FIX 2] Padding to force Proxy buffer flush (4KB)
@@ -760,6 +812,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             content: `You are an expert UNS Architect and Operator.
             SYSTEM CONTEXT:
             ${brokerContext}
+            
             DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
             When the user asks for a diagram, use 'create_dynamic_view'.
             1. You MUST generate valid SVG XML with unique 'id' attributes for dynamic elements.
@@ -784,11 +837,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
               }
             });
             \`\`\`
+
             CAPABILITIES:
             - READ: Inspect database, search data, infer schemas, view files.
             - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
             - MANAGE: Update UNS Model, Prune History.
+
             DATA LANGUAGE: English (translate user queries if needed).
+
             INSTRUCTIONS:
             - Use 'search_data' to find relevant topics before creating a view.
             - Use 'create_dynamic_view' to build dashboards (generate SVG XML + JS Bindings).
@@ -799,6 +855,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         };
 
         let conversation = [systemMessage, ...messages];
+
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -812,7 +869,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
                 turnCount++;
                 sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`);
-                
+
                 const requestPayload = {
                     model: config.LLM_MODEL,
                     messages: conversation,
@@ -824,7 +881,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                 // [CRITICAL] Added Timeout to prevent hanging
                 const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
-                
                 const message = response.data.choices[0].message;
 
                 // Case 1: The model wants to call tools
@@ -852,7 +908,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
                             result = JSON.stringify({ error: err.message });
                         }
-                        
+
                         duration = Date.now() - startTime;
                         sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration });
 
