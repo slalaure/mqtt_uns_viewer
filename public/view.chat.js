@@ -38,7 +38,6 @@ let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
-
 // --- Storage & Path State ---
 let appBasePath = ''; // Store base path for API calls
 
@@ -48,11 +47,11 @@ let isListening = false;
 let wasLastInputVoice = false; 
 let finalTranscript = ''; 
 let userWantMicActive = false;
-
 // Global reference for TTS to prevent Garbage Collection
 let currentUtterance = null; 
 // Cache for voices
 let availableVoices = [];
+
 let onFileCreatedCallback = null;
 
 // --- Streaming UI ---
@@ -69,7 +68,7 @@ export function initChatView(basePath, onFileCreated) {
     appBasePath = basePath || '';
     if (appBasePath === '/') appBasePath = '';
     if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
-
+    
     if (onFileCreated) {
         onFileCreatedCallback = onFileCreated;
     }
@@ -77,7 +76,7 @@ export function initChatView(basePath, onFileCreated) {
     injectUploadUI();
     injectVoiceUI(); 
     injectCameraUI(); 
-    
+
     // Load History from Server
     loadHistory();
 
@@ -102,7 +101,6 @@ export function initChatView(basePath, onFileCreated) {
         }
         autoResizeInput();
     });
-
     btnClear?.addEventListener('click', () => {
         if (confirm('Clear conversation history?')) {
             conversationHistory = [];
@@ -110,6 +108,8 @@ export function initChatView(basePath, onFileCreated) {
             renderHistory();
             trackEvent('chat_clear_history');
             window.speechSynthesis.cancel();
+            // Re-add greeting with correct role
+            addMessageToState('assistant', 'Hello! I am your UNS Assistant.');
         }
     });
 }
@@ -183,7 +183,6 @@ function takePicture() {
     canvas.width = cameraVideo.videoWidth;
     canvas.height = cameraVideo.videoHeight;
     canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
-    
     pendingAttachment = { type: 'image', content: canvas.toDataURL('image/jpeg', 0.8), name: `capture_${Date.now()}.jpg` };
     closeCamera();
     renderPreview();
@@ -201,7 +200,6 @@ function injectVoiceUI() {
     btnMic.innerHTML = '🎤'; 
     btnMic.title = 'Voice Input (Click to Start/Stop)';
     btnMic.className = 'chat-icon-btn';
-    
     inputArea.insertBefore(btnMic, btnSend);
 
     recognition = new SpeechRecognition();
@@ -214,7 +212,6 @@ function injectVoiceUI() {
         btnMic.classList.add('listening');
         chatInput.placeholder = "Listening... (Click mic to stop)";
     };
-
     recognition.onend = () => {
         isListening = false;
         if (userWantMicActive) {
@@ -227,7 +224,6 @@ function injectVoiceUI() {
             }
         }
     };
-
     recognition.onresult = (event) => {
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -241,7 +237,6 @@ function injectVoiceUI() {
         autoResizeInput();
         chatInput.scrollTop = chatInput.scrollHeight;
     };
-
     recognition.onerror = (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             userWantMicActive = false;
@@ -274,7 +269,7 @@ function injectVoiceUI() {
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-
+    
     let cleanText = text
         .replace(/\*\*/g, '') 
         .replace(/`/g, '')    
@@ -291,7 +286,7 @@ function speakText(text) {
     if (availableVoices.length === 0) {
         availableVoices = window.speechSynthesis.getVoices();
     }
-
+    
     let voice = availableVoices.find(v => v.lang === targetLang && v.name.includes('Google'));
     if (!voice) {
         voice = availableVoices.find(v => v.lang === targetLang);
@@ -327,7 +322,7 @@ function injectUploadUI() {
     const btnAttach = document.createElement('button');
     btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
     btnAttach.addEventListener('click', () => fileInput.click());
-
+    
     if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
     else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
     else inputArea.insertBefore(btnAttach, chatInput);
@@ -362,7 +357,6 @@ export function toggleChatWidget(show) {
 }
 
 // --- History Persistence (Server Side) ---
-
 async function loadHistory() {
     try {
         const res = await fetch(`${appBasePath}/api/chat/history`);
@@ -370,7 +364,6 @@ async function loadHistory() {
             let serverHistory = await res.json();
             // Automatically filter out messages with 'error' role
             conversationHistory = serverHistory.filter(msg => msg.role !== 'error');
-            
             if (conversationHistory.length !== serverHistory.length) {
                 console.log(`[Chat] Sanitized ${serverHistory.length - conversationHistory.length} corrupted messages.`);
                 saveHistory();
@@ -384,9 +377,10 @@ async function loadHistory() {
         console.error("Error loading chat history:", e);
         conversationHistory = [];
     }
-
+    
     if (conversationHistory.length === 0) {
-        addMessageToState('system', 'Hello! I am your UNS Assistant.');
+        // [MODIFIED] Use 'assistant' role instead of 'system' for greeting
+        addMessageToState('assistant', 'Hello! I am your UNS Assistant.');
     }
 }
 
@@ -431,6 +425,7 @@ function appendMessageToUI(msg) {
         if (msg.tool_calls) {
             msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${t.function.name}</div>`);
         }
+        
         if (msg.role === 'tool') div.classList.add('system'), div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
         else div.innerHTML = htmlContent;
     }
@@ -442,6 +437,7 @@ function appendMessageToUI(msg) {
         speakerBtn.onclick = () => speakText(msg.content);
         div.appendChild(speakerBtn);
     }
+    
     chatHistory.appendChild(div);
     scrollToBottom();
 }
@@ -470,6 +466,7 @@ function createLogDiv() {
 function appendToLog(container, text, type = 'info') {
     if (!container) return;
     const line = document.createElement('div');
+    
     if (type === 'tool_start') {
         line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${text}`;
     } else if (type === 'tool_result') {
@@ -481,6 +478,7 @@ function appendToLog(container, text, type = 'info') {
     } else {
         line.innerHTML = `<small style="opacity:0.8">${text}</small>`;
     }
+    
     container.appendChild(line);
     scrollToBottom();
 }
@@ -497,10 +495,10 @@ async function sendMessage(fromVoice = false) {
 
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
-    
+
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
-
+    
     let messageContent = text;
     if (pendingAttachment) {
         if (pendingAttachment.type === 'image') {
@@ -516,8 +514,8 @@ async function sendMessage(fromVoice = false) {
     addMessageToState('user', messageContent);
     isProcessing = true;
     hasToolActivity = false; 
+    
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
-
     currentLogDiv = createLogDiv();
 
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
@@ -585,7 +583,7 @@ async function sendMessage(fromVoice = false) {
         }
 
         currentLogDiv = null; 
-
+        
         if (!assistantMsg && hasToolActivity) {
             assistantMsg = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
         }
@@ -595,7 +593,7 @@ async function sendMessage(fromVoice = false) {
                 const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
                 if (hasCreatedFile) setTimeout(() => onFileCreatedCallback(), 1000);
             }
-
+            
             if (assistantMsg.content === null) {
                  assistantMsg.content = "✅ Operation completed.";
             }

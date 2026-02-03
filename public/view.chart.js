@@ -144,7 +144,7 @@ export function initChartView(callbacks) {
     
     maxChartsLimit = maxSavedChartConfigs || 0; 
     isMultiBroker = multiBrokerState || false; 
-    
+
     payloadViewer = createPayloadViewer({
         topicEl: document.getElementById('chart-payload-topic'),
         contentEl: document.getElementById('chart-payload-content'),
@@ -155,12 +155,10 @@ export function initChartView(callbacks) {
     btnChartExportPNG?.addEventListener('click', onExportPNG);
     btnChartExportCSV?.addEventListener('click', onExportCSV);
     btnChartClear?.addEventListener('click', onClearAll); 
-    
     chartConfigSelect?.addEventListener('change', onChartConfigChange);
     btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
     btnChartSaveAs?.addEventListener('click', onSaveAsNew);
     btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
-
     chartTypeSelect?.addEventListener('change', () => onGenerateChart(true));
     chartConnectNulls?.addEventListener('change', () => onGenerateChart(true));
     chartSmartAxis?.addEventListener('change', () => onGenerateChart(true)); 
@@ -186,6 +184,7 @@ export function initChartView(callbacks) {
     const onDateChange = () => {
         const start = chartStartDateInput.value ? new Date(chartStartDateInput.value).getTime() : 0;
         const end = chartEndDateInput.value ? new Date(chartEndDateInput.value).getTime() : Date.now();
+        
         if (start && end && start < end) {
             isChartLive = (Math.abs(end - Date.now()) < 60000);
             currentMinTimestamp = start;
@@ -194,6 +193,7 @@ export function initChartView(callbacks) {
             triggerDataFetch(start, end);
         }
     };
+
     chartStartDateInput?.addEventListener('change', onDateChange);
     chartEndDateInput?.addEventListener('change', onDateChange);
 
@@ -209,12 +209,13 @@ export function initChartView(callbacks) {
                 isUserInteracting = true; 
                 currentMinTimestamp = newMin;
                 currentMaxTimestamp = newMax;
+                
                 const timeRange = maxTimestamp - minTimestamp;
                 if (timeRange > 0) {
                     const maxPercent = ((newMax - minTimestamp) / timeRange) * 100;
                     isChartLive = (maxPercent > 99.9);
                 }
-                
+
                 if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
                 if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
                 
@@ -232,7 +233,7 @@ export function initChartView(callbacks) {
             }
         });
     }
-
+    
     loadChartConfig(); 
 }
 
@@ -251,6 +252,7 @@ function triggerDataFetch(start, end) {
 function setRelativeRange(hours) {
     let start, end = Date.now();
     isUserInteracting = false;
+    
     if (hours === 'FULL') {
         start = (minTimestamp > 0) ? minTimestamp : end - (24 * 60 * 60 * 1000); 
         isChartLive = true;
@@ -259,6 +261,7 @@ function setRelativeRange(hours) {
         if (minTimestamp > 0 && start < minTimestamp) start = minTimestamp;
         isChartLive = true;
     }
+
     currentMinTimestamp = start;
     currentMaxTimestamp = end;
     updateChartSliderUI(minTimestamp, maxTimestamp, false, true);
@@ -297,7 +300,6 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
     if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
     
     if (chartTimeSliderContainer) chartTimeSliderContainer.style.display = (min === 0 && max === 0) ? 'none' : 'flex';
-    
     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
     
     if (isChartLive && !isInitialLoad && !force && chartedVariables.size > 0) {
@@ -345,6 +347,7 @@ function findNumericKeys(obj, path = '', list = []) {
     for (const key of Object.keys(obj)) {
         const newPath = path ? `${path}.${key}` : key;
         const value = obj[key];
+        
         if (typeof value === 'number') {
             list.push({ path: newPath, type: Number.isInteger(value) ? 'int' : 'float' });
         } else if (typeof value === 'string' && value.trim() !== '') {
@@ -366,7 +369,6 @@ function populateChartVariables(payloadString) {
          chartVariableList.innerHTML = '<p class="history-placeholder">No topic selected.</p>';
          return;
     }
-
     if (payloadString === null || payloadString === undefined) {
          chartVariableList.innerHTML = '<p class="history-placeholder">No payload for this topic.</p>';
          return;
@@ -375,6 +377,7 @@ function populateChartVariables(payloadString) {
     try {
         const payload = JSON.parse(payloadString);
         let numericKeys = [];
+        
         if (typeof payload === 'number' || typeof payload === 'boolean') {
              numericKeys.push({ path: "(value)", type: typeof payload });
         } 
@@ -413,8 +416,8 @@ function populateChartVariables(payloadString) {
             const typeSpan = document.createElement('span');
             typeSpan.className = 'var-type';
             typeSpan.textContent = `(${key.type})`; 
+            
             label.appendChild(typeSpan);
-
             itemDiv.appendChild(checkbox);
             itemDiv.appendChild(label);
             chartVariableList.appendChild(itemDiv);
@@ -427,6 +430,7 @@ function populateChartVariables(payloadString) {
 function onClearAll() {
     trackEvent('chart_clear_all'); 
     chartedVariables.clear();
+    
     if (chartVariableList) {
         chartVariableList.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
             cb.checked = false;
@@ -434,6 +438,7 @@ function onClearAll() {
     }
     chartTypeSelect.value = 'line';
     chartConnectNulls.checked = false;
+    
     currentConfigId = null;
     chartConfigSelect.value = ""; 
     onGenerateChart(true); 
@@ -455,19 +460,23 @@ function onChartVariableToggle(event) {
         chartedVariables.delete(varId);
         trackEvent('chart_remove_variable'); 
     }
+    
     onGenerateChart(true);
     appCallbacks.colorChartTreeCallback();
 }
 
 function downsampleData(data, targetCount) {
     if (data.length <= targetCount) return data;
+    
     const sampled = [];
     const bucketSize = Math.ceil(data.length / targetCount);
+    
     for (let i = 0; i < data.length; i += bucketSize) {
         const bucket = data.slice(i, i + bucketSize);
         let sumVal = 0;
         let sumTs = 0;
         let count = 0;
+        
         for (const point of bucket) {
             if (point && point.y !== null && point.y !== undefined) {
                 sumVal += point.y;
@@ -475,6 +484,7 @@ function downsampleData(data, targetCount) {
                 count++;
             }
         }
+        
         if (count > 0) {
             sampled.push({
                 x: Math.round(sumTs / count),
@@ -503,20 +513,25 @@ function guessGroupKey(topic, path) {
         'load', 'flow', 'rate', 'debit', 'throughput',
         'concentration', 'ppm', 'ppb', 'mg', 'µg', 'aqi', 'co2', 'pm25'
     ];
+    
     for (const kw of keywords) {
         if (fullString.includes(kw)) return kw;
     }
+    
     const topicParts = topic.split('/');
     const lastPart = topicParts[topicParts.length - 1];
+    
     if (path === '(value)' || path.toLowerCase() === 'value') {
         return lastPart.toLowerCase();
     }
+    
     return (lastPart + '_' + path).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 }
 
 // [MODIFIED] Helper: Select hue based on index, optionally ignoring semantics if Smart Axis is off
 function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
     const key = axisKey.toLowerCase();
+    
     // 1. Semantic Override (Only if enabled)
     if (enableSemantic) {
         if (key.includes('heater') || key.includes('fire')) return 0; // Red
@@ -529,7 +544,7 @@ function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
         if (key.includes('percent') || key.includes('level') || key.includes('battery')) return 120; // Green
         if (key.includes('status')) return 270; // Purple
     }
-    
+
     // 2. Palette Rotation fallback
     return PALETTE_HUES[axisIndex % PALETTE_HUES.length];
 }
@@ -537,7 +552,6 @@ function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
 function onGenerateChart(showLoader = false) {
     trackEvent('chart_generate_refresh'); 
     if (isUserInteracting) return;
-    
     if (showLoader) showChartLoader();
     setTimeout(() => {
         processChartData();
@@ -556,6 +570,7 @@ function processChartData() {
     }
 
     const allHistory = appCallbacks.getHistory(); 
+    
     const timeFilteredHistory = allHistory.filter(entry => 
         entry.timestampMs >= (currentMinTimestamp - 500) && 
         entry.timestampMs <= (currentMaxTimestamp + 500)
@@ -604,7 +619,6 @@ function processChartData() {
     // --- PIE CHART LOGIC ---
     if (chartType === 'pie') {
         const totals = {};
-        
         chartedVariables.forEach((varInfo, varId) => {
             const topicParts = varInfo.topic.split('/');
             const cleanPath = varInfo.path.replace(/\[|\]/g, ''); 
@@ -654,7 +668,7 @@ function processChartData() {
     else {
         const axisGroups = new Map(); 
         const axisMap = new Map(); 
-
+        
         for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
             const topicParts = topic.split('/');
             const cleanPath = path.replace(/\[|\]/g, '');
@@ -697,10 +711,8 @@ function processChartData() {
 
             // --- Semantic Color Logic ---
             const axisIndex = distinctAxes.indexOf(axisKey);
-            
             // [MODIFIED] Disable semantic coloring if Smart Axis is OFF
             const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
-            
             // Generate lightness variation for items on same axis
             const lightness = 45 + (indexInGroup * (30 / Math.max(1, totalInGroup)));
             const color = `hsl(${hue}, 85%, ${lightness}%)`;
@@ -724,7 +736,7 @@ function processChartData() {
                         } else {
                             value = getNestedValue(payload, path);
                         }
-                        
+
                         if (typeof value === 'string') {
                             const numVal = parseFloat(value);
                             if (!isNaN(numVal) && isFinite(Number(value))) value = numVal;
@@ -739,7 +751,7 @@ function processChartData() {
 
             rawPoints.sort((a, b) => a.x - b.x);
             const isBool = isBooleanLike(rawPoints);
-
+            
             let processedPoints = rawPoints;
             if (rawPoints.length > MAX_POINTS_PER_SERIES) {
                 processedPoints = downsampleData(rawPoints, MAX_POINTS_PER_SERIES);
@@ -810,7 +822,6 @@ function processChartData() {
     }
 
     if (chartInstance) chartInstance.destroy();
-    
     chartPlaceholder.style.display = 'none';
     chartCanvas.style.display = 'block';
     
@@ -881,7 +892,6 @@ function toggleChartFullscreen() {
 function onExportPNG() {
     trackEvent('chart_export_png'); 
     if (!chartInstance) { alert("Please generate a chart first."); return; }
-    
     const a = document.createElement('a');
     a.href = chartInstance.toBase64Image();
     a.download = `multi_topic_chart.png`;
@@ -894,7 +904,6 @@ function onExportCSV() {
         alert("Please generate a chart first.");
         return;
     }
-
     const chartType = chartTypeSelect.value;
     let csvContent = "data:text/csv;charset=utf-8,";
 
@@ -907,13 +916,13 @@ function onExportCSV() {
     } else {
         const headers = ['timestamp', ...chartInstance.data.datasets.map(d => `"${d.label}"`)];
         csvContent += headers.join(',') + '\r\n';
-
+        
         const allTimestamps = new Set();
         chartInstance.data.datasets.forEach(ds => {
             ds.data.forEach(point => allTimestamps.add(point.x));
         });
         const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
-
+        
         const dataMap = chartInstance.data.datasets.map(ds => {
             const map = new Map();
             ds.data.forEach(p => map.set(p.x, p.y));
@@ -951,8 +960,8 @@ async function loadChartConfig() {
     try {
         const response = await fetch('api/chart/config');
         if (!response.ok) throw new Error('Failed to fetch chart config');
-        
         let savedConfig = await response.json(); 
+        
         if (Array.isArray(savedConfig)) {
             allChartConfigs = { configurations: [{ id: `chart_${Date.now()}`, name: "Migrated Chart", chartType: "line", connectNulls: false, variables: savedConfig.map(v => ({ brokerId: 'default', topic: v.topic, path: v.path })) }] };
             await saveAllChartConfigs(allChartConfigs, false); 
@@ -961,8 +970,9 @@ async function loadChartConfig() {
         } else {
             allChartConfigs = { configurations: [] }; 
         }
-
+        
         populateChartConfigSelect(); 
+        
         if (allChartConfigs.configurations.length > 0) {
             chartConfigSelect.value = allChartConfigs.configurations[0].id; 
             onChartConfigChange(); 
@@ -985,7 +995,7 @@ function populateChartConfigSelect() {
     allChartConfigs.configurations.forEach(config => {
         const option = document.createElement('option');
         option.value = config.id;
-        option.textContent = config.name;
+        option.textContent = config.name; // Already formatted as [GLOBAL] in API if needed
         chartConfigSelect.appendChild(option);
     });
     chartConfigSelect.value = currentConfigId || "";
@@ -994,15 +1004,41 @@ function populateChartConfigSelect() {
 function onChartConfigChange() {
     const configId = chartConfigSelect.value;
     currentConfigId = configId;
+    
     if (!configId) { onClearAll(); return; }
 
     const config = allChartConfigs.configurations.find(c => c.id === configId);
     if (!config) { onClearAll(); return; }
 
+    // --- [MODIFIED] Role-Based UI Logic ---
+    const userRole = window.currentUser ? window.currentUser.role : 'user';
+    const isGlobal = config._isGlobal === true;
+
+    if (isGlobal && userRole !== 'admin') {
+        // Lock controls for Standard Users on Global Charts
+        btnChartSaveCurrent.disabled = true;
+        btnChartSaveCurrent.textContent = "🔒 Locked";
+        btnChartSaveCurrent.title = "Global charts are read-only. Use 'Save As' to create a private copy.";
+        
+        btnChartDeleteConfig.disabled = true;
+        btnChartDeleteConfig.title = "Cannot delete Global chart.";
+        
+        // Ensure "Save As" is available
+        btnChartSaveAs.disabled = false;
+    } else {
+        // Unlock controls
+        btnChartSaveCurrent.disabled = false;
+        btnChartSaveCurrent.textContent = "Save";
+        btnChartSaveCurrent.title = "Save changes to this chart";
+        
+        btnChartDeleteConfig.disabled = false;
+        btnChartDeleteConfig.title = "Delete this chart";
+    }
+
     chartTypeSelect.value = config.chartType || 'line';
     chartConnectNulls.checked = config.connectNulls || false;
-    chartedVariables.clear();
     
+    chartedVariables.clear();
     if (Array.isArray(config.variables)) {
         config.variables.forEach(v => {
             const brokerId = v.brokerId || 'default_broker'; 
@@ -1031,7 +1067,12 @@ async function saveAllChartConfigs(configObject, showStatus = true) {
             body: JSON.stringify(configObject),
         });
         if (!response.ok) throw new Error('Failed to save');
-        allChartConfigs = configObject; 
+        
+        // IMPORTANT: We do not update allChartConfigs with the response, 
+        // because the backend might have split them. We trust our local state until next reload
+        // OR we should reload. 
+        // For simplicity in this edit: we trust the save succeeded.
+        
         if (showStatus) showChartSaveStatus('Saved!', 'success');
         return true;
     } catch (error) {
@@ -1057,6 +1098,7 @@ async function onSaveCurrent() {
 
 async function onSaveAsNew() {
     trackEvent('chart_save_as_new'); 
+    
     if (maxChartsLimit > 0 && allChartConfigs.configurations.length >= maxChartsLimit) {
         alert(`Limit reached (${maxChartsLimit}). Delete a chart first.`);
         return; 
@@ -1064,7 +1106,7 @@ async function onSaveAsNew() {
 
     const name = prompt("Enter a name for this new chart configuration:");
     if (!name || name.trim().length === 0) return; 
-
+    
     const newConfig = {
         id: `chart_${Date.now()}`,
         name: name.trim(),
@@ -1072,20 +1114,31 @@ async function onSaveAsNew() {
         connectNulls: chartConnectNulls.checked,
         variables: Array.from(chartedVariables.values()) 
     };
-
+    
     allChartConfigs.configurations.push(newConfig);
     currentConfigId = newConfig.id; 
     
     const success = await saveAllChartConfigs(allChartConfigs);
-    if (success) populateChartConfigSelect();
+    if (success) {
+        // Manually trigger reload to get correct global/private flags if needed, 
+        // or just update UI locally
+        populateChartConfigSelect();
+        
+        // Reset UI lock since it's a new (Private) chart
+        btnChartSaveCurrent.disabled = false;
+        btnChartSaveCurrent.textContent = "Save";
+        btnChartDeleteConfig.disabled = false;
+    }
 }
 
 async function onDeleteConfig() {
     trackEvent('chart_delete_config'); 
     if (!currentConfigId) { alert("No chart selected."); return; }
+    
     if (!confirm(`Delete chart?`)) return;
-
+    
     allChartConfigs.configurations = allChartConfigs.configurations.filter(c => c.id !== currentConfigId);
     const success = await saveAllChartConfigs(allChartConfigs);
+    
     if (success) { onClearAll(); populateChartConfigSelect(); }
 }

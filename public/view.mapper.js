@@ -8,9 +8,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
-  
  */
-
 // Import shared utilities
 import { mqttPatternToClientRegex, trackEvent } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
@@ -46,10 +44,8 @@ let deleteModalContext = null;
 let maxMappersLimit = 0; 
 let isMultiBroker = false; 
 let brokerConfigs = []; // Store broker configs
-
 let aceEditors = new Map(); 
 let isDarkTheme = localStorage.getItem('theme') === 'dark'; 
-
 let payloadViewer = createPayloadViewer({
     topicEl: document.getElementById('mapper-payload-topic'),
     contentEl: document.getElementById('mapper-payload-content'),
@@ -57,7 +53,6 @@ let payloadViewer = createPayloadViewer({
     placeholderEl: null,
     isMultiBroker: false 
 });
-
 
 // --- Callbacks from main app.js ---
 let appCallbacks = {
@@ -75,7 +70,6 @@ export function setMapperTheme(isDark) {
     });
 }
 
-
 /**
  * Initializes the Mapper View functionality.
  */
@@ -91,12 +85,11 @@ export function initMapperView(callbacks) {
         contentEl: document.getElementById('mapper-payload-content'),
         isMultiBroker: isMultiBroker 
     });
-    
+
     defaultJSCode = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
 // Return the modified 'msg' object to publish.
 // Return null or undefined to skip publishing.
-
 /* // Example: Get average of last 5 values for this topic
 try {
     const sql = \`
@@ -116,17 +109,27 @@ try {
     console.error(\"DB query failed: \" + e.message);
 }
 */
-
 return msg;
 `;
-    
     loadMapperConfig(); 
     
-    mapperSaveButton?.addEventListener('click', onSave);
+    // --- [MODIFIED] Role-Based UI Adjustments ---
+    const userRole = window.currentUser ? window.currentUser.role : 'user';
+    if (userRole !== 'admin') {
+        if (mapperSaveButton) {
+            mapperSaveButton.disabled = true;
+            mapperSaveButton.textContent = "🔒 Save Live (Admin Only)";
+            mapperSaveButton.title = "Only Administrators can modify the live running configuration. Please use 'Save as New...' to save a private draft.";
+            mapperSaveButton.style.opacity = '0.7';
+            mapperSaveButton.style.cursor = 'not-allowed';
+        }
+    } else {
+        mapperSaveButton?.addEventListener('click', onSave);
+    }
+
     mapperSaveAsNewButton?.addEventListener('click', onSaveAsNew);
     mapperVersionSelect?.addEventListener('change', onVersionChange);
     mapperAddTargetButton?.addEventListener('click', onAddTarget);
-    
     modalBtnCancel?.addEventListener('click', hidePruneModal);
     modalBtnDeleteRule?.addEventListener('click', onDeleteRule);
     modalBtnDeletePrune?.addEventListener('click', onDeleteAndPrune);
@@ -152,19 +155,16 @@ export function updateMapperConfig(newConfig) {
  */
 export function handleMapperNodeClick(event, nodeContainer, brokerId, topic) {
     const li = nodeContainer.closest('li');
-    
     //  Ignore folders for mapping logic
     if (li.classList.contains('is-folder')) {
         return; 
     }
-
     const payload = nodeContainer.dataset.payload; 
     payloadViewer.display(brokerId, topic, payload);
-
+    
     // Enable editor for leaf node only
     currentEditingBrokerId = brokerId;
     currentEditingSourceTopic = topic;
-    
     renderTransformEditor(brokerId, topic);
 }
 
@@ -183,7 +183,7 @@ export function addMappedTargetTopic(brokerId, topic) {
 
 export function getTopicMappingStatus(brokerId, topic) {
     if (!mapperConfig || !mapperConfig.versions) return null;
-
+    
     const targetKey = `${brokerId}|${topic}`;
     if (mappedTargetTopics.has(targetKey)) return 'target';
 
@@ -212,11 +212,10 @@ async function loadMapperConfig() {
         const response = await fetch('api/mapper/config');
         if (!response.ok) throw new Error('Failed to fetch mapper config');
         mapperConfig = await response.json();
-
+        
         if (mapperConfig.DEFAULT_JS_CODE) {
             defaultJSCode = mapperConfig.DEFAULT_JS_CODE;
         } 
-        
         updateMapperVersionSelector();
         appCallbacks.colorAllTrees();
     } catch (error) {
@@ -228,15 +227,19 @@ async function loadMapperConfig() {
 function updateMapperVersionSelector() {
     if (!mapperVersionSelect) return;
     mapperVersionSelect.innerHTML = '';
-    mapperConfig.versions.forEach(version => {
-        const option = document.createElement('option');
-        option.value = version.id;
-        option.textContent = version.name;
-        if (version.id === mapperConfig.activeVersionId) {
-            option.selected = true;
-        }
-        mapperVersionSelect.appendChild(option);
-    });
+    
+    // If config has versions loaded from API/Memory
+    if(mapperConfig.versions) {
+        mapperConfig.versions.forEach(version => {
+            const option = document.createElement('option');
+            option.value = version.id;
+            option.textContent = version.name; // This currently only shows Active Live versions from engine
+            if (version.id === mapperConfig.activeVersionId) {
+                option.selected = true;
+            }
+            mapperVersionSelect.appendChild(option);
+        });
+    }
 }
 
 function getRuleForTopic(sourceTopic, createIfMissing = false) {
@@ -263,11 +266,9 @@ function renderTransformEditor(brokerId, sourceTopic) {
 
     aceEditors.forEach(editor => editor.destroy());
     aceEditors.clear();
-    
     mapperTargetsList.innerHTML = ''; 
 
     const rule = getRuleForTopic(sourceTopic, false); 
-
     if (!rule || rule.targets.length === 0) {
         mapperTargetsPlaceholder.style.display = 'block';
     } else {
@@ -282,7 +283,7 @@ function renderTransformEditor(brokerId, sourceTopic) {
 
 function isTopicSubscribed(outputTopic) {
     if (isMultiBroker) return true; 
-
+    
     const subscriptionPatterns = appCallbacks.getSubscribedTopics();
     if (!subscriptionPatterns || subscriptionPatterns.length === 0) {
         return false;
@@ -290,7 +291,6 @@ function isTopicSubscribed(outputTopic) {
     if (subscriptionPatterns.includes('#')) {
             return true;
     }
-
     for (const pattern of subscriptionPatterns) {
             if (pattern.endsWith('/#')) {
                 const prefix = pattern.substring(0, pattern.length - 1); 
@@ -337,10 +337,8 @@ function createTargetEditor(rule, target) {
     if (isMultiBroker) {
         const brokerGroup = document.createElement('div');
         brokerGroup.className = 'form-group';
-        
         const label = document.createElement('label');
         label.textContent = 'Target Broker';
-        
         const select = document.createElement('select');
         select.className = 'target-broker-select';
         
@@ -352,41 +350,35 @@ function createTargetEditor(rule, target) {
         brokerConfigs.forEach(broker => {
             const option = document.createElement('option');
             option.value = broker.id;
-            
             // [MODIFIED] Check for read-only permission
             const isReadOnly = (!broker.publish || broker.publish.length === 0);
-            
             if (isReadOnly) {
                 option.textContent = `🔒 ${broker.id} (Read-Only)`;
                 option.disabled = true; // Disable selection
             } else {
                 option.textContent = `${broker.id} (${broker.host})`;
             }
-            
             select.appendChild(option);
         });
-        
+
         select.value = target.targetBrokerId || ""; 
-        
         select.addEventListener('change', () => {
             target.targetBrokerId = select.value || null; 
         });
-        
+
         brokerGroup.appendChild(label);
         brokerGroup.appendChild(select);
-        
         editorDiv.insertBefore(brokerGroup, editorDiv.querySelector('.form-group'));
     }
 
     const outputTopicInput = editorDiv.querySelector('.target-output-topic');
     outputTopicInput.value = target.outputTopic;
-
     //  Removed Wildcard Hint block
 
     const validateTopic = () => {
         const topicValue = outputTopicInput.value.trim();
         target.outputTopic = topicValue; 
-
+        
         let warningMessage = '';
         let isError = false;
 
@@ -414,6 +406,7 @@ function createTargetEditor(rule, target) {
             outputTopicInput.title = '';
         }
     };
+
     outputTopicInput.addEventListener('input', validateTopic);
     validateTopic();
 
@@ -421,16 +414,14 @@ function createTargetEditor(rule, target) {
     codeLabel.textContent = 'Transform (JavaScript)';
 
     const codeEditorDiv = editorDiv.querySelector('.target-code-editor');
-    
     if (!target.code) {
         target.code = defaultJSCode;
     }
-    
+
     const editor = ace.edit(codeEditorDiv);
     editor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
     editor.session.setMode('ace/mode/javascript');
     editor.session.setValue(target.code);
-    
     editor.setOptions({
         fontSize: "14px",
         fontFamily: "monospace",
@@ -445,7 +436,6 @@ function createTargetEditor(rule, target) {
     });
     
     aceEditors.set(target.id, editor);
-    
     updateMetricsForTarget(editorDiv, rule.sourceTopic, target.id);
 
     return editorDiv;
@@ -457,12 +447,11 @@ function createTargetEditor(rule, target) {
 function onAddTarget() {
     trackEvent('mapper_add_target'); 
     if (!currentEditingSourceTopic) return;
-    
+
     const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
     if (!activeVersion) return; 
-    
+
     const existingRule = activeVersion.rules.find(r => r.sourceTopic === currentEditingSourceTopic);
-    
     if (!existingRule) {
         if (maxMappersLimit > 0 && activeVersion.rules.length >= maxMappersLimit) {
             alert(`Cannot add new mapping rule. You have reached the maximum limit of ${maxMappersLimit} mapping rules for this demo.
@@ -470,9 +459,8 @@ Please ask an administrator to clean up old rules or versions.`);
             return; 
         }
     }
-    
-    const rule = getRuleForTopic(currentEditingSourceTopic, true); 
 
+    const rule = getRuleForTopic(currentEditingSourceTopic, true); 
     //  Removed smart wildcard default. All rules are now explicit leaf mappings.
     let initialOutputTopic = currentEditingSourceTopic + Math.floor(Math.random() * 100);
     let initialCode = defaultJSCode;
@@ -492,7 +480,7 @@ Please ask an administrator to clean up old rules or versions.`);
 
 function updateMetricsForEditor(sourceTopic) {
     if (!sourceTopic || sourceTopic !== currentEditingSourceTopic) return;
-
+    
     const rule = getRuleForTopic(sourceTopic, false);
     if (!rule) return;
 
@@ -507,17 +495,19 @@ function updateMetricsForEditor(sourceTopic) {
 function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
     const ruleId = `${sourceTopic}::${targetId}`; 
     const ruleMetrics = mapperMetrics[ruleId];
-
+    
     const countSpan = editorDiv.querySelector('.metric-count');
     const logsList = editorDiv.querySelector('.target-logs-list');
 
     if (ruleMetrics) {
         countSpan.textContent = ruleMetrics.count;
+        
         if (ruleMetrics.logs && ruleMetrics.logs.length > 0) {
             logsList.innerHTML = '';
             ruleMetrics.logs.forEach(log => {
                 const logDiv = document.createElement('div');
                 logDiv.className = 'target-log-entry';
+                
                 let fullLogContent = ''; 
 
                 if (log.error) {
@@ -528,7 +518,6 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
                     `;
                     fullLogContent = `Input: ${log.inTopic}\nError: ${log.error}`; 
                     logDiv.title = fullLogContent;
-                
                 } else if (log.debug) { 
                     logDiv.classList.add('is-debug');
                     logDiv.innerHTML = `
@@ -537,7 +526,6 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
                     `;
                     fullLogContent = `Input: ${log.inTopic}\nTrace: ${log.debug}`; 
                     logDiv.title = fullLogContent;
-
                 } else {
                     logDiv.innerHTML = `
                         <span class="log-entry-ts">${new Date(log.ts).toLocaleTimeString('en-GB')}</span>
@@ -551,6 +539,7 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
                 copyBtn.className = 'log-copy-btn';
                 copyBtn.innerHTML = '📋'; 
                 copyBtn.title = 'Copy log details';
+                
                 copyBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     navigator.clipboard.writeText(fullLogContent).then(() => {
@@ -565,12 +554,12 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
                         copyBtn.innerHTML = 'X';
                     });
                 });
-                logDiv.appendChild(copyBtn);
 
+                logDiv.appendChild(copyBtn);
                 logsList.appendChild(logDiv);
             });
         } else {
-            logsList.innerHTML = '<p class.history-placeholder">No executions yet.</p>';
+            logsList.innerHTML = '<p class="history-placeholder">No executions yet.</p>';
         }
     } else {
         countSpan.textContent = '0';
@@ -583,8 +572,10 @@ function updateMetricsForTarget(editorDiv, sourceTopic, targetId) {
  */
 async function onSave() {
     trackEvent('mapper_save'); 
+    
     let hasInvalidMapping = false;
     const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
+    
     if (activeVersion && activeVersion.rules) {
         for (const rule of activeVersion.rules) {
             const isSourceSparkplug = rule.sourceTopic.startsWith('spBv1.0/');
@@ -609,22 +600,24 @@ async function onSave() {
         return;
     }
 
-    showMapperSaveStatus('Saving...');
+    showMapperSaveStatus('Saving to Live Engine...');
     try {
         if(activeVersion) {
             activeVersion.rules = activeVersion.rules.filter(r => r.targets && r.targets.length > 0);
         }
-
+        
         const response = await fetch('api/mapper/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(mapperConfig)
         });
+
         if (!response.ok) {
             const errData = await response.json();
             throw new Error(errData.error || 'Failed to save');
         }
-        showMapperSaveStatus('Saved!', 'success');
+
+        showMapperSaveStatus('Live Deployed!', 'success');
         appCallbacks.colorAllTrees();
     } catch (error) {
         console.error('Error saving mapper config:', error);
@@ -634,6 +627,7 @@ async function onSave() {
 
 function onSaveAsNew() {
     trackEvent('mapper_save_as_new'); 
+    
     if (maxMappersLimit > 0 && mapperConfig.versions.length >= maxMappersLimit) {
         alert(`Cannot save new version. You have reached the maximum limit of ${maxMappersLimit} saved mapper versions.
 Please ask an administrator to clean up old versions.`); 
@@ -641,7 +635,8 @@ Please ask an administrator to clean up old versions.`);
     }
 
     const activeVersionName = mapperVersionSelect.options[mapperVersionSelect.selectedIndex]?.text || 'current';
-    const newVersionName = prompt("Enter a name for the new version:", `Copy of ${activeVersionName}`);
+    const newVersionName = prompt("Enter a name for this configuration version:", `Copy of ${activeVersionName}`);
+    
     if (!newVersionName) return;
 
     const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
@@ -653,24 +648,38 @@ Please ask an administrator to clean up old versions.`);
     newVersion.createdAt = new Date().toISOString();
     newVersion.rules = newVersion.rules.filter(r => r.targets && r.targets.length > 0);
 
-    mapperConfig.versions.push(newVersion);
-    mapperConfig.activeVersionId = newVersion.id;
-
-    updateMapperVersionSelector();
-    onSave(); 
+    // Save via API (POST /version/:name)
+    // Note: mapperConfig local state is for Live. We are saving a FILE here.
+    
+    fetch(`api/mapper/version/${encodeURIComponent(newVersionName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newVersion)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success) {
+            alert(data.message || "Version saved successfully.");
+            // Update local selector logic if needed? 
+            // Currently selector shows *Live* versions. 
+            // If we want to load this, we might need to reload config.
+        } else {
+            alert("Error: " + data.error);
+        }
+    })
+    .catch(err => alert("Request failed: " + err.message));
 }
 
 function onVersionChange() {
     trackEvent('mapper_version_change'); 
     mapperConfig.activeVersionId = mapperVersionSelect.value;
-
+    
     if (currentEditingSourceTopic) {
         renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic);
     } else {
         mapperTransformPlaceholder.style.display = 'block';
         mapperTransformForm.style.display = 'none';
     }
-    
     appCallbacks.colorAllTrees();
 }
 
@@ -689,14 +698,14 @@ function showMapperSaveStatus(message, type = 'success') {
 
 function showPruneModal(rule, target, brokerId, topic) {
     deleteModalContext = { rule, target, brokerId, topic }; 
-
+    
     const displayTopic = isMultiBroker ? `[${brokerId}] ${target.outputTopic}` : target.outputTopic;
     deleteModalTopic.textContent = displayTopic;
-
+    
     //  Removed wildcard pattern parsing logic
     let pattern = target.outputTopic;
     deleteModalPattern.value = pattern;
-
+    
     deleteModalBackdrop.style.display = 'flex';
 }
 
@@ -707,6 +716,7 @@ function hidePruneModal() {
 
 function onDeleteRule() {
     trackEvent('mapper_delete_rule_only'); 
+    
     if (!deleteModalContext) return;
     const { rule, target, brokerId, topic } = deleteModalContext;
 
@@ -738,30 +748,31 @@ function onDeleteRule() {
 
 async function onDeleteAndPrune() {
     trackEvent('mapper_delete_and_prune'); 
+    
     if (!deleteModalContext) return;
     const { rule, target, brokerId, topic } = deleteModalContext;
     const topicPattern = deleteModalPattern.value;
 
     appCallbacks.addPruneIgnorePattern(topicPattern);
-
     modalBtnDeletePrune.disabled = true;
     showMapperSaveStatus('Purging history...', 'info');
 
     try {
         const targetBrokerId = target.targetBrokerId || brokerId;
-        
         const response = await fetch('api/context/prune-topic', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ topicPattern: topicPattern, broker_id: targetBrokerId })
         });
+
         if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.error || 'Failed to prune database.');
         }
+
         const result = await response.json();
         console.log(`Pruned ${result.count} entries from DB.`);
-        
+
         const editor = aceEditors.get(target.id);
         if (editor) {
             editor.destroy();
@@ -769,7 +780,7 @@ async function onDeleteAndPrune() {
         }
 
         rule.targets = rule.targets.filter(t => t.id !== target.id);
-
+        
         let ruleWasRemoved = false;
         if (rule.targets.length === 0) {
             const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
@@ -780,7 +791,7 @@ async function onDeleteAndPrune() {
         }
 
         await onSave(); 
-
+        
         await appCallbacks.pruneTopicFromFrontend(topicPattern);
 
         if(ruleWasRemoved) {
@@ -795,7 +806,6 @@ async function onDeleteAndPrune() {
 
         showMapperSaveStatus(`Rule deleted & ${result.count} entries pruned.`, 'success');
         hidePruneModal();
-
     } catch (err) {
         console.error('Error during prune operation:', err);
         showMapperSaveStatus(`Prune failed: ${err.message}`, 'error');

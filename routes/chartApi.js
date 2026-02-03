@@ -10,7 +10,7 @@
  *
  * Chart API
  * Handles saving and loading of chart configurations.
- * Supports Global (default) and User-Scoped configurations.
+ * Implements Layered Storage: Merges Global (Read-Only for users) and Private configs.
  */
 const express = require('express');
 const fs = require('fs');
@@ -18,75 +18,149 @@ const path = require('path');
 
 module.exports = (defaultConfigPath, logger) => {
     const router = express.Router();
-    
-    // Determine the data root directory based on the passed default file path
     const DATA_ROOT = path.dirname(defaultConfigPath);
+    const SESSIONS_DIR = path.join(DATA_ROOT, 'sessions');
 
     /**
-     * Helper: Get the correct chart config file path for the current request.
-     * @param {object} req - Express request object
-     * @returns {string} Path to charts.json
+     * Helper: Read a JSON file safely. Returns object with 'configurations' array.
      */
-    function getChartFilePath(req) {
+    function readChartFile(filePath) {
+        try {
+            if (fs.existsSync(filePath)) {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const json = JSON.parse(content);
+                // Ensure valid structure
+                if (!json.configurations) json.configurations = [];
+                return json;
+            }
+        } catch (e) {
+            logger.error({ err: e, path: filePath }, "Error reading chart file");
+        }
+        return { configurations: [] };
+    }
+
+    /**
+     * Helper: Get User Private File Path
+     */
+    function getUserChartPath(req) {
         if (req.user && req.user.id) {
-            // User Scoped: data/sessions/<userId>/charts.json
-            const userDir = path.join(DATA_ROOT, 'sessions', req.user.id);
+            const userDir = path.join(SESSIONS_DIR, req.user.id);
             if (!fs.existsSync(userDir)) {
-                try {
-                    fs.mkdirSync(userDir, { recursive: true });
-                } catch (err) {
-                    logger.error({ err }, `Failed to create user directory: ${userDir}`);
-                    return defaultConfigPath; // Fallback
-                }
+                try { fs.mkdirSync(userDir, { recursive: true }); } catch (e) {}
             }
             return path.join(userDir, 'charts.json');
         }
-        // Fallback / Guest: Global charts.json
-        return defaultConfigPath;
+        return null;
     }
 
-    // --- GET Configuration ---
+    // --- GET Configuration (Merged) ---
     router.get('/', (req, res) => {
-        const filePath = getChartFilePath(req);
+        // 1. Load Global Configs
+        const globalData = readChartFile(defaultConfigPath);
         
-        fs.readFile(filePath, 'utf8', (err, data) => {
-            if (err) {
-                // If user file doesn't exist, try loading global default as a starting point? 
-                // Or just return empty. Let's return empty structure.
-                if (err.code === 'ENOENT') {
-                    return res.json({ configurations: [] });
-                }
-                logger.error({ err }, "Error reading chart config");
-                return res.status(500).json({ error: "Failed to read configuration" });
-            }
-            try {
-                res.json(JSON.parse(data));
-            } catch (parseErr) {
-                logger.error({ err: parseErr }, "Error parsing chart config");
-                res.status(500).json({ error: "Invalid configuration file" });
-            }
+        // Mark global items
+        globalData.configurations.forEach(c => {
+            c._isGlobal = true; // Flag for Frontend UI
+            c.name = `[GLOBAL] ${c.name}`; // Visual cue
         });
+
+        // 2. Load Private Configs (if user logged in)
+        let privateData = { configurations: [] };
+        const userPath = getUserChartPath(req);
+        if (userPath) {
+            privateData = readChartFile(userPath);
+        }
+
+        // 3. Merge: Private items appear after Global items
+        // Note: We do NOT override Global items with Private ones here to prevent confusion.
+        // Users must save as a new copy if they want to edit a global chart.
+        const mergedConfigs = [
+            ...globalData.configurations,
+            ...privateData.configurations
+        ];
+
+        res.json({ configurations: mergedConfigs });
     });
 
-    // --- SAVE Configuration ---
+    // --- SAVE Configuration (Partitioned) ---
     router.post('/', (req, res) => {
-        const config = req.body;
-        if (!config || !config.configurations) {
+        const incomingConfig = req.body;
+        if (!incomingConfig || !Array.isArray(incomingConfig.configurations)) {
             return res.status(400).json({ error: "Invalid configuration format" });
         }
 
-        const filePath = getChartFilePath(req);
+        const isAdmin = req.user && req.user.role === 'admin';
+        const userPath = getUserChartPath(req);
 
-        fs.writeFile(filePath, JSON.stringify(config, null, 2), (err) => {
-            if (err) {
-                logger.error({ err }, "Error saving chart config");
-                return res.status(500).json({ error: "Failed to save configuration" });
-            }
+        // Load existing Global configs to check IDs
+        const existingGlobal = readChartFile(defaultConfigPath);
+        const globalIds = new Set(existingGlobal.configurations.map(c => c.id));
+
+        // Lists to save
+        const newGlobalList = [];
+        const newPrivateList = [];
+
+        // Distribute incoming configs
+        incomingConfig.configurations.forEach(config => {
+            // Remove the metadata flag before saving
+            const isMarkedGlobal = config._isGlobal === true;
+            delete config._isGlobal;
             
-            const context = req.user ? `User ${req.user.username}` : "Global";
-            logger.info(`✅ Chart configuration saved (${context}).`);
-            res.json({ success: true });
+            // Remove [GLOBAL] prefix if present (sanitize name)
+            if (config.name.startsWith('[GLOBAL] ')) {
+                config.name = config.name.replace('[GLOBAL] ', '');
+            }
+
+            if (globalIds.has(config.id)) {
+                // It's an existing Global chart
+                if (isAdmin) {
+                    newGlobalList.push(config); // Admin updates Global
+                } else {
+                    // User cannot touch Global. 
+                    // If they tried to edit it, the Frontend should have forced a new ID (Save As).
+                    // If we receive a Global ID from a non-admin, we IGNORE the change to protect the global file,
+                    // or strictly speaking, we just don't put it in the private file.
+                    // Ideally, we keep it in global list (read-only persistence)
+                }
+            } else {
+                // It's a New chart or an existing Private chart
+                if (isAdmin) {
+                    // Admin saves EVERYTHING to Global (Promote private to global)
+                    newGlobalList.push(config);
+                } else {
+                    // User saves to Private
+                    newPrivateList.push(config);
+                }
+            }
         });
+
+        try {
+            // 1. Admin Write: Update Global File
+            if (isAdmin) {
+                // Admin replaces the global list entirely with the current view
+                fs.writeFileSync(defaultConfigPath, JSON.stringify({ configurations: newGlobalList }, null, 2));
+                // Admin also clears their private file to avoid duplicates? 
+                // Or keeps them? Let's clear private if Admin promotes everything.
+                if (userPath) {
+                    fs.writeFileSync(userPath, JSON.stringify({ configurations: [] }, null, 2));
+                }
+                logger.info(`✅ Admin updated Global Charts (${newGlobalList.length} items).`);
+            } 
+            // 2. User Write: Update Private File ONLY
+            else if (userPath) {
+                // User only saves what is NOT in the global set
+                fs.writeFileSync(userPath, JSON.stringify({ configurations: newPrivateList }, null, 2));
+                logger.info(`✅ User ${req.user.username} saved Private Charts (${newPrivateList.length} items).`);
+            } else {
+                return res.status(401).json({ error: "Guest cannot save charts." });
+            }
+
+            res.json({ success: true });
+
+        } catch (err) {
+            logger.error({ err }, "Error saving chart config");
+            res.status(500).json({ error: "Failed to save configuration" });
+        }
     });
 
     return router;

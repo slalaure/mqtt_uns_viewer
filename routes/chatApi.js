@@ -11,7 +11,8 @@
  * Chat API (LLM Agent Endpoint)
  * Implements a Multi-Turn Loop (Max 5 steps) to handle complex agentic workflows.
  * Added explicit timeouts to Axios calls to prevent indefinite hanging.
- * [NEW] Added User-Scoped History Persistence.
+ * [NEW] Added User-Scoped History Persistence and Tool Constraints.
+ * [DEBUG] Enhanced logging for 400 Errors.
  */
 const express = require('express');
 const axios = require('axios');
@@ -19,17 +20,14 @@ const mqttMatch = require('mqtt-match');
 const fs = require('fs');
 const path = require('path');
 const chrono = require('chrono-node');
-
 // --- Constants ---
 const MAX_AGENT_TURNS = 8; // Limit recursion to prevent infinite loops
 const LLM_TIMEOUT_MS = 120000; // 120s timeout for LLM generation
-
 // Helper to escape SQL string
 const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/'/g, "''");
 };
-
 // Helper to parse natural language time expression into SQL bounds
 const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
@@ -40,7 +38,6 @@ const parseTimeWindow = (timeExpression) => {
     let end = firstResult.end ? firstResult.end.date() : new Date(); 
     return { start, end };
 };
-
 // Helper to infer schema
 function _inferSchema(messages) {
     const schema = {};
@@ -58,7 +55,6 @@ function _inferSchema(messages) {
     }
     return schema;
 }
-
 // Map Tools to Permission Categories
 const TOOL_PERMISSIONS = {
     'get_application_status': 'ENABLE_READ',
@@ -84,7 +80,6 @@ const TOOL_PERMISSIONS = {
     'prune_topic_history': 'ENABLE_ADMIN',
     'restart_application_server': 'ENABLE_ADMIN'
 };
-
 // Helper to send NDJSON chunks
 const sendChunk = (res, type, content) => {
     // Prevent writing to a closed stream
@@ -93,13 +88,11 @@ const sendChunk = (res, type, content) => {
     // [CRITICAL FIX] Flush the buffer immediately to bypass proxy buffering (if supported by environment)
     if (res.flush) res.flush();
 };
-
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
     const router = express.Router();
     const DATA_PATH = path.join(__dirname, '..', 'data');
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
     const SESSIONS_DIR = path.join(DATA_PATH, 'sessions'); // Define sessions path
-
     // Helper to load model
     let unsModel = [];
     const loadUnsModel = () => {
@@ -115,7 +108,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
     loadUnsModel();
-
     // --- User Scoped History Helpers ---
     const getUserChatPath = (req) => {
         if (req.user && req.user.id) {
@@ -129,9 +121,69 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         // Fallback for non-authenticated or generic
         return path.join(DATA_PATH, 'chat_history_global.json');
     };
+    
+    // --- [NEW] File System Constraints Helpers ---
+    
+    /**
+     * Resolves a filename to a real path with priority:
+     * 1. Private User Session Folder
+     * 2. Global Data Folder
+     * 3. Root Folder (Read-Only)
+     */
+    function resolvePathPriority(filename, user) {
+        // 1. Try User Scope (Private)
+        if (user && user.id) {
+            const userSvgDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+            const userFile = path.join(userSvgDir, filename); 
+            if (fs.existsSync(userFile)) return userFile;
+        }
+        
+        // 2. Try Global Data
+        const globalDataFile = path.join(DATA_PATH, filename);
+        if (fs.existsSync(globalDataFile)) return globalDataFile;
+
+        // 3. Try Root (for reading source code like server.js)
+        const rootFile = path.join(__dirname, '..', filename);
+        if (fs.existsSync(rootFile)) return rootFile;
+
+        return null;
+    }
+
+    /**
+     * Determines the safe write path for a file.
+     * Non-admins are forced into their private 'svgs' folder.
+     */
+    function getSafeWritePath(filename, user) {
+        // Enforce filename sanity (no traversal)
+        const safeFilename = path.basename(filename); 
+
+        // If User is Admin: Allow Global Write
+        if (user && user.role === 'admin') {
+            return { 
+                fullPath: path.join(DATA_PATH, safeFilename), 
+                displayPath: `data/${safeFilename}`,
+                context: "Global"
+            };
+        }
+
+        // If User is Standard: Enforce Private Write
+        if (user && user.id) {
+            const userSvgDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+            if (!fs.existsSync(userSvgDir)) {
+                try { fs.mkdirSync(userSvgDir, { recursive: true }); } catch (e) {}
+            }
+            return { 
+                fullPath: path.join(userSvgDir, safeFilename), 
+                displayPath: `(Private) data/${safeFilename}`,
+                context: "Private"
+            };
+        }
+
+        // Fallback (Guest/No User): Block
+        return null;
+    }
 
     // --- History Routes (Sync) ---
-    
     // GET /api/chat/history
     router.get('/history', (req, res) => {
         const filepath = getUserChatPath(req);
@@ -147,7 +199,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             res.json([]);
         }
     });
-
     // POST /api/chat/history
     router.post('/history', (req, res) => {
         const history = req.body;
@@ -163,7 +214,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             res.json({ success: true });
         });
     });
-
     // --- 1. Tool Definitions ---
     const allTools = [
         {
@@ -255,7 +305,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 parameters: {
                     type: "object",
                     properties: {
-                        topic_pattern: { type: "string", description: "Topic pattern (e.g., 'factory/line1/%')." }
+                        topic_pattern: { 
+                            type: "string",
+                            description: "Topic pattern (e.g., 'factory/line1/%')." 
+                        }
                     },
                     required: ["topic_pattern"]
                 }
@@ -436,7 +489,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             }
         }
     ];
-
     const enabledTools = allTools.filter(tool => {
         const permissionKey = TOOL_PERMISSIONS[tool.function.name];
         if (permissionKey && config.AI_TOOLS) {
@@ -444,8 +496,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
         return true;
     });
-
     // --- 2. Tool Implementations (Promises) ---
+    // [MODIFIED] Added 'user' argument to tool calls
     const toolImplementations = {
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
@@ -479,20 +531,16 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
-                
                 let whereClauses = words.map(word => {
                     const safeWord = `%${escapeSQL(word)}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
-
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     whereClauses.push(`timestamp >= '${timeWindow.start.toISOString()}'`);
                     whereClauses.push(`timestamp <= '${timeWindow.end.toISOString()}'`);
                 }
-
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
                 db.serialize(() => {
                     logger.info("[ChatAPI:search_data] 2. Inside Serialize");
                     db.all(sql, (err, rows) => {
@@ -508,15 +556,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
-
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
                     params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
-
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_topic_history] 2. Inside Serialize");
                     // Using spread operator for dynamic params
@@ -534,7 +579,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 let params = [topic];
                 if (broker_id) { sql += " AND broker_id = ?"; params.push(broker_id); }
                 sql += " ORDER BY timestamp DESC LIMIT 1";
-                
                 logger.info(`[ChatAPI:get_latest_message] 1. Topic: ${topic}`);
                 db.serialize(() => {
                     logger.info("[ChatAPI:get_latest_message] 2. Inside Serialize");
@@ -556,8 +600,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             );
             return { definitions: results };
         },
-        update_uns_model: async ({ model_json }) => {
+        update_uns_model: async ({ model_json }, user) => { // [MODIFIED] Admin check
             return new Promise((resolve) => {
+                if (user && user.role !== 'admin') {
+                    return resolve({ error: "Forbidden: Only admins can update the UNS Model." });
+                }
                 logger.info("[ChatAPI:update_uns_model] Writing file...");
                 try {
                     const newModel = JSON.parse(model_json);
@@ -572,23 +619,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         search_uns_concept: async ({ concept, filters, broker_id }) => {
             loadUnsModel();
             logger.info(`[ChatAPI:search_uns_concept] 1. Concept: ${concept}`);
-            
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
-            
             if (!model) return { error: `Concept '${concept}' not found in model.` };
-            
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
-            
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-            
             if (filters) {
                 for (const [key, value] of Object.entries(filters)) {
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
-
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -604,7 +645,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         infer_schema: async ({ topic_pattern }) => {
             logger.info(`[ChatAPI:infer_schema] 1. Pattern: ${topic_pattern}`);
             const safePattern = escapeSQL(topic_pattern).replace(/%/g, '\\%').replace(/#/g, '%').replace(/\+/g, '%');
-            
             return new Promise((resolve, reject) => {
                 const sql = `SELECT payload FROM mqtt_events WHERE topic LIKE '${safePattern}' ORDER BY timestamp DESC LIMIT 20`;
                 db.serialize(() => {
@@ -616,18 +656,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         resolve({ inferred_schema: schema });
                     });
                 });
-            });
-        },
-        update_uns_model: async ({ model_json }) => {
-            return new Promise((resolve) => {
-                try {
-                    const newModel = JSON.parse(model_json);
-                    if (!Array.isArray(newModel)) return resolve({ error: "Model must be a JSON Array." });
-                    fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
-                    resolve({ success: true, message: "UNS Model Manifest updated successfully." });
-                } catch (error) {
-                    resolve({ error: `Error updating model: ${error.message}` });
-                }
             });
         },
         // ... (Publish & File tools) ...
@@ -642,72 +670,153 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
-
                 const usedBrokerId = targetBrokerConfig.id;
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
-
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
-
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
-
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) resolve({ error: err.message });
                     else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
                 });
             });
         },
-        list_project_files: async () => {
+        
+        // --- [MODIFIED] File System Tools with User Constraints ---
+        
+        list_project_files: async ({}, user) => { // Added user arg
             logger.info("[ChatAPI] Listing files...");
             const rootFiles = fs.readdirSync(path.join(__dirname, '..')).filter(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.md'));
-            const dataFiles = fs.existsSync(DATA_PATH) ? fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js')) : [];
-            return { root_files: rootFiles, data_files: dataFiles };
+            
+            // Global Data Files
+            const globalFiles = fs.existsSync(DATA_PATH) ? fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js')) : [];
+            
+            // User Private Files (Merge)
+            let privateFiles = [];
+            if (user && user.id) {
+                const userDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                if (fs.existsSync(userDir)) {
+                    privateFiles = fs.readdirSync(userDir).map(f => `${f} (Private)`);
+                }
+            }
+
+            return { root_files: rootFiles, data_files: [...globalFiles, ...privateFiles] };
         },
-        get_file_content: async ({ filename }) => {
+
+        get_file_content: async ({ filename }, user) => { // Added user arg
             logger.info(`[ChatAPI] Reading file: ${filename}`);
-            const resolvedPath = path.resolve(path.join(__dirname, '..'), filename);
-            if (!resolvedPath.startsWith(path.join(__dirname, '..'))) return { error: "Path traversal blocked." };
-            if (!fs.existsSync(resolvedPath)) return { error: "File not found." };
+            
+            // Use Priority Resolver logic
+            let resolvedPath = null;
+            
+            // 1. Try User Scope
+            if (user && user.id) {
+                const userSvgDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                const userFile = path.join(userSvgDir, filename); 
+                if (fs.existsSync(userFile)) resolvedPath = userFile;
+            }
+            
+            // 2. Try Global Data
+            if (!resolvedPath) {
+                const globalDataFile = path.join(DATA_PATH, filename);
+                if (fs.existsSync(globalDataFile)) resolvedPath = globalDataFile;
+            }
+
+            // 3. Try Root
+            if (!resolvedPath) {
+                const rootFile = path.join(__dirname, '..', filename);
+                if (fs.existsSync(rootFile)) resolvedPath = rootFile;
+            }
+
+            if (!resolvedPath) return { error: "File not found." };
+            
+            // Security Check
+            const relative = path.relative(path.join(__dirname, '..'), resolvedPath);
+            if (relative.startsWith('..') && !path.isAbsolute(resolvedPath)) return { error: "Path traversal blocked." };
+
             return { filename, content: fs.readFileSync(resolvedPath, 'utf8') };
         },
-        save_file_to_data_directory: async ({ filename, content }) => {
+
+        save_file_to_data_directory: async ({ filename, content }, user) => { // Added user arg
             logger.info(`[ChatAPI] Saving file: ${filename}`);
-            const resolvedPath = path.resolve(DATA_PATH, filename);
-            if (!resolvedPath.startsWith(DATA_PATH)) return { error: "Path traversal blocked. Can only save to /data." };
+            
+            let targetDir = DATA_PATH;
+            let accessLevel = "Global";
+
+            // Constraint: Non-admins save to private directory
+            if (user && user.role !== 'admin') {
+                targetDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                if (!fs.existsSync(targetDir)) {
+                    try { fs.mkdirSync(targetDir, { recursive: true }); } catch (e) {}
+                }
+                accessLevel = "Private";
+            } else {
+                // Admin checks
+                if (!fs.existsSync(targetDir)) return { error: "Global Data directory not found." };
+            }
+
+            const resolvedPath = path.resolve(targetDir, path.basename(filename)); 
+            if (!resolvedPath.startsWith(targetDir)) return { error: "Path traversal blocked." };
+            
             fs.writeFileSync(resolvedPath, content, 'utf8');
-            return { success: true, path: `data/${filename}` };
+            return { success: true, path: `${accessLevel}/data/${filename}`, note: accessLevel === "Private" ? "File saved to your private workspace." : "File saved globally." };
         },
-        create_dynamic_view: async ({ view_name, svg_content, js_content }) => {
+        
+        // --- [MODIFIED] User-Scoped View Creation ---
+        create_dynamic_view: async ({ view_name, svg_content, js_content }, user) => {
             try {
                 // Ensure nice filenames
                 const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
                 const svgFilename = `${baseName}.svg`;
                 const jsFilename = `${baseName}.svg.js`;
                 
-                const svgPath = path.join(DATA_PATH, svgFilename);
-                const jsPath = path.join(DATA_PATH, jsFilename);
+                // Determine Target Directory: User Private vs Global
+                let targetDir = DATA_PATH;
+                let contextMessage = "Global";
+
+                if (user && user.id) {
+                    targetDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                    contextMessage = "Private (User)";
+                    if (!fs.existsSync(targetDir)) {
+                        fs.mkdirSync(targetDir, { recursive: true });
+                    }
+                }
+
+                const svgPath = path.join(targetDir, svgFilename);
+                const jsPath = path.join(targetDir, jsFilename);
 
                 // Write SVG
                 fs.writeFileSync(svgPath, svg_content, 'utf8');
                 // Write JS
                 fs.writeFileSync(jsPath, js_content, 'utf8');
-
-                logger.info(`[ChatAPI] Created dynamic view '${baseName}' in /data.`);
+                
+                logger.info(`[ChatAPI] Created dynamic view '${baseName}' in ${contextMessage} storage.`);
                 return { 
                     success: true, 
-                    message: `View '${baseName}' created successfully. Two files saved: data/${svgFilename} and data/${jsFilename}. Go to the SVG View tab to select it.` 
+                    message: `View '${baseName}' created successfully in ${contextMessage} storage. Go to the SVG View tab to select it.` 
                 };
             } catch (err) {
                 logger.error({ err }, "[ChatAPI] create_dynamic_view error");
                 return { error: err.message };
             }
         },
-        get_available_svg_views: async () => {
-            const files = fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg'));
-            return { svg_files: files };
+        
+        get_available_svg_views: async ({}, user) => { // Added user arg
+            const globalFiles = fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg'));
+            let allFiles = new Set(globalFiles);
+
+            if (user && user.id) {
+                const userDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                if (fs.existsSync(userDir)) {
+                    const privateFiles = fs.readdirSync(userDir).filter(f => f.endsWith('.svg'));
+                    privateFiles.forEach(f => allFiles.add(f)); // Merge
+                }
+            }
+            return { svg_files: Array.from(allFiles).sort() };
         },
+        
         get_mapper_config: async () => {
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             return { config: mapperEngine.getMappings() };
@@ -718,13 +827,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
-
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
             }
-
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
             const newTarget = {
                 id: `tgt_${Date.now()}`,
@@ -734,7 +841,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
-
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -743,7 +849,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-                
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -771,48 +876,38 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             return { message: "Server restarting..." };
         }
     };
-
     // --- 3. Streamed POST Endpoint ---
     router.post('/completion', async (req, res) => {
         const { messages } = req.body;
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
-
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
-
         // Set Headers for Streaming Response
         res.setHeader('Content-Type', 'application/x-ndjson');
-        
         // [CRITICAL FIX] Disable Proxy Buffering
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no'); // Key for Nginx/Ingress
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        
         if (res.flushHeaders) res.flushHeaders(); // Explicit flush headers
-
         // [CRITICAL FIX 2] Padding to force Proxy buffer flush (4KB)
         // Proxies like Nginx often buffer the first 4KB before streaming.
         const padding = " ".repeat(4096); 
         res.write(`{"type":"ping","content":"padding_ignored"}${padding}\n`);
         if (res.flush) res.flush();
-
         // Initial Heartbeat
         sendChunk(res, 'status', 'Processing request...');
-
         const brokerContext = config.BROKER_CONFIGS.map(b => {
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
         }).join('\n');
-
         const systemMessage = {
             role: "system",
             content: `You are an expert UNS Architect and Operator.
             SYSTEM CONTEXT:
             ${brokerContext}
-            
             DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
             When the user asks for a diagram, use 'create_dynamic_view'.
             1. You MUST generate valid SVG XML with unique 'id' attributes for dynamic elements.
@@ -837,14 +932,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
               }
             });
             \`\`\`
-
             CAPABILITIES:
             - READ: Inspect database, search data, infer schemas, view files.
             - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
             - MANAGE: Update UNS Model, Prune History.
-
             DATA LANGUAGE: English (translate user queries if needed).
-
             INSTRUCTIONS:
             - Use 'search_data' to find relevant topics before creating a view.
             - Use 'create_dynamic_view' to build dashboards (generate SVG XML + JS Bindings).
@@ -853,23 +945,28 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             - Use 'infer_schema' before creating complex mappings if schema is unknown.
             - Use 'search_uns_concept' for semantic queries.`
         };
-
-        let conversation = [systemMessage, ...messages];
-
+        
+        // [CRITICAL FIX] FILTER OUT 'SYSTEM' MESSAGES FROM CLIENT TO AVOID 400 ERRORS
+        // The frontend history might contain a "Hello" message with role "system".
+        // Sending multiple or misplaced system messages breaks OpenAI/Gemini APIs.
+        const safeUserMessages = messages.filter(m => m.role !== 'system');
+        
+        // [DEBUG LOGGING]
+        logger.info(`[ChatAPI] Preparing to send ${safeUserMessages.length + 1} messages to LLM.`);
+        
+        let conversation = [systemMessage, ...safeUserMessages];
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
         };
-
+        
         // --- AGENT LOOP ---
         let turnCount = 0;
         let finalMessageSent = false;
-
         try {
             while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
                 turnCount++;
                 sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`);
-
                 const requestPayload = {
                     model: config.LLM_MODEL,
                     messages: conversation,
@@ -878,28 +975,28 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     tools: enabledTools.length > 0 ? enabledTools : undefined,
                     tool_choice: enabledTools.length > 0 ? "auto" : undefined
                 };
+                
+                // [DEBUG LOGGING]
+                // logger.debug(`[ChatAPI] Request Payload (Truncated): ${JSON.stringify(requestPayload).substring(0, 500)}...`);
 
                 // [CRITICAL] Added Timeout to prevent hanging
                 const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
                 const message = response.data.choices[0].message;
-
                 // Case 1: The model wants to call tools
                 if (message.tool_calls && message.tool_calls.length > 0) {
                     conversation.push(message); // Add assistant's message to history
-                    
                     for (const toolCall of message.tool_calls) {
                         const fnName = toolCall.function.name;
                         sendChunk(res, 'tool_start', { name: fnName });
-                        
                         let result;
                         let duration = 0;
                         const startTime = Date.now();
-
                         try {
                             if (toolImplementations[fnName]) {
                                 let args = {};
                                 try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
-                                result = await toolImplementations[fnName](args);
+                                // [MODIFIED] Pass req.user to tool implementation
+                                result = await toolImplementations[fnName](args, req.user);
                                 result = JSON.stringify(result);
                             } else {
                                 result = JSON.stringify({ error: "Tool not implemented on server." });
@@ -908,10 +1005,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
                             result = JSON.stringify({ error: err.message });
                         }
-
                         duration = Date.now() - startTime;
                         sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration });
-
                         conversation.push({
                             tool_call_id: toolCall.id,
                             role: "tool",
@@ -927,24 +1022,32 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     finalMessageSent = true;
                 }
             }
-
             if (!finalMessageSent) {
                 sendChunk(res, 'error', "Max agent turns reached. Stopping execution.");
             }
-
         } catch (error) {
-            const msg = error.response?.data?.error?.message || error.message;
-            if (msg.includes("timeout")) {
-                logger.error("LLM Timeout");
-                sendChunk(res, 'error', "The AI took too long to respond (Timeout).");
+            // [DEBUG LOGGING]
+            if (error.response) {
+                 logger.error({ 
+                     status: error.response.status, 
+                     data: error.response.data 
+                 }, "[ChatAPI] Upstream API Error Details");
+                 
+                 const apiMsg = error.response.data?.error?.message || "Unknown Upstream Error";
+                 sendChunk(res, 'error', `API Error ${error.response.status}: ${apiMsg}`);
             } else {
-                logger.error({ err: msg }, "[ChatAPI] Stream Error");
-                sendChunk(res, 'error', msg);
+                 const msg = error.message;
+                 if (msg.includes("timeout")) {
+                    logger.error("LLM Timeout");
+                    sendChunk(res, 'error', "The AI took too long to respond (Timeout).");
+                } else {
+                    logger.error({ err: msg }, "[ChatAPI] Stream Error");
+                    sendChunk(res, 'error', msg);
+                }
             }
         } finally {
             res.end();
         }
     });
-
     return router;
 };

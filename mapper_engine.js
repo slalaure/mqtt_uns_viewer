@@ -17,7 +17,6 @@ const vm = require('vm');
 const mustache = require('mustache');
 const mqttMatch = require('mqtt-match');
 const spBv10Codec = require('sparkplug-payload').get("spBv10"); 
-
 const MAPPINGS_FILE_PATH = path.join(__dirname, 'data', 'mappings.json');
 
 let config = {
@@ -26,7 +25,6 @@ let config = {
 };
 let metrics = new Map(); 
 let metricsUpdateTimer = null;
-
 let activeConnections = new Map();
 let broadcastCallback = (message) => {};
 let engineLogger = null;
@@ -39,7 +37,6 @@ const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed
 // 'db' object is available with await db.all(sql) and await db.get(sql).
 // Return the modified 'msg' object to publish.
 // Return null or undefined to skip publishing.
-
 /* // Example: Get average of last 5 values for this topic
 try {
     const sql = \`
@@ -59,7 +56,6 @@ try {
     console.error(\"DB query failed: \" + e.message);
 }
 */
-
 return msg;
 `;
 
@@ -135,7 +131,7 @@ const saveMappings = (newConfig) => {
         config = newConfig; 
         fs.writeFileSync(MAPPINGS_FILE_PATH, JSON.stringify(config, null, 2));
         engineLogger.info(`✅ Mapper Engine: Saved config. Active: ${config.activeVersionId}`);
-
+        
         broadcastCallback(JSON.stringify({
             type: 'mapper-config-update',
             config: config
@@ -162,7 +158,6 @@ const getMetrics = () => {
 
 const broadcastMetrics = () => {
     if (metricsUpdateTimer) return; 
-
     metricsUpdateTimer = setTimeout(() => {
         broadcastCallback(JSON.stringify({
             type: 'mapper-metrics-update',
@@ -198,11 +193,10 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
     }
 
     ruleMetrics.logs.unshift(logEntry);
-
     if (ruleMetrics.logs.length > 20) {
         ruleMetrics.logs.pop();
     }
-    
+
     if (errorMsg) {
         clearTimeout(metricsUpdateTimer); 
         metricsUpdateTimer = null;
@@ -235,13 +229,10 @@ const rulesForTopicRequireDb = (topic) => {
 //  Helper to check if publishing is allowed based on server config
 const isPublishAllowed = (brokerId, topic) => {
     if (!serverConfig || !serverConfig.BROKER_CONFIGS) return true; // Default allow if no config
-
     const brokerConfig = serverConfig.BROKER_CONFIGS.find(b => b.id === brokerId);
     if (!brokerConfig) return false; // Broker unknown
-
     const publishPatterns = brokerConfig.publish || [];
     if (publishPatterns.length === 0) return false; // Read-Only
-
     return publishPatterns.some(pattern => mqttMatch(pattern, topic));
 };
 
@@ -257,7 +248,6 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
 
     for (const rule of activeRules) {
         if (mqttMatch(rule.sourceTopic.trim(), topic)) {
-            
             const targetPromises = rule.targets.map(async (target) => {
                 if (!target.enabled) return;
 
@@ -276,7 +266,6 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                     const context = vm.createContext(createSandbox(msgForSandbox));
                     
                     const cleanCode = target.code.replace(/\u00A0/g, " ");
-
                     const script = new vm.Script(`(async () => { ${cleanCode} })();`); 
                     
                     resultMsg = await script.runInContext(context, { timeout: 2000 }); 
@@ -288,12 +277,10 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                             topic: topic,
                             brokerId: brokerId
                         };
-
                         const outputTopic = mustache.render(target.outputTopic, viewContext);
-
+                        
                         let outputPayload; 
                         let outputPayloadForMetrics; 
-
                         const shouldOutputSparkplug = isSparkplugOrigin && outputTopic.startsWith('spBv1.0/');
 
                         if (shouldOutputSparkplug) {
@@ -323,7 +310,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                     brokerId: targetBrokerId, 
                                     topic: outputTopic
                                 }));
-
+                                
                                 updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
                             } else {
                                 const errorMessage = `Target broker '${targetBrokerId}' does not allow publishing to '${outputTopic}'. Check config.`;
@@ -336,11 +323,9 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                             updateMetrics(rule, target, topic, null, null, errorMessage, null);
                             return; 
                         }
-                    
                     } else if (resultMsg === null) {
                         updateMetrics(rule, target, topic, null, null, null, "Script executed and returned null (skipped publish).");
                     }
-
                 } catch (err) {
                     engineLogger.error({ err, ruleName: rule.sourceTopic, targetId: target.id }, "❌ Mapper Engine: Error executing async JS transform.");
                     
@@ -368,6 +353,7 @@ module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerCo
     if (!connectionsMap || !broadcaster || !logger || !longReplacer) {
         throw new Error("Mapper Engine V2 requires a connections map, broadcaster, logger, and longReplacer function.");
     }
+    
     activeConnections = connectionsMap; 
     broadcastCallback = broadcaster;
     engineLogger = logger.child({ component: 'MapperEngineV2' });
@@ -383,6 +369,7 @@ module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerCo
         },
         saveMappings,
         getMappings,
+        getConfig: getMappings, // [FIX] Add alias so API calls to getConfig() work
         getMetrics,
         processMessage,
         rulesForTopicRequireDb,
