@@ -8,7 +8,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Capabilities Test Suite (Secured)
+ * Capabilities Test Suite (Secured & Base Path Aware)
  * Verifies that the AI permissions set in .env are correctly enforced by the server.
  */
 import axios from 'axios';
@@ -17,28 +17,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // --- Configuration ---
-const BASE_URL = 'http://localhost:8080/api';
-const AUTH_URL = 'http://localhost:8080/auth/login';
 const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', '.env');
-
-// --- Test User Credentials (must match server setup) ---
-const TEST_USER = 'admin';
-const TEST_PASS = 'admin';
-
-// --- State ---
-let sessionHeaders = {};
-
-// --- Colors for Console ---
-const c = {
-    reset: "\x1b[0m",
-    green: "\x1b[32m",
-    red: "\x1b[31m",
-    yellow: "\x1b[33m",
-    blue: "\x1b[34m",
-    dim: "\x1b[2m",
-    bold: "\x1b[1m",
-    cyan: "\x1b[36m"
-};
 
 // --- Helper: Read .env manually ---
 function getEnvConfig() {
@@ -56,13 +35,47 @@ function getEnvConfig() {
         });
         return config;
     } catch (e) {
-        console.error(`${c.red}Error reading .env file at ${ENV_PATH}${c.reset}`);
+        console.error(`Error reading .env file at ${ENV_PATH}`);
         return {};
     }
 }
 
+const config = getEnvConfig();
+
+// --- Dynamic URL Construction ---
+const PORT = config.PORT || 8080;
+let BASE_PATH = config.BASE_PATH || '';
+
+// Normalize BASE_PATH
+if (BASE_PATH && !BASE_PATH.startsWith('/')) BASE_PATH = '/' + BASE_PATH;
+if (BASE_PATH === '/') BASE_PATH = '';
+if (BASE_PATH.endsWith('/')) BASE_PATH = BASE_PATH.slice(0, -1);
+
+const API_URL = `http://localhost:${PORT}${BASE_PATH}/api`;
+const AUTH_URL = `http://localhost:${PORT}${BASE_PATH}/auth/login`;
+
+// --- Credentials ---
+const TEST_USER = config.ADMIN_USERNAME || 'admin';
+const TEST_PASS = config.ADMIN_PASSWORD || 'admin';
+
+// --- State ---
+let sessionHeaders = {};
+
+// --- Colors for Console ---
+const c = {
+    reset: "\x1b[0m",
+    green: "\x1b[32m",
+    red: "\x1b[31m",
+    yellow: "\x1b[33m",
+    blue: "\x1b[34m",
+    dim: "\x1b[2m",
+    bold: "\x1b[1m",
+    cyan: "\x1b[36m"
+};
+
 // --- Helper: Authenticate ---
 async function authenticate() {
+    console.log(`${c.dim}Connecting to ${AUTH_URL}...${c.reset}`);
     console.log(`${c.dim}Authenticating as ${TEST_USER}...${c.reset}`);
     try {
         const res = await axios.post(AUTH_URL, { username: TEST_USER, password: TEST_PASS });
@@ -119,7 +132,7 @@ async function testCapability(scenario, config) {
     console.log(`  Prompt: "${scenario.prompt}"`);
 
     try {
-        const response = await axios.post(`${BASE_URL}/chat/completion`, {
+        const response = await axios.post(`${API_URL}/chat/completion`, {
             messages: [{ role: "user", content: scenario.prompt }]
         }, { 
             timeout: 20000,
@@ -162,7 +175,7 @@ async function testCapability(scenario, config) {
                  return;
              }
              
-             // If disabled and we get a permission error (often handled by LLM text, but sometimes tool errors bubble up)
+             // If disabled and we get a permission error
              if (!isEnabled && (status === 403 || (dataErr && dataErr.includes("disabled")))) {
                  console.log(`  Result: ${c.green}✔ PASS (Explicitly blocked)${c.reset}`);
              } else {
@@ -179,15 +192,13 @@ async function run() {
     console.log(`\n${c.blue}=== AI Capabilities Security Check ===${c.reset}\n`);
     
     // 1. Authenticate first
-    await authenticate();
-
-    // 2. Load Config
-    const config = getEnvConfig();
     if (!config.LLM_API_KEY) {
         console.error(`${c.yellow}WARNING: LLM_API_KEY is missing in .env. Tests will likely fail with 500.${c.reset}\n`);
     }
+    
+    await authenticate();
 
-    // 3. Run Scenarios
+    // 2. Run Scenarios
     for (const scenario of SCENARIOS) {
         await testCapability(scenario, config);
         

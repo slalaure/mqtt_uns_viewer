@@ -10,18 +10,58 @@
  *
  * Full API Test Suite (Enhanced & Secured)
  * Covers: Auth, Admin, Context, Search, SVG, Chart, Mapper, Config, Simulators, Publishing, Tools, Chat.
+ * [UPDATED] Respects BASE_PATH from .env
  */
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// --- Configuration ---
-const BASE_URL = 'http://localhost:8080'; // Base URL (without /api for auth routes)
-const API_URL = `${BASE_URL}/api`;
+// --- Configuration Helpers ---
+const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', '.env');
+
+// Read .env manually
+function getEnvConfig() {
+    try {
+        if (!fs.existsSync(ENV_PATH)) return {};
+        const envContent = fs.readFileSync(ENV_PATH, 'utf8');
+        const config = {};
+        envContent.split('\n').forEach(line => {
+            const parts = line.split('=');
+            if (parts.length >= 2 && !line.trim().startsWith('#')) {
+                const key = parts[0].trim();
+                const val = parts.slice(1).join('=').trim();
+                config[key] = val;
+            }
+        });
+        return config;
+    } catch (e) {
+        console.error(`Error reading .env file at ${ENV_PATH}`);
+        return {};
+    }
+}
+
+const envConfig = getEnvConfig();
+
+// --- Dynamic URL Construction ---
+const PORT = envConfig.PORT || 8080;
+let BASE_PATH = envConfig.BASE_PATH || '';
+
+// Normalize BASE_PATH (must start with / and not end with /)
+if (BASE_PATH && !BASE_PATH.startsWith('/')) BASE_PATH = '/' + BASE_PATH;
+if (BASE_PATH === '/') BASE_PATH = '';
+if (BASE_PATH.endsWith('/')) BASE_PATH = BASE_PATH.slice(0, -1);
+
+const ROOT_URL = `http://localhost:${PORT}${BASE_PATH}`;
+const API_URL = `${ROOT_URL}/api`;
+const AUTH_URL = `${ROOT_URL}/auth`;
+
 const TIMEOUT = 5000;
 
-// Default Admin Credentials (as defined in README/env)
+// Admin Credentials
 const CREDENTIALS = {
-    username: 'admin',
-    password: 'admin'
+    username: envConfig.ADMIN_USERNAME || 'admin',
+    password: envConfig.ADMIN_PASSWORD || 'admin'
 };
 
 // --- State ---
@@ -109,9 +149,11 @@ const post = async (endpoint, data, expectedStatus = 200) => {
  */
 async function authenticate() {
     title("Authentication");
+    console.log(`${colors.dim}Target URL: ${ROOT_URL}${colors.reset}`);
+    console.log(`${colors.dim}Attempting login with user: ${CREDENTIALS.username}${colors.reset}`);
     try {
         // 1. Attempt Login
-        const res = await axios.post(`${BASE_URL}/auth/login`, CREDENTIALS, { timeout: TIMEOUT });
+        const res = await axios.post(`${AUTH_URL}/login`, CREDENTIALS, { timeout: TIMEOUT });
         if (res.status === 200 && res.data.success) {
             // Capture 'set-cookie' header
             const cookies = res.headers['set-cookie'];
@@ -127,7 +169,7 @@ async function authenticate() {
         }
     } catch (e) {
         fail("Login Request Failed", e);
-        console.log(`${colors.yellow}Ensure local server is running and admin/admin account exists.${colors.reset}`);
+        console.log(`${colors.yellow}Ensure local server is running at ${ROOT_URL} and credentials in .env match.${colors.reset}`);
         process.exit(1); // Cannot proceed without auth
     }
 }
