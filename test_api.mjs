@@ -8,14 +8,24 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Full API Test Suite (Enhanced)
- * Covers: Context, Search, SVG, Chart, Mapper, Config, Simulators, Publishing, Tools, AND Chat.
+ * Full API Test Suite (Enhanced & Secured)
+ * Covers: Auth, Admin, Context, Search, SVG, Chart, Mapper, Config, Simulators, Publishing, Tools, Chat.
  */
 import axios from 'axios';
 
 // --- Configuration ---
-const BASE_URL = 'http://localhost:8080/api';
+const BASE_URL = 'http://localhost:8080'; // Base URL (without /api for auth routes)
+const API_URL = `${BASE_URL}/api`;
 const TIMEOUT = 5000;
+
+// Default Admin Credentials (as defined in README/env)
+const CREDENTIALS = {
+    username: 'admin',
+    password: 'admin'
+};
+
+// --- State ---
+let sessionCookie = null;
 
 // --- Helpers ---
 const colors = {
@@ -38,10 +48,22 @@ const fail = (msg, err) => {
 };
 const info = (msg) => console.log(`    ${colors.dim}ℹ ${msg}${colors.reset}`);
 
+// Axios Configuration Generator
+const getHeaders = () => {
+    const headers = {};
+    if (sessionCookie) {
+        headers['Cookie'] = sessionCookie;
+    }
+    return headers;
+};
+
 // Generic Fetcher
 const get = async (endpoint, expectedStatus = 200) => {
     try {
-        const res = await axios.get(`${BASE_URL}${endpoint}`, { timeout: TIMEOUT });
+        const res = await axios.get(`${API_URL}${endpoint}`, { 
+            timeout: TIMEOUT,
+            headers: getHeaders()
+        });
         if (expectedStatus === 200) {
             success(`GET ${endpoint}`);
             return res.data;
@@ -61,7 +83,10 @@ const get = async (endpoint, expectedStatus = 200) => {
 
 const post = async (endpoint, data, expectedStatus = 200) => {
     try {
-        const res = await axios.post(`${BASE_URL}${endpoint}`, data, { timeout: TIMEOUT });
+        const res = await axios.post(`${API_URL}${endpoint}`, data, { 
+            timeout: TIMEOUT,
+            headers: getHeaders()
+        });
         if (expectedStatus === 200) {
             success(`POST ${endpoint}`);
             return res.data;
@@ -80,10 +105,41 @@ const post = async (endpoint, data, expectedStatus = 200) => {
 };
 
 /**
+ * Authentication Helper
+ */
+async function authenticate() {
+    title("Authentication");
+    try {
+        // 1. Attempt Login
+        const res = await axios.post(`${BASE_URL}/auth/login`, CREDENTIALS, { timeout: TIMEOUT });
+        if (res.status === 200 && res.data.success) {
+            // Capture 'set-cookie' header
+            const cookies = res.headers['set-cookie'];
+            if (cookies) {
+                sessionCookie = cookies.map(c => c.split(';')[0]).join('; ');
+                success("Login Successful & Session Cookie Captured");
+                info(`User: ${res.data.user.username} (${res.data.user.id})`);
+            } else {
+                fail("Login succeeded but no cookie returned.");
+            }
+        } else {
+            fail("Login failed", { message: "Invalid credentials or server error" });
+        }
+    } catch (e) {
+        fail("Login Request Failed", e);
+        console.log(`${colors.yellow}Ensure local server is running and admin/admin account exists.${colors.reset}`);
+        process.exit(1); // Cannot proceed without auth
+    }
+}
+
+/**
  * Main Test Runner
  */
 async function runTests() {
-    console.log("🚀 Starting Full API Health Check...\n");
+    console.log("🚀 Starting Secured API Health Check...\n");
+
+    // --- 0. Authentication ---
+    await authenticate();
 
     // --- 1. System Context & Status ---
     title("Context & Status");
@@ -119,7 +175,6 @@ async function runTests() {
         
         await get(`/context/topic/${encodeURIComponent(sampleTopic)}`);
         
-        // This should now PASS with the spread operator fix in mcpApi.js
         await get(`/context/history/${encodeURIComponent(sampleTopic)}?limit=5`);
         
         // Short Search Test (Expect 400)
@@ -151,12 +206,18 @@ async function runTests() {
     await get('/mapper/config');
     await get('/mapper/metrics');
 
-    // --- 6. Configuration ---
-    title("Configuration");
-    await get('/config');
+    // --- 6. Configuration (Admin Only) ---
+    title("Configuration (Admin Route)");
+    // This should PASS now because we are logged in as admin
+    await get('/config'); 
+    
+    // --- NEW: Admin User Management ---
+    title("Admin User Management");
+    const users = await get('/admin/users');
+    if(users) info(`Registered Users: ${users.length}`);
 
-    // --- 7. Simulator Control ---
-    title("Simulators");
+    // --- 7. Simulator Control (Admin Only) ---
+    title("Simulators (Admin Action)");
     const simStatus = await get('/simulator/status');
     if (simStatus && simStatus.statuses) {
         const sims = Object.keys(simStatus.statuses);
@@ -176,7 +237,7 @@ async function runTests() {
         }
     }
 
-    // --- 8. Publish Capability (With Broker ID Fix) ---
+    // --- 8. Publish Capability ---
     title("Publishing");
     const pubRes = await post('/publish/message', {
         topic: 'test/api/healthcheck',
@@ -191,19 +252,19 @@ async function runTests() {
     await get('/tools/files/list');
     await get('/tools/model/definitions?concept=workorder');
 
-    // --- 10. Chat API (LLM Endpoint) ---
+    // --- 10. Chat API (LLM Agent) ---
     title("Chat API (LLM Agent)");
     // Test 1: Validation (Missing messages) - Expect 400
-    // This confirms chatApi.js is mounted and checking inputs
     await post('/chat/completion', {}, 400); 
     
     // Test 2: Connectivity (With mock message)
-    // We send a request. It will either succeed (200) or fail with 500 if no API key is set.
-    // Both confirm the code path is working up to the LLM call.
     try {
-        await axios.post(`${BASE_URL}/chat/completion`, {
+        await axios.post(`${API_URL}/chat/completion`, {
             messages: [{ role: "user", content: "Hello" }]
-        }, { timeout: 10000 }); // Longer timeout for LLM
+        }, { 
+            timeout: 10000,
+            headers: getHeaders() // Pass auth headers
+        });
         success("POST /chat/completion (External Call Success)");
     } catch (e) {
         if (e.response && e.response.status === 500 && e.response.data.error.includes("LLM_API_KEY")) {
@@ -211,7 +272,6 @@ async function runTests() {
              success("POST /chat/completion (Server reached, stopped at Key Check)");
              info("Note: LLM_API_KEY is not configured in .env, so external call was blocked.");
         } else if (e.response && e.response.status === 500) {
-             // Upstream error from OpenAI/Gemini (e.g. Quota, DNS)
              success(`POST /chat/completion (Server reached, Upstream Error: ${e.response.data.error})`);
         } else {
              fail("POST /chat/completion", e);

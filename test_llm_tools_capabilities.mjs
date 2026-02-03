@@ -8,9 +8,8 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
- * Capabilities Test Suite
+ * Capabilities Test Suite (Secured)
  * Verifies that the AI permissions set in .env are correctly enforced by the server.
- * [MODIFIED] Increased delay between tests to avoid HTTP 429 (Rate Limits).
  */
 import axios from 'axios';
 import fs from 'fs';
@@ -19,7 +18,15 @@ import { fileURLToPath } from 'url';
 
 // --- Configuration ---
 const BASE_URL = 'http://localhost:8080/api';
+const AUTH_URL = 'http://localhost:8080/auth/login';
 const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', '.env');
+
+// --- Test User Credentials (must match server setup) ---
+const TEST_USER = 'admin';
+const TEST_PASS = 'admin';
+
+// --- State ---
+let sessionHeaders = {};
 
 // --- Colors for Console ---
 const c = {
@@ -54,15 +61,31 @@ function getEnvConfig() {
     }
 }
 
+// --- Helper: Authenticate ---
+async function authenticate() {
+    console.log(`${c.dim}Authenticating as ${TEST_USER}...${c.reset}`);
+    try {
+        const res = await axios.post(AUTH_URL, { username: TEST_USER, password: TEST_PASS });
+        const cookies = res.headers['set-cookie'];
+        if (cookies) {
+            sessionHeaders['Cookie'] = cookies.map(c => c.split(';')[0]).join('; ');
+            console.log(`${c.green}✔ Authenticated.${c.reset}`);
+            return true;
+        }
+    } catch (e) {
+        console.error(`${c.red}Authentication failed: ${e.message}${c.reset}`);
+        console.warn("Tests might fail with 401/403 if server requires auth.");
+    }
+    return false;
+}
+
 // --- Test Definitions ---
 const SCENARIOS = [
     {
         name: "READ Capability",
         flag: "LLM_TOOL_ENABLE_READ",
         prompt: "List all the MQTT topics currently in the database.",
-        // Keywords expected if tool WORKS
         successKeywords: ["mqttunsviewer", "stark", "factory", "list", "found"], 
-        // Keywords expected if tool is BLOCKED
         blockKeywords: ["cannot", "unable", "don't have access", "permission", "sorry"] 
     },
     {
@@ -85,9 +108,7 @@ const SCENARIOS = [
         prompt: "Get the model definition for the concept 'Work Order'.",
         successKeywords: ["schema", "definition", "concept", "workorder"],
         blockKeywords: ["cannot", "unable", "don't have access", "permission", "sorry"]
-    },
-    // Note: PUBLISH, MAPPER, and ADMIN are harder to test non-destructively via simple prompt/response keywords,
-    // but follow the same logic.
+    }
 ];
 
 async function testCapability(scenario, config) {
@@ -100,7 +121,10 @@ async function testCapability(scenario, config) {
     try {
         const response = await axios.post(`${BASE_URL}/chat/completion`, {
             messages: [{ role: "user", content: scenario.prompt }]
-        }, { timeout: 20000 }); // Increased timeout for LLM processing
+        }, { 
+            timeout: 20000,
+            headers: sessionHeaders 
+        });
 
         const reply = response.data.choices[0].message.content || "";
         console.log(`  ${c.dim}IA Response: ${reply.substring(0, 100).replace(/\n/g, ' ')}...${c.reset}`);
@@ -111,7 +135,7 @@ async function testCapability(scenario, config) {
         if (isEnabled) {
             // Expecting SUCCESS keywords
             const hit = scenario.successKeywords.some(kw => lowerReply.includes(kw));
-            if (hit || reply.length > 50) { // Length check is a heuristic fallback
+            if (hit || reply.length > 50) { 
                 console.log(`  Result: ${c.green}✔ PASS (Tool execution detected)${c.reset}`);
             } else {
                 console.log(`  Result: ${c.yellow}⚠ WARN (Tool enabled, but response ambiguous)${c.reset}`);
@@ -133,15 +157,14 @@ async function testCapability(scenario, config) {
              
              console.log(`  API Error: ${status} - ${dataErr || e.message}`);
              
-             // Handle 429 specifically
              if (status === 429) {
-                 console.log(`  Result: ${c.yellow}⚠ SKIPPED (Rate Limit hit - Try running tests slower)${c.reset}`);
+                 console.log(`  Result: ${c.yellow}⚠ SKIPPED (Rate Limit hit)${c.reset}`);
                  return;
              }
-
-             // If error explicitly mentions "disabled", it's a pass for disabled state
-             if (!isEnabled && dataErr && dataErr.includes("disabled")) {
-                 console.log(`  Result: ${c.green}✔ PASS (Explicitly blocked by server)${c.reset}`);
+             
+             // If disabled and we get a permission error (often handled by LLM text, but sometimes tool errors bubble up)
+             if (!isEnabled && (status === 403 || (dataErr && dataErr.includes("disabled")))) {
+                 console.log(`  Result: ${c.green}✔ PASS (Explicitly blocked)${c.reset}`);
              } else {
                  console.log(`  Result: ${c.red}✘ ERROR (Request failed)${c.reset}`);
              }
@@ -155,13 +178,8 @@ async function testCapability(scenario, config) {
 async function run() {
     console.log(`\n${c.blue}=== AI Capabilities Security Check ===${c.reset}\n`);
     
-    // 1. Check Server
-    try {
-        await axios.get(`${BASE_URL}/context/status`);
-    } catch (e) {
-        console.error(`${c.red}FATAL: Server is not running on ${BASE_URL}. Start 'node server.js' first.${c.reset}`);
-        process.exit(1);
-    }
+    // 1. Authenticate first
+    await authenticate();
 
     // 2. Load Config
     const config = getEnvConfig();
@@ -173,9 +191,9 @@ async function run() {
     for (const scenario of SCENARIOS) {
         await testCapability(scenario, config);
         
-        // [MODIFIED] Increased wait time to 10 seconds to avoid 429 Errors from Gemini
-        console.log(`${c.dim}Waiting 10s to respect Rate Limits...${c.reset}`);
-        await new Promise(r => setTimeout(r, 10000));
+        // Wait to respect Rate Limits
+        console.log(`${c.dim}Waiting 5s...${c.reset}`);
+        await new Promise(r => setTimeout(r, 5000));
     }
 
     console.log(`${c.blue}=== Check Complete ===${c.reset}\n`);
