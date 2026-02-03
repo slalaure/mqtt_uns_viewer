@@ -1,9 +1,8 @@
-
 # MQTT UNS Viewer
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.5.0--beta32-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)
@@ -104,7 +103,7 @@ graph TD
 ### 1. Quick Start
 ```bash
 # Clone the repository
-git clone https://github.com/slalaure/mqtt_uns_viewer.git
+git clone [https://github.com/slalaure/mqtt_uns_viewer.git](https://github.com/slalaure/mqtt_uns_viewer.git)
 cd mqtt_uns_viewer
 
 # Setup configuration
@@ -118,77 +117,119 @@ docker-compose up -d
 
 ### 2. Configuration (`.env`)
 
+The application supports extensive configuration via environment variables.
+
 #### Connectivity
 ```bash
 # Define multiple brokers (Minified JSON)
-MQTT_BROKERS='[{"id":"local","host":"mosquitto","port":1883,"protocol":"mqtt","subscribe":["#"],"publish":[]},{"id":"cloud","host":"aws-iot.com","port":8883,"protocol":"mqtts","certFilename":"cert.pem","keyFilename":"key.pem","caFilename":"root.pem"}]'
+MQTT_BROKERS='[{ "id":"local", "host":"mosquitto", "port":1883, "protocol":"mqtt", "subscribe":["#"], "publish":[] }, { "id":"cloud", "host":"aws-iot.com", "port":8883, "protocol":"mqtts", "certFilename":"cert.pem", "keyFilename":"key.pem", "caFilename":"root.pem" }]'
 ```
 
 #### Storage Tuning
 ```bash
-DUCKDB_MAX_SIZE_MB=500       # Limit local DB size
-DB_INSERT_BATCH_SIZE=5000    # Performance tuning for high-throughput
-PERENNIAL_DRIVER=timescale   # Enable long-term storage
+DUCKDB_MAX_SIZE_MB=500       # Limit local DB size. Oldest data is pruned automatically.
+DUCKDB_PRUNE_CHUNK_SIZE=5000 # Number of rows to delete per prune cycle.
+DB_INSERT_BATCH_SIZE=5000    # Messages buffered in RAM before DB write (Higher = Better Perf).
+DB_BATCH_INTERVAL_MS=2000    # Flush interval for DB writes.
+
+# Perennial Storage (Optional)
+PERENNIAL_DRIVER=timescale   # Enable long-term storage (Options: 'none', 'timescale')
 PG_HOST=192.168.1.50         # Postgres connection details
+PG_DATABASE=mqtt_uns_viewer
+PG_TABLE_NAME=mqtt_events
 ```
 
-#### Security & AI
+#### Authentication & Security
 ```bash
-HTTP_USER=admin              # Basic Auth User
+# Web Interface & API Authentication
+HTTP_USER=admin              # Basic Auth User (Legacy/API fallback)
 HTTP_PASSWORD=secure         # Basic Auth Password
-MCP_API_KEY=sk-my-secret-key # Protect AI Access
-EXTERNAL_API_ENABLED=true    # Allow HTTP Publish
+SESSION_SECRET=change_me     # Signing key for session cookies
+
+# Google OAuth (Optional)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+PUBLIC_URL=http://localhost:8080 # Required for OAuth redirects
+
+# Auto-Provisioning
+ADMIN_USERNAME=admin         # Creates/Updates a Super Admin on startup
+ADMIN_PASSWORD=admin
+```
+
+#### AI & MCP Capabilities
+Control what the AI Agent is allowed to do.
+```bash
+MCP_API_KEY=sk-my-secret-key    # Secure the MCP endpoint
+LLM_API_URL=...                 # OpenAI-compatible endpoint (Gemini, ChatGPT, Local)
+LLM_API_KEY=...                 # Key for the internal Chat Assistant
+
+# Granular Tool Permissions (true/false)
+LLM_TOOL_ENABLE_READ=true       # Inspect DB, Search
+LLM_TOOL_ENABLE_SEMANTIC=true   # Infer Schema, Model Definitions
+LLM_TOOL_ENABLE_PUBLISH=true    # Publish MQTT messages
+LLM_TOOL_ENABLE_FILES=true      # Read/Write files (SVGs, Simulators)
+LLM_TOOL_ENABLE_SIMULATOR=true  # Start/Stop built-in sims
+LLM_TOOL_ENABLE_MAPPER=true     # Modify ETL rules
+LLM_TOOL_ENABLE_ADMIN=true      # Prune History, Restart Server
+```
+
+#### Analytics
+```bash
+ANALYTICS_ENABLED=false         # Enable Microsoft Clarity tracking
 ```
 
 ---
 
 ## 📘 User Manual
 
-### 1. Dynamic Topic Tree
+### 1. Authentication & Roles
+The viewer supports **Local** (Username/Password) and **Google OAuth** authentication.
+* **Standard User:** Can view data, create *Private* Charts, Mappers, and SVG views (stored in their own session workspace).
+* **Administrator:** Has full control. Can edit *Global* configurations, access the **Admin Dashboard** (`/admin`), manage users, and configure the server via the UI.
+
+### 2. Dynamic Topic Tree
 The left panel displays the discovered UNS hierarchy.
-* **Sparkplug B Support:** Topics starting with `spBv1.0/` are automatically decoded from Protobuf. The tree renders complex metrics, aliases, and historical rebirths (`NBIRTH`).
-* **Multi-Broker:** The root nodes represent your different broker connections (e.g., `[local]`, `[aws]`).
+* **Sparkplug B Support:** Topics starting with `spBv1.0/` are automatically decoded from Protobuf.
+* **Multi-Broker:** The root nodes represent your different broker connections.
 
-![Tree View](assets/mqtt_uns_viewer1.png)
-
-### 2. SVG Synoptics (SCADA View)
+### 3. SVG Synoptics (SCADA View)
 Create professional HMIs using standard vector graphics.
-1.  **Upload:** Drop your `.svg` file in the `data/` folder.
-2.  **Simple Binding:** Set an SVG element's `id` to match a topic (replace `/` with `-`).
-    * *Example:* Topic `plant/line1/temp` -> SVG ID `plant-line1-temp`.
-3.  **Advanced Scripting:** See the [Developer Guide](#svg-scripting-api) below.
+* **Dynamic Loading:** Upload `.svg` files directly via the UI or AI.
+* **Layered Storage:**
+    * **Global:** Files in `/data` are visible to everyone. (Admin write access).
+    * **Private:** Users can create/upload SVGs visible only to them (saved in `/data/sessions/<id>/svgs`).
 
-![SVG View](assets/mqtt_uns_viewer2.png)
-
-### 3. Historical Analysis
+### 4. Historical Analysis & Data Management
 Navigate through time using the **DuckDB** powered engine.
-* **Global Search:** Type "Error" or "Voltage" to find any message containing these terms in the topic *or* the payload.
-* **Time Travel:** Use the dual-handle slider at the bottom to restrict the view to a specific incident window.
-* **Pruning:** Right-click (or use the modal) to delete specific topic patterns from history to free up space.
+* **Time Travel:** Use the dual-handle slider or quick-select buttons (1h, 24h, Full).
+* **Export:** Download filtered data as JSON for offline analysis.
+* **Import:** Admins can import JSON history files to backfill the database.
+* **Pruning:** Right-click a topic node or use the Admin tools to delete specific topic patterns from the database to free up space.
 
-![History View](assets/mqtt_uns_viewer3.png)
+### 5. Mapper (ETL Engine)
+Transform data on the fly using JavaScript.
+* **Layered Config:**
+    * **Live/Global:** Rules running on the server. Only Admins can "Save Live".
+    * **Private Drafts:** Users can "Save As New" to create personal versions of mapping logic.
+* **Features:** Supports Multi-target routing (Fan-out) and re-publishing to different brokers.
 
-### 4. Mapper (ETL Engine)
-Transform data on the fly.
-* **Scenario:** You have a sensor sending `{ "tempF": 100 }` but your UNS requires `{ "tempC": 37.7 }`.
-* **Action:** Create a mapping rule.
-* **Result:** The Viewer publishes the transformed message to the target topic/broker automatically.
-
-![Mapper View](assets/mqtt_uns_viewer4.png)
-
-### 5. Advanced Charting
+### 6. Advanced Charting
 Visualize correlations instantly.
-1.  Select a topic in the Chart Tree.
-2.  Check the metrics you want to plot (supports nested JSON).
-3.  Click **Save As...** to persist your configuration in `charts.json`.
-4.  **Export:** Download data as CSV for Excel or PNG for reports.
+* **Smart Axis:** Automatically groups variables with similar units (e.g., Temperature, Pressure) on shared Y-axes.
+* **Persistence:** Save chart configurations (Global for Admins, Private for Users).
 
-![Chart View](assets/mqtt_uns_viewer5.png)
+### 7. AI Chat Assistant
+A floating assistant powered by LLMs.
+* **Context Aware:** Knows your topics, schemas, and file structure.
+* **Capabilities:** Can generate SQL queries, analyze anomalies, creating SVG dashboards from scratch (`create_dynamic_view`), and even control simulators.
+* **Voice & Vision:** Supports voice input (Chrome/Safari) and camera capture for analyzing physical equipment.
 
-### 6. Data Publishing & Simulation
-Manually publish messages to test your architecture or run built-in simulation scenarios (Stark Industries, Death Star, Paris Metro) to generate test data.
-
-![Publish View](assets/mqtt_uns_viewer6.png)
+### 8. Configuration Interface (Admin Only)
+Accessible via the Cog icon (`/config.html`).
+* **Environment:** Modify `.env` variables and restart the server from the UI.
+* **Certificates:** Upload SSL/TLS certificates for MQTT connections.
+* **UNS Model:** Edit the semantic model (`uns_model.json`) used by the AI for search.
+* **Database:** Execute Full Reset (Truncate) or Import data.
 
 ---
 
@@ -197,22 +238,22 @@ Manually publish messages to test your architecture or run built-in simulation s
 ### Project Structure
 ```text
 📦 root
- ┣ 📂 data/                # Persistent Volume
+ ┣ 📂 data/                # Persistent Volume (Global Configs)
  ┃ ┣ 📂 certs/             # MQTT Certificates
- ┃ ┣ 📄 charts.json        # Saved Charts
- ┃ ┣ 📄 mappings.json      # ETL Rules
- ┃ ┣ 📄 mqtt_events.duckdb # Hot DB
- ┃ ┗ 📄 [name].svg.js      # SVG Logic
- ┣ 📂 database/            # DB Adapters
- ┣ 📂 public/              # Frontend (Vanilla JS)
- ┣ 📂 routes/              # Express API
- ┣ 📄 server.js            # Main Entry
- ┣ 📄 mcp_server.mjs       # AI Server
+ ┃ ┣ 📂 sessions/          # User Data (Private Charts/SVGs/History)
+ ┃ ┣ 📄 charts.json        # Global Saved Charts
+ ┃ ┣ 📄 mappings.json      # Global ETL Rules
+ ┃ ┗ 📄 mqtt_events.duckdb # Hot DB
+ ┣ 📂 database/            # DB Adapters (DuckDB, Timescale, UserManager)
+ ┣ 📂 public/              # Frontend (Vanilla JS SPA)
+ ┣ 📂 routes/              # Express API (Auth, Admin, Config, Chat, etc.)
+ ┣ 📄 server.js            # Main Entry Point
+ ┣ 📄 mcp_server.mjs       # AI Server (Model Context Protocol)
  ┗ 📄 mapper_engine.js     # ETL Sandbox
 ```
 
 ### SVG Scripting API
-To add logic (animations, color changes) to an SVG, create a file named `[filename].svg.js` in the `data/` folder.
+To add logic (animations, color changes) to an SVG, create a file named `[filename].svg.js` alongside your `.svg` file.
 
 ```javascript
 // data/factory.svg.js
@@ -305,7 +346,7 @@ The **MCP Server** allows you to connect AI Agents (like **Claude Desktop**) dir
   "mcpServers": {
     "mqtt_viewer": {
       "command": "node",
-      "args": ["path/to/mcp-client.js"],
+      "args": ["path/to/mcp-client.js"], // Or via Docker
       "env": {
         "MCP_API_KEY": "your-key",
         "MCP_URL": "http://localhost:3000/mcp"
@@ -324,10 +365,10 @@ The application exposes a comprehensive REST API.
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/external/publish` | Publish data from 3rd party apps. Requires `x-api-key`. | ✅ (API Key) |
-| `GET` | `/api/context/status` | Get DB size and connection status. | ✅ (Basic) |
-| `GET` | `/api/context/search` | Full-text search (`?q=keyword`). | ✅ (Basic) |
-| `POST` | `/api/simulator/start/:name` | Start a simulation scenario. | ✅ (Basic) |
-| `GET` | `/api/chart/config` | Retrieve saved chart configurations. | ✅ (Basic) |
+| `GET` | `/api/context/status` | Get DB size and connection status. | ✅ (Session/Basic) |
+| `GET` | `/api/admin/users` | List registered users. | ✅ (Admin) |
+| `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
+| `POST` | `/api/env/import-db` | Import JSON history data. | ✅ (Admin) |
 
 ---
 
@@ -348,4 +389,4 @@ We welcome contributions! We believe in **Community Driven Innovation**.
 Licensed under the **Apache License, Version 2.0**.
 You are free to use, modify, and distribute this software, even for commercial purposes, under the terms of the license.
 
-**Copyright (c) 2025 Sebastien Lalaurette**
+**Copyright (c) 2025-2026 Sebastien Lalaurette**
