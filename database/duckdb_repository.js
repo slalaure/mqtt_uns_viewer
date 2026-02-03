@@ -11,10 +11,8 @@
  * DuckDB Repository
  *
  * Manages all WRITE operations for the embedded DuckDB database.
- * This includes batch inserting for performance.
- * READ operations are still performed directly on the 'db' object for now.
+ * [UPDATED] Forces ISO String insertion to fix Timezone shift (1h delay).
  */
-
 // --- Module-level State ---
 let logger = null;
 let config = null;
@@ -79,18 +77,28 @@ function processDbQueue() {
         return;
     }
 
+    // [DEBUG] Log the timestamp of the first item to verify system time vs data time
+    // const firstItemTs = batch[0].timestamp;
+    // const now = new Date();
+    // logger.info(`[DB Debug] Inserting batch. First TS: ${firstItemTs.toISOString()} (System: ${now.toISOString()})`);
+
     db.serialize(() => {
         db.run('BEGIN TRANSACTION;', (err) => {
             if (err) return logger.error({ err }, "DB Batch: Failed to BEGIN TRANSACTION");
         });
 
-        //  Add broker_id to the INSERT statement
-        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload, broker_id) VALUES (?, ?, ?, ?)');
+        // [CRITICAL FIX] Use CAST(? AS TIMESTAMPTZ) in the SQL.
+        // We will pass the ISO string directly. DuckDB handles ISO strings with 'Z' correctly 
+        // as UTC when cast to TIMESTAMPTZ, preventing the 1h offset.
+        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload, broker_id) VALUES (CAST(? AS TIMESTAMPTZ), ?, ?, ?)');
         let errorCount = 0;
 
         for (const msg of batch) {
-            //  Add msg.brokerId as the 4th parameter
-            stmt.run(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.brokerId, (runErr) => {
+            // [CRITICAL FIX] Explicitly convert Date object to ISO String.
+            // This ensures "2026-02-03T16:30:00.000Z" is passed, preserving the 'Z'.
+            const timestampIso = msg.timestamp.toISOString();
+
+            stmt.run(timestampIso, msg.topic, msg.payloadStringForDb, msg.brokerId, (runErr) => {
                 if (runErr) {
                     logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
                     errorCount++;
