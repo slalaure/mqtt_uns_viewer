@@ -54,10 +54,10 @@ module.exports = (defaultConfigPath, logger) => {
     }
 
     // --- GET Configuration (Merged) ---
-    router.get('/', (req, res) => {
+    // [FIX] Route updated to /config to match frontend and tests
+    router.get('/config', (req, res) => {
         // 1. Load Global Configs
         const globalData = readChartFile(defaultConfigPath);
-        
         // Mark global items
         globalData.configurations.forEach(c => {
             c._isGlobal = true; // Flag for Frontend UI
@@ -83,7 +83,8 @@ module.exports = (defaultConfigPath, logger) => {
     });
 
     // --- SAVE Configuration (Partitioned) ---
-    router.post('/', (req, res) => {
+    // [FIX] Route updated to /config to match frontend and tests
+    router.post('/config', (req, res) => {
         const incomingConfig = req.body;
         if (!incomingConfig || !Array.isArray(incomingConfig.configurations)) {
             return res.status(400).json({ error: "Invalid configuration format" });
@@ -103,9 +104,8 @@ module.exports = (defaultConfigPath, logger) => {
         // Distribute incoming configs
         incomingConfig.configurations.forEach(config => {
             // Remove the metadata flag before saving
-            const isMarkedGlobal = config._isGlobal === true;
             delete config._isGlobal;
-            
+
             // Remove [GLOBAL] prefix if present (sanitize name)
             if (config.name.startsWith('[GLOBAL] ')) {
                 config.name = config.name.replace('[GLOBAL] ', '');
@@ -156,7 +156,6 @@ module.exports = (defaultConfigPath, logger) => {
             }
 
             res.json({ success: true });
-
         } catch (err) {
             logger.error({ err }, "Error saving chart config");
             res.status(500).json({ error: "Failed to save configuration" });
