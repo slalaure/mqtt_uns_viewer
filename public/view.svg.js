@@ -18,7 +18,7 @@
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KINDD, EXPRESS OR
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -74,10 +74,8 @@ export function initSvgView(appConfig) {
     isMultiBroker = appConfig.isMultiBroker; // Store multi-broker state
     // Initial load
     refreshSvgList(appConfig.svgFilePath);
-    
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
     svgSelectDropdown?.addEventListener('change', onSvgFileChange);
-
     svgHistoryToggle?.addEventListener('change', (e) => {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
@@ -99,7 +97,20 @@ export function initSvgView(appConfig) {
                 trackEvent('svg_slider_drag_end');
             }
         });
-    }  
+    }
+    
+    // [NEW] Add Delete Button to Controls
+    const controlsContainer = document.querySelector('.map-view-controls');
+    if (controlsContainer) {
+        const btnDelete = document.createElement('button');
+        btnDelete.className = 'map-button danger-button'; // Re-use css classes
+        btnDelete.innerHTML = '&#x1F5D1;'; // Trash icon
+        btnDelete.title = "Delete current view";
+        btnDelete.style.marginLeft = "10px";
+        btnDelete.onclick = deleteCurrentSvg;
+        // Append before fullscreen button
+        controlsContainer.insertBefore(btnDelete, btnSvgFullscreen);
+    }
 }
 /**
  * Receives the full history log from the main app.
@@ -107,28 +118,23 @@ export function initSvgView(appConfig) {
 export function setSvgHistoryData(entries) {
     allHistoryEntries = entries; // These entries include brokerId
 }
-
 /**
  * [NEW] Publicly exported function to refresh the dropdown.
  * Can be called by Chat View when a new file is created.
  */
 export async function refreshSvgList(targetFilenameToSelect = null) {
     if (!svgSelectDropdown) return;
-    
     // Preserve current selection if no target specified
     const currentSelection = targetFilenameToSelect || svgSelectDropdown.value;
-
     try {
         const response = await fetch('api/svg/list');
         if (!response.ok) throw new Error('Failed to fetch SVG list');
         const svgFiles = await response.json();
-        
         svgSelectDropdown.innerHTML = '';
         if (svgFiles.length === 0) {
             svgSelectDropdown.innerHTML = '<option value="">No SVGs found</option>';
             return;
         }
-
         let matchFound = false;
         svgFiles.forEach(filename => {
             const option = document.createElement('option');
@@ -140,7 +146,6 @@ export async function refreshSvgList(targetFilenameToSelect = null) {
             }
             svgSelectDropdown.appendChild(option);
         });
-
         // If we have files but the target/current one isn't there, pick the first
         if (!matchFound && svgFiles.length > 0) {
             svgSelectDropdown.value = svgFiles[0];
@@ -149,13 +154,11 @@ export async function refreshSvgList(targetFilenameToSelect = null) {
             // Reload the view to ensure we have the latest content
             await loadSvgPlan(currentSelection);
         }
-
     } catch (error) {
         console.error("Could not populate SVG list:", error);
         svgSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
     }
 }
-
 /**
  * Handles the change event when a new SVG is selected.
  */
@@ -164,6 +167,25 @@ async function onSvgFileChange(event) {
     if (!filename) return;
     trackEvent('svg_file_change');
     await loadSvgPlan(filename);
+}
+// [NEW] Logic to delete the current SVG view
+async function deleteCurrentSvg() {
+    const filename = svgSelectDropdown.value;
+    if(!filename) return;
+    if(!confirm(`Are you sure you want to delete '${filename}'? This action cannot be undone.`)) return;
+    
+    try {
+        const res = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if(res.ok) {
+            alert("View deleted successfully.");
+            refreshSvgList(); // Reload list, will pick first available
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch(e) {
+        alert("Request failed: " + e.message);
+    }
 }
 /**
  * Dynamically loads the custom svg-bindings.js script *by name*.

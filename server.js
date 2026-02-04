@@ -429,7 +429,6 @@ const authMiddleware = (req, res, next) => {
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
     return res.status(401).send('Unauthorized. Please log in.');
 };
-
 // --- [NEW] Admin Middleware ---
 const requireAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
@@ -446,7 +445,6 @@ const requireAdmin = (req, res, next) => {
     logger.warn(`[Security] Admin access denied for ${req.user ? req.user.username : req.ip} on ${req.originalUrl}`);
     return res.status(403).send("Forbidden: Admin privileges required.");
 };
-
 let ALLOWED_IPS = config.API_ALLOWED_IPS ? config.API_ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const ipFilterMiddleware = (req, res, next) => {
     if (ALLOWED_IPS.length === 0 || ALLOWED_IPS.includes(req.ip)) return next();
@@ -466,12 +464,10 @@ simulatorManager.init(logger, (topic, payload) => {
 mainRouter.use('/auth', require('./routes/authApi')(logger));
 // --- [NEW] Admin Routes ---
 mainRouter.use('/api/admin', require('./routes/adminApi')(logger));
-
 // --- [NEW] Layered File System Helper for SVGs ---
 // Determines the priority file path (Private > Global)
 function resolveSvgPath(filename, req) {
     const globalPath = path.join(DATA_PATH, filename);
-    
     if (req.user && req.user.id) {
         const userSvgDir = path.join(SESSIONS_PATH, req.user.id, 'svgs');
         const userPath = path.join(userSvgDir, filename);
@@ -483,34 +479,28 @@ function resolveSvgPath(filename, req) {
     // Fallback to global
     return globalPath;
 }
-
 // --- API Routes ---
 // [MODIFIED] Serve SVG file with precedence (Private > Global)
 mainRouter.get('/api/svg/file', (req, res) => {
     const filename = path.basename(req.query.name || '');
     if (!filename.endsWith('.svg')) return res.status(400).send('Invalid file type');
-
     const filePath = resolveSvgPath(filename, req);
-    
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
     } else {
         res.status(404).send('Not found');
     }
 });
-
 // [MODIFIED] List SVGs (Merge Global + Private)
 mainRouter.get('/api/svg/list', (req, res) => {
     try {
         let files = new Set();
-
         // 1. Add Global Files
         if (fs.existsSync(DATA_PATH)) {
             fs.readdirSync(DATA_PATH).forEach(f => {
                 if (f.endsWith('.svg')) files.add(f);
             });
         }
-
         // 2. Add Private Files (if logged in)
         if (req.user && req.user.id) {
             const userSvgDir = path.join(SESSIONS_PATH, req.user.id, 'svgs');
@@ -520,27 +510,80 @@ mainRouter.get('/api/svg/list', (req, res) => {
                 });
             }
         }
-
         res.json(Array.from(files).sort());
     } catch { 
         res.status(500).json([]); 
     }
 });
-
 // [MODIFIED] Serve Bindings JS with precedence
 mainRouter.get('/api/svg/bindings.js', (req, res) => {
     const filename = path.basename(req.query.name || '');
     // filename comes in as "view.svg.js" likely, or we construct it? 
     // The client calls: bindings.js?name=view.svg.js
-    
     const filePath = resolveSvgPath(filename, req);
-
     if (fs.existsSync(filePath)) { 
         res.setHeader('Content-Type', 'application/javascript'); 
         res.sendFile(filePath); 
     } else { 
         res.setHeader('Content-Type', 'application/javascript'); 
         res.send('// No bindings'); 
+    }
+});
+
+// [NEW] Delete SVG View (File + JS)
+mainRouter.delete('/api/svg/file', (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const filename = path.basename(req.query.name || '');
+    if (!filename.endsWith('.svg')) return res.status(400).json({ error: "Invalid file type" });
+
+    const globalPath = path.join(DATA_PATH, filename);
+    let targetPath = null;
+    let isPrivate = false;
+
+    // Check for private file first
+    if (req.user && req.user.id) {
+        const userSvgDir = path.join(SESSIONS_PATH, req.user.id, 'svgs');
+        const userPath = path.join(userSvgDir, filename);
+        if (fs.existsSync(userPath)) {
+            targetPath = userPath;
+            isPrivate = true;
+        }
+    }
+
+    // Fallback to global if private not found
+    if (!targetPath && fs.existsSync(globalPath)) {
+        targetPath = globalPath;
+        isPrivate = false;
+    }
+
+    if (!targetPath) {
+        return res.status(404).json({ error: "File not found" });
+    }
+
+    // Permission Logic
+    if (!isPrivate) {
+        // Only Admin can delete global files
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: "Forbidden: Only Admins can delete Global SVG views." });
+        }
+    }
+
+    try {
+        // Delete .svg
+        fs.unlinkSync(targetPath);
+        logger.info(`Deleted SVG: ${targetPath}`);
+        
+        // Try delete .svg.js
+        const jsPath = targetPath + ".js";
+        if (fs.existsSync(jsPath)) {
+            fs.unlinkSync(jsPath);
+            logger.info(`Deleted SVG JS: ${jsPath}`);
+        }
+        
+        res.json({ success: true, message: "View deleted successfully." });
+    } catch (err) {
+        logger.error({ err }, "Error deleting SVG");
+        res.status(500).json({ error: "Failed to delete file" });
     }
 });
 
@@ -564,7 +607,10 @@ mainRouter.get('/api/config', (req, res) => {
     });
 });
 if (config.IS_SIMULATOR_ENABLED) {
-    mainRouter.get('/api/simulator/status', (req, res) => res.json({ statuses: simulatorManager.getStatuses() }));
+    mainRouter.get('/api/simulator/status', (req, res) => {
+        // [FIX] Ensure we return an object with "statuses" property
+        res.json({ statuses: simulatorManager.getStatuses() });
+    });
     // [SECURED] Require Admin to start/stop
     mainRouter.post('/api/simulator/start/:name', requireAdmin, (req, res) => {
         const r = simulatorManager.startSimulator(req.params.name);
@@ -610,7 +656,6 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
 if (config.EXTERNAL_API_ENABLED) {
     mainRouter.use('/api/external', ipFilterMiddleware, require('./routes/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer));
 }
-
 // [SECURED] Explicitly protect the configuration page
 if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', requireAdmin);
@@ -619,7 +664,6 @@ if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', (req, res) => res.status(403).send('Disabled'));
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
-
 // Disable internal redirect for static files to allow Redbird to handle slashes
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false, index: false }));
 // Helper to serve index.html with dynamic base tag injection.
