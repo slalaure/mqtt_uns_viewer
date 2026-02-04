@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.5.0--beta32-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.6.0--beta1-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)
@@ -80,7 +80,7 @@ graph TD
         Claude["Claude / ChatGPT"] <-->|HTTP/SSE| MCP
     end
 
-    Backend -.->|Async Write| Timescale
+    Backend -.- ->|Async Write| Timescale
 ```
 
 ### Storage Strategy (Tiered)
@@ -221,7 +221,9 @@ Visualize correlations instantly.
 ### 7. AI Chat Assistant
 A floating assistant powered by LLMs.
 * **Context Aware:** Knows your topics, schemas, and file structure.
+* **Multi-Session:** Use the **☰** menu to switch between chat sessions, create new ones, or delete old ones.
 * **Capabilities:** Can generate SQL queries, analyze anomalies, creating SVG dashboards from scratch (`create_dynamic_view`), and even control simulators.
+* **Control:** Use the **⏹ Stop** button to cancel a long-running generation.
 * **Voice & Vision:** Supports voice input (Chrome/Safari) and camera capture for analyzing physical equipment.
 
 ### 8. Configuration Interface (Admin Only)
@@ -240,7 +242,7 @@ Accessible via the Cog icon (`/config.html`).
 📦 root
  ┣ 📂 data/                # Persistent Volume (Global Configs)
  ┃ ┣ 📂 certs/             # MQTT Certificates
- ┃ ┣ 📂 sessions/          # User Data (Private Charts/SVGs/History)
+ ┃ ┣ 📂 sessions/          # User Data (Private Charts/SVGs/History/Chats)
  ┃ ┣ 📄 charts.json        # Global Saved Charts
  ┃ ┣ 📄 mappings.json      # Global ETL Rules
  ┃ ┗ 📄 mqtt_events.duckdb # Hot DB
@@ -366,6 +368,12 @@ The application exposes a comprehensive REST API.
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/external/publish` | Publish data from 3rd party apps. Requires `x-api-key`. | ✅ (API Key) |
 | `GET` | `/api/context/status` | Get DB size and connection status. | ✅ (Session/Basic) |
+| `POST` | `/api/publish/message` | Publish MQTT message. | ✅ (Session/Basic) |
+| `GET` | `/api/chat/sessions` | List chat history sessions. | ✅ (Session/Basic) |
+| `GET` | `/api/chat/session/:id` | Load specific session history. | ✅ (Session/Basic) |
+| `DELETE` | `/api/chat/session/:id` | Delete a chat session. | ✅ (Session/Basic) |
+| `POST` | `/api/chat/stop` | Abort current generation. | ✅ (Session/Basic) |
+| `POST` | `/api/external/publish` | Publish data from 3rd party apps. | ✅ (API Key) |
 | `GET` | `/api/admin/users` | List registered users. | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
 | `POST` | `/api/env/import-db` | Import JSON history data. | ✅ (Admin) |

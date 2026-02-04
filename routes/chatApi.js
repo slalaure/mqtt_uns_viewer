@@ -9,21 +9,23 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
- * Implements a Multi-Turn Loop (Max 5 steps) to handle complex agentic workflows.
- * Added explicit timeouts to Axios calls to prevent indefinite hanging.
- * [NEW] Added User-Scoped History Persistence and Tool Constraints.
- * [NEW] Added WebSocket fallback for streaming updates with DEDUPLICATION IDs.
+ * Implements Multi-Turn Agent Loop, Session Management, and Abort Control.
  */
 const express = require('express');
 const axios = require('axios');
 const mqttMatch = require('mqtt-match'); 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto'); // For UUIDs
 const chrono = require('chrono-node');
 
 // --- Constants ---
 const MAX_AGENT_TURNS = 8; // Limit recursion to prevent infinite loops
 const LLM_TIMEOUT_MS = 120000; // 120s timeout for LLM generation
+
+// --- State for Abort Control ---
+// Map<clientId, { abortController: AbortController, res: Response }>
+const activeStreams = new Map();
 
 // Helper to escape SQL string
 const escapeSQL = (str) => {
@@ -36,11 +38,9 @@ const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
     const results = chrono.parse(timeExpression);
     if (results.length === 0) return null;
-
     const firstResult = results[0];
     let start = firstResult.start.date();
     let end = firstResult.end ? firstResult.end.date() : new Date(); 
-
     return { start, end };
 };
 
@@ -96,6 +96,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- [NEW] Helper to send chunks via HTTP AND WebSocket with Deduplication ID ---
     const sendChunk = (res, type, content, clientId) => {
+        // Check if stream was aborted before sending
+        if (clientId && !activeStreams.has(clientId)) return;
+
         // Generate a unique ID for this chunk to allow frontend deduplication
         const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         const chunkData = { type, content, id: chunkId };
@@ -113,7 +116,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 type: 'chat-stream',
                 chunkType: type,
                 content: content,
-                id: chunkId // Include ID for dedupe
+                id: chunkId 
             });
         }
     };
@@ -134,47 +137,141 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
     loadUnsModel();
 
-    // --- User Scoped History Helpers ---
-    const getUserChatPath = (req) => {
+    // --- User Scoped Session Directory Helper ---
+    const getUserChatsDir = (req) => {
+        let basePath;
         if (req.user && req.user.id) {
-            const userDir = path.join(SESSIONS_DIR, req.user.id);
-            if (!fs.existsSync(userDir)) {
-                try { fs.mkdirSync(userDir, { recursive: true }); } catch (e) {}
-            }
-            return path.join(userDir, 'chat_history.json');
+            basePath = path.join(SESSIONS_DIR, req.user.id, 'chats');
+        } else {
+            basePath = path.join(DATA_PATH, 'sessions', 'global', 'chats');
         }
-        return path.join(DATA_PATH, 'chat_history_global.json');
+        
+        if (!fs.existsSync(basePath)) {
+            try { fs.mkdirSync(basePath, { recursive: true }); } catch (e) {}
+        }
+        return basePath;
     };
 
-    // --- History Routes (Sync) ---
-    router.get('/history', (req, res) => {
-        const filepath = getUserChatPath(req);
-        if (fs.existsSync(filepath)) {
-            try {
-                const history = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-                res.json(history);
-            } catch (e) {
-                logger.error({ err: e }, "Failed to read chat history");
-                res.json([]);
-            }
-        } else {
+    // --- Session Management Routes ---
+
+    // LIST Sessions
+    router.get('/sessions', (req, res) => {
+        const chatsDir = getUserChatsDir(req);
+        try {
+            const files = fs.readdirSync(chatsDir).filter(f => f.endsWith('.json'));
+            const sessions = files.map(file => {
+                const filePath = path.join(chatsDir, file);
+                const stats = fs.statSync(filePath);
+                let title = "New Chat";
+                try {
+                    const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                    // Find first user message for title
+                    const firstUserMsg = content.find(m => m.role === 'user');
+                    if (firstUserMsg) {
+                        const txt = Array.isArray(firstUserMsg.content) 
+                            ? firstUserMsg.content.find(c => c.type === 'text')?.text 
+                            : firstUserMsg.content;
+                        if (txt) title = txt.substring(0, 30) + (txt.length > 30 ? "..." : "");
+                    }
+                } catch(e) {}
+                
+                return {
+                    id: file.replace('.json', ''),
+                    title: title,
+                    updatedAt: stats.mtime
+                };
+            });
+            // Sort by newest first
+            sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+            res.json(sessions);
+        } catch (e) {
+            logger.error({ err: e }, "Failed to list chat sessions");
             res.json([]);
         }
     });
 
-    router.post('/history', (req, res) => {
+    // LOAD Session History
+    router.get('/session/:id', (req, res) => {
+        const chatsDir = getUserChatsDir(req);
+        const filePath = path.join(chatsDir, `${req.params.id}.json`);
+        
+        // Security check
+        if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
+
+        if (fs.existsSync(filePath)) {
+            try {
+                const history = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                res.json(history);
+            } catch (e) {
+                res.json([]);
+            }
+        } else {
+            res.json([]); // New empty session
+        }
+    });
+
+    // SAVE Session History
+    router.post('/session/:id', (req, res) => {
         const history = req.body;
         if (!Array.isArray(history)) {
             return res.status(400).json({ error: "History must be an array" });
         }
-        const filepath = getUserChatPath(req);
-        fs.writeFile(filepath, JSON.stringify(history, null, 2), (err) => {
+        const chatsDir = getUserChatsDir(req);
+        const filePath = path.join(chatsDir, `${req.params.id}.json`);
+        
+        // Security check
+        if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
+
+        fs.writeFile(filePath, JSON.stringify(history, null, 2), (err) => {
             if (err) {
                 logger.error({ err }, "Failed to save chat history");
                 return res.status(500).json({ error: "Save failed" });
             }
             res.json({ success: true });
         });
+    });
+
+    // DELETE Session
+    router.delete('/session/:id', (req, res) => {
+        const chatsDir = getUserChatsDir(req);
+        const filePath = path.join(chatsDir, `${req.params.id}.json`);
+        
+        // Security check
+        if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        res.json({ success: true });
+    });
+
+    // STOP Generation Endpoint
+    router.post('/stop', (req, res) => {
+        const { clientId } = req.body;
+        if (clientId && activeStreams.has(clientId)) {
+            const stream = activeStreams.get(clientId);
+            if (stream.abortController) {
+                stream.abortController.abort();
+                logger.info(`[ChatAPI] Aborted generation for client ${clientId}`);
+            }
+            activeStreams.delete(clientId);
+            res.json({ success: true, message: "Generation stopped." });
+        } else {
+            res.json({ success: false, message: "No active generation found for this client." });
+        }
+    });
+
+    // --- Legacy /history Route (Redirects to a 'default' session) ---
+    router.get('/history', (req, res) => {
+        req.params.id = 'default';
+        // Reuse logic manually or redirect client side. 
+        // For API simplicity, we just return the default session file content.
+        const chatsDir = getUserChatsDir(req);
+        const filePath = path.join(chatsDir, `default.json`);
+        if (fs.existsSync(filePath)) {
+            try { res.json(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } 
+            catch (e) { res.json([]); }
+        } else { res.json([]); }
     });
 
     // --- 1. Tool Definitions ---
@@ -802,7 +899,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const { messages, clientId } = req.body; 
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
-        
+
+        // Setup Abort Controller for this request
+        const abortController = new AbortController();
+        if (clientId) {
+            activeStreams.set(clientId, { abortController, res });
+        }
+
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
@@ -855,6 +958,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
         const safeUserMessages = messages.filter(m => m.role !== 'system');
         let conversation = [systemMessage, ...safeUserMessages];
+
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -866,9 +970,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
         try {
             while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
+                // Check Cancellation
+                if (abortController.signal.aborted) {
+                    throw new Error("Generation cancelled by user.");
+                }
+
                 turnCount++;
                 sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`, clientId);
-                
+
                 const requestPayload = {
                     model: config.LLM_MODEL,
                     messages: conversation,
@@ -878,20 +987,28 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     tool_choice: enabledTools.length > 0 ? "auto" : undefined
                 };
 
-                const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
+                const response = await axios.post(apiUrl, requestPayload, { 
+                    headers, 
+                    timeout: LLM_TIMEOUT_MS,
+                    signal: abortController.signal // Link axios to abort controller
+                });
+
                 const message = response.data.choices[0].message;
 
                 // Case 1: The model wants to call tools
                 if (message.tool_calls && message.tool_calls.length > 0) {
                     conversation.push(message); 
+                    
                     for (const toolCall of message.tool_calls) {
+                        if (abortController.signal.aborted) throw new Error("Generation cancelled by user.");
+
                         const fnName = toolCall.function.name;
-                        
                         sendChunk(res, 'tool_start', { name: fnName }, clientId);
                         
                         let result;
                         let duration = 0;
                         const startTime = Date.now();
+
                         try {
                             if (toolImplementations[fnName]) {
                                 let args = {};
@@ -905,10 +1022,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
                             result = JSON.stringify({ error: err.message });
                         }
+
                         duration = Date.now() - startTime;
-                        
                         sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration }, clientId);
-                        
+
                         conversation.push({
                             tool_call_id: toolCall.id,
                             role: "tool",
@@ -923,11 +1040,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     finalMessageSent = true;
                 }
             }
+
             if (!finalMessageSent) {
                 sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
             }
+
         } catch (error) {
-            if (error.response) {
+            if (error.message === "Generation cancelled by user." || error.code === 'ERR_CANCELED') {
+                sendChunk(res, 'status', '⛔ Generation Stopped by User', clientId);
+            } else if (error.response) {
                  const apiMsg = error.response.data?.error?.message || "Unknown Upstream Error";
                  sendChunk(res, 'error', `API Error ${error.response.status}: ${apiMsg}`, clientId);
             } else {
@@ -939,6 +1060,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
             }
         } finally {
+            if (clientId) activeStreams.delete(clientId);
             res.end();
         }
     });

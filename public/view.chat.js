@@ -13,6 +13,7 @@
  * Optimized for Chrome "Google" Voices & Safari compatibility.
  * [NEW] User-Scoped Server-Side History Sync.
  * [NEW] WebSocket Streaming support for bypassing Proxy buffering with DEDUPLICATION.
+ * [NEW] Multi-Session Support & Stop Generation.
  */
 import { trackEvent } from './utils.js';
 
@@ -33,12 +34,20 @@ let btnCam = null;
 let cameraModal = null; 
 let cameraVideo = null; 
 let cameraStream = null; 
+// Session UI
+let sessionMenuBtn = null;
+let sessionOverlay = null;
+let sessionListContainer = null;
+let btnNewChat = null;
+// Stop UI
+let btnStop = null;
 
 // --- State ---
 let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
+let currentSessionId = 'default';
 
 // --- Storage & Path State ---
 let appBasePath = ''; // Store base path for API calls
@@ -49,10 +58,8 @@ let isListening = false;
 let wasLastInputVoice = false; 
 let finalTranscript = ''; 
 let userWantMicActive = false;
-
 // Global reference for TTS to prevent Garbage Collection
 let currentUtterance = null; 
-
 // Cache for voices
 let availableVoices = [];
 let onFileCreatedCallback = null;
@@ -60,7 +67,6 @@ let onFileCreatedCallback = null;
 // --- Streaming UI ---
 let currentLogDiv = null; 
 let hasToolActivity = false; 
-
 // --- [NEW] Deduplication Set ---
 let processedChunkIds = new Set();
 
@@ -82,9 +88,17 @@ export function initChatView(basePath, onFileCreated) {
     injectUploadUI();
     injectVoiceUI(); 
     injectCameraUI(); 
+    injectSessionUI(); // Add Sidebar and Menu button
+    injectStopButton(); // Add Stop button
 
-    // Load History from Server
-    loadHistory();
+    // Load Sessions List first, then load latest
+    loadSessionsList().then(sessions => {
+        if (sessions && sessions.length > 0) {
+            switchSession(sessions[0].id);
+        } else {
+            createNewSession();
+        }
+    });
 
     // [FIX] Pre-load voices aggressively for Chrome/Safari
     if ('speechSynthesis' in window) {
@@ -100,7 +114,8 @@ export function initChatView(basePath, onFileCreated) {
     fabButton?.addEventListener('click', () => toggleChatWidget(true));
     btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
     btnSend?.addEventListener('click', () => sendMessage(false));
-    
+    btnStop?.addEventListener('click', stopGeneration);
+
     chatInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -110,14 +125,8 @@ export function initChatView(basePath, onFileCreated) {
     });
 
     btnClear?.addEventListener('click', () => {
-        if (confirm('Clear conversation history?')) {
-            conversationHistory = [];
-            saveHistory(); // Sync to server
-            renderHistory();
-            trackEvent('chat_clear_history');
-            window.speechSynthesis.cancel();
-            // Re-add greeting with correct role
-            addMessageToState('assistant', 'Hello! I am your UNS Assistant.');
+        if (confirm('Delete current chat session?')) {
+            deleteSession(currentSessionId);
         }
     });
 }
@@ -149,16 +158,169 @@ function autoResizeInput() {
     chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
 }
 
+// --- Session Management UI Injection ---
+function injectSessionUI() {
+    const header = document.querySelector('.chat-header');
+    if (!header) return;
+
+    // 1. Menu Button
+    sessionMenuBtn = document.createElement('button');
+    sessionMenuBtn.innerHTML = '☰';
+    sessionMenuBtn.title = "Chat History";
+    sessionMenuBtn.style.marginRight = '10px';
+    sessionMenuBtn.onclick = toggleSessionOverlay;
+    // Insert before title
+    header.insertBefore(sessionMenuBtn, header.firstChild);
+
+    // 2. Session Overlay (Drawer)
+    sessionOverlay = document.createElement('div');
+    sessionOverlay.className = 'chat-session-overlay';
+    sessionOverlay.style.cssText = `
+        position: absolute; top: 0; left: 0; width: 250px; height: 100%;
+        background: var(--color-bg-secondary); border-right: 1px solid var(--color-border);
+        z-index: 100; transform: translateX(-100%); transition: transform 0.3s ease;
+        display: flex; flex-direction: column; padding: 10px; box-sizing: border-box;
+    `;
+    
+    const overlayHeader = document.createElement('div');
+    overlayHeader.style.cssText = "display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid var(--color-border); padding-bottom:5px;";
+    overlayHeader.innerHTML = `<strong>History</strong><button id="btn-close-sessions" style="background:none; border:none; cursor:pointer;">✕</button>`;
+    
+    btnNewChat = document.createElement('button');
+    btnNewChat.textContent = "+ New Chat";
+    btnNewChat.className = "mapper-button"; // Reuse style
+    btnNewChat.style.width = "100%";
+    btnNewChat.style.marginBottom = "10px";
+    btnNewChat.onclick = createNewSession;
+
+    sessionListContainer = document.createElement('div');
+    sessionListContainer.style.cssText = "flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:5px;";
+
+    sessionOverlay.appendChild(overlayHeader);
+    sessionOverlay.appendChild(btnNewChat);
+    sessionOverlay.appendChild(sessionListContainer);
+
+    // Append to widget
+    document.querySelector('.chat-widget-container').appendChild(sessionOverlay);
+
+    sessionOverlay.querySelector('#btn-close-sessions').onclick = toggleSessionOverlay;
+}
+
+function injectStopButton() {
+    const inputArea = document.querySelector('.chat-input-area');
+    btnStop = document.createElement('button');
+    btnStop.id = 'btn-chat-stop';
+    btnStop.innerHTML = '⏹';
+    btnStop.className = 'chat-icon-btn';
+    btnStop.style.display = 'none'; // Hidden by default
+    btnStop.style.color = 'var(--color-danger)';
+    btnStop.title = "Stop Generating";
+    
+    // Insert before Send button
+    inputArea.insertBefore(btnStop, btnSend);
+}
+
+function toggleSessionOverlay() {
+    const isOpen = sessionOverlay.style.transform === 'translateX(0%)';
+    sessionOverlay.style.transform = isOpen ? 'translateX(-100%)' : 'translateX(0%)';
+    if (!isOpen) loadSessionsList(); // Refresh on open
+}
+
+async function loadSessionsList() {
+    try {
+        const res = await fetch(`${appBasePath}/api/chat/sessions`);
+        if (!res.ok) throw new Error("Failed to load sessions");
+        const sessions = await res.json();
+        renderSessionList(sessions);
+        return sessions;
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+}
+
+function renderSessionList(sessions) {
+    sessionListContainer.innerHTML = '';
+    if (sessions.length === 0) {
+        sessionListContainer.innerHTML = '<div style="color:var(--color-text-secondary); font-style:italic; padding:10px;">No history</div>';
+        return;
+    }
+    
+    sessions.forEach(session => {
+        const div = document.createElement('div');
+        div.className = 'session-item';
+        div.style.cssText = `
+            padding: 8px; cursor: pointer; border-radius: 4px;
+            background: ${session.id === currentSessionId ? 'var(--color-bg-accent)' : 'transparent'};
+            border: 1px solid ${session.id === currentSessionId ? 'var(--color-primary)' : 'transparent'};
+            font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        `;
+        div.textContent = session.title || "Untitled Chat";
+        div.onclick = () => switchSession(session.id);
+        sessionListContainer.appendChild(div);
+    });
+}
+
+async function switchSession(id) {
+    if (id === currentSessionId) {
+        toggleSessionOverlay(); // Just close menu
+        return;
+    }
+    currentSessionId = id;
+    loadHistory(); // Uses currentSessionId
+    toggleSessionOverlay();
+}
+
+async function createNewSession() {
+    // Generate simple ID
+    const newId = `chat_${Date.now()}`;
+    currentSessionId = newId;
+    conversationHistory = [];
+    chatHistory.innerHTML = '';
+    addMessageToState('assistant', 'Hello! I am your UNS Assistant. How can I help?');
+    toggleSessionOverlay(); // Close menu
+}
+
+async function deleteSession(id) {
+    if (!confirm("Are you sure you want to delete this chat?")) return;
+    try {
+        await fetch(`${appBasePath}/api/chat/session/${id}`, { method: 'DELETE' });
+        createNewSession();
+    } catch (e) {
+        alert("Failed to delete session");
+    }
+}
+
+function stopGeneration() {
+    if (!isProcessing) return;
+    
+    // Call API to stop
+    fetch(`${appBasePath}/api/chat/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: window.wsClientId })
+    }).catch(console.error);
+
+    // UI Feedback immediately
+    if (currentLogDiv) {
+        appendToLog(currentLogDiv, "⛔ Stopped by user.", 'error');
+    }
+    isProcessing = false;
+    updateUIState(false);
+}
+
+// --- Injection Functions (Camera, Upload, Voice) ---
 function injectCameraUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
-
+    
     btnCam = document.createElement('button');
     btnCam.id = 'btn-chat-cam';
     btnCam.innerHTML = '📷';
     btnCam.title = 'Take Photo';
     btnCam.className = 'chat-icon-btn';
     
+    // Insert Logic: Mic -> Cam -> Send
     if (btnMic) inputArea.insertBefore(btnCam, btnMic);
     else inputArea.insertBefore(btnCam, btnSend);
 
@@ -175,7 +337,7 @@ function injectCameraUI() {
         </div>
     `;
     document.body.appendChild(cameraModal);
-
+    
     cameraVideo = document.getElementById('chat-camera-feed');
     document.getElementById('btn-camera-cancel').addEventListener('click', closeCamera);
     document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
@@ -184,7 +346,7 @@ function injectCameraUI() {
 }
 
 async function openCamera() {
-    if (!window.isSecureContext) {
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         alert("Camera requires HTTPS or localhost.");
         return;
     }
@@ -213,7 +375,6 @@ function takePicture() {
     canvas.width = cameraVideo.videoWidth;
     canvas.height = cameraVideo.videoHeight;
     canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
-    
     pendingAttachment = { type: 'image', content: canvas.toDataURL('image/jpeg', 0.8), name: `capture_${Date.now()}.jpg` };
     closeCamera();
     renderPreview();
@@ -222,7 +383,7 @@ function takePicture() {
 function injectVoiceUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
-
+    
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -231,6 +392,7 @@ function injectVoiceUI() {
     btnMic.innerHTML = '🎤'; 
     btnMic.title = 'Voice Input (Click to Start/Stop)';
     btnMic.className = 'chat-icon-btn';
+    
     inputArea.insertBefore(btnMic, btnSend);
 
     recognition = new SpeechRecognition();
@@ -303,7 +465,7 @@ function injectVoiceUI() {
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-
+    
     let cleanText = text
         .replace(/\*\*/g, '') 
         .replace(/`/g, '')    
@@ -337,11 +499,10 @@ function speakText(text) {
         currentUtterance.voice = voice;
     } else {
         console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
-    } 
-
+    }
+    
     currentUtterance.onend = () => { currentUtterance = null; };
     currentUtterance.onerror = (e) => { console.error("TTS Error:", e); currentUtterance = null; };
-    
     window.speechSynthesis.speak(currentUtterance);
 }
 
@@ -358,6 +519,7 @@ function injectUploadUI() {
     btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
     btnAttach.addEventListener('click', () => fileInput.click());
 
+    // Insert logic
     if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
     else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
     else inputArea.insertBefore(btnAttach, chatInput);
@@ -394,16 +556,11 @@ export function toggleChatWidget(show) {
 // --- History Persistence (Server Side) ---
 async function loadHistory() {
     try {
-        const res = await fetch(`${appBasePath}/api/chat/history`);
+        const res = await fetch(`${appBasePath}/api/chat/session/${currentSessionId}`);
         if (res.ok) {
             let serverHistory = await res.json();
             // Automatically filter out messages with 'error' role
             conversationHistory = serverHistory.filter(msg => msg.role !== 'error');
-            
-            if (conversationHistory.length !== serverHistory.length) {
-                console.log(`[Chat] Sanitized ${serverHistory.length - conversationHistory.length} corrupted messages.`);
-                saveHistory();
-            }
             renderHistory();
         } else {
             console.warn("Failed to load chat history from server.");
@@ -413,16 +570,15 @@ async function loadHistory() {
         console.error("Error loading chat history:", e);
         conversationHistory = [];
     }
-
     if (conversationHistory.length === 0) {
-        addMessageToState('assistant', 'Hello! I am your UNS Assistant.');
+        addMessageToState('assistant', 'Hello! I am your UNS Assistant. How can I help?');
     }
 }
 
 async function saveHistory() {
     // Debounce or fire-and-forget
     try {
-        await fetch(`${appBasePath}/api/chat/history`, {
+        await fetch(`${appBasePath}/api/chat/session/${currentSessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(conversationHistory)
@@ -435,7 +591,8 @@ async function saveHistory() {
 function addMessageToState(role, content, toolCalls=null) {
     const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
     conversationHistory.push(msg);
-    if(conversationHistory.length>30) conversationHistory=conversationHistory.slice(-30);
+    // Increased history limit for better context
+    if(conversationHistory.length > 50) conversationHistory = conversationHistory.slice(-50);
     saveHistory(); 
     appendMessageToUI(msg);
 }
@@ -461,8 +618,12 @@ function appendMessageToUI(msg) {
             msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${t.function.name}</div>`);
         }
         
-        if (msg.role === 'tool') div.classList.add('system'), div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
-        else div.innerHTML = htmlContent;
+        if (msg.role === 'tool') {
+            div.classList.add('system');
+            div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
+        } else {
+            div.innerHTML = htmlContent;
+        }
     }
 
     if (msg.role === 'assistant' && msg.content && !Array.isArray(msg.content)) {
@@ -472,7 +633,6 @@ function appendMessageToUI(msg) {
         speakerBtn.onclick = () => speakText(msg.content);
         div.appendChild(speakerBtn);
     }
-
     chatHistory.appendChild(div);
     scrollToBottom();
 }
@@ -545,8 +705,21 @@ function processStreamChunk(type, content) {
     } else if (type === 'message') {
         assistantMsgFromStream = content;
     } else if (type === 'error') {
+        // Handle stopping/error gracefully in UI
+        if (currentLogDiv) appendToLog(currentLogDiv, content, 'error');
         throw new Error(content);
     }
+}
+
+function updateUIState(processing) {
+    btnSend.disabled = processing;
+    btnStop.style.display = processing ? 'flex' : 'none';
+    btnSend.style.display = processing ? 'none' : 'flex'; // Swap Send/Stop
+    
+    if (btnMic) btnMic.disabled = processing;
+    if (btnCam) btnCam.disabled = processing;
+    
+    if (!processing) chatInput.focus();
 }
 
 // --- STREAMING SEND MESSAGE ---
@@ -561,7 +734,6 @@ async function sendMessage(fromVoice = false) {
 
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
-
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
 
@@ -581,12 +753,10 @@ async function sendMessage(fromVoice = false) {
     isProcessing = true;
     hasToolActivity = false; 
     assistantMsgFromStream = null; 
-    
-    // [NEW] Clear deduplication set for new request
-    processedChunkIds.clear();
+    processedChunkIds.clear(); // Clear deduplication set
 
-    btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
-    
+    updateUIState(true); // Toggle buttons
+
     currentLogDiv = createLogDiv();
 
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
@@ -600,7 +770,6 @@ async function sendMessage(fromVoice = false) {
 
     try {
         const url = `${appBasePath}/api/chat/completion`;
-        
         const requestBody = { 
             messages: messagesPayload,
             userLanguage: navigator.language,
@@ -631,7 +800,7 @@ async function sendMessage(fromVoice = false) {
                     if (line.trim()) {
                         try {
                             const chunk = JSON.parse(line);
-                            // [NEW] Check ID before processing
+                            // Check ID before processing
                             if (chunk.id && !processedChunkIds.has(chunk.id)) {
                                 processedChunkIds.add(chunk.id);
                                 processStreamChunk(chunk.type, chunk.content);
@@ -640,19 +809,7 @@ async function sendMessage(fromVoice = false) {
                     }
                 }
             }
-            if (done) {
-                if (buffer.trim()) {
-                    try {
-                        const chunk = JSON.parse(buffer);
-                        // [NEW] Check ID
-                        if (chunk.id && !processedChunkIds.has(chunk.id)) {
-                            processedChunkIds.add(chunk.id);
-                            processStreamChunk(chunk.type, chunk.content);
-                        }
-                    } catch (e) {}
-                }
-                break;
-            }
+            if (done) break;
         }
 
         currentLogDiv = null; 
@@ -667,20 +824,15 @@ async function sendMessage(fromVoice = false) {
                 const hasCreatedFile = assistantMsgFromStream.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
                 if (hasCreatedFile) setTimeout(() => onFileCreatedCallback(), 1000);
             }
-
             if (assistantMsgFromStream.content === null) {
                  assistantMsgFromStream.content = "✅ Operation completed.";
             }
-
             addMessageToState('assistant', assistantMsgFromStream.content, assistantMsgFromStream.tool_calls);
             trackEvent('chat_message_sent');
-            
             if (isVoice && assistantMsgFromStream.content) {
                 speakText(assistantMsgFromStream.content);
             }
-        } else if (!hasToolActivity) {
-            // Error handled in stream
-        }
+        } 
 
     } catch (error) {
         console.error(error);
@@ -688,11 +840,11 @@ async function sendMessage(fromVoice = false) {
              appendToLog(currentLogDiv, `Error: ${error.message}`, 'error');
              currentLogDiv = null;
         } else {
+             // Only add error bubble if not already logged in stream
              addMessageToState('error', `Error: ${error.message}`);
         }
     } finally {
         isProcessing = false;
-        btnSend.disabled = false; if(btnMic) btnMic.disabled = false; if(btnCam) btnCam.disabled = false;
-        chatInput.focus();
+        updateUIState(false);
     }
 }
