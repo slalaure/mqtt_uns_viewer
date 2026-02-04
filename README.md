@@ -103,7 +103,7 @@ graph TD
 ### 1. Quick Start
 ```bash
 # Clone the repository
-git clone [https://github.com/slalaure/mqtt_uns_viewer.git](https://github.com/slalaure/mqtt_uns_viewer.git)
+git clone https://github.com/slalaure/mqtt_uns_viewer.git
 cd mqtt_uns_viewer
 
 # Setup configuration
