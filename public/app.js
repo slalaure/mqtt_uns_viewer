@@ -40,7 +40,8 @@ import {
     refreshChart 
 } from './view.chart.js';
 import { initPublishView, setPublishTheme, updateSimulatorStatuses } from './view.publish.js';
-import { initChatView, toggleChatWidget } from './view.chat.js'; 
+// [MODIFIED] Import onChatStreamMessage
+import { initChatView, toggleChatWidget, onChatStreamMessage } from './view.chat.js'; 
 import { initLoginStyles, showLoginOverlay } from './view.login.js';
 import { initAdminView, onAdminViewShow } from './view.admin.js';
 
@@ -101,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userDiv.style.display = 'flex';
         userDiv.style.alignItems = 'center';
         userDiv.style.gap = '10px';
+        
         if (window.innerWidth > 768) {
             userDiv.style.marginLeft = 'auto'; 
             userDiv.style.marginRight = '15px';
@@ -149,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoginOverlay();
         return; 
     }
+
     console.log("✅ Logged in as:", currentUser.username || currentUser.displayName);
     injectUserMenu(currentUser);
 
@@ -205,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function switchView(viewToShow, updateHistory = true) {
         const views = [treeView, mapView, historyView, mapperView, chartView, publishView, adminView]; 
         const buttons = [btnTreeView, btnMapView, btnHistoryView, btnMapperView, btnChartView, btnPublishView, btnAdminView];
+        
         let targetView, targetButton;
         let slug = 'tree'; 
 
@@ -225,10 +229,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         views.forEach(v => v?.classList.remove('active'));
         buttons.forEach(b => b?.classList.remove('active'));
-        
+
         targetView?.classList.add('active');
         targetButton?.classList.add('active');
-        
+
         trackEvent(`view_switch_${viewToShow || 'tree'}`);
 
         if (viewToShow === 'history') {
@@ -258,12 +262,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleRoutingFromUrl() {
         const path = window.location.pathname;
         let viewToLoad = 'tree'; 
+        
         const normalizedBase = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
         let relativePath = path;
         
         if (path.startsWith(normalizedBase)) {
             relativePath = path.substring(normalizedBase.length);
         }
+        
         const cleanPath = relativePath.replace(/^\/|\/$/g, '');
 
         if (cleanPath === 'svg' || cleanPath === 'map') viewToLoad = 'map';
@@ -312,6 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const payload = nodeContainer.dataset.payload;
             mainPayloadViewer.display(brokerId, topic, payload);
+            
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'get-topic-history', brokerId: brokerId, topic: topic }));
             }
@@ -388,24 +395,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 cleanBasePath += '/';
             }
             const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
-            console.log("Connecting WebSocket to:", wsUrl); 
             
+            console.log("Connecting WebSocket to:", wsUrl); 
             ws = new WebSocket(wsUrl);
+
             ws.onopen = () => finishInitialization(appConfig);
             
             ws.onmessage = async (event) => {
                 const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
                 const message = JSON.parse(dataText);
+                
                 if (isAppInitialized) processWsMessage(message);
                 else messageBuffer.push(message);
             };
-            
+
             ws.onerror = (err) => console.error("WebSocket Error:", err);
+            
             ws.onclose = (event) => { 
                 console.warn(`WebSocket closed (code: ${event.code}). Reconnecting in 3s...`);
                 isAppInitialized = false; 
                 setTimeout(startApp, 3000); 
             };
+
         } catch (error) {
             console.error("Failed to fetch initial app configuration:", error);
         }
@@ -414,18 +425,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function processWsMessage(message) {
         try {
             switch(message.type) {
+                // --- [NEW] Handshake & Chat Stream ---
+                case 'welcome':
+                    console.log(`[WS] Handshake successful. Client ID: ${message.clientId}`);
+                    // Store the Client ID globally so view.chat.js can access it
+                    window.wsClientId = message.clientId;
+                    break;
+                
+                case 'chat-stream':
+                    // Route chat stream chunks to the chat view module
+                    onChatStreamMessage(message);
+                    break;
+
                 case 'mqtt-message':
                     updateMap(message.brokerId, message.topic, message.payload); 
                     const newEntry = { ...message, timestampMs: new Date(message.timestamp).getTime() };
+                    
                     setHistoryData([newEntry], false, true); 
+                    
                     if (newEntry.timestampMs > globalDbMax) globalDbMax = newEntry.timestampMs;
                     updateSvgTimelineUI(globalDbMin, globalDbMax);
                     updateChartSliderUI(globalDbMin, globalDbMax, false);
-                    
+
                     let ignoreForTreeUpdate = false;
                     for (const pattern of recentlyPrunedPatterns) {
                         try { if (mqttPatternToRegex(pattern).test(message.topic)) { ignoreForTreeUpdate = true; break; } } catch (e) {}
                     }
+
                     if (!ignoreForTreeUpdate) {
                         const options = { enableAnimations: true };
                         const node = mainTree?.update(message.brokerId, message.topic, message.payload, message.timestamp, options);
@@ -474,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
 
                 case 'topic-history-data': mainPayloadViewer.updateHistory(message.brokerId, message.topic, message.data); break;
-                
+
                 case 'db-status-update':
                     if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
                     if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
@@ -482,9 +508,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
 
                 case 'pruning-status': if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started'); break;
+
                 case 'mapper-config-update': updateMapperConfig(message.config); colorAllMapperTrees(); break;
                 case 'mapped-topic-generated': addMappedTargetTopic(message.brokerId, message.topic); colorAllMapperTrees(); break;
                 case 'mapper-metrics-update': updateMapperMetrics(message.metrics); break;
+
                 case 'broker-status-all': renderBrokerStatuses(message.data); break;
                 case 'broker-status': updateSingleBrokerStatus(message.brokerId, message.status, message.error); break;
             }
@@ -511,8 +539,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSingleBrokerStatus(brokerId, status, error) {
         let item = document.getElementById(`broker-status-${brokerId}`);
         if (!item) { createBrokerStatusElement(brokerId, status, error); return; }
+        
         item.classList.remove('status-connected', 'status-connecting', 'status-error', 'status-offline', 'status-disconnected');
         item.classList.add(`status-${status}`);
+        
         if (error) item.title = `Error: ${error}`; else item.title = `${brokerId}: ${status}`;
     }
 
@@ -528,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnTreeView?.classList.remove('active');
         treeView?.classList.remove('active');
-        
+
         const views = [
             { enabled: appConfig.viewTreeEnabled, btn: btnTreeView, view: 'tree' },
             { enabled: appConfig.viewSvgEnabled, btn: btnMapView, view: 'map' },
@@ -599,11 +629,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         initSvgView(appConfig);
+        
         initHistoryView({ 
             isMultiBroker: isMultiBroker,
             brokerConfigs: brokerConfigs,
             requestRangeCallback: requestHistoryRange 
         }); 
+
         initMapperView({
             pruneTopicFromFrontend: pruneTopicFromFrontend,
             getSubscribedTopics: () => subscribedTopicPatterns, 
@@ -616,6 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isMultiBroker: isMultiBroker,
             brokerConfigs: brokerConfigs 
         });
+
         initChartView({
             getHistory: () => allHistoryEntries,
             requestRangeCallback: requestHistoryRange, 
@@ -623,13 +656,14 @@ document.addEventListener('DOMContentLoaded', () => {
             maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
             isMultiBroker: isMultiBroker 
         });
+
         initPublishView({
             subscribedTopics: subscribedTopicPatterns, 
             simulatorListContainer: simulatorControls,
             isMultiBroker: isMultiBroker, 
             brokerConfigs: brokerConfigs 
         });
-        
+
         initAdminView();
 
         if (appConfig.viewChatEnabled) {
@@ -695,35 +729,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const key = `${entry.brokerId}|${entry.topic}`; 
             uniqueTopicsMap.set(key, entry);
         }
-        
         const entries = Array.from(uniqueTopicsMap.values());
-        
         if (mainTree) mainTree.rebuild(entries);
         if (mapperTree) mapperTree.rebuild(entries);
         if (chartTree) chartTree.rebuild(entries);
-        
         if (getTopicMappingStatus) colorAllMapperTrees();
         if (getChartedTopics) colorChartTree();
     }
 
     async function pruneTopicFromFrontend(topicPattern) {
         const regex = mqttPatternToRegex(topicPattern);
-        
         allHistoryEntries = allHistoryEntries.filter(entry => !regex.test(entry.topic));
         setSvgHistoryModuleData(allHistoryEntries);
         const newState = setHistoryData(allHistoryEntries, false, false); 
         updateChartSliderUI(globalDbMin, globalDbMax, true); 
         pruneChartedVariables(regex); 
-        
         const targetMap = getMappedTargetTopics();
         const keysToRemove = [];
         for (const [key, value] of targetMap.entries()) {
             if (regex.test(value.topic)) keysToRemove.push(key);
         }
         keysToRemove.forEach(key => targetMap.delete(key));
-        
         populateTreesFromHistory(); 
-        
         if (selectedMainTreeNode && regex.test(selectedMainTreeNode.dataset.topic)) {
             selectedMainTreeNode.classList.remove('selected');
             selectedMainTreeNode = null;

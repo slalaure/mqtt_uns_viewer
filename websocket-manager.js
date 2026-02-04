@@ -10,9 +10,10 @@
  *
  * WebSocket Manager
  * Handles WebSocket server setup, client connections, and broadcasting.
- * [UPDATED] Fixed Search Logic: Now searches FULL payload content (keys & values).
+ * [UPDATED] Added Client ID generation and unicast (sendToClient) capability for Chat.
  */
 const { WebSocketServer } = require('ws');
+const crypto = require('crypto'); // Used for generating Client IDs
 
 let wss = null;
 let db = null;
@@ -21,6 +22,9 @@ let appBasePath = '/';
 let longReplacer = null; 
 let getDbStatus = null; 
 let getBrokerStatuses = null; 
+
+// Map to store clients by ID: Map<string, WebSocket>
+const clients = new Map();
 
 // Helper to escape single quotes for SQL strings
 const escapeSQL = (str) => {
@@ -48,32 +52,36 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
 
     // [CRITICAL FIX] "noServer: true"
     // We detach the WebSocket server from the HTTP server's default routing.
-    // We will handle the 'upgrade' event manually below. This solves issues where
-    // reverse proxies strip paths (e.g. /webapp/foo -> /) causing 'ws' to reject the path.
     wss = new WebSocketServer({ noServer: true });
 
     // Manual Upgrade Handling
     server.on('upgrade', (request, socket, head) => {
         const reqUrl = request.url;
-        
-        // Log the exact URL received by Node.js (useful to debug what Redbird is sending)
         logger.info(`🔄 HTTP Upgrade Request received on path: '${reqUrl}'`);
-
-        // We accept ALL upgrades on this server port, regardless of path.
-        // This makes the server resilient to whatever path rewriting the proxy did.
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit('connection', ws, request);
         });
     });
 
     wss.on('connection', (ws, req) => {
-        // Log successful connection
-        logger.info('✅ ➡️ WebSocket client connected successfully.');
+        // 1. Assign a Unique ID to this client
+        const clientId = crypto.randomUUID();
+        clients.set(clientId, ws);
+        
+        logger.info(`✅ ➡️ WebSocket client connected. Assigned ID: ${clientId}`);
+
+        // 2. Send Welcome Message with ID (Handshake)
+        if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ 
+                type: 'welcome', 
+                clientId: clientId,
+                message: 'Connected to MQTT UNS Viewer Realtime Socket'
+            }));
+        }
 
         // 0. Send Broker Statuses (Immediate UI feedback)
         if (getBrokerStatuses) {
             const statuses = getBrokerStatuses();
-            // Convert Map to Object for JSON serialization
             const statusObj = Object.fromEntries(statuses);
             ws.send(JSON.stringify({ 
                 type: 'broker-status-all', 
@@ -98,7 +106,6 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
             if (err) logger.error({ err }, "❌ Error fetching initial data.");
             else if (ws.readyState === ws.OPEN) {
                 const processedRows = rows.map(row => processRow(row));
-                // Reverse to chronological order for charts/history
                 ws.send(JSON.stringify({ type: 'history-initial-data', data: processedRows }));
             }
         });
@@ -130,8 +137,6 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                     const { start, end, filter } = parsedMessage;
                     const safeStart = start || 0;
                     const safeEnd = end || Date.now();
-
-                    // Convert to ISO Strings (UTC)
                     const startIso = new Date(safeStart).toISOString();
                     const endIso = new Date(safeEnd).toISOString();
 
@@ -142,13 +147,9 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                         `timestamp <= CAST('${endIso}' AS TIMESTAMPTZ)`
                     ];
 
-                    // [MODIFIED] Increased base limit to capture more history
                     let limit = 20000;
-
                     if (filter && filter.length >= 3) {
                          const safeSearchTerm = `%${escapeSQL(filter)}%`;
-                         // [CRITICAL FIX] Search in Topic OR Full Payload (converted to string)
-                         // This catches keys (like "STORAGE_LEVEL") and values anywhere in the JSON.
                          whereClauses.push(
                              `(topic ILIKE '${safeSearchTerm}' OR CAST(payload AS VARCHAR) ILIKE '${safeSearchTerm}')`
                          );
@@ -162,15 +163,11 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                         LIMIT ${limit};
                     `;
 
-                    // Log query for verification
-                    logger.info(`[WS Debug] SQL: ${query.replace(/\s+/g, ' ').trim()}`);
-
                     db.all(query, (err, rows) => {
                         if (err) {
                             logger.error({ err, query }, "❌ Error fetching history range");
                             ws.send(JSON.stringify({ type: 'history-range-data', error: "Query failed.", data: [] }));
                         } else if (ws.readyState === ws.OPEN) {
-                            logger.info(`[WS Debug] DB returned ${rows.length} rows.`);
                             const processedRows = rows.map(row => processRow(row));
                             ws.send(JSON.stringify({ 
                                 type: 'history-range-data', 
@@ -189,15 +186,12 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                     let query = "SELECT timestamp, topic, payload, broker_id FROM mqtt_events WHERE topic = ?";
                     let params = [topic];
                     if (brokerId) {
-                        // [FIX] Alias 'default' to 'default_broker' to match DB migration
                         if (brokerId === 'default') brokerId = 'default_broker';
                         query += " AND broker_id = ?";
                         params.push(brokerId);
                     }
                     query += " ORDER BY timestamp DESC LIMIT 20";
-
-                    // [CRITICAL FIX] Use spread operator ...params because DuckDB node client 
-                    // expects variadic arguments (sql, arg1, arg2, callback), NOT an array.
+                    
                     db.all(query, ...params, (err, rows) => {
                         if (!err && ws.readyState === ws.OPEN) {
                             const processedRows = rows.map(row => processRow(row));
@@ -210,18 +204,24 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
             }
         });
 
+        // Cleanup on close
+        ws.on('close', () => {
+            clients.delete(clientId);
+            // logger.info(`Client ${clientId} disconnected.`);
+        });
+
         if (getDbStatus) {
             getDbStatus((statusData) => {
                 if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(statusData));
             });
         }
     });
+
     logger.info('✅ WebSocket Manager initialized.');
 }
 
 // Helper to process row JSON/BigInt
 function processRow(row) {
-    // DuckDB returns timestamps as strings, convert to milliseconds since epoch
     if (typeof row.timestamp === 'string') {
         row.timestampMs = new Date(row.timestamp).getTime();
     } else if (typeof row.timestamp === 'object') {
@@ -250,6 +250,20 @@ function broadcast(message) {
 }
 
 /**
+ * Sends a message to a specific client by ID (Unicast).
+ * @param {string} clientId - The ID of the target client.
+ * @param {object} data - The JSON object to send.
+ */
+function sendToClient(clientId, data) {
+    const client = clients.get(clientId);
+    if (client && client.readyState === client.OPEN) {
+        client.send(JSON.stringify(data));
+        return true;
+    }
+    return false;
+}
+
+/**
  * Closes all WebSocket connections.
  * @param {function} callback - Callback to run when server is closed.
  */
@@ -269,5 +283,6 @@ function close(callback) {
 module.exports = {
     initWebSocketManager,
     broadcast,
+    sendToClient,
     close
 };

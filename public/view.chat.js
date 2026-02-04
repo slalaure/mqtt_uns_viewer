@@ -12,6 +12,7 @@
  * Includes Continuous Voice Input and Language-Aware Output.
  * Optimized for Chrome "Google" Voices & Safari compatibility.
  * [NEW] User-Scoped Server-Side History Sync.
+ * [NEW] WebSocket Streaming support for bypassing Proxy buffering.
  */
 import { trackEvent } from './utils.js';
 
@@ -38,6 +39,7 @@ let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
+
 // --- Storage & Path State ---
 let appBasePath = ''; // Store base path for API calls
 
@@ -47,11 +49,12 @@ let isListening = false;
 let wasLastInputVoice = false; 
 let finalTranscript = ''; 
 let userWantMicActive = false;
+
 // Global reference for TTS to prevent Garbage Collection
 let currentUtterance = null; 
+
 // Cache for voices
 let availableVoices = [];
-
 let onFileCreatedCallback = null;
 
 // --- Streaming UI ---
@@ -68,7 +71,7 @@ export function initChatView(basePath, onFileCreated) {
     appBasePath = basePath || '';
     if (appBasePath === '/') appBasePath = '';
     if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
-    
+
     if (onFileCreated) {
         onFileCreatedCallback = onFileCreated;
     }
@@ -94,6 +97,7 @@ export function initChatView(basePath, onFileCreated) {
     fabButton?.addEventListener('click', () => toggleChatWidget(true));
     btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
     btnSend?.addEventListener('click', () => sendMessage(false));
+    
     chatInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -101,6 +105,7 @@ export function initChatView(basePath, onFileCreated) {
         }
         autoResizeInput();
     });
+
     btnClear?.addEventListener('click', () => {
         if (confirm('Clear conversation history?')) {
             conversationHistory = [];
@@ -112,6 +117,23 @@ export function initChatView(basePath, onFileCreated) {
             addMessageToState('assistant', 'Hello! I am your UNS Assistant.');
         }
     });
+}
+
+/**
+ * [NEW] Handles incoming stream chunks from WebSocket (via app.js).
+ * This bypasses Nginx buffering issues.
+ */
+export function onChatStreamMessage(message) {
+    // message = { type: 'chat-stream', chunkType: 'status'|'tool_start'..., content: ... }
+    if (!message || !message.chunkType) return;
+    
+    // Create log div if it doesn't exist (e.g. if HTTP stream is totally blocked)
+    if (!currentLogDiv && isProcessing) {
+        currentLogDiv = createLogDiv();
+    }
+
+    // Reuse the same logic as HTTP streaming
+    processStreamChunk(message.chunkType, message.content);
 }
 
 function autoResizeInput() {
@@ -183,6 +205,7 @@ function takePicture() {
     canvas.width = cameraVideo.videoWidth;
     canvas.height = cameraVideo.videoHeight;
     canvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+    
     pendingAttachment = { type: 'image', content: canvas.toDataURL('image/jpeg', 0.8), name: `capture_${Date.now()}.jpg` };
     closeCamera();
     renderPreview();
@@ -212,6 +235,7 @@ function injectVoiceUI() {
         btnMic.classList.add('listening');
         chatInput.placeholder = "Listening... (Click mic to stop)";
     };
+
     recognition.onend = () => {
         isListening = false;
         if (userWantMicActive) {
@@ -224,6 +248,7 @@ function injectVoiceUI() {
             }
         }
     };
+
     recognition.onresult = (event) => {
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -237,6 +262,7 @@ function injectVoiceUI() {
         autoResizeInput();
         chatInput.scrollTop = chatInput.scrollHeight;
     };
+
     recognition.onerror = (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             userWantMicActive = false;
@@ -269,7 +295,7 @@ function injectVoiceUI() {
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    
+
     let cleanText = text
         .replace(/\*\*/g, '') 
         .replace(/`/g, '')    
@@ -286,7 +312,7 @@ function speakText(text) {
     if (availableVoices.length === 0) {
         availableVoices = window.speechSynthesis.getVoices();
     }
-    
+
     let voice = availableVoices.find(v => v.lang === targetLang && v.name.includes('Google'));
     if (!voice) {
         voice = availableVoices.find(v => v.lang === targetLang);
@@ -299,7 +325,7 @@ function speakText(text) {
     }
 
     if (voice) {
-        console.log(`[TTS] Speaking with voice: ${voice.name} (${voice.lang})`);
+        // console.log(`[TTS] Speaking with voice: ${voice.name} (${voice.lang})`);
         currentUtterance.voice = voice;
     } else {
         console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
@@ -307,6 +333,7 @@ function speakText(text) {
 
     currentUtterance.onend = () => { currentUtterance = null; };
     currentUtterance.onerror = (e) => { console.error("TTS Error:", e); currentUtterance = null; };
+    
     window.speechSynthesis.speak(currentUtterance);
 }
 
@@ -322,7 +349,7 @@ function injectUploadUI() {
     const btnAttach = document.createElement('button');
     btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
     btnAttach.addEventListener('click', () => fileInput.click());
-    
+
     if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
     else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
     else inputArea.insertBefore(btnAttach, chatInput);
@@ -364,6 +391,7 @@ async function loadHistory() {
             let serverHistory = await res.json();
             // Automatically filter out messages with 'error' role
             conversationHistory = serverHistory.filter(msg => msg.role !== 'error');
+            
             if (conversationHistory.length !== serverHistory.length) {
                 console.log(`[Chat] Sanitized ${serverHistory.length - conversationHistory.length} corrupted messages.`);
                 saveHistory();
@@ -377,9 +405,8 @@ async function loadHistory() {
         console.error("Error loading chat history:", e);
         conversationHistory = [];
     }
-    
+
     if (conversationHistory.length === 0) {
-        // [MODIFIED] Use 'assistant' role instead of 'system' for greeting
         addMessageToState('assistant', 'Hello! I am your UNS Assistant.');
     }
 }
@@ -437,7 +464,7 @@ function appendMessageToUI(msg) {
         speakerBtn.onclick = () => speakText(msg.content);
         div.appendChild(speakerBtn);
     }
-    
+
     chatHistory.appendChild(div);
     scrollToBottom();
 }
@@ -467,6 +494,12 @@ function appendToLog(container, text, type = 'info') {
     if (!container) return;
     const line = document.createElement('div');
     
+    // Basic deduplication: Check if the last child has the exact same text
+    if (container.lastChild && container.lastChild.textContent.includes(text)) {
+        // Just flash it or ignore it
+        return;
+    }
+
     if (type === 'tool_start') {
         line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${text}`;
     } else if (type === 'tool_result') {
@@ -478,16 +511,41 @@ function appendToLog(container, text, type = 'info') {
     } else {
         line.innerHTML = `<small style="opacity:0.8">${text}</small>`;
     }
-    
     container.appendChild(line);
     scrollToBottom();
+}
+
+// --- SHARED CHUNK PROCESSOR (HTTP & WS) ---
+// This handles logic for updating the UI based on stream events
+// It manages state variables like hasToolActivity and assistantMsg
+let assistantMsgFromStream = null;
+
+function processStreamChunk(type, content) {
+    if (!currentLogDiv && type !== 'message' && type !== 'error') {
+        // If we missed the start, create log div now
+        currentLogDiv = createLogDiv();
+    }
+
+    if (type === 'status') {
+        appendToLog(currentLogDiv, content);
+    } else if (type === 'tool_start') {
+        appendToLog(currentLogDiv, `Executing: ${content.name}...`, 'tool_start');
+        hasToolActivity = true;
+    } else if (type === 'tool_result') {
+        const durationStr = content.duration ? `(${content.duration}ms)` : '';
+        appendToLog(currentLogDiv, `Completed: ${content.name} ${durationStr}`, 'tool_result');
+    } else if (type === 'message') {
+        assistantMsgFromStream = content;
+    } else if (type === 'error') {
+        throw new Error(content);
+    }
 }
 
 // --- STREAMING SEND MESSAGE ---
 async function sendMessage(fromVoice = false) {
     if (isProcessing) return;
-    window.speechSynthesis.cancel();
     
+    window.speechSynthesis.cancel();
     if (userWantMicActive || isListening) {
         userWantMicActive = false;
         if(recognition) recognition.stop();
@@ -498,7 +556,7 @@ async function sendMessage(fromVoice = false) {
 
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
-    
+
     let messageContent = text;
     if (pendingAttachment) {
         if (pendingAttachment.type === 'image') {
@@ -514,8 +572,10 @@ async function sendMessage(fromVoice = false) {
     addMessageToState('user', messageContent);
     isProcessing = true;
     hasToolActivity = false; 
-    
+    assistantMsgFromStream = null; // Reset
+
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
+    
     currentLogDiv = createLogDiv();
 
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
@@ -529,44 +589,26 @@ async function sendMessage(fromVoice = false) {
 
     try {
         const url = `${appBasePath}/api/chat/completion`;
+        
+        // [NEW] Include clientId so backend can send WS updates
+        const requestBody = { 
+            messages: messagesPayload,
+            userLanguage: navigator.language,
+            clientId: window.wsClientId || null 
+        };
+
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                messages: messagesPayload,
-                userLanguage: navigator.language 
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
 
+        // Read the HTTP stream (NDJSON) as a backup or primary method
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let assistantMsg = null;
         let buffer = "";
-
-        const processLine = (line) => {
-            if (!line.trim()) return;
-            try {
-                const chunk = JSON.parse(line);
-                if (chunk.type === 'status') {
-                    appendToLog(currentLogDiv, chunk.content);
-                } else if (chunk.type === 'tool_start') {
-                    appendToLog(currentLogDiv, `Executing: ${chunk.content.name}...`, 'tool_start');
-                    hasToolActivity = true;
-                } else if (chunk.type === 'tool_result') {
-                    const durationStr = chunk.content.duration ? `(${chunk.content.duration}ms)` : '';
-                    appendToLog(currentLogDiv, `Completed: ${chunk.content.name} ${durationStr}`, 'tool_result');
-                } else if (chunk.type === 'message') {
-                    assistantMsg = chunk.content;
-                } else if (chunk.type === 'error') {
-                    throw new Error(chunk.content);
-                }
-            } catch (e) {
-                if (e.message.startsWith('API Error') || e.message.startsWith('Error')) throw e;
-                console.warn("Stream parse error:", e);
-            }
-        };
 
         while (true) {
             const { done, value } = await reader.read();
@@ -574,38 +616,53 @@ async function sendMessage(fromVoice = false) {
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop(); 
-                lines.forEach(processLine);
+                
+                for (const line of lines) {
+                    if (line.trim()) {
+                        try {
+                            const chunk = JSON.parse(line);
+                            processStreamChunk(chunk.type, chunk.content);
+                        } catch (e) { console.warn("Stream parse error:", e); }
+                    }
+                }
             }
             if (done) {
-                if (buffer.trim()) processLine(buffer);
+                if (buffer.trim()) {
+                    try {
+                        const chunk = JSON.parse(buffer);
+                        processStreamChunk(chunk.type, chunk.content);
+                    } catch (e) {}
+                }
                 break;
             }
         }
 
         currentLogDiv = null; 
-        
-        if (!assistantMsg && hasToolActivity) {
-            assistantMsg = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
+
+        // Handle final state
+        if (!assistantMsgFromStream && hasToolActivity) {
+            assistantMsgFromStream = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
         }
 
-        if (assistantMsg) {
-            if (assistantMsg.tool_calls && onFileCreatedCallback) {
-                const hasCreatedFile = assistantMsg.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
+        if (assistantMsgFromStream) {
+            if (assistantMsgFromStream.tool_calls && onFileCreatedCallback) {
+                const hasCreatedFile = assistantMsgFromStream.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
                 if (hasCreatedFile) setTimeout(() => onFileCreatedCallback(), 1000);
             }
-            
-            if (assistantMsg.content === null) {
-                 assistantMsg.content = "✅ Operation completed.";
+
+            if (assistantMsgFromStream.content === null) {
+                 assistantMsgFromStream.content = "✅ Operation completed.";
             }
 
-            addMessageToState('assistant', assistantMsg.content, assistantMsg.tool_calls);
+            addMessageToState('assistant', assistantMsgFromStream.content, assistantMsgFromStream.tool_calls);
             trackEvent('chat_message_sent');
             
-            if (isVoice && assistantMsg.content) {
-                speakText(assistantMsg.content);
+            if (isVoice && assistantMsgFromStream.content) {
+                speakText(assistantMsgFromStream.content);
             }
         } else if (!hasToolActivity) {
-            throw new Error("Empty response from server.");
+            // Only throw if we truly got nothing (no tools, no message)
+            // Sometimes errors are handled in processStreamChunk
         }
 
     } catch (error) {
