@@ -37,12 +37,25 @@ const LOGIN_CSS = `
 }
 .login-logo {
     font-size: 3em;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     display: block;
 }
 .login-title {
-    margin-bottom: 30px;
+    margin-bottom: 10px;
     color: var(--color-text);
+}
+.login-welcome-text {
+    font-size: 1em;
+    color: var(--color-text);
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+.login-privacy-note {
+    font-size: 0.85em;
+    color: var(--color-text-secondary);
+    margin-bottom: 25px;
+    line-height: 1.4;
+    padding: 0 10px;
 }
 .login-form-group {
     margin-bottom: 15px;
@@ -149,13 +162,21 @@ export function showLoginOverlay() {
     const overlay = document.createElement('div');
     overlay.id = 'login-overlay';
     overlay.className = 'login-overlay';
-    
+
     // Using simple display toggling between two forms
     overlay.innerHTML = `
         <div class="login-card">
             <span class="login-logo">🔐</span>
             <h2 class="login-title" id="form-title">MQTT UNS Viewer</h2>
             
+            <div class="login-welcome-block">
+                <p class="login-welcome-text">Welcome! Please sign in.</p>
+                <p class="login-privacy-note">
+                    You can create a <strong>free local user</strong> instantly. 
+                    No email address required—we don't collect any personal data.
+                </p>
+            </div>
+
             <form id="login-form">
                 <div class="login-form-group">
                     <label>Username</label>
@@ -197,7 +218,6 @@ export function showLoginOverlay() {
             </button>
 
             <div id="login-error" class="login-error"></div>
-            
             <a id="toggle-auth-mode" class="toggle-link">Need an account? Register</a>
         </div>
     `;
@@ -240,7 +260,7 @@ export function showLoginOverlay() {
         const username = document.getElementById('login-username').value;
         const password = document.getElementById('login-password').value;
         const btn = loginForm.querySelector('button');
-
+        
         handleAuth('auth/login', { username, password }, btn, 'Sign In');
     });
 
@@ -273,6 +293,7 @@ export function showLoginOverlay() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
+
             const data = await res.json();
 
             if (data.success) {
