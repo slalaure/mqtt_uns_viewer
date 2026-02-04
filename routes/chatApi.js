@@ -847,7 +847,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             - READ: Inspect database, search data, infer schemas, view files.
             - WRITE: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.
             - MANAGE: Update UNS Model, Prune History.
-            DATA LANGUAGE: English (translate user queries if needed).`
+            DATA LANGUAGE: English (translate user queries if needed).
+            IMPORTANT TECHNICAL CONSTRAINTS :
+            - js scripts related to SVG (.svg.js) will be executed on the webbrowser side (Client-Side). They don't have access to 'db' or SQL. they can only used data received in real-time using the 'update(topic, payload)' function.
+            - if the user is asking for a complex SVG view that requires historical dataset access you should propose to implement a mapper rule to be published on a specific topic you will propose according to publish access rights on the available conencted brokers, with persistance/retain enabled. Propose ths approach and explain the mapper rules and path to be confirmes by the user before doing the work.`
         };
 
         const safeUserMessages = messages.filter(m => m.role !== 'system');
