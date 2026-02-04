@@ -12,7 +12,7 @@
  * Includes Continuous Voice Input and Language-Aware Output.
  * Optimized for Chrome "Google" Voices & Safari compatibility.
  * [NEW] User-Scoped Server-Side History Sync.
- * [NEW] WebSocket Streaming support for bypassing Proxy buffering.
+ * [NEW] WebSocket Streaming support for bypassing Proxy buffering with DEDUPLICATION.
  */
 import { trackEvent } from './utils.js';
 
@@ -60,6 +60,9 @@ let onFileCreatedCallback = null;
 // --- Streaming UI ---
 let currentLogDiv = null; 
 let hasToolActivity = false; 
+
+// --- [NEW] Deduplication Set ---
+let processedChunkIds = new Set();
 
 /**
  * Initializes the Chat View.
@@ -121,13 +124,18 @@ export function initChatView(basePath, onFileCreated) {
 
 /**
  * [NEW] Handles incoming stream chunks from WebSocket (via app.js).
- * This bypasses Nginx buffering issues.
+ * Uses processedChunkIds to prevent duplication with HTTP stream.
  */
 export function onChatStreamMessage(message) {
-    // message = { type: 'chat-stream', chunkType: 'status'|'tool_start'..., content: ... }
-    if (!message || !message.chunkType) return;
+    if (!message || !message.id) return;
     
-    // Create log div if it doesn't exist (e.g. if HTTP stream is totally blocked)
+    // Deduplication check
+    if (processedChunkIds.has(message.id)) {
+        return; 
+    }
+    processedChunkIds.add(message.id);
+
+    // Create log div if missing
     if (!currentLogDiv && isProcessing) {
         currentLogDiv = createLogDiv();
     }
@@ -329,7 +337,7 @@ function speakText(text) {
         currentUtterance.voice = voice;
     } else {
         console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
-    }
+    } 
 
     currentUtterance.onend = () => { currentUtterance = null; };
     currentUtterance.onerror = (e) => { console.error("TTS Error:", e); currentUtterance = null; };
@@ -494,7 +502,7 @@ function appendToLog(container, text, type = 'info') {
     if (!container) return;
     const line = document.createElement('div');
     
-    // Basic deduplication: Check if the last child has the exact same text
+    // Legacy Deduplication (Keep it for safety)
     if (container.lastChild && container.lastChild.textContent.includes(text)) {
         // Just flash it or ignore it
         return;
@@ -572,7 +580,10 @@ async function sendMessage(fromVoice = false) {
     addMessageToState('user', messageContent);
     isProcessing = true;
     hasToolActivity = false; 
-    assistantMsgFromStream = null; // Reset
+    assistantMsgFromStream = null; 
+    
+    // [NEW] Clear deduplication set for new request
+    processedChunkIds.clear();
 
     btnSend.disabled = true; if(btnMic) btnMic.disabled = true; if(btnCam) btnCam.disabled = true;
     
@@ -590,7 +601,6 @@ async function sendMessage(fromVoice = false) {
     try {
         const url = `${appBasePath}/api/chat/completion`;
         
-        // [NEW] Include clientId so backend can send WS updates
         const requestBody = { 
             messages: messagesPayload,
             userLanguage: navigator.language,
@@ -605,7 +615,7 @@ async function sendMessage(fromVoice = false) {
 
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
 
-        // Read the HTTP stream (NDJSON) as a backup or primary method
+        // Read the HTTP stream (NDJSON)
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
@@ -621,7 +631,11 @@ async function sendMessage(fromVoice = false) {
                     if (line.trim()) {
                         try {
                             const chunk = JSON.parse(line);
-                            processStreamChunk(chunk.type, chunk.content);
+                            // [NEW] Check ID before processing
+                            if (chunk.id && !processedChunkIds.has(chunk.id)) {
+                                processedChunkIds.add(chunk.id);
+                                processStreamChunk(chunk.type, chunk.content);
+                            }
                         } catch (e) { console.warn("Stream parse error:", e); }
                     }
                 }
@@ -630,7 +644,11 @@ async function sendMessage(fromVoice = false) {
                 if (buffer.trim()) {
                     try {
                         const chunk = JSON.parse(buffer);
-                        processStreamChunk(chunk.type, chunk.content);
+                        // [NEW] Check ID
+                        if (chunk.id && !processedChunkIds.has(chunk.id)) {
+                            processedChunkIds.add(chunk.id);
+                            processStreamChunk(chunk.type, chunk.content);
+                        }
                     } catch (e) {}
                 }
                 break;
@@ -661,8 +679,7 @@ async function sendMessage(fromVoice = false) {
                 speakText(assistantMsgFromStream.content);
             }
         } else if (!hasToolActivity) {
-            // Only throw if we truly got nothing (no tools, no message)
-            // Sometimes errors are handled in processStreamChunk
+            // Error handled in stream
         }
 
     } catch (error) {

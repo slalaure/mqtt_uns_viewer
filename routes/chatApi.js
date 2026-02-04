@@ -12,7 +12,7 @@
  * Implements a Multi-Turn Loop (Max 5 steps) to handle complex agentic workflows.
  * Added explicit timeouts to Axios calls to prevent indefinite hanging.
  * [NEW] Added User-Scoped History Persistence and Tool Constraints.
- * [NEW] Added WebSocket fallback for streaming updates (bypass Nginx buffering).
+ * [NEW] Added WebSocket fallback for streaming updates with DEDUPLICATION IDs.
  */
 const express = require('express');
 const axios = require('axios');
@@ -94,21 +94,26 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
     const SESSIONS_DIR = path.join(DATA_PATH, 'sessions'); 
 
-    // --- [NEW] Helper to send chunks via HTTP AND WebSocket ---
+    // --- [NEW] Helper to send chunks via HTTP AND WebSocket with Deduplication ID ---
     const sendChunk = (res, type, content, clientId) => {
-        // 1. HTTP Streaming (NDJSON) - Best effort for proxies
+        // Generate a unique ID for this chunk to allow frontend deduplication
+        const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        const chunkData = { type, content, id: chunkId };
+        const jsonStr = JSON.stringify(chunkData);
+
+        // 1. HTTP Streaming (NDJSON)
         if (!res.writableEnded && res.writable) {
-            res.write(JSON.stringify({ type, content }) + '\n');
-            // Try to force flush if environment supports it
+            res.write(jsonStr + '\n');
             if (res.flush) res.flush();
         }
 
-        // 2. WebSocket Unicast (Guaranteed Real-time bypass)
+        // 2. WebSocket Unicast
         if (clientId) {
             wsManager.sendToClient(clientId, {
                 type: 'chat-stream',
                 chunkType: type,
-                content: content
+                content: content,
+                id: chunkId // Include ID for dedupe
             });
         }
     };
@@ -457,6 +462,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- 2. Tool Implementations (Promises) ---
     const toolImplementations = {
+        // ... (Tool implementations omitted for brevity, they are unchanged from previous version) ...
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
                 logger.info("[ChatAPI:get_application_status] 1. Starting request");
@@ -793,7 +799,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- 3. Streamed POST Endpoint ---
     router.post('/completion', async (req, res) => {
-        const { messages, clientId } = req.body; // [NEW] Read clientId
+        const { messages, clientId } = req.body; 
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
         
