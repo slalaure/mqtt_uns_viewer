@@ -948,11 +948,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             
             MAPPER ENGINE SCRIPTING GUIDE:
             - The Mapper uses a JavaScript sandbox.
-            - Input is 'msg' object: { topic, payload (JSON object), brokerId }.
-            - Output MUST be the modified 'msg' object (return msg;).
+            - Access the JSON payload via: 'msg.payload'
+            - Access the topic via: 'msg.topic'
+            - Access the broker ID via: 'msg.brokerId'
             - DO NOT return an array of messages. Multi-target output is not supported in one script.
             - DO NOT use console.log (use context console).
             - SQL access via 'db' is read-only (SELECT).
+            - The engine maps ONE source message to ONE target message.
+            - **REQUIRED**: Modify the 'msg' object in place and return 'msg'.
+            - Before setting a Target Topic, CHECK the 'SYSTEM CONTEXT' above.
+            - Ensure the target Broker ID allows publishing to your proposed topic pattern.
+            - If you need to split data into multiple topics, instruct the user to create multiple separate Mapping Rules in the UI instead of doing it in one script.
             
             DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS:
             When the user asks for a diagram, use 'create_dynamic_view'.
