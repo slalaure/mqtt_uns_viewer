@@ -844,7 +844,7 @@ async function createMcpServer() {
         "update_mapper_rule",
         {
           title: "Update Mapper Rule",
-          description: "Adds or updates a mapping rule. Rules are topic-based and apply to messages from *all* brokers. Inside the code, `msg.brokerId` can be used to handle logic differently for each broker.",
+          description: "Adds or updates a mapping rule. Rules are topic-based and apply to messages from *all* brokers. Inside the code, `msg.brokerId` can be used to handle logic differently for each broker. WARNING: The code runs in a sandbox. You MUST act on `msg` (input) and return `msg` (output). You CANNOT use `console.log` directly (use context `console`).",
           inputSchema: { 
             sourceTopic: z.string().describe("The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."),
             targetTopic: z.string().describe("The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."),
@@ -852,6 +852,7 @@ async function createMcpServer() {
               "The ASYNC JavaScript code for the transformation. " +
               "You have access to 'msg' (msg.topic, msg.payload, msg.brokerId) and 'db' (await db.all(sql), await db.get(sql)). " +
               "SQL must be read-only (SELECT). " +
+              "IMPORTANT: You MUST modify and return the `msg` object. Access input data via `msg.payload`. " +
               "Example: 'const row = await db.get(`SELECT * FROM mqtt_events WHERE broker_id = \\'${msg.brokerId}\\' LIMIT 1`); msg.payload.latest_val = row.payload; return msg;'"
             )
           },
