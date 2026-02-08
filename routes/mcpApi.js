@@ -9,7 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * MCP API - Context & History Endpoints
- * [MODIFIED] Restored specific DEBUG logs and logic for 'search/model'.
+ * [MODIFIED] Ensures query returns the absolute last value known <= timestamp.
  * [MODIFIED] Added db.serialize() to prevent DuckDB locking errors.
  * [MODIFIED] Added 'startDate' and 'endDate' support for time filtering.
  * [MODIFIED] Added Admin check for Prune Topic.
@@ -87,6 +87,47 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             });
         });
     });
+    
+    // --- [NEW] Get Last Known State AS OF a specific timestamp ---
+    // This implements the "State at Point in Time" logic.
+    // Even if the last message was 6 hours ago, if it's the latest relative to the timestamp, it returns it.
+    router.get('/last-known', (req, res) => {
+        const timestampIso = req.query.timestamp;
+        if (!timestampIso) {
+            return res.status(400).json({ error: "Missing 'timestamp' query parameter (ISO 8601)." });
+        }
+
+        // Window Function explanation:
+        // 1. Filter: Keep only messages OLDER or EQUAL to the requested time.
+        // 2. Partition: Group by topic (and broker).
+        // 3. Order: Sort by time DESC (newest first).
+        // 4. Qualify: Keep only the 1st row (the newest) for each group.
+        const query = `
+            SELECT topic, payload, broker_id, timestamp
+            FROM mqtt_events
+            WHERE timestamp <= CAST(? AS TIMESTAMPTZ)
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY topic, broker_id ORDER BY timestamp DESC) = 1
+        `;
+
+        db.serialize(() => {
+            db.all(query, timestampIso, (err, rows) => {
+                if (err) {
+                    console.error("❌ Last-Known Query Error:", err);
+                    return res.status(500).json({ error: "Database query failed." });
+                }
+                
+                const results = rows.map(row => {
+                    if (typeof row.payload === 'object' && row.payload !== null) {
+                        try { row.payload = JSON.stringify(row.payload); } catch (e) {}
+                    }
+                    return row;
+                });
+                
+                res.json(results);
+            });
+        });
+    });
+
     router.get('/search', (req, res) => {
         const query = req.query.q;
         const brokerId = req.query.brokerId;
@@ -201,7 +242,6 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         if (!req.user || req.user.role !== 'admin') {
             return res.status(403).json({ error: "Forbidden: Only Admins can prune database history." });
         }
-
         const { topicPattern, broker_id } = req.body;
         if (!topicPattern) return res.status(400).json({ error: "Missing 'topicPattern'." });
         const sqlPattern = mqttToSqlLike(topicPattern);

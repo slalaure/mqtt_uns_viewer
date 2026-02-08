@@ -80,7 +80,12 @@ export function initSvgView(appConfig) {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
         trackEvent(isSvgHistoryMode ? 'svg_history_on' : 'svg_history_off');
-        replaySvgHistory(currentMaxTimestamp);
+        
+        if (isSvgHistoryMode) {
+            // When turning on, fetch state for the current slider position
+            const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
+            fetchLastKnownState(replayTime);
+        }
         if (svgSlider) {
             svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
         }
@@ -90,25 +95,29 @@ export function initSvgView(appConfig) {
             containerEl: svgTimelineSlider,
             handleEl: svgHandle,
             labelEl: svgLabel,
+            // onDrag only updates UI now
             onDrag: (newTime) => {
-                replaySvgHistory(newTime);
+                // UI update managed by slider
             },
+            // onDragEnd triggers the DB fetch
             onDragEnd: (newTime) => {
                 trackEvent('svg_slider_drag_end');
+                if (isSvgHistoryMode) {
+                    fetchLastKnownState(newTime);
+                }
             }
         });
     }
     
-    // [NEW] Add Delete Button to Controls
+    // Add Delete Button to Controls
     const controlsContainer = document.querySelector('.map-view-controls');
     if (controlsContainer) {
         const btnDelete = document.createElement('button');
-        btnDelete.className = 'map-button danger-button'; // Re-use css classes
+        btnDelete.className = 'map-button danger-button'; 
         btnDelete.innerHTML = '&#x1F5D1;'; // Trash icon
         btnDelete.title = "Delete current view";
         btnDelete.style.marginLeft = "10px";
         btnDelete.onclick = deleteCurrentSvg;
-        // Append before fullscreen button
         controlsContainer.insertBefore(btnDelete, btnSvgFullscreen);
     }
 }
@@ -116,15 +125,13 @@ export function initSvgView(appConfig) {
  * Receives the full history log from the main app.
  */
 export function setSvgHistoryData(entries) {
-    allHistoryEntries = entries; // These entries include brokerId
+    allHistoryEntries = entries; 
 }
 /**
- * [NEW] Publicly exported function to refresh the dropdown.
- * Can be called by Chat View when a new file is created.
+ * Publicly exported function to refresh the dropdown.
  */
 export async function refreshSvgList(targetFilenameToSelect = null) {
     if (!svgSelectDropdown) return;
-    // Preserve current selection if no target specified
     const currentSelection = targetFilenameToSelect || svgSelectDropdown.value;
     try {
         const response = await fetch('api/svg/list');
@@ -168,7 +175,7 @@ async function onSvgFileChange(event) {
     trackEvent('svg_file_change');
     await loadSvgPlan(filename);
 }
-// [NEW] Logic to delete the current SVG view
+// Logic to delete the current SVG view
 async function deleteCurrentSvg() {
     const filename = svgSelectDropdown.value;
     if(!filename) return;
@@ -268,10 +275,11 @@ async function loadSvgPlan(filename) {
                 customSvgBindings.initialize(svgRoot);
             }
             scanForDataKeys();
-            const replayTime = isSvgHistoryMode 
-                ? parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp) 
-                : currentMaxTimestamp;
-            replaySvgHistory(replayTime);
+            
+            if (isSvgHistoryMode) {
+                const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
+                fetchLastKnownState(replayTime);
+            }
         }
     } catch (error) {
         console.error(`Could not load the SVG file '${filename}':`, error);
@@ -319,9 +327,6 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
         case 'L': return value < threshold;
         default: return false;
     }
-}
-function updateAlarmPlaceholder() {
-    // This function is no longer needed as logic is generic
 }
 /**
  * Updates a single SVG element with a new value.
@@ -467,14 +472,21 @@ export function updateSvgTimelineUI(min, max) {
     const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
     svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentTimestamp);
 }
+
 /**
- * Replays the SVG state up to a specific point in time.
+ * [NEW] Fetches the system state from DuckDB for a specific timestamp
+ * and applies it to the SVG. Replaces local replaySvgHistory.
+ * Renamed to fetchLastKnownState to match server semantic.
  */
-function replaySvgHistory(replayUntilTimestamp) {
+async function fetchLastKnownState(timestamp) {
     if (!svgContent) return;
     const svgRoot = svgContent.querySelector('svg');
     if (!svgRoot) return;
-    // 1. Reset SVG to its initial state (using default logic)
+
+    // 1. Visual Feedback
+    svgContent.style.opacity = '0.5';
+    
+    // 2. Clear current state (Reset)
     svgInitialTextValues.forEach((state, element) => {
         if (state.type === 'text') {
             element.textContent = state.value;
@@ -494,50 +506,54 @@ function replaySvgHistory(replayUntilTimestamp) {
             console.error("Error in custom SVG binding 'reset' function:", err);
         }
     }
-    // 2. Filter messages up to the replay timestamp
-    const entriesToReplay = allHistoryEntries.filter(e => e.timestampMs <= replayUntilTimestamp);
-    // 3. Determine the final state of each topic *per broker*.
-    const finalState = new Map();
-    for (let i = entriesToReplay.length - 1; i >= 0; i--) {
-        const entry = entriesToReplay[i];
-        const key = `${entry.brokerId}|${entry.topic}`; // Use unique key
-        if (!finalState.has(key)) {
-                finalState.set(key, entry); // Store the full entry
-        }
-    }
-    // 4. Apply the final state to the SVG view
-    finalState.forEach((entry, key) => {
-        const { brokerId, topic, payload } = entry;
-        let payloadObject;
-        let isJson = false;
-        try {
-            payloadObject = JSON.parse(payload);
-            isJson = true;
-        } catch (e) { 
-            payloadObject = payload;
-        }
-        if (customSvgBindings.isLoaded) {
+
+    // 3. API Call to /last-known
+    try {
+        const isoTime = new Date(timestamp).toISOString();
+        const response = await fetch(`api/context/last-known?timestamp=${encodeURIComponent(isoTime)}`);
+        if (!response.ok) throw new Error("Failed to fetch state");
+        
+        const stateData = await response.json(); 
+        console.log(`[SVG History] Fetched ${stateData.length} records (Last Known State) for ${isoTime}`);
+
+        // 4. Apply State
+        stateData.forEach(entry => {
+            const { broker_id: brokerId, topic, payload } = entry;
+            let payloadObject;
+            let isJson = false;
             try {
-                customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
-            } catch (err) {
-                // [Fix] Same recovery logic for replay
-                if (isJson && typeof payloadObject === 'object') {
-                     try {
-                         customSvgBindings.update(brokerId, topic, payload, svgRoot);
-                         return;
-                     } catch(e) {}
+                payloadObject = JSON.parse(payload);
+                isJson = true;
+            } catch (e) {
+                payloadObject = payload;
+            }
+
+            if (customSvgBindings.isLoaded) {
+                try {
+                    customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
+                } catch (err) {
+                     // Retry with raw string if object fail
+                     if (isJson && typeof payloadObject === 'object') {
+                         try {
+                             customSvgBindings.update(brokerId, topic, payload, svgRoot);
+                         } catch(e) {}
+                    }
                 }
-                console.error(`Error in custom SVG binding 'update' function during replay for topic ${topic}:`, err);
-            }
-        } else {
-            if (isJson) {
+            } else {
+                if (isJson) {
                 //  Use fallback logic in replay too
-                const specificId = isMultiBroker 
-                    ? `${brokerId}-${topic.replace(/\//g, '-')}` 
-                    : topic.replace(/\//g, '-');
-                const genericId = topic.replace(/\//g, '-');
-                defaultUpdateLogic(specificId, genericId, payloadObject);
+                    const specificId = isMultiBroker 
+                        ? `${brokerId}-${topic.replace(/\//g, '-')}` 
+                        : topic.replace(/\//g, '-');
+                    const genericId = topic.replace(/\//g, '-');
+                    defaultUpdateLogic(specificId, genericId, payloadObject);
+                }
             }
-        }
-    });
+        });
+
+    } catch (err) {
+        console.error("Error fetching historical state:", err);
+    } finally {
+        svgContent.style.opacity = '1';
+    }
 }
