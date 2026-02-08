@@ -1,391 +1,431 @@
 {
-    "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### MAPPER ENGINE SCRIPTING GUIDE\n- The Mapper uses a JavaScript sandbox.\n- Access the JSON payload via: `msg.payload`\n- Access the topic via: `msg.topic`\n- Access the broker ID via: `msg.brokerId`\n- **DO NOT** return an array of messages. Multi-target output is not supported in one script.\n- **DO NOT** use console.log (use context console).\n- SQL access via `db` is read-only (SELECT) using `await db.all(sql)` or `await db.get(sql)`.\n- The engine maps ONE source message to ONE target message.\n- **REQUIRED**: Modify the `msg` object in place and return `msg`. Returning `null` drops the message.\n- Before setting a Target Topic, CHECK the `SYSTEM CONTEXT` above.\n- Ensure the target Broker ID allows publishing to your proposed topic pattern.\n- If you need to split data into multiple topics, instruct the user to create multiple separate Mapping Rules in the UI instead of doing it in one script.\n\n### DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS\nWhen the user asks for a diagram, synoptic, or view, use `create_dynamic_view`.\n1. You MUST generate valid SVG XML with unique `id` attributes for dynamic elements.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerSvgBindings({\n  initialize: (svgRoot) => { console.log(\"SVG initialized\"); },\n  update: (brokerId, topic, payload, svgRoot) => {\n    // Example: Rotate fan based on value\n    // if (topic.includes('fan_speed')) {\n    //   const el = svgRoot.getElementById('fan');\n    //   if(el) el.style.transform = `rotate(${Date.now() % 360}deg)`;\n    // }\n  },\n  reset: (svgRoot) => { }\n});\n```\n**IMPORTANT TECHNICAL CONSTRAINTS FOR SVG JS:**\n- Scripts related to SVG (.svg.js) will be executed on the webbrowser side (Client-Side).\n- They DO NOT have access to `db` or SQL.\n- They can ONLY use data received in real-time using the `update(brokerId, topic, payload, svgRoot)` function.\n\n### CAPABILITIES\n- **READ**: Inspect database, search data, infer schemas, view files.\n- **WRITE**: Create simulators, **create dynamic views (SVG+JS)**, map topics, publish messages.\n- **MANAGE**: Update UNS Model, Prune History, Restart Server.\n\n### DATA LANGUAGE\nEnglish (translate user queries if needed).\n\n### STRATEGY FOR COMPLEX VIEWS\nIf the user is asking for a complex SVG view that requires historical dataset access (which is not available in the client-side SVG script), you should propose to implement a **Mapper Rule** first. This rule will aggregate the necessary data on the server side and publish it to a specific topic with persistence/retain enabled. Explain this approach and the mapper rules path to be confirmed by the user before doing the work.",
-    "tools": [
-      {
-        "name": "get_application_status",
-        "description": "Provides a high-level health check of the application, including MQTT connection status, database size, and message counts.",
-        "category": "ENABLE_READ",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "list_topics",
-        "description": "Lists all unique MQTT topics currently stored in the database. Use this to discover available data points before searching or mapping.",
-        "category": "ENABLE_READ",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "get_topics_list",
-        "description": "Returns a flat list of all unique MQTT topics currently known, including their broker ID. Useful for disambiguating identical topics across different brokers.",
-        "category": "ENABLE_READ",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "search_data",
-        "description": "Performs a full-text search for a keyword across all topic names and payload contents. IMPORTANT: Data is mostly in ENGLISH. Translate keywords if needed.",
-        "category": "ENABLE_READ",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string",
-              "description": "Space-separated English keywords (e.g., 'maintenance cmms')."
-            },
-            "time_expression": {
-              "type": "string",
-              "description": "Natural language time range (e.g., 'last 24 hours', 'since yesterday')."
-            },
-            "limit": {
-              "type": "number",
-              "description": "Max results to return."
-            },
-            "broker_id": {
-              "type": "string",
-              "description": "Optional. Filter by specific broker ID."
-            }
-          },
-          "required": ["query"]
-        }
-      },
-      {
-        "name": "get_topic_history",
-        "description": "Get historical messages for a topic, optionally filtered by a time range.",
-        "category": "ENABLE_READ",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "topic": {
-              "type": "string",
-              "description": "The exact MQTT topic string."
-            },
-            "time_expression": {
-              "type": "string",
-              "description": "Natural language time range (e.g., 'last week', 'from 2pm to 4pm')."
-            },
-            "limit": {
-              "type": "number",
-              "description": "Max results (default 20)."
-            },
-            "broker_id": {
-              "type": "string",
-              "description": "Optional. Filter by specific broker ID."
-            }
-          },
-          "required": ["topic"]
-        }
-      },
-      {
-        "name": "get_latest_message",
-        "description": "Retrieves the most recent message for a single, exact MQTT topic.",
-        "category": "ENABLE_READ",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "topic": {
-              "type": "string",
-              "description": "The exact MQTT topic."
-            },
-            "broker_id": {
-              "type": "string",
-              "description": "Optional. Filter by specific broker ID."
-            }
-          },
-          "required": ["topic"]
-        }
-      },
-      {
-        "name": "search_uns_concept",
-        "description": "Performs a precise, structured search for MQTT messages based on a known UNS concept and specific data filters.",
-        "category": "ENABLE_SEMANTIC",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "concept": {
-              "type": "string",
-              "description": "The concept name (e.g., 'Work Order', 'Maintenance Request')."
-            },
-            "filters": {
-              "type": "object",
-              "description": "Key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."
-            },
-            "broker_id": {
-              "type": "string",
-              "description": "Optional. Broker ID."
-            }
-          },
-          "required": ["concept"]
-        }
-      },
-      {
-        "name": "infer_schema",
-        "description": "Analyzes recent messages for a given topic pattern (e.g., 'stark_industries/security/%') and returns the inferred JSON payload schema.",
-        "category": "ENABLE_SEMANTIC",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "topic_pattern": {
-              "type": "string",
-              "description": "SQL LIKE pattern (e.g., 'factory/line1/%')."
-            }
-          },
-          "required": ["topic_pattern"]
-        }
-      },
-      {
-        "name": "get_model_definition",
-        "description": "Get the definition (schema, topic template) for a concept from the UNS Model Manifest.",
-        "category": "ENABLE_SEMANTIC",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "concept": {
-              "type": "string",
-              "description": "Keyword or concept name."
-            }
-          },
-          "required": ["concept"]
-        }
-      },
-      {
-        "name": "update_uns_model",
-        "description": "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
-        "category": "ENABLE_ADMIN",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "model_json": {
-              "type": "string",
-              "description": "The full JSON string representing the new model array. Must be a valid JSON array of definition objects."
-            }
-          },
-          "required": ["model_json"]
-        }
-      },
-      {
-        "name": "publish_message",
-        "description": "Publish a NEW MQTT message. You MUST check 'Broker Permissions' in system prompt to choose the correct topic prefix and broker_id.",
-        "category": "ENABLE_PUBLISH",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "topic": {
-              "type": "string",
-              "description": "Target topic (e.g., 'mqttunsviewer/site/crane/load')."
-            },
-            "payload": {
-              "type": "string",
-              "description": "The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."
-            },
-            "format": {
-              "type": "string",
-              "enum": ["string", "json", "sparkplugb"],
-              "description": "Payload format."
-            },
-            "broker_id": {
-              "type": "string",
-              "description": "Optional. ID of the broker to use."
-            },
-            "qos": {
-              "type": "number",
-              "description": "The QoS level (0, 1, or 2)."
-            },
-            "retain": {
-              "type": "boolean",
-              "description": "Whether to set the retain flag."
-            }
-          },
-          "required": ["topic", "payload"]
-        }
-      },
-      {
-        "name": "list_project_files",
-        "description": "Lists files in the project root and `data` directory. Useful for finding existing views or simulators.",
-        "category": "ENABLE_FILES",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "get_file_content",
-        "description": "Reads the content of a file (SVG, JS, JSON).",
-        "category": "ENABLE_FILES",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "filename": {
-              "type": "string",
-              "description": "Relative path (e.g., 'data/view.svg')."
-            }
-          },
-          "required": ["filename"]
-        }
-      },
-      {
-        "name": "save_file_to_data_directory",
-        "description": "Saves content to a file in the `data/` directory. Use for SVGs, JS bindings, or Simulators.",
-        "category": "ENABLE_FILES",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "filename": {
-              "type": "string",
-              "description": "The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."
-            },
-            "content": {
-              "type": "string",
-              "description": "The full text content (JavaScript or SVG) to save."
-            }
-          },
-          "required": ["filename", "content"]
-        }
-      },
-      {
-        "name": "create_dynamic_view",
-        "description": "Creates a new interactive SVG dashboard by saving TWO files: the SVG graphic (.svg) and its logic script (.svg.js). Use this when the user asks for a 'diagram', 'synoptic', or 'view' of data. Ensure you have identified the relevant MQTT topics first.",
-        "category": "ENABLE_FILES",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "view_name": {
-              "type": "string",
-              "description": "Filename without extension (e.g., 'pump_station')."
-            },
-            "svg_content": {
-              "type": "string",
-              "description": "The complete XML SVG code. Must include unique IDs for dynamic elements."
-            },
-            "js_content": {
-              "type": "string",
-              "description": "The JavaScript code using 'window.registerSvgBindings({...})' to animate the SVG based on MQTT data."
-            }
-          },
-          "required": ["view_name", "svg_content", "js_content"]
-        }
-      },
-      {
-        "name": "get_available_svg_views",
-        "description": "Lists all .svg files available in the /data directory that can be displayed in the 'SVG View' tab.",
-        "category": "ENABLE_FILES",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "get_mapper_config",
-        "description": "Retrieves the entire (JSON) configuration for the Topic Mapper engine, including all versions and rules.",
-        "category": "ENABLE_MAPPER",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "update_mapper_rule",
-        "description": "Adds or updates a mapping rule in the active configuration. WARNING: The code runs in a sandbox. You MUST act on `msg` (input) and return `msg` (output).",
-        "category": "ENABLE_MAPPER",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "sourceTopic": {
-              "type": "string",
-              "description": "The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."
-            },
-            "targetTopic": {
-              "type": "string",
-              "description": "The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."
-            },
-            "targetCode": {
-              "type": "string",
-              "description": "The ASYNC JavaScript code for the transformation. Must return the `msg` object."
-            }
-          },
-          "required": ["sourceTopic", "targetTopic", "targetCode"]
-        }
-      },
-      {
-        "name": "prune_topic_history",
-        "description": "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
-        "category": "ENABLE_ADMIN",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "topic_pattern": {
-              "type": "string",
-              "description": "The topic pattern to prune, using MQTT wildcards (+, #)."
-            },
-            "broker_id": {
-              "type": "string",
-              "description": "Optional. The ID of the broker to prune from (e.g., 'broker_1')."
-            }
-          },
-          "required": ["topic_pattern"]
-        }
-      },
-      {
-        "name": "get_simulator_status",
-        "description": "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
-        "category": "ENABLE_SIMULATOR",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
-      },
-      {
-        "name": "start_simulator",
-        "description": "Starts a specific MQTT data simulator by name.",
-        "category": "ENABLE_SIMULATOR",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "The name of the scenario to start (e.g., 'stark_industries')."
-            }
-          },
-          "required": ["name"]
-        }
-      },
-      {
-        "name": "stop_simulator",
-        "description": "Stops a specific MQTT data simulator by name.",
-        "category": "ENABLE_SIMULATOR",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "The name of the scenario to stop."
-            }
-          },
-          "required": ["name"]
-        }
-      },
-      {
-        "name": "restart_application_server",
-        "description": "Triggers a graceful restart of the main MQTT UNS Viewer web server.",
-        "category": "ENABLE_ADMIN",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
+  "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or SVG), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n\n### DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS\nWhen the user asks for a diagram, synoptic, or view, use `create_dynamic_view`.\n1. You MUST generate valid SVG XML with unique `id` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerSvgBindings({\n  initialize: (svgRoot) => { console.log(\"SVG initialized\"); },\n  update: (brokerId, topic, payload, svgRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema (Example logic to generate):\n    // const data = msg.variables || msg; // ADAPT THIS LINE BASED ON DETECTED SCHEMA\n    \n    // 3. Update DOM using REAL tag names\n    // const el = svgRoot.getElementById('val_temp');\n    // if(el) el.textContent = data.AI_TT_Real_Tag;\n  },\n  reset: (svgRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names. Use the tools provided to discover the environment state.",
+  "tools": [
+    {
+      "name": "get_application_status",
+      "description": "Provides a high-level health check of the application, including MQTT connection status, database size, and message counts.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
       }
-    ]
-  }
+    },
+    {
+      "name": "list_topics",
+      "description": "Lists all unique MQTT topics currently stored in the database. Use this to discover available data points before searching or mapping.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "get_topics_list",
+      "description": "Returns a flat list of all unique MQTT topics currently known, including their broker ID. Useful for disambiguating identical topics across different brokers.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "search_data",
+      "description": "Performs a full-text search for a keyword across all topic names and payload contents. IMPORTANT: Data is mostly in ENGLISH. Translate keywords if needed.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Space-separated English keywords (e.g., 'maintenance cmms')."
+          },
+          "time_expression": {
+            "type": "string",
+            "description": "Natural language time range (e.g., 'last 24 hours', 'since yesterday')."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max results to return."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional. Filter by specific broker ID."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "get_topic_history",
+      "description": "Get historical messages for a topic, optionally filtered by a time range.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "The exact MQTT topic string."
+          },
+          "time_expression": {
+            "type": "string",
+            "description": "Natural language time range (e.g., 'last week', 'from 2pm to 4pm')."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max results (default 20)."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional. Filter by specific broker ID."
+          }
+        },
+        "required": [
+          "topic"
+        ]
+      }
+    },
+    {
+      "name": "get_latest_message",
+      "description": "Retrieves the most recent message for a single, exact MQTT topic.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "The exact MQTT topic."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional. Filter by specific broker ID."
+          }
+        },
+        "required": [
+          "topic"
+        ]
+      }
+    },
+    {
+      "name": "search_uns_concept",
+      "description": "Performs a precise, structured search for MQTT messages based on a known UNS concept and specific data filters.",
+      "category": "ENABLE_SEMANTIC",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "concept": {
+            "type": "string",
+            "description": "The concept name (e.g., 'Work Order', 'Maintenance Request')."
+          },
+          "filters": {
+            "type": "object",
+            "description": "Key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional. Broker ID."
+          }
+        },
+        "required": [
+          "concept"
+        ]
+      }
+    },
+    {
+      "name": "infer_schema",
+      "description": "Analyzes recent messages for a given topic pattern (e.g., 'stark_industries/security/%') and returns the inferred JSON payload schema.",
+      "category": "ENABLE_SEMANTIC",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic_pattern": {
+            "type": "string",
+            "description": "SQL LIKE pattern (e.g., 'factory/line1/%')."
+          }
+        },
+        "required": [
+          "topic_pattern"
+        ]
+      }
+    },
+    {
+      "name": "get_model_definition",
+      "description": "Get the definition (schema, topic template) for a concept from the UNS Model Manifest.",
+      "category": "ENABLE_SEMANTIC",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "concept": {
+            "type": "string",
+            "description": "Keyword or concept name."
+          }
+        },
+        "required": [
+          "concept"
+        ]
+      }
+    },
+    {
+      "name": "update_uns_model",
+      "description": "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
+      "category": "ENABLE_ADMIN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "model_json": {
+            "type": "string",
+            "description": "The full JSON string representing the new model array. Must be a valid JSON array of definition objects."
+          }
+        },
+        "required": [
+          "model_json"
+        ]
+      }
+    },
+    {
+      "name": "publish_message",
+      "description": "Publish a NEW MQTT message. You MUST check 'Broker Permissions' in system prompt to choose the correct topic prefix and broker_id.",
+      "category": "ENABLE_PUBLISH",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Target topic (e.g., 'mqttunsviewer/site/crane/load')."
+          },
+          "payload": {
+            "type": "string",
+            "description": "The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "string",
+              "json",
+              "sparkplugb"
+            ],
+            "description": "Payload format."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional. ID of the broker to use."
+          },
+          "qos": {
+            "type": "number",
+            "description": "The QoS level (0, 1, or 2)."
+          },
+          "retain": {
+            "type": "boolean",
+            "description": "Whether to set the retain flag."
+          }
+        },
+        "required": [
+          "topic",
+          "payload"
+        ]
+      }
+    },
+    {
+      "name": "list_project_files",
+      "description": "Lists files in the project root and `data` directory. Useful for finding existing views or simulators.",
+      "category": "ENABLE_FILES",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "get_file_content",
+      "description": "Reads the content of a file (SVG, JS, JSON).",
+      "category": "ENABLE_FILES",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Relative path (e.g., 'data/view.svg')."
+          }
+        },
+        "required": [
+          "filename"
+        ]
+      }
+    },
+    {
+      "name": "save_file_to_data_directory",
+      "description": "Saves content to a file in the `data/` directory. Use for SVGs, JS bindings, or Simulators.",
+      "category": "ENABLE_FILES",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."
+          },
+          "content": {
+            "type": "string",
+            "description": "The full text content (JavaScript or SVG) to save."
+          }
+        },
+        "required": [
+          "filename",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "create_dynamic_view",
+      "description": "Creates a new interactive SVG dashboard by saving TWO files: the SVG graphic (.svg) and its logic script (.svg.js). Use this when the user asks for a 'diagram', 'synoptic', or 'view' of data. Ensure you have identified the relevant MQTT topics first.",
+      "category": "ENABLE_FILES",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "view_name": {
+            "type": "string",
+            "description": "Filename without extension (e.g., 'pump_station')."
+          },
+          "svg_content": {
+            "type": "string",
+            "description": "The complete XML SVG code. Must include unique IDs for dynamic elements."
+          },
+          "js_content": {
+            "type": "string",
+            "description": "The JavaScript code using 'window.registerSvgBindings({...})' to animate the SVG based on MQTT data."
+          }
+        },
+        "required": [
+          "view_name",
+          "svg_content",
+          "js_content"
+        ]
+      }
+    },
+    {
+      "name": "get_available_svg_views",
+      "description": "Lists all .svg files available in the /data directory that can be displayed in the 'SVG View' tab.",
+      "category": "ENABLE_FILES",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "get_mapper_config",
+      "description": "Retrieves the entire (JSON) configuration for the Topic Mapper engine, including all versions and rules.",
+      "category": "ENABLE_MAPPER",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "update_mapper_rule",
+      "description": "Adds or updates a mapping rule in the active configuration. WARNING: The code runs in a sandbox. You MUST act on `msg` (input) and return `msg` (output).",
+      "category": "ENABLE_MAPPER",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceTopic": {
+            "type": "string",
+            "description": "The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."
+          },
+          "targetTopic": {
+            "type": "string",
+            "description": "The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."
+          },
+          "targetCode": {
+            "type": "string",
+            "description": "The ASYNC JavaScript code for the transformation. Must return the `msg` object."
+          }
+        },
+        "required": [
+          "sourceTopic",
+          "targetTopic",
+          "targetCode"
+        ]
+      }
+    },
+    {
+      "name": "prune_topic_history",
+      "description": "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
+      "category": "ENABLE_ADMIN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic_pattern": {
+            "type": "string",
+            "description": "The topic pattern to prune, using MQTT wildcards (+, #)."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional. The ID of the broker to prune from (e.g., 'broker_1')."
+          }
+        },
+        "required": [
+          "topic_pattern"
+        ]
+      }
+    },
+    {
+      "name": "get_simulator_status",
+      "description": "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
+      "category": "ENABLE_SIMULATOR",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "start_simulator",
+      "description": "Starts a specific MQTT data simulator by name.",
+      "category": "ENABLE_SIMULATOR",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the scenario to start (e.g., 'stark_industries')."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "stop_simulator",
+      "description": "Stops a specific MQTT data simulator by name.",
+      "category": "ENABLE_SIMULATOR",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the scenario to stop."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "restart_application_server",
+      "description": "Triggers a graceful restart of the main MQTT UNS Viewer web server.",
+      "category": "ENABLE_ADMIN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  ]
+}
