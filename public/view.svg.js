@@ -414,6 +414,14 @@ export function updateMap(brokerId, topic, payload) {
         try {
             customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
         } catch (err) {
+            // [Fix] Recovery: If script failed (likely trying to parse Object), try passing raw string
+            if (isJson && typeof payloadObject === 'object') {
+                 try {
+                     // Try passing it as a string
+                     customSvgBindings.update(brokerId, topic, payload, svgRoot);
+                     return; // Success on retry
+                 } catch(retryErr) {}
+            }
             console.error(`Error in custom SVG binding 'update' function for topic ${topic}:`, err);
         }
     } else {
@@ -512,6 +520,13 @@ function replaySvgHistory(replayUntilTimestamp) {
             try {
                 customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
             } catch (err) {
+                // [Fix] Same recovery logic for replay
+                if (isJson && typeof payloadObject === 'object') {
+                     try {
+                         customSvgBindings.update(brokerId, topic, payload, svgRoot);
+                         return;
+                     } catch(e) {}
+                }
                 console.error(`Error in custom SVG binding 'update' function during replay for topic ${topic}:`, err);
             }
         } else {
