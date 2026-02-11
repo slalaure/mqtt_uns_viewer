@@ -8,20 +8,14 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
-  
+ * Configuration Page Script
+ * Manages System Infrastructure: Certificates, UNS Model, and Environment Variables.
+ * [UPDATED] Operational tasks (DB, Alerts) moved to Admin View.
  */
-
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('config-form');
     const saveButton = document.getElementById('save-config-button');
     const statusMessage = document.getElementById('status-message');
-    
-    // Database Management Elements
-    const btnResetDb = document.getElementById('btn-reset-db');
-    const resetDbStatus = document.getElementById('reset-db-status');
-    const btnImportDb = document.getElementById('btn-import-db');
-    const importInput = document.getElementById('db-import-input');
-    const importStatus = document.getElementById('db-import-status');
 
     // Cert Manager Elements
     const certList = document.getElementById('cert-list');
@@ -36,98 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnUploadModel = document.getElementById('btn-upload-model');
     const modelUploadStatus = document.getElementById('model-upload-status');
 
-    // --- Database Import Logic ---
-    if (btnImportDb && importInput) {
-        btnImportDb.addEventListener('click', async () => {
-            const file = importInput.files[0];
-            if (!file) {
-                alert("Please select a JSON export file first.");
-                return;
-            }
-
-            if (!confirm(`Import data from '${file.name}'?\nThis will be added to the existing history queue.`)) {
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('db_import', file);
-
-            btnImportDb.disabled = true;
-            btnImportDb.textContent = "Importing...";
-            importStatus.textContent = "Uploading & Processing...";
-            importStatus.style.color = "var(--color-text)";
-
-            try {
-                const response = await fetch('api/env/import-db', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || "Import failed.");
-                }
-
-                importStatus.textContent = result.message; // Success message from server
-                importStatus.style.color = 'var(--color-success)';
-                importInput.value = ''; // Clear input
-            } catch (e) {
-                importStatus.textContent = `❌ Error: ${e.message}`;
-                importStatus.style.color = 'var(--color-danger)';
-            } finally {
-                btnImportDb.disabled = false;
-                btnImportDb.textContent = "Import Data";
-                // Clear success message after a delay
-                setTimeout(() => {
-                    if (importStatus.textContent.includes('Successfully')) {
-                        importStatus.textContent = '';
-                    }
-                }, 5000);
-            }
-        });
-    }
-
-    // --- Database Reset Logic ---
-    btnResetDb.addEventListener('click', async () => {
-        const confirmed = confirm("⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?");
-        
-        if (!confirmed) return;
-
-        btnResetDb.disabled = true;
-        btnResetDb.textContent = "Resetting...";
-        resetDbStatus.textContent = "";
-
-        try {
-            const response = await fetch('api/env/reset-db', {
-                method: 'POST'
-            });
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || "Reset failed.");
-            }
-
-            resetDbStatus.textContent = "✅ Database reset successfully!";
-            resetDbStatus.style.color = 'var(--color-success)';
-            
-        } catch (e) {
-            resetDbStatus.textContent = `❌ Error: ${e.message}`;
-            resetDbStatus.style.color = 'var(--color-danger)';
-        } finally {
-            btnResetDb.disabled = false;
-            btnResetDb.textContent = "Reset Database to 0";
-            setTimeout(() => { resetDbStatus.textContent = ''; }, 5000);
-        }
-    });
-
     // --- UNS Model Manager Logic ---
-
     async function loadUnsModel() {
         try {
             const response = await fetch('api/env/model');
             if (!response.ok) throw new Error("Failed to fetch UNS Model.");
             const model = await response.json();
-            
             // Pretty print JSON in textarea
             modelEditor.value = JSON.stringify(model, null, 2);
         } catch (e) {
@@ -138,7 +46,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveUnsModel(modelData) {
         btnSaveModel.disabled = true;
         btnSaveModel.textContent = "Saving...";
-        
         try {
             // Validate JSON
             let jsonPayload;
@@ -158,7 +65,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const err = await response.json();
                 throw new Error(err.error || "Failed to save model.");
             }
-
             alert("UNS Model saved successfully!");
             loadUnsModel(); // Reload to formatting
         } catch (e) {
@@ -181,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("Please select a JSON file first.");
             return;
         }
-
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
@@ -199,25 +104,20 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsText(file);
     });
 
-
     // --- Certificate Manager Logic ---
-
     async function loadCertificates() {
         try {
             const response = await fetch('api/env/certs');
             if (!response.ok) throw new Error("Failed to fetch certificates.");
             const files = await response.json();
-            
             certList.innerHTML = '';
             if (files.length === 0) {
                 certList.innerHTML = '<li class="cert-item" style="justify-content: center; color: var(--color-text-secondary);">No certificates found.</li>';
                 return;
             }
-
             files.forEach(filename => {
                 const li = document.createElement('li');
                 li.className = 'cert-item';
-                
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = filename;
                 
@@ -246,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("Please select a file first.");
             return;
         }
-
+        
         const formData = new FormData();
         formData.append('certificate', file);
 
@@ -260,9 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: formData
             });
             const result = await response.json();
-
             if (!response.ok) throw new Error(result.error || 'Upload failed');
-
+            
             uploadStatus.textContent = '✅ Uploaded!';
             uploadStatus.style.color = 'var(--color-success)';
             uploadInput.value = ''; // Clear input
@@ -277,10 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-
-    // --- Existing Configuration Logic ---
-
-    // Load current configuration from the server
+    // --- Environment Configuration Logic ---
     async function loadConfig() {
         try {
             const response = await fetch('api/env');
@@ -291,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Failed to load configuration.');
             }
             const config = await response.json();
-
+            
             // Clear form before populating
             form.innerHTML = '';
 
@@ -299,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const key in config) {
                 const group = document.createElement('div');
                 group.className = 'form-group';
-
+                
                 const label = document.createElement('label');
                 label.htmlFor = `input-${key}`;
                 label.textContent = key;
@@ -335,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     input.value = config[key];
                     group.appendChild(input);
                 }
-
+                
                 form.appendChild(group);
             }
         } catch (error) {
@@ -389,7 +285,6 @@ document.addEventListener('DOMContentLoaded', () => {
             statusMessage.className = 'status-message success';
             
             const restart = confirm("Configuration saved!\nA server restart is required for changes to take effect.\n\nRestart now?");
-            
             if (restart) {
                 statusMessage.textContent = 'Restarting server...';
                 statusMessage.className = 'status-message success';

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.5.0--beta42-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.5.0--beta43-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)

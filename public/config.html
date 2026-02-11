@@ -43,66 +43,20 @@
             border-radius: 3px;
         }
         .btn-copy-cert:hover { background-color: var(--color-primary); color: white; }
-        .danger-zone-text {
-            color: var(--color-danger);
-            font-weight: bold;
-            margin-bottom: 10px;
-            display: block;
-        }
     </style>
 </head>
 <body class="scrollable-page">
     <header>
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
-            <p>Application Configuration</p>
+            <p>System Configuration</p>
         </div>
         <a href="./" class="nav-button">Back to Viewer</a>
     </header>
     <main class="config-page-container">
-        <h1>Configuration</h1>
-        <p>Modify the application settings below. The server will require a restart after saving.</p>
-
-        <div class="database-manager" style="border-color: var(--color-primary);">
-            <h3>Database Management</h3>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 15px;">
-                Manage the embedded DuckDB database and import data.
-            </p>
-            <div style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px dashed var(--color-border);">
-                <h4 style="margin-top: 0; font-size: 1em;">Import History (JSON)</h4>
-                <p style="font-size: 0.9em; margin-bottom: 10px;">
-                    Import history from a JSON export file. Data will be queued for insertion into DuckDB and TimescaleDB (if configured).
-                </p>
-                <div class="cert-upload-row">
-                    <input type="file" id="db-import-input" accept=".json" />
-                    <button id="btn-import-db" class="modal-button button-primary" type="button">Import Data</button>
-                    <span id="db-import-status" style="font-size: 0.9em; margin-left: 10px;"></span>
-                </div>
-            </div>
-            
-            <h4 style="color: var(--color-danger); margin-top: 0;">⚠️ Danger Zone</h4>
-            <p style="font-size: 0.9em; margin-bottom: 15px;">
-                Resetting the database will permanently delete <strong>ALL</strong> recorded MQTT history and reclaim disk space. This action cannot be undone.
-            </p>
-            <button id="btn-reset-db" class="modal-button button-danger" type="button">Reset Database to 0</button>
-            <span id="reset-db-status" style="font-size: 0.9em; margin-left: 10px; font-weight: bold;"></span>
-        </div>
-
-        <div class="database-manager" style="border-color: var(--color-warning);">
-            <h3>Alerts History Maintenance</h3>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 15px;">
-                Manage stored alert history.
-            </p>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom:10px;">
-                <div>
-                    <strong>Resolved Alerts:</strong> <span id="stats-resolved-count">--</span> 
-                    <span style="color: var(--color-text-secondary); margin-left:5px;">(~<span id="stats-resolved-size">--</span> MB)</span>
-                </div>
-                <button id="btn-purge-alerts" class="modal-button button-danger" type="button">Purge Resolved Alerts</button>
-            </div>
-            <span id="purge-alerts-status" style="font-size: 0.9em;"></span>
-        </div>
-
+        <h1>System Configuration</h1>
+        <p>Modify the application infrastructure settings below. Changes here often require a server restart.</p>
+        
         <div class="cert-manager">
             <h3>Certificate Manager (Upload .pem, .crt, .key, .ca)</h3>
             <div class="cert-upload-row">
@@ -134,9 +88,9 @@
             </div>
         </div>
 
+        <h3>Environment Variables (.env)</h3>
         <form id="config-form">
             </form>
-
         <div class="form-actions">
             <button id="save-config-button" type="submit" form="config-form">Save Configuration</button>
             <div id="status-message" class="status-message"></div>

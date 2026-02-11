@@ -20,7 +20,6 @@ let logger = null;
 let llmConfig = null;
 let broadcaster = null;
 let agentRunner = null; // Holds the AI Agent function
-
 // Sandbox configuration for safe evaluation
 const createSandbox = (msg) => {
     return {
@@ -51,13 +50,11 @@ const createSandbox = (msg) => {
         }
     };
 };
-
 function init(database, appLogger, config, appBroadcaster) {
     db = database;
     logger = appLogger.child({ component: 'AlertManager' });
     llmConfig = config;
     broadcaster = appBroadcaster;
-
     const createRulesTable = `
         CREATE TABLE IF NOT EXISTS alert_rules (
             id VARCHAR PRIMARY KEY,
@@ -72,7 +69,6 @@ function init(database, appLogger, config, appBroadcaster) {
             created_at TIMESTAMPTZ
         );
     `;
-
     const createAlertsTable = `
         CREATE TABLE IF NOT EXISTS active_alerts (
             id VARCHAR PRIMARY KEY,
@@ -87,7 +83,6 @@ function init(database, appLogger, config, appBroadcaster) {
             updated_at TIMESTAMPTZ
         );
     `;
-
     db.run(createRulesTable);
     db.run(createAlertsTable, (err) => {
         if (!err) {
@@ -112,7 +107,6 @@ function init(database, appLogger, config, appBroadcaster) {
         logger.info("✅ Alert Manager: AI Agent capabilities (pre-registered) are active.");
     }
 }
-
 /**
  * Registers the AI Agent runner function from chatApi.js
  */
@@ -123,7 +117,6 @@ function registerAgentRunner(runnerFn) {
         logger.info("✅ Alert Manager: AI Agent capabilities registered.");
     }
 }
-
 function createRule(ruleData) {
     return new Promise((resolve, reject) => {
         const id = `rule_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -141,7 +134,6 @@ function createRule(ruleData) {
         });
     });
 }
-
 function updateRule(id, userId, ruleData, isAdmin) {
     return new Promise((resolve, reject) => {
         db.all("SELECT owner_id FROM alert_rules WHERE id = ?", id, (err, rows) => {
@@ -165,7 +157,6 @@ function updateRule(id, userId, ruleData, isAdmin) {
         });
     });
 }
-
 function getRules(userId) {
     return new Promise((resolve, reject) => {
         let query = "SELECT * FROM alert_rules WHERE owner_id = 'global'";
@@ -184,7 +175,6 @@ function getRules(userId) {
         });
     });
 }
-
 function deleteRule(ruleId, userId, isAdmin) {
     return new Promise((resolve, reject) => {
         db.all("SELECT owner_id FROM alert_rules WHERE id = ?", ruleId, (err, rows) => {
@@ -201,7 +191,6 @@ function deleteRule(ruleId, userId, isAdmin) {
         });
     });
 }
-
 function getActiveAlerts(userId) {
     return new Promise((resolve, reject) => {
         const query = `
@@ -218,20 +207,17 @@ function getActiveAlerts(userId) {
         });
     });
 }
-
 function updateAlertStatus(alertId, status, username, analysisResult = null) {
     return new Promise((resolve, reject) => {
         const now = new Date().toISOString();
         let query = "UPDATE active_alerts SET status = ?, handled_by = ?, updated_at = ?";
         const params = [status, username, now];
-        
         if (analysisResult) {
             query += ", analysis_result = ?";
             params.push(analysisResult);
         }
         query += " WHERE id = ?";
         params.push(alertId);
-
         db.run(query, ...params, (err) => {
             if (err) return reject(err);
             // Broadcast update
@@ -242,18 +228,18 @@ function updateAlertStatus(alertId, status, username, analysisResult = null) {
         });
     });
 }
-
 function getResolvedAlertsStats() {
     return new Promise((resolve, reject) => {
         db.all("SELECT COUNT(*) as count FROM active_alerts WHERE status = 'resolved'", (err, rows) => {
             if (err) return reject(err);
-            const count = rows[0]?.count || 0;
-            const estimatedSizeMb = (count / 1024).toFixed(2);
+            // [CRITICAL FIX] Convert DuckDB BigInt to Number before math operations
+            const count = rows[0]?.count ? Number(rows[0].count) : 0;
+            // Estimated size (approx 1KB per alert record)
+            const estimatedSizeMb = (count / 1024).toFixed(2); 
             resolve({ count, estimatedSizeMb });
         });
     });
 }
-
 function purgeResolvedAlerts() {
     return new Promise((resolve, reject) => {
         db.run("DELETE FROM active_alerts WHERE status = 'resolved'", function(err) {
@@ -263,7 +249,6 @@ function purgeResolvedAlerts() {
         });
     });
 }
-
 async function processMessage(brokerId, topic, payload) {
     if (!db) return;
     db.all("SELECT * FROM alert_rules WHERE enabled = true", async (err, rules) => {
@@ -285,7 +270,6 @@ async function processMessage(brokerId, topic, payload) {
         }
     });
 }
-
 function triggerAlert(rule, msgContext) {
     const dedupQuery = `
         SELECT id FROM active_alerts 
@@ -294,7 +278,6 @@ function triggerAlert(rule, msgContext) {
     db.all(dedupQuery, rule.id, msgContext.topic, (err, rows) => {
         if (err) return;
         if (rows.length > 0) return;
-
         const alertId = `alert_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
         const now = new Date().toISOString();
         const triggerVal = JSON.stringify(msgContext.payload).substring(0, 200);
@@ -304,7 +287,6 @@ function triggerAlert(rule, msgContext) {
         `;
         db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, now, now, (insErr) => {
             if (insErr) return logger.error({ err: insErr }, "Failed to persist alert.");
-            
             logger.info(`🚨 New Alert Triggered: ${rule.name} on ${msgContext.topic}`);
             if (broadcaster) {
                 broadcaster(JSON.stringify({
@@ -318,35 +300,27 @@ function triggerAlert(rule, msgContext) {
         });
     });
 }
-
 async function executeWorkflow(alertId, rule, msgContext) {
     let finalAnalysis = "No analysis performed.";
-    
     // 1. Execute LLM Analysis (if agent configured)
     if (rule.workflow_prompt && agentRunner) {
         if (logger) logger.info(`[AlertWorkflow] Starting AI Analysis for Alert ${alertId}...`);
-        
         // Update status to analyzing
         updateAlertStatus(alertId, 'analyzing', 'System (AI)');
-
         const systemPrompt = `
             You are an Autonomous Industrial Alert Analyst.
             An alert triggered with the following context:
             - Rule: "${rule.name}" (${rule.severity})
             - Topic: ${msgContext.topic}
             - Trigger Value: ${JSON.stringify(msgContext.payload)}
-            
             TASK: ${rule.workflow_prompt}
-            
             Analyze the situation using available tools (history, model definitions, etc.).
             Provide a concise summary of the root cause and recommended actions.
             Format your response in Markdown.
         `;
-        
         try {
             // Run the Agent Loop (Max 10 turns)
             finalAnalysis = await agentRunner(systemPrompt, "Proceed with analysis.");
-            
             // Save result to DB and set status to Open (Action required)
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
             if (logger) logger.info(`[AlertWorkflow] AI Analysis complete for ${alertId}`);
@@ -356,11 +330,9 @@ async function executeWorkflow(alertId, rule, msgContext) {
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
         }
     }
-
     // 2. Send Notifications (Webhook) with Analysis
     let notifications = {};
     try { notifications = JSON.parse(rule.notifications); } catch(e){}
-    
     if (notifications.webhook) {
         try {
             await axios.post(notifications.webhook, {
@@ -375,7 +347,6 @@ async function executeWorkflow(alertId, rule, msgContext) {
         }
     }
 }
-
 module.exports = {
     init,
     registerAgentRunner,

@@ -467,8 +467,8 @@ simulatorManager.init(logger, (topic, payload) => {
 }, config.IS_SPARKPLUG_ENABLED);
 // --- Auth Routes ---
 mainRouter.use('/auth', require('./routes/authApi')(logger));
-// --- [NEW] Admin Routes ---
-mainRouter.use('/api/admin', require('./routes/adminApi')(logger));
+// --- [UPDATED] Admin Routes (Injection of DB deps) ---
+mainRouter.use('/api/admin', require('./routes/adminApi')(logger, db, dataManager, DATA_PATH));
 // --- [NEW] Alert API Routes ---
 mainRouter.use('/api/alerts', ipFilterMiddleware, require('./routes/alertApi')(logger));
 // --- [NEW] Layered File System Helper for SVGs ---

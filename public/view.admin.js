@@ -9,20 +9,82 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin View Module
- * Handles User Management Dashboard (List users, Delete users).
+ * Handles User Management, Database Maintenance, and Alerts Maintenance.
+ * [UPDATED] Points to correct /api/admin endpoints.
  */
-
 let usersTableBody = null;
+// --- Elements for Tabs ---
+let subNavButtons = null;
+let adminPanels = null;
+// --- Elements for DB Maintenance ---
+let btnImportDb = null;
+let importInput = null;
+let importStatus = null;
+let btnResetDb = null;
+let resetDbStatus = null;
+// --- Elements for Alerts Maintenance ---
+let resolvedCountEl = null;
+let resolvedSizeEl = null;
+let btnPurgeAlerts = null;
+let purgeStatus = null;
 
 /**
  * Initializes the Admin View elements.
  */
 export function initAdminView() {
+    // 1. User Management Elements
     usersTableBody = document.getElementById('admin-users-table-body');
     const refreshBtn = document.getElementById('btn-admin-refresh');
-    
     if (refreshBtn) {
         refreshBtn.addEventListener('click', loadUsers);
+    }
+
+    // 2. Tab Navigation Logic
+    subNavButtons = document.querySelectorAll('#admin-view .sub-tab-button');
+    // Reusing the alerts container class for styling consistency
+    const panelClass = 'alerts-content-container'; 
+    
+    subNavButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remove active from all buttons
+            subNavButtons.forEach(b => b.classList.remove('active'));
+            // Hide all panels
+            document.querySelectorAll(`#admin-view .${panelClass}`).forEach(p => p.classList.remove('active'));
+            
+            // Activate clicked
+            btn.classList.add('active');
+            const targetId = btn.dataset.target;
+            const targetPanel = document.getElementById(targetId);
+            if (targetPanel) targetPanel.classList.add('active');
+
+            // Load data based on tab
+            if (targetId === 'admin-users-panel') loadUsers();
+            if (targetId === 'admin-alerts-panel') loadResolvedStats();
+        });
+    });
+
+    // 3. Database Maintenance Logic
+    btnImportDb = document.getElementById('btn-import-db');
+    importInput = document.getElementById('db-import-input');
+    importStatus = document.getElementById('db-import-status');
+    btnResetDb = document.getElementById('btn-reset-db');
+    resetDbStatus = document.getElementById('reset-db-status');
+
+    if (btnImportDb && importInput) {
+        btnImportDb.addEventListener('click', onImportDB);
+    }
+    if (btnResetDb) {
+        btnResetDb.addEventListener('click', onResetDB);
+    }
+
+    // 4. Alerts Maintenance Logic
+    resolvedCountEl = document.getElementById('stats-resolved-count');
+    resolvedSizeEl = document.getElementById('stats-resolved-size');
+    btnPurgeAlerts = document.getElementById('btn-purge-alerts');
+    purgeStatus = document.getElementById('purge-alerts-status');
+
+    if (btnPurgeAlerts) {
+        btnPurgeAlerts.addEventListener('click', onPurgeAlerts);
     }
 }
 
@@ -30,7 +92,12 @@ export function initAdminView() {
  * Called when the Admin tab is activated.
  */
 export function onAdminViewShow() {
-    loadUsers();
+    const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
+    if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') {
+        loadResolvedStats();
+    } else {
+        loadUsers();
+    }
 }
 
 /**
@@ -38,9 +105,7 @@ export function onAdminViewShow() {
  */
 async function loadUsers() {
     if (!usersTableBody) return;
-    
     usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading users...</td></tr>';
-    
     try {
         const res = await fetch('api/admin/users');
         if (!res.ok) {
@@ -61,21 +126,18 @@ async function loadUsers() {
  */
 function renderUsers(users) {
     usersTableBody.innerHTML = '';
-    
     if (users.length === 0) {
         usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No users found.</td></tr>';
         return;
     }
-
     users.forEach(user => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--color-border)';
-        
         const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : 'Never';
         const roleBadge = user.role === 'admin' 
             ? '<span style="background:var(--color-danger); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">ADMIN</span>' 
             : '<span style="background:var(--color-success); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">USER</span>';
-
+        
         const isSelf = window.currentUser && window.currentUser.id === user.id;
         const deleteDisabled = isSelf ? 'disabled title="You cannot delete yourself"' : '';
         const deleteStyle = isSelf ? 'opacity: 0.5; cursor: not-allowed;' : '';
@@ -90,7 +152,6 @@ function renderUsers(users) {
                 <button class="danger-button btn-delete-user" data-id="${user.id}" data-username="${user.username || user.display_name}" ${deleteDisabled} style="${deleteStyle}">Delete</button>
             </td>
         `;
-        
         usersTableBody.appendChild(tr);
     });
 
@@ -109,11 +170,9 @@ function renderUsers(users) {
  */
 async function deleteUser(id, username) {
     if (!confirm(`⚠️ WARNING: Are you sure you want to delete user "${username}"?\n\nThis will permanently delete their account AND all their saved data (charts, mapper configs, history).`)) return;
-    
     try {
         const res = await fetch(`api/admin/users/${id}`, { method: 'DELETE' });
         const data = await res.json();
-        
         if (data.success) {
             loadUsers(); // Refresh list
         } else {
@@ -121,5 +180,124 @@ async function deleteUser(id, username) {
         }
     } catch (e) {
         alert("Request failed: " + e.message);
+    }
+}
+
+// --- Database Maintenance Functions ---
+
+async function onImportDB() {
+    const file = importInput.files[0];
+    if (!file) {
+        alert("Please select a JSON export file first.");
+        return;
+    }
+    if (!confirm(`Import data from '${file.name}'?\nThis will be added to the existing history queue.`)) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('db_import', file);
+
+    btnImportDb.disabled = true;
+    btnImportDb.textContent = "Importing...";
+    importStatus.textContent = "Uploading & Processing...";
+    importStatus.style.color = "var(--color-text)";
+
+    try {
+        // [UPDATED] Now points to Admin API
+        const response = await fetch('api/admin/import-db', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Import failed.");
+        }
+        importStatus.textContent = result.message; 
+        importStatus.style.color = 'var(--color-success)';
+        importInput.value = ''; 
+    } catch (e) {
+        importStatus.textContent = `❌ Error: ${e.message}`;
+        importStatus.style.color = 'var(--color-danger)';
+    } finally {
+        btnImportDb.disabled = false;
+        btnImportDb.textContent = "Import Data";
+        setTimeout(() => {
+            if (importStatus.textContent.includes('Successfully')) {
+                importStatus.textContent = '';
+            }
+        }, 5000);
+    }
+}
+
+async function onResetDB() {
+    const confirmed = confirm("⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?");
+    if (!confirmed) return;
+
+    btnResetDb.disabled = true;
+    btnResetDb.textContent = "Resetting...";
+    resetDbStatus.textContent = "";
+
+    try {
+        // [UPDATED] Now points to Admin API
+        const response = await fetch('api/admin/reset-db', {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Reset failed.");
+        }
+        resetDbStatus.textContent = "✅ Database reset successfully!";
+        resetDbStatus.style.color = 'var(--color-success)';
+    } catch (e) {
+        resetDbStatus.textContent = `❌ Error: ${e.message}`;
+        resetDbStatus.style.color = 'var(--color-danger)';
+    } finally {
+        btnResetDb.disabled = false;
+        btnResetDb.textContent = "Reset Database to 0";
+        setTimeout(() => { resetDbStatus.textContent = ''; }, 5000);
+    }
+}
+
+// --- Alerts Maintenance Functions ---
+
+async function loadResolvedStats() {
+    if (!resolvedCountEl) return;
+    try {
+        const res = await fetch('api/alerts/admin/stats');
+        const data = await res.json();
+        if (data.count !== undefined) {
+            resolvedCountEl.textContent = data.count;
+            resolvedSizeEl.textContent = data.estimatedSizeMb;
+        }
+    } catch (e) {
+        console.error("Failed to load alert stats", e);
+    }
+}
+
+async function onPurgeAlerts() {
+    if (!confirm("Are you sure you want to delete ALL resolved alerts?")) return;
+    
+    btnPurgeAlerts.disabled = true;
+    btnPurgeAlerts.textContent = "Purging...";
+    purgeStatus.textContent = "";
+
+    try {
+        const res = await fetch('api/alerts/admin/purge', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            purgeStatus.textContent = "✅ Alerts purged.";
+            purgeStatus.style.color = "var(--color-success)";
+            loadResolvedStats(); 
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (e) {
+        purgeStatus.textContent = "❌ Error: " + e.message;
+        purgeStatus.style.color = "var(--color-danger)";
+    } finally {
+        btnPurgeAlerts.disabled = false;
+        btnPurgeAlerts.textContent = "Purge Resolved Alerts";
+        setTimeout(() => { purgeStatus.textContent = ''; }, 3000);
     }
 }
