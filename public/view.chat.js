@@ -14,9 +14,9 @@
  * [NEW] User-Scoped Server-Side History Sync.
  * [NEW] WebSocket Streaming support for bypassing Proxy buffering with DEDUPLICATION.
  * [NEW] Multi-Session Support & Stop Generation.
+ * [UPDATED] Integrated marked.js for full Markdown rendering in chat bubbles.
  */
 import { trackEvent } from './utils.js';
-
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-widget-container');
 const chatHistory = document.getElementById('chat-history');
@@ -25,7 +25,6 @@ const btnSend = document.getElementById('btn-send-chat');
 const btnClear = document.getElementById('btn-chat-clear');
 const btnMinimize = document.getElementById('btn-chat-minimize');
 const fabButton = document.getElementById('btn-chat-fab');
-
 // --- New Elements ---
 let fileInput = null;
 let previewContainer = null;
@@ -41,17 +40,14 @@ let sessionListContainer = null;
 let btnNewChat = null;
 // Stop UI
 let btnStop = null;
-
 // --- State ---
 let conversationHistory = [];
 let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
 let currentSessionId = 'default';
-
 // --- Storage & Path State ---
 let appBasePath = ''; // Store base path for API calls
-
 // --- Voice State ---
 let recognition = null;
 let isListening = false;
@@ -63,13 +59,11 @@ let currentUtterance = null;
 // Cache for voices
 let availableVoices = [];
 let onFileCreatedCallback = null;
-
 // --- Streaming UI ---
 let currentLogDiv = null; 
 let hasToolActivity = false; 
 // --- [NEW] Deduplication Set ---
 let processedChunkIds = new Set();
-
 /**
  * Initializes the Chat View.
  * @param {string} basePath - The base path of the application.
@@ -80,17 +74,14 @@ export function initChatView(basePath, onFileCreated) {
     appBasePath = basePath || '';
     if (appBasePath === '/') appBasePath = '';
     if (appBasePath.endsWith('/')) appBasePath = appBasePath.slice(0, -1);
-
     if (onFileCreated) {
         onFileCreatedCallback = onFileCreated;
     }
-
     injectUploadUI();
     injectVoiceUI(); 
     injectCameraUI(); 
     injectSessionUI(); // Add Sidebar and Menu button
     injectStopButton(); // Add Stop button
-
     // Load Sessions List first, then load latest
     loadSessionsList().then(sessions => {
         if (sessions && sessions.length > 0) {
@@ -99,7 +90,6 @@ export function initChatView(basePath, onFileCreated) {
             createNewSession();
         }
     });
-
     // [FIX] Pre-load voices aggressively for Chrome/Safari
     if ('speechSynthesis' in window) {
         const loadVoices = () => {
@@ -110,12 +100,10 @@ export function initChatView(basePath, onFileCreated) {
         // Chrome fires this when voices are ready
         window.speechSynthesis.onvoiceschanged = loadVoices;
     }
-
     fabButton?.addEventListener('click', () => toggleChatWidget(true));
     btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
     btnSend?.addEventListener('click', () => sendMessage(false));
     btnStop?.addEventListener('click', stopGeneration);
-
     chatInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -123,46 +111,38 @@ export function initChatView(basePath, onFileCreated) {
         }
         autoResizeInput();
     });
-
     btnClear?.addEventListener('click', () => {
         if (confirm('Delete current chat session?')) {
             deleteSession(currentSessionId);
         }
     });
 }
-
 /**
  * [NEW] Handles incoming stream chunks from WebSocket (via app.js).
  * Uses processedChunkIds to prevent duplication with HTTP stream.
  */
 export function onChatStreamMessage(message) {
     if (!message || !message.id) return;
-    
     // Deduplication check
     if (processedChunkIds.has(message.id)) {
         return; 
     }
     processedChunkIds.add(message.id);
-
     // Create log div if missing
     if (!currentLogDiv && isProcessing) {
         currentLogDiv = createLogDiv();
     }
-
     // Reuse the same logic as HTTP streaming
     processStreamChunk(message.chunkType, message.content);
 }
-
 function autoResizeInput() {
     chatInput.style.height = 'auto';
     chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
 }
-
 // --- Session Management UI Injection ---
 function injectSessionUI() {
     const header = document.querySelector('.chat-header');
     if (!header) return;
-
     // 1. Menu Button
     sessionMenuBtn = document.createElement('button');
     sessionMenuBtn.innerHTML = '☰';
@@ -171,7 +151,6 @@ function injectSessionUI() {
     sessionMenuBtn.onclick = toggleSessionOverlay;
     // Insert before title
     header.insertBefore(sessionMenuBtn, header.firstChild);
-
     // 2. Session Overlay (Drawer)
     sessionOverlay = document.createElement('div');
     sessionOverlay.className = 'chat-session-overlay';
@@ -181,31 +160,24 @@ function injectSessionUI() {
         z-index: 100; transform: translateX(-100%); transition: transform 0.3s ease;
         display: flex; flex-direction: column; padding: 10px; box-sizing: border-box;
     `;
-    
     const overlayHeader = document.createElement('div');
     overlayHeader.style.cssText = "display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid var(--color-border); padding-bottom:5px;";
     overlayHeader.innerHTML = `<strong>History</strong><button id="btn-close-sessions" style="background:none; border:none; cursor:pointer;">✕</button>`;
-    
     btnNewChat = document.createElement('button');
     btnNewChat.textContent = "+ New Chat";
     btnNewChat.className = "mapper-button"; // Reuse style
     btnNewChat.style.width = "100%";
     btnNewChat.style.marginBottom = "10px";
     btnNewChat.onclick = createNewSession;
-
     sessionListContainer = document.createElement('div');
     sessionListContainer.style.cssText = "flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:5px;";
-
     sessionOverlay.appendChild(overlayHeader);
     sessionOverlay.appendChild(btnNewChat);
     sessionOverlay.appendChild(sessionListContainer);
-
     // Append to widget
     document.querySelector('.chat-widget-container').appendChild(sessionOverlay);
-
     sessionOverlay.querySelector('#btn-close-sessions').onclick = toggleSessionOverlay;
 }
-
 function injectStopButton() {
     const inputArea = document.querySelector('.chat-input-area');
     btnStop = document.createElement('button');
@@ -215,17 +187,14 @@ function injectStopButton() {
     btnStop.style.display = 'none'; // Hidden by default
     btnStop.style.color = 'var(--color-danger)';
     btnStop.title = "Stop Generating";
-    
     // Insert before Send button
     inputArea.insertBefore(btnStop, btnSend);
 }
-
 function toggleSessionOverlay() {
     const isOpen = sessionOverlay.style.transform === 'translateX(0%)';
     sessionOverlay.style.transform = isOpen ? 'translateX(-100%)' : 'translateX(0%)';
     if (!isOpen) loadSessionsList(); // Refresh on open
 }
-
 async function loadSessionsList() {
     try {
         const res = await fetch(`${appBasePath}/api/chat/sessions`);
@@ -238,14 +207,12 @@ async function loadSessionsList() {
         return [];
     }
 }
-
 function renderSessionList(sessions) {
     sessionListContainer.innerHTML = '';
     if (sessions.length === 0) {
         sessionListContainer.innerHTML = '<div style="color:var(--color-text-secondary); font-style:italic; padding:10px;">No history</div>';
         return;
     }
-    
     sessions.forEach(session => {
         const div = document.createElement('div');
         div.className = 'session-item';
@@ -260,7 +227,6 @@ function renderSessionList(sessions) {
         sessionListContainer.appendChild(div);
     });
 }
-
 async function switchSession(id) {
     if (id === currentSessionId) {
         toggleSessionOverlay(); // Just close menu
@@ -270,7 +236,6 @@ async function switchSession(id) {
     loadHistory(); // Uses currentSessionId
     toggleSessionOverlay();
 }
-
 async function createNewSession() {
     // Generate simple ID
     const newId = `chat_${Date.now()}`;
@@ -280,7 +245,6 @@ async function createNewSession() {
     addMessageToState('assistant', 'Hello! I am your UNS Assistant. How can I help?');
     toggleSessionOverlay(); // Close menu
 }
-
 async function deleteSession(id) {
     if (!confirm("Are you sure you want to delete this chat?")) return;
     try {
@@ -290,17 +254,14 @@ async function deleteSession(id) {
         alert("Failed to delete session");
     }
 }
-
 function stopGeneration() {
     if (!isProcessing) return;
-    
     // Call API to stop
     fetch(`${appBasePath}/api/chat/stop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: window.wsClientId })
     }).catch(console.error);
-
     // UI Feedback immediately
     if (currentLogDiv) {
         appendToLog(currentLogDiv, "⛔ Stopped by user.", 'error');
@@ -308,22 +269,18 @@ function stopGeneration() {
     isProcessing = false;
     updateUIState(false);
 }
-
 // --- Injection Functions (Camera, Upload, Voice) ---
 function injectCameraUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
-    
     btnCam = document.createElement('button');
     btnCam.id = 'btn-chat-cam';
     btnCam.innerHTML = '📷';
     btnCam.title = 'Take Photo';
     btnCam.className = 'chat-icon-btn';
-    
     // Insert Logic: Mic -> Cam -> Send
     if (btnMic) inputArea.insertBefore(btnCam, btnMic);
     else inputArea.insertBefore(btnCam, btnSend);
-
     cameraModal = document.createElement('div');
     cameraModal.className = 'chat-camera-modal';
     cameraModal.style.display = 'none';
@@ -337,38 +294,31 @@ function injectCameraUI() {
         </div>
     `;
     document.body.appendChild(cameraModal);
-    
     cameraVideo = document.getElementById('chat-camera-feed');
     document.getElementById('btn-camera-cancel').addEventListener('click', closeCamera);
     document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
-    
     btnCam.addEventListener('click', openCamera);
 }
-
 async function openCamera() {
     if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         alert("Camera requires HTTPS or localhost.");
         return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return alert("Camera not supported");
-    
     try {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         cameraVideo.srcObject = cameraStream;
         cameraModal.style.display = 'flex';
-        
         if (userWantMicActive) {
             userWantMicActive = false;
             recognition?.stop();
         }
     } catch (err) { alert("Camera error: " + err.message); }
 }
-
 function closeCamera() {
     if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
     if (cameraModal) cameraModal.style.display = 'none';
 }
-
 function takePicture() {
     if (!cameraVideo || !cameraStream) return;
     const canvas = document.createElement('canvas');
@@ -379,33 +329,26 @@ function takePicture() {
     closeCamera();
     renderPreview();
 }
-
 function injectVoiceUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
-    
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-
     btnMic = document.createElement('button');
     btnMic.id = 'btn-chat-mic';
     btnMic.innerHTML = '🎤'; 
     btnMic.title = 'Voice Input (Click to Start/Stop)';
     btnMic.className = 'chat-icon-btn';
-    
     inputArea.insertBefore(btnMic, btnSend);
-
     recognition = new SpeechRecognition();
     recognition.continuous = true; 
     recognition.interimResults = true;
     recognition.lang = navigator.language || 'en-US';
-
     recognition.onstart = () => {
         isListening = true;
         btnMic.classList.add('listening');
         chatInput.placeholder = "Listening... (Click mic to stop)";
     };
-
     recognition.onend = () => {
         isListening = false;
         if (userWantMicActive) {
@@ -418,7 +361,6 @@ function injectVoiceUI() {
             }
         }
     };
-
     recognition.onresult = (event) => {
         let interimTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -432,7 +374,6 @@ function injectVoiceUI() {
         autoResizeInput();
         chatInput.scrollTop = chatInput.scrollHeight;
     };
-
     recognition.onerror = (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             userWantMicActive = false;
@@ -440,7 +381,6 @@ function injectVoiceUI() {
             btnMic.classList.remove('listening');
         }
     };
-
     btnMic.addEventListener('click', () => {
         if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             alert("Voice input requires HTTPS security.");
@@ -461,11 +401,9 @@ function injectVoiceUI() {
         }
     });
 }
-
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    
     let cleanText = text
         .replace(/\*\*/g, '') 
         .replace(/`/g, '')    
@@ -473,16 +411,13 @@ function speakText(text) {
         .replace(/\[(.*?)\]\(.*?\)/g, '$1') 
         .replace(/```[\s\S]*?```/g, 'Code block skipped.') 
         .replace(/<[^>]*>/g, '');
-
     currentUtterance = new SpeechSynthesisUtterance(cleanText);
     const targetLang = navigator.language || 'en-US';
     currentUtterance.lang = targetLang;
     currentUtterance.rate = 1.0; 
-
     if (availableVoices.length === 0) {
         availableVoices = window.speechSynthesis.getVoices();
     }
-
     let voice = availableVoices.find(v => v.lang === targetLang && v.name.includes('Google'));
     if (!voice) {
         voice = availableVoices.find(v => v.lang === targetLang);
@@ -493,42 +428,34 @@ function speakText(text) {
     if (!voice) {
         voice = availableVoices.find(v => v.lang.startsWith(targetLang.substring(0, 2)));
     }
-
     if (voice) {
         // console.log(`[TTS] Speaking with voice: ${voice.name} (${voice.lang})`);
         currentUtterance.voice = voice;
     } else {
         console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
     }
-    
     currentUtterance.onend = () => { currentUtterance = null; };
     currentUtterance.onerror = (e) => { console.error("TTS Error:", e); currentUtterance = null; };
     window.speechSynthesis.speak(currentUtterance);
 }
-
 function injectUploadUI() {
     const inputArea = document.querySelector('.chat-input-area');
     if (!inputArea) return;
-
     fileInput = document.createElement('input');
     fileInput.type = 'file'; fileInput.id = 'chat-file-input'; fileInput.style.display = 'none';
     fileInput.addEventListener('change', handleFileSelect);
     inputArea.appendChild(fileInput);
-
     const btnAttach = document.createElement('button');
     btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
     btnAttach.addEventListener('click', () => fileInput.click());
-
     // Insert logic
     if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
     else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
     else inputArea.insertBefore(btnAttach, chatInput);
-
     previewContainer = document.createElement('div');
     previewContainer.id = 'chat-file-preview'; previewContainer.style.display = 'none';
     document.querySelector('.chat-body')?.insertBefore(previewContainer, inputArea);
 }
-
 function handleFileSelect(e) {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
@@ -538,21 +465,18 @@ function handleFileSelect(e) {
     };
     if (file.type.startsWith('image/')) reader.readAsDataURL(file); else reader.readAsText(file);
 }
-
 function renderPreview() {
     if(!pendingAttachment) { previewContainer.style.display='none'; return; }
     previewContainer.style.display='flex';
-    previewContainer.innerHTML = `<div class="preview-item">${pendingAttachment.type==='image'?`<img src="${pendingAttachment.content}">`:`<div class="file-icon">📄</div>`}<span class="file-name">${pendingAttachment.name}</span><button class="btn-remove-attachment">×</button></div>`;
+    previewContainer.innerHTML = `<div class="preview-item"><img src="${pendingAttachment.type==='image'?pendingAttachment.content:''}">${pendingAttachment.type==='image'?'':`<div class="file-icon">📄</div>`}<span class="file-name">${pendingAttachment.name}</span><button class="btn-remove-attachment">×</button></div>`;
     previewContainer.querySelector('.btn-remove-attachment').onclick = () => { pendingAttachment=null; fileInput.value=''; renderPreview(); };
 }
-
 export function toggleChatWidget(show) {
     isWidgetOpen = show;
     chatContainer.classList.toggle('active', show);
     fabButton.style.display = show ? 'none' : 'flex';
     if(show) setTimeout(() => { scrollToBottom(); chatInput.focus(); }, 300);
 }
-
 // --- History Persistence (Server Side) ---
 async function loadHistory() {
     try {
@@ -574,7 +498,6 @@ async function loadHistory() {
         addMessageToState('assistant', 'Hello! I am your UNS Assistant. How can I help?');
     }
 }
-
 async function saveHistory() {
     // Debounce or fire-and-forget
     try {
@@ -587,7 +510,6 @@ async function saveHistory() {
         console.error("Failed to sync chat history to server:", e);
     }
 }
-
 function addMessageToState(role, content, toolCalls=null) {
     const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
     conversationHistory.push(msg);
@@ -596,15 +518,12 @@ function addMessageToState(role, content, toolCalls=null) {
     saveHistory(); 
     appendMessageToUI(msg);
 }
-
 function renderHistory() { chatHistory.innerHTML=''; conversationHistory.forEach(appendMessageToUI); scrollToBottom(); }
 function scrollToBottom() { chatHistory.scrollTop = chatHistory.scrollHeight; }
-
 function appendMessageToUI(msg) {
     if (!chatHistory) return;
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
-    
     if (Array.isArray(msg.content)) {
         let htmlParts = '';
         msg.content.forEach(part => {
@@ -617,7 +536,6 @@ function appendMessageToUI(msg) {
         if (msg.tool_calls) {
             msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${t.function.name}</div>`);
         }
-        
         if (msg.role === 'tool') {
             div.classList.add('system');
             div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
@@ -625,7 +543,6 @@ function appendMessageToUI(msg) {
             div.innerHTML = htmlContent;
         }
     }
-
     if (msg.role === 'assistant' && msg.content && !Array.isArray(msg.content)) {
         const speakerBtn = document.createElement('button');
         speakerBtn.className = 'btn-message-speak';
@@ -636,16 +553,29 @@ function appendMessageToUI(msg) {
     chatHistory.appendChild(div);
     scrollToBottom();
 }
-
+/**
+ * Formats Markdown content using marked.js.
+ * Falls back to basic regex formatting if library is not found.
+ */
 function formatMessageContent(text) {
     if (!text) return '';
+    
+    // Check if marked is available for robust rendering
+    if (window.marked) {
+        try {
+            return window.marked.parse(text);
+        } catch (e) {
+            console.warn("Markdown parsing failed, falling back to basic formatting.", e);
+        }
+    }
+
+    // Basic Fallback (original logic)
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
                .replace(/`([^`]+)`/g, '<code>$1</code>')
                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
                .replace(/\n/g, '<br>');
 }
-
 // --- NEW PERSISTENT LOG UI ---
 function createLogDiv() {
     const div = document.createElement('div');
@@ -657,17 +587,14 @@ function createLogDiv() {
     scrollToBottom();
     return div;
 }
-
 function appendToLog(container, text, type = 'info') {
     if (!container) return;
     const line = document.createElement('div');
-    
     // Legacy Deduplication (Keep it for safety)
     if (container.lastChild && container.lastChild.textContent.includes(text)) {
         // Just flash it or ignore it
         return;
     }
-
     if (type === 'tool_start') {
         line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${text}`;
     } else if (type === 'tool_result') {
@@ -682,18 +609,15 @@ function appendToLog(container, text, type = 'info') {
     container.appendChild(line);
     scrollToBottom();
 }
-
 // --- SHARED CHUNK PROCESSOR (HTTP & WS) ---
 // This handles logic for updating the UI based on stream events
 // It manages state variables like hasToolActivity and assistantMsg
 let assistantMsgFromStream = null;
-
 function processStreamChunk(type, content) {
     if (!currentLogDiv && type !== 'message' && type !== 'error') {
         // If we missed the start, create log div now
         currentLogDiv = createLogDiv();
     }
-
     if (type === 'status') {
         appendToLog(currentLogDiv, content);
     } else if (type === 'tool_start') {
@@ -710,33 +634,26 @@ function processStreamChunk(type, content) {
         throw new Error(content);
     }
 }
-
 function updateUIState(processing) {
     btnSend.disabled = processing;
     btnStop.style.display = processing ? 'flex' : 'none';
     btnSend.style.display = processing ? 'none' : 'flex'; // Swap Send/Stop
-    
     if (btnMic) btnMic.disabled = processing;
     if (btnCam) btnCam.disabled = processing;
-    
     if (!processing) chatInput.focus();
 }
-
 // --- STREAMING SEND MESSAGE ---
 async function sendMessage(fromVoice = false) {
     if (isProcessing) return;
-    
     window.speechSynthesis.cancel();
     if (userWantMicActive || isListening) {
         userWantMicActive = false;
         if(recognition) recognition.stop();
     }
-
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
-
     let messageContent = text;
     if (pendingAttachment) {
         if (pendingAttachment.type === 'image') {
@@ -745,20 +662,15 @@ async function sendMessage(fromVoice = false) {
             messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
         }
     }
-
     chatInput.value = ''; autoResizeInput();
     pendingAttachment = null; renderPreview(); fileInput.value = '';
-    
     addMessageToState('user', messageContent);
     isProcessing = true;
     hasToolActivity = false; 
     assistantMsgFromStream = null; 
     processedChunkIds.clear(); // Clear deduplication set
-
     updateUIState(true); // Toggle buttons
-
     currentLogDiv = createLogDiv();
-
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
     const messagesPayload = validHistory.map(m => {
         const apiMsg = { role: m.role, content: m.content };
@@ -767,7 +679,6 @@ async function sendMessage(fromVoice = false) {
         if (m.name) apiMsg.name = m.name;
         return apiMsg;
     });
-
     try {
         const url = `${appBasePath}/api/chat/completion`;
         const requestBody = { 
@@ -775,27 +686,22 @@ async function sendMessage(fromVoice = false) {
             userLanguage: navigator.language,
             clientId: window.wsClientId || null 
         };
-
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
-
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-
         // Read the HTTP stream (NDJSON)
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
-
         while (true) {
             const { done, value } = await reader.read();
             if (value) {
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop(); 
-                
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
@@ -811,14 +717,11 @@ async function sendMessage(fromVoice = false) {
             }
             if (done) break;
         }
-
         currentLogDiv = null; 
-
         // Handle final state
         if (!assistantMsgFromStream && hasToolActivity) {
             assistantMsgFromStream = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
         }
-
         if (assistantMsgFromStream) {
             if (assistantMsgFromStream.tool_calls && onFileCreatedCallback) {
                 const hasCreatedFile = assistantMsgFromStream.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
@@ -833,7 +736,6 @@ async function sendMessage(fromVoice = false) {
                 speakText(assistantMsgFromStream.content);
             }
         } 
-
     } catch (error) {
         console.error(error);
         if (currentLogDiv) {
