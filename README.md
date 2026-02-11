@@ -82,7 +82,7 @@ graph TD
         Claude["Claude / ChatGPT"] <-->|HTTP/SSE| MCP
     end
 
-    Backend -.- ->|Async Write| Timescale
+    Backend -.->|Async Write| Timescale
 ```
 
 ### Storage Strategy (Tiered)
