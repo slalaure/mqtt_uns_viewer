@@ -10,12 +10,12 @@
  *
  * Admin View Module
  * Handles User Management, Database Maintenance, and Alerts Maintenance.
- * [UPDATED] Points to correct /api/admin endpoints.
+ * [UPDATED] Uses Async HTML Fragment Loading.
  */
+
 let usersTableBody = null;
 // --- Elements for Tabs ---
 let subNavButtons = null;
-let adminPanels = null;
 // --- Elements for DB Maintenance ---
 let btnImportDb = null;
 let importInput = null;
@@ -28,10 +28,38 @@ let resolvedSizeEl = null;
 let btnPurgeAlerts = null;
 let purgeStatus = null;
 
+let isViewInitialized = false;
+
 /**
- * Initializes the Admin View elements.
+ * Initializes the Admin View elements by loading the HTML fragment.
  */
-export function initAdminView() {
+export async function initAdminView() {
+    const container = document.getElementById('admin-view');
+    if (!container) return;
+    if (isViewInitialized) return;
+
+    try {
+        // 1. Fetch HTML Fragment
+        const response = await fetch('html/view.admin.html');
+        if (!response.ok) throw new Error(`Failed to load admin template: ${response.statusText}`);
+        const htmlContent = await response.text();
+        container.innerHTML = htmlContent;
+
+        // 2. Initialize DOM References & Listeners AFTER injection
+        initializeElements(container);
+        isViewInitialized = true;
+        console.log("✅ Admin View Initialized (Async HTML Load)");
+
+    } catch (err) {
+        console.error("Error initializing Admin View:", err);
+        container.innerHTML = `<div style="padding:20px; color:red;">Error loading Admin Interface. Check console.</div>`;
+    }
+}
+
+/**
+ * Helper to attach listeners once HTML is in DOM.
+ */
+function initializeElements(container) {
     // 1. User Management Elements
     usersTableBody = document.getElementById('admin-users-table-body');
     const refreshBtn = document.getElementById('btn-admin-refresh');
@@ -40,23 +68,20 @@ export function initAdminView() {
     }
 
     // 2. Tab Navigation Logic
-    subNavButtons = document.querySelectorAll('#admin-view .sub-tab-button');
-    // Reusing the alerts container class for styling consistency
+    subNavButtons = container.querySelectorAll('.sub-tab-button');
     const panelClass = 'alerts-content-container'; 
-    
     subNavButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             // Remove active from all buttons
             subNavButtons.forEach(b => b.classList.remove('active'));
             // Hide all panels
-            document.querySelectorAll(`#admin-view .${panelClass}`).forEach(p => p.classList.remove('active'));
-            
+            container.querySelectorAll(`.${panelClass}`).forEach(p => p.classList.remove('active'));
             // Activate clicked
             btn.classList.add('active');
             const targetId = btn.dataset.target;
             const targetPanel = document.getElementById(targetId);
             if (targetPanel) targetPanel.classList.add('active');
-
+            
             // Load data based on tab
             if (targetId === 'admin-users-panel') loadUsers();
             if (targetId === 'admin-alerts-panel') loadResolvedStats();
@@ -92,6 +117,13 @@ export function initAdminView() {
  * Called when the Admin tab is activated.
  */
 export function onAdminViewShow() {
+    if (!isViewInitialized) {
+        // If user clicks tab before async fetch finishes, wait or retry?
+        // Usually fetch is fast enough, but we can check.
+        // initAdminView is called on app load, so usually it's ready.
+        return;
+    }
+
     const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
     if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') {
         loadResolvedStats();
@@ -106,6 +138,7 @@ export function onAdminViewShow() {
 async function loadUsers() {
     if (!usersTableBody) return;
     usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading users...</td></tr>';
+    
     try {
         const res = await fetch('api/admin/users');
         if (!res.ok) {
@@ -130,9 +163,11 @@ function renderUsers(users) {
         usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No users found.</td></tr>';
         return;
     }
+
     users.forEach(user => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--color-border)';
+        
         const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : 'Never';
         const roleBadge = user.role === 'admin' 
             ? '<span style="background:var(--color-danger); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">ADMIN</span>' 
@@ -170,6 +205,7 @@ function renderUsers(users) {
  */
 async function deleteUser(id, username) {
     if (!confirm(`⚠️ WARNING: Are you sure you want to delete user "${username}"?\n\nThis will permanently delete their account AND all their saved data (charts, mapper configs, history).`)) return;
+
     try {
         const res = await fetch(`api/admin/users/${id}`, { method: 'DELETE' });
         const data = await res.json();
@@ -204,7 +240,6 @@ async function onImportDB() {
     importStatus.style.color = "var(--color-text)";
 
     try {
-        // [UPDATED] Now points to Admin API
         const response = await fetch('api/admin/import-db', {
             method: 'POST',
             body: formData
@@ -239,7 +274,6 @@ async function onResetDB() {
     resetDbStatus.textContent = "";
 
     try {
-        // [UPDATED] Now points to Admin API
         const response = await fetch('api/admin/reset-db', {
             method: 'POST'
         });

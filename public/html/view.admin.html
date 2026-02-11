@@ -1,0 +1,80 @@
+<div class="alerts-sub-nav">
+    <button class="sub-tab-button active" data-target="admin-users-panel">👤 Users</button>
+    <button class="sub-tab-button" data-target="admin-db-panel">💾 Database</button>
+    <button class="sub-tab-button" data-target="admin-alerts-panel">🔔 Alerts History</button>
+</div>
+
+<div id="admin-users-panel" class="alerts-content-container active">
+    <div class="payload-header" style="margin-bottom: 15px;">
+        <h2>User Management</h2>
+        <button id="btn-admin-refresh" class="mapper-button">Refresh List</button>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                <tr>
+                    <th style="padding: 10px; font-weight: 500;">Username</th>
+                    <th style="padding: 10px; font-weight: 500;">Display Name</th>
+                    <th style="padding: 10px; font-weight: 500;">Email</th>
+                    <th style="padding: 10px; font-weight: 500;">Role</th>
+                    <th style="padding: 10px; font-weight: 500;">Last Login</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="admin-users-table-body">
+                <tr><td colspan="6" style="text-align:center; padding:20px;">Loading interface...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="admin-db-panel" class="alerts-content-container">
+    <div style="max-width: 800px; margin: 0 auto;">
+        <h2>Database Maintenance</h2>
+        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
+            Manage the embedded DuckDB database containing the MQTT history.
+        </p>
+        
+        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin-top:0;">Import History (JSON)</h3>
+            <p style="font-size: 0.9em; margin-bottom: 15px;">
+                Import offline history data. This will be queued for insertion.
+            </p>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="file" id="db-import-input" accept=".json" style="flex:1;">
+                <button id="btn-import-db" class="mapper-button" style="background-color: var(--color-primary); color: white;">Import Data</button>
+            </div>
+            <div id="db-import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+        </div>
+
+        <div style="background-color: rgba(220, 53, 69, 0.05); border: 1px solid var(--color-danger); border-radius: 8px; padding: 20px;">
+            <h3 style="margin-top:0; color: var(--color-danger);">⚠️ Danger Zone</h3>
+            <p style="font-size: 0.9em; margin-bottom: 15px;">
+                Permanently delete ALL recorded MQTT history. This cannot be undone.
+            </p>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <button id="btn-reset-db" class="danger-button" style="padding: 10px 20px;">Reset Database to 0</button>
+                <span id="reset-db-status" style="font-weight: bold;"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="admin-alerts-panel" class="alerts-content-container">
+    <div style="max-width: 800px; margin: 0 auto;">
+        <h2>Alerts History Maintenance</h2>
+        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
+            Manage the archive of triggered alerts.
+        </p>
+        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div>
+                    <strong>Resolved Alerts:</strong> <span id="stats-resolved-count" style="font-weight:bold;">--</span> 
+                    <span style="color: var(--color-text-secondary); margin-left:5px;">(~<span id="stats-resolved-size">--</span> MB)</span>
+                </div>
+            </div>
+            <button id="btn-purge-alerts" class="danger-button" style="width: 100%; padding: 10px;">Purge All Resolved Alerts</button>
+            <div id="purge-alerts-status" style="margin-top: 10px; text-align: center;"></div>
+        </div>
+    </div>
+</div>

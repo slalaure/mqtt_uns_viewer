@@ -3,20 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard</title>
-    <meta name="description" content="Explore your MQTT data in real-time. A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
-    <meta name="keywords" content="mqtt, uns, unified namespace, iiot, industry 4.0, sparkplug b, data visualization, real-time, dashboard, mqtt viewer, docker, duckdb, mcp, node.js">
-    <meta name="author" content="Sebastien Lalaurette">
-    <meta name="license" content="MIT">
-    <link rel="canonical" href="https://www.mqttunsviewer.com">
-    <meta property="og:title" content="MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard">
-    <meta property="og:description" content="A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
-    <meta property="og:url" content="https://www.mqttunsviewer.com">
-    <meta property="og:type" content="website">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard">
-    <meta name="twitter:description" content="A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
+    <title>MQTT UNS Viewer</title>
+    <meta name="description" content="Explore your MQTT data in real-time. A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
     <link rel="stylesheet" href="css/view.svg.css">
@@ -25,7 +15,9 @@
     <link rel="stylesheet" href="css/view.chart.css">
     <link rel="stylesheet" href="css/view.publish.css"> 
     <link rel="stylesheet" href="css/view.chat.css"> 
-    <link rel="stylesheet" href="css/view.alerts.css"> <script src="libs/chart-min.js"></script>
+    <link rel="stylesheet" href="css/view.alerts.css"> 
+
+    <script src="libs/chart-min.js"></script>
     <script src="libs/chartjs-adapter-date-fns-min.js"></script>
     <script src="libs/hammer.min.js"></script>
     <script src="libs/chartjs-plugin-zoom.min.js"></script>
@@ -36,7 +28,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta43</p>
+                <p>v 1.5.0-beta44</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -50,15 +42,18 @@
             <span class="theme-label">Dark Mode</span>
         </div>
     </header>
+
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
         <button id="btn-map-view" class="tab-button">SVG View</button>
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
-        <button id="btn-alerts-view" class="tab-button">Alerts</button> <button id="btn-publish-view" class="tab-button">Publish</button> 
+        <button id="btn-alerts-view" class="tab-button">Alerts</button>
+        <button id="btn-publish-view" class="tab-button">Publish</button> 
         <button id="btn-admin-view" class="tab-button" style="display: none; border-bottom-color: var(--color-danger);">Admin</button>
     </nav>
+
     <div class="view-container">
         <main id="tree-view" class="view active">
             <div class="tree-view-wrapper">
@@ -94,6 +89,7 @@
                 </div>
             </div>
         </main>
+
         <main id="map-view" class="view">
             <div class="map-view-container">
                 <div class="map-view-controls">
@@ -117,6 +113,7 @@
                 <div id="svg-content" class="svg-content"></div>
             </div>
         </main>
+
         <main id="history-view" class="view">
             <div class="history-status-bar">
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
@@ -141,6 +138,7 @@
                 <p>Cleaning database, please wait...</p>
             </div>
         </main>
+
         <main id="mapper-view" class="view">
             <div class="mapper-tree-wrapper">
                 <div class="tree-controls">
@@ -223,6 +221,7 @@
                 </div>
             </div>
         </main>
+
         <main id="chart-view" class="view">
             <div class="chart-tree-wrapper">
                 <div class="tree-controls">
@@ -305,8 +304,10 @@
                 </div>
             </div>
         </main>
+
         <main id="alerts-view" class="view">
             </main>
+
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
                 <h2>Manual Publish</h2>
@@ -351,8 +352,9 @@
             <div class="simulator-panel-wrapper">
                 <h2>Simulator</h2>
                 <div class="simulator-controls-container">
-                    <p>Control the built-in data simulators.</p> <div id="simulator-list-container" class="simulator-controls">
-                        </div>
+                    <p>Control the built-in data simulators.</p> 
+                    <div id="simulator-list-container" class="simulator-controls">
+                    </div>
                     <template id="simulator-control-template">
                         <div class="simulator-instance-controls">
                             <h3 class="simulator-name"></h3>
@@ -364,91 +366,11 @@
                 </div>
             </div>
         </main>
-        
+
         <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;">
-            <div class="alerts-sub-nav">
-                <button class="sub-tab-button active" data-target="admin-users-panel">👤 Users</button>
-                <button class="sub-tab-button" data-target="admin-db-panel">💾 Database</button>
-                <button class="sub-tab-button" data-target="admin-alerts-panel">🔔 Alerts History</button>
-            </div>
-
-            <div id="admin-users-panel" class="alerts-content-container active">
-                <div class="payload-header" style="margin-bottom: 15px;">
-                    <h2>User Management</h2>
-                    <button id="btn-admin-refresh" class="mapper-button">Refresh List</button>
-                </div>
-                <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                        <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                            <tr>
-                                <th style="padding: 10px; font-weight: 500;">Username</th>
-                                <th style="padding: 10px; font-weight: 500;">Display Name</th>
-                                <th style="padding: 10px; font-weight: 500;">Email</th>
-                                <th style="padding: 10px; font-weight: 500;">Role</th>
-                                <th style="padding: 10px; font-weight: 500;">Last Login</th>
-                                <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-users-table-body">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="admin-db-panel" class="alerts-content-container">
-                <div style="max-width: 800px; margin: 0 auto;">
-                    <h2>Database Maintenance</h2>
-                    <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-                        Manage the embedded DuckDB database containing the MQTT history.
-                    </p>
-
-                    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                        <h3 style="margin-top:0;">Import History (JSON)</h3>
-                        <p style="font-size: 0.9em; margin-bottom: 15px;">
-                            Import offline history data. This will be queued for insertion.
-                        </p>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <input type="file" id="db-import-input" accept=".json" style="flex:1;">
-                            <button id="btn-import-db" class="mapper-button" style="background-color: var(--color-primary); color: white;">Import Data</button>
-                        </div>
-                        <div id="db-import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
-                    </div>
-
-                    <div style="background-color: rgba(220, 53, 69, 0.05); border: 1px solid var(--color-danger); border-radius: 8px; padding: 20px;">
-                        <h3 style="margin-top:0; color: var(--color-danger);">⚠️ Danger Zone</h3>
-                        <p style="font-size: 0.9em; margin-bottom: 15px;">
-                            Permanently delete ALL recorded MQTT history. This cannot be undone.
-                        </p>
-                        <div style="display: flex; gap: 15px; align-items: center;">
-                            <button id="btn-reset-db" class="danger-button" style="padding: 10px 20px;">Reset Database to 0</button>
-                            <span id="reset-db-status" style="font-weight: bold;"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="admin-alerts-panel" class="alerts-content-container">
-                <div style="max-width: 800px; margin: 0 auto;">
-                    <h2>Alerts History Maintenance</h2>
-                    <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-                        Manage the archive of triggered alerts.
-                    </p>
-
-                    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <div>
-                                <strong>Resolved Alerts:</strong> <span id="stats-resolved-count" style="font-weight:bold;">--</span> 
-                                <span style="color: var(--color-text-secondary); margin-left:5px;">(~<span id="stats-resolved-size">--</span> MB)</span>
-                            </div>
-                        </div>
-                        <button id="btn-purge-alerts" class="danger-button" style="width: 100%; padding: 10px;">Purge All Resolved Alerts</button>
-                        <div id="purge-alerts-status" style="margin-top: 10px; text-align: center;"></div>
-                    </div>
-                </div>
-            </div>
-        </main>
-        
+            </main>
     </div>
+
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
             <span>AI Assistant</span>
@@ -459,16 +381,18 @@
         </div>
         <div class="chat-body">
             <div id="chat-history" class="chat-history-container">
-                </div>
+            </div>
             <div class="chat-input-area">
                 <textarea id="chat-input" rows="1" placeholder="Ask..."></textarea>
                 <button id="btn-send-chat">➤</button>
             </div>
         </div>
     </div>
+
     <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
         💬
     </button>
+
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>
@@ -486,14 +410,18 @@
             </div>
         </div>
     </div>
+
     <footer class="app-footer">
         <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
                 rel="noopener noreferrer">github</a></p>
     </footer>
+
     <script src="view.login.js" type="module"></script>
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
     <script src="view.publish.js" type="module"></script> 
     <script src="view.chat.js" type="module"></script>
-    <script src="view.alerts.js" type="module"></script> </body>
+    <script src="view.alerts.js" type="module"></script> 
+    <script src="view.admin.js" type="module"></script>
+</body>
 </html>

@@ -9,7 +9,9 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * View Module for Alerts Management.
+ * [UPDATED] Uses Dynamic HTML Fragment Loading to keep index.html clean.
  */
+
 // --- Imports ---
 import { trackEvent } from './utils.js';
 
@@ -22,158 +24,33 @@ let btnNewRule = null;
 let ruleEditorContainer = null;
 let rulesListContainer = null;
 let helpModal = null;
-let analysisModal = null; // [NEW] Modal for AI report
+let analysisModal = null;
 let ruleEditorTitle = null;
 
 // --- State ---
 let aceEditor = null; // For condition code
 let editingRuleId = null; // Track if we are editing an existing rule
+let isViewInitialized = false;
 
 /**
  * Initialize the Alerts View.
+ * Fetches HTML template dynamically to keep JS clean and index.html light.
  */
-export function initAlertsView() {
+export async function initAlertsView() {
     container = document.getElementById('alerts-view');
     if (!container) return;
 
-    // --- 1. Inject UI Structure ---
-    container.innerHTML = `
-        <div class="alerts-sub-nav">
-            <button class="sub-tab-button active" data-target="active-alerts-panel">🚨 Active Alerts</button>
-            <button class="sub-tab-button" data-target="alert-rules-panel">⚙️ Alert Rules</button>
-        </div>
-        <div id="active-alerts-panel" class="alerts-content-container active">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h2>Live Dashboard</h2>
-                <div style="display:flex; align-items:center; gap:20px;">
-                    <label style="font-size:0.9em; cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px;">
-                        <input type="checkbox" id="chk-hide-resolved"> 
-                        <strong>Hide Resolved</strong>
-                    </label>
-                    <span style="font-size:0.8em; color:var(--color-text-secondary); border-left:1px solid #ccc; padding-left:15px;">Updates automatically</span>
-                </div>
-            </div>
-            <table class="alerts-table">
-                <thead>
-                    <tr>
-                        <th style="width: 120px;">Time</th>
-                        <th>Severity</th>
-                        <th>Rule / Topic</th>
-                        <th>Status</th>
-                        <th>Trigger Value</th>
-                        <th style="width: 300px;">Analysis / Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="active-alerts-body">
-                    <tr><td colspan="6" style="text-align:center;">Waiting for alerts...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div id="alert-rules-panel" class="alerts-content-container">
-            <div id="rules-list-container">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h2>Detection Rules</h2>
-                    <button id="btn-new-rule" class="modal-button button-primary">+ New Rule</button>
-                </div>
-                <table class="alerts-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Topic Pattern</th>
-                            <th>Severity</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="alert-rules-body">
-                        <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div id="rule-editor-container" class="rule-editor-container" style="display:none;">
-                <div class="rule-editor-header">
-                    <h3 id="rule-editor-title">Create / Edit Rule</h3>
-                    <button id="btn-cancel-rule" class="modal-button">Cancel</button>
-                </div>
-                <form id="rule-form">
-                    <div class="form-group">
-                        <label>Rule Name</label>
-                        <input type="text" name="name" required placeholder="e.g. High Temp Warning">
-                    </div>
-                    <div class="form-group">
-                        <label>Topic Pattern (Wildcards allowed)</label>
-                        <input type="text" name="topic_pattern" required placeholder="e.g. factory/+/temp">
-                    </div>
-                    <div class="form-group">
-                        <label>Severity</label>
-                        <select name="severity">
-                            <option value="info">Info</option>
-                            <option value="warning">Warning</option>
-                            <option value="critical">Critical</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <div class="label-with-icon">
-                            <label style="margin:0;">Condition (JavaScript)</label>
-                            <span id="btn-js-help" class="info-icon" title="See Examples">ℹ️</span>
-                        </div>
-                        <span class="help-text">
-                            Available vars: <code>msg.payload</code>, <code>msg.topic</code>. <br>
-                            Must return <code>true</code> to trigger. Async <code>await db.get(...)</code> supported.
-                        </span>
-                        <div id="rule-condition-editor" class="code-editor-wrapper"></div>
-                    </div>
-                    <div class="form-group">
-                        <label>AI Analysis Prompt (Workflow)</label>
-                        <textarea name="workflow_prompt" rows="3" placeholder="e.g. Analyze this temperature spike. Check maintenance logs for this machine."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <div class="label-with-icon">
-                            <label style="margin:0;">Webhook URL (HTTP POST)</label>
-                            <span class="info-icon" title="Trigger external systems">🔗</span>
-                        </div>
-                        <span class="help-text">Enter a URL to receive a POST request when alert triggers. <br>Example: <code>https://chat.googleapis.com/v1/spaces/AAAA/messages?key=...</code> (Google Chat) or Slack/Teams webhook.</span>
-                        <input type="text" name="webhook" placeholder="https://chat.googleapis.com/v1/spaces/AAAA/messages?key=...">
-                    </div>
-                    <div style="text-align:right;">
-                        <button type="submit" class="modal-button button-primary">Save Rule</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div id="alert-help-modal" class="modal-backdrop" style="display:none;">
-            <div class="help-modal-content">
-                <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-                    <h3 style="margin:0;">JavaScript Condition Examples</h3>
-                    <button id="btn-close-help" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
-                </div>
-                <div class="example-block">
-                    <div class="example-title">1. Simple Threshold (Stark Industries)</div>
-                    <div class="example-code">// Topic: stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/robotic_arm_01/temperature
-// Trigger if temp > 70
-return msg.payload.value > 70;</div>
-                </div>
-                <div style="text-align:right;">
-                     <button id="btn-close-help-2" class="modal-button">Close</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="analysis-modal" class="modal-backdrop" style="display:none; z-index: 3000;">
-            <div class="help-modal-content" style="max-width: 800px;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:10px;">
-                    <h3 style="margin:0;">🤖 AI Analysis Report</h3>
-                    <button id="btn-close-analysis" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
-                </div>
-                <div id="analysis-content" class="analysis-content" style="line-height:1.6; white-space: pre-wrap;"></div>
-                <div style="text-align:right; margin-top:20px;">
-                     <button id="btn-close-analysis-2" class="modal-button">Close</button>
-                </div>
-            </div>
-        </div>
-    `;
+    // --- 1. Fetch and Inject HTML Fragment ---
+    try {
+        const response = await fetch('html/view.alerts.html');
+        if (!response.ok) throw new Error(`Failed to load alerts template: ${response.statusText}`);
+        const htmlContent = await response.text();
+        container.innerHTML = htmlContent;
+    } catch (err) {
+        console.error("Error initializing Alerts View:", err);
+        container.innerHTML = `<div style="padding:20px; color:red;">Error loading Alerts Interface. Please check console.</div>`;
+        return;
+    }
 
     // --- 2. Element References ---
     activeAlertsTableBody = document.getElementById('active-alerts-body');
@@ -183,7 +60,7 @@ return msg.payload.value > 70;</div>
     ruleEditorContainer = document.getElementById('rule-editor-container');
     rulesListContainer = document.getElementById('rules-list-container');
     helpModal = document.getElementById('alert-help-modal');
-    analysisModal = document.getElementById('analysis-modal'); // [NEW]
+    analysisModal = document.getElementById('analysis-modal');
     ruleEditorTitle = document.getElementById('rule-editor-title');
 
     // --- 3. Event Listeners ---
@@ -194,6 +71,7 @@ return msg.payload.value > 70;</div>
             container.querySelectorAll('.alerts-content-container').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(btn.dataset.target).classList.add('active');
+            
             if (btn.dataset.target === 'active-alerts-panel') loadActiveAlerts();
             if (btn.dataset.target === 'alert-rules-panel') loadRules();
         });
@@ -204,13 +82,13 @@ return msg.payload.value > 70;</div>
     // Rule Editor Controls
     btnNewRule.addEventListener('click', () => showRuleEditor());
     document.getElementById('btn-cancel-rule').addEventListener('click', hideRuleEditor);
-    
+
     // Help Modal Controls
     document.getElementById('btn-js-help').addEventListener('click', () => helpModal.style.display = 'flex');
     document.getElementById('btn-close-help').addEventListener('click', () => helpModal.style.display = 'none');
     document.getElementById('btn-close-help-2').addEventListener('click', () => helpModal.style.display = 'none');
-    
-    // [NEW] Analysis Modal Controls
+
+    // Analysis Modal Controls
     document.getElementById('btn-close-analysis').addEventListener('click', () => analysisModal.style.display = 'none');
     document.getElementById('btn-close-analysis-2').addEventListener('click', () => analysisModal.style.display = 'none');
 
@@ -226,25 +104,55 @@ return msg.payload.value > 70;</div>
         aceEditor.session.setMode("ace/mode/javascript");
         aceEditor.setValue("return msg.payload.value > 50;", -1);
     }
+
+    isViewInitialized = true;
+    console.log("✅ Alerts View Initialized (Async HTML Load)");
+
+    // [FIX] Check if the view is ALREADY active (user clicked tab while loading)
+    // If so, trigger the data load now that DOM is ready.
+    if (container.classList.contains('active')) {
+        // Determine which sub-tab is active to load the right data
+        const activeSubTab = container.querySelector('.sub-tab-button.active');
+        if (activeSubTab && activeSubTab.dataset.target === 'alert-rules-panel') {
+            loadRules();
+        } else {
+            loadActiveAlerts();
+        }
+    }
 }
 
 // --- View Lifecycle ---
+
 export function onAlertsViewShow() {
-    loadActiveAlerts();
+    // Only try to load if init is complete. 
+    // If not complete, the initAlertsView function (above) will handle the load when it finishes.
+    if (isViewInitialized) {
+        loadActiveAlerts();
+    }
 }
+
 export function onAlertsViewHide() { }
 
 // --- Public API for app.js ---
+
 export function refreshAlerts() {
-    if (container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
+    if (isViewInitialized && container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
         loadActiveAlerts();
     }
 }
 
 export function openCreateRuleModal(topic, examplePayload) {
-    document.querySelector('.sub-tab-button[data-target="alert-rules-panel"]').click();
+    if (!isViewInitialized) {
+        console.warn("Alerts view not ready yet.");
+        return;
+    }
+    // Switch to Rules Tab
+    const rulesTabBtn = document.querySelector('.sub-tab-button[data-target="alert-rules-panel"]');
+    if (rulesTabBtn) rulesTabBtn.click();
+
     showRuleEditor();
     ruleForm.elements.topic_pattern.value = topic;
+    
     let condition = "return true;";
     if (examplePayload && typeof examplePayload === 'object') {
         const keys = Object.keys(examplePayload);
@@ -260,9 +168,11 @@ export function openCreateRuleModal(topic, examplePayload) {
 }
 
 // --- Logic: Rules ---
+
 function showRuleEditor(ruleToEdit = null) {
     rulesListContainer.style.display = 'none';
     ruleEditorContainer.style.display = 'block';
+    
     if (ruleToEdit) {
         editingRuleId = ruleToEdit.id;
         ruleEditorTitle.textContent = "Edit Rule";
@@ -271,6 +181,7 @@ function showRuleEditor(ruleToEdit = null) {
         ruleForm.elements.severity.value = ruleToEdit.severity;
         ruleForm.elements.workflow_prompt.value = ruleToEdit.workflow_prompt || '';
         ruleForm.elements.webhook.value = ruleToEdit.notifications?.webhook || '';
+        
         if (aceEditor) {
             aceEditor.setValue(ruleToEdit.condition_code, -1);
         }
@@ -327,19 +238,24 @@ async function saveRule() {
             webhook: formData.get('webhook')
         }
     };
+
     try {
         let url = 'api/alerts/rules';
         let method = 'POST';
+        
         if (editingRuleId) {
             url = `api/alerts/rules/${editingRuleId}`;
             method = 'PUT';
         }
+
         const res = await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
+
         if (!res.ok) throw new Error((await res.json()).error);
+        
         alert("Rule saved successfully!");
         hideRuleEditor();
         loadRules();
@@ -355,35 +271,39 @@ async function deleteRule(id) {
 }
 
 // --- Logic: Alerts ---
+
 async function loadActiveAlerts() {
     try {
         const res = await fetch('api/alerts/active');
         let alerts = await res.json();
+        
         const hideResolved = document.getElementById('chk-hide-resolved')?.checked;
         if (hideResolved) {
             alerts = alerts.filter(a => a.status !== 'resolved');
         }
+
         activeAlertsTableBody.innerHTML = '';
         if (alerts.length === 0) {
             activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts. All systems nominal.</td></tr>';
             return;
         }
+
         alerts.forEach(alert => {
             const tr = document.createElement('tr');
+            
             let displayVal = alert.trigger_value;
             try { 
                 const j = JSON.parse(alert.trigger_value); 
                 displayVal = `<pre style="margin:0; font-size:0.8em; max-height:80px; overflow:auto;">${JSON.stringify(j, null, 2)}</pre>`;
             } catch(e){}
 
-            // [UPDATED] Analysis Section with Status
+            // Analysis Section with Status
             let analysisHtml = '';
             if (alert.status === 'analyzing') {
                 analysisHtml = `<div style="color:var(--color-primary); display:flex; align-items:center; gap:6px;">
                     <span class="broker-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> AI Analyzing...
                 </div>`;
             } else if (alert.analysis_result) {
-                // Show snippet + Button
                 const snippet = alert.analysis_result.substring(0, 100) + (alert.analysis_result.length > 100 ? "..." : "");
                 analysisHtml = `
                     <div style="font-size:0.9em;">
@@ -423,17 +343,17 @@ async function loadActiveAlerts() {
                     ${analysisHtml}
                 </td>
             `;
-            
+
             // Listeners
             tr.querySelectorAll('.btn-ack').forEach(b => b.addEventListener('click', () => updateStatus(alert.id, 'acknowledged')));
             tr.querySelectorAll('.btn-resolve').forEach(b => b.addEventListener('click', () => updateStatus(alert.id, 'resolved')));
             
-            // [NEW] Open Analysis Modal
+            // Open Analysis Modal
             const viewBtn = tr.querySelector('.btn-view-analysis');
             if(viewBtn) {
                 viewBtn.addEventListener('click', () => {
                     const contentDiv = document.getElementById('analysis-content');
-                    if(contentDiv) contentDiv.textContent = alert.analysis_result; // Use textContent to show raw markdown safely
+                    if(contentDiv) contentDiv.textContent = alert.analysis_result;
                     if(analysisModal) analysisModal.style.display = 'flex';
                 });
             }

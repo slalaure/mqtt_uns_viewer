@@ -9,153 +9,18 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Login View Module
- * Handles the authentication UI (Local & Google) and style injection.
- * [NEW] Added Registration Form and Toggle Logic.
+ * Handles the authentication UI (Local & Google) via dynamic HTML loading.
+ * [UPDATED] Removed embedded HTML/CSS strings.
  */
 
-// --- Internal CSS for the Login View ---
-const LOGIN_CSS = `
-.login-overlay {
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background-color: var(--color-bg);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    backdrop-filter: blur(5px);
-}
-.login-card {
-    background-color: var(--color-bg-secondary);
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px var(--color-shadow);
-    width: 100%;
-    max-width: 400px;
-    text-align: center;
-    border: 1px solid var(--color-border);
-}
-.login-logo {
-    font-size: 3em;
-    margin-bottom: 10px;
-    display: block;
-}
-.login-title {
-    margin-bottom: 10px;
-    color: var(--color-text);
-}
-.login-welcome-text {
-    font-size: 1em;
-    color: var(--color-text);
-    margin-bottom: 5px;
-    font-weight: 500;
-}
-.login-privacy-note {
-    font-size: 0.85em;
-    color: var(--color-text-secondary);
-    margin-bottom: 25px;
-    line-height: 1.4;
-    padding: 0 10px;
-}
-.login-form-group {
-    margin-bottom: 15px;
-    text-align: left;
-}
-.login-form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 0.9em;
-    color: var(--color-text-secondary);
-}
-.login-input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text);
-    font-size: 1em;
-    box-sizing: border-box;
-}
-.btn-login-submit {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 1em;
-    cursor: pointer;
-    font-weight: bold;
-    margin-top: 10px;
-    transition: background 0.2s;
-}
-.btn-login-submit:hover {
-    background-color: var(--color-primary-hover);
-}
-.divider {
-    margin: 25px 0;
-    position: relative;
-    border-top: 1px solid var(--color-border);
-}
-.divider span {
-    position: absolute;
-    top: -10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: var(--color-bg-secondary);
-    padding: 0 10px;
-    color: var(--color-text-secondary);
-    font-size: 0.85em;
-}
-.btn-google {
-    width: 100%;
-    padding: 12px;
-    background-color: white;
-    color: #333;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 1em;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    font-weight: 500;
-    transition: background 0.2s;
-}
-.btn-google:hover {
-    background-color: #f5f5f5;
-}
-.login-error {
-    color: var(--color-danger);
-    margin-top: 15px;
-    font-size: 0.9em;
-    display: none;
-    padding: 10px;
-    background: rgba(220, 53, 69, 0.1);
-    border-radius: 4px;
-}
-.toggle-link {
-    display: block;
-    margin-top: 15px;
-    font-size: 0.9em;
-    color: var(--color-primary);
-    cursor: pointer;
-    text-decoration: underline;
-}
-`;
-
 export function initLoginStyles() {
-    const style = document.createElement('style');
-    style.textContent = LOGIN_CSS;
-    document.head.appendChild(style);
+    // Deprecated: Styles are now loaded with the HTML fragment
 }
 
 /**
  * Renders the login overlay and handles interaction.
  */
-export function showLoginOverlay() {
+export async function showLoginOverlay() {
     const existing = document.getElementById('login-overlay');
     if (existing) existing.remove();
 
@@ -163,76 +28,28 @@ export function showLoginOverlay() {
     overlay.id = 'login-overlay';
     overlay.className = 'login-overlay';
 
-    // Using simple display toggling between two forms
-    overlay.innerHTML = `
-        <div class="login-card">
-            <span class="login-logo">🔐</span>
-            <h2 class="login-title" id="form-title">MQTT UNS Viewer</h2>
-            
-            <div class="login-welcome-block">
-                <p class="login-welcome-text">Welcome! Please sign in.</p>
-                <p class="login-privacy-note">
-                    You can create a <strong>free local user</strong> instantly. 
-                    No email address required—we don't collect any personal data.
-                </p>
-            </div>
-
-            <form id="login-form">
-                <div class="login-form-group">
-                    <label>Username</label>
-                    <input type="text" id="login-username" class="login-input" required autofocus>
-                </div>
-                <div class="login-form-group">
-                    <label>Password</label>
-                    <input type="password" id="login-password" class="login-input" required>
-                </div>
-                <button type="submit" class="btn-login-submit">Sign In</button>
-            </form>
-
-            <form id="register-form" style="display:none;">
-                <div class="login-form-group">
-                    <label>Username</label>
-                    <input type="text" id="reg-username" class="login-input" required>
-                </div>
-                <div class="login-form-group">
-                    <label>Password</label>
-                    <input type="password" id="reg-password" class="login-input" required minlength="6">
-                </div>
-                <div class="login-form-group">
-                    <label>Confirm Password</label>
-                    <input type="password" id="reg-confirm" class="login-input" required minlength="6">
-                </div>
-                <button type="submit" class="btn-login-submit">Create Account</button>
-            </form>
-
-            <div id="auth-divider" class="divider"><span>OR</span></div>
-
-            <button id="btn-google-login" class="btn-google">
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                    <path d="M17.64 9.2c0-.637-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"></path>
-                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.715H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"></path>
-                    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"></path>
-                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.272C4.672 5.14 6.656 3.58 9 3.58z" fill="#EA4335"></path>
-                </svg>
-                Sign in with Google
-            </button>
-
-            <div id="login-error" class="login-error"></div>
-            <a id="toggle-auth-mode" class="toggle-link">Need an account? Register</a>
-        </div>
-    `;
+    try {
+        const response = await fetch('html/view.login.html');
+        if (!response.ok) throw new Error(`Failed to load login template: ${response.statusText}`);
+        overlay.innerHTML = await response.text();
+    } catch (e) {
+        console.error("Error loading login view:", e);
+        overlay.innerHTML = `<div style="background:#fff;padding:20px;border-radius:8px;color:red;">Error loading login form.<br>Check console.</div>`;
+    }
 
     document.body.appendChild(overlay);
 
+    // --- Attach Event Listeners (after injection) ---
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const title = document.getElementById('form-title');
     const toggleLink = document.getElementById('toggle-auth-mode');
     const errorDiv = document.getElementById('login-error');
-    const divider = document.getElementById('auth-divider');
     const googleBtn = document.getElementById('btn-google-login');
 
-    // --- Toggle Logic ---
+    if (!loginForm) return; // Stop if load failed
+
+    // Toggle Logic
     toggleLink.addEventListener('click', () => {
         const isLogin = loginForm.style.display !== 'none';
         errorDiv.style.display = 'none';
@@ -243,8 +60,6 @@ export function showLoginOverlay() {
             registerForm.style.display = 'block';
             title.textContent = 'Create Account';
             toggleLink.textContent = 'Already have an account? Sign In';
-            // Hide Google Auth on register screen to keep it simple, or keep it.
-            // Let's keep it but change divider text? Nah, Google creates acct too.
         } else {
             // Switch to Login
             registerForm.style.display = 'none';
@@ -254,17 +69,16 @@ export function showLoginOverlay() {
         }
     });
 
-    // --- Login Handler ---
+    // Login Handler
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('login-username').value;
         const password = document.getElementById('login-password').value;
         const btn = loginForm.querySelector('button');
-        
         handleAuth('auth/login', { username, password }, btn, 'Sign In');
     });
 
-    // --- Register Handler ---
+    // Register Handler
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('reg-username').value;
@@ -277,9 +91,17 @@ export function showLoginOverlay() {
             errorDiv.style.display = 'block';
             return;
         }
-
         handleAuth('auth/register', { username, password }, btn, 'Create Account');
     });
+
+    // Google Login
+    if (googleBtn) {
+        googleBtn.addEventListener('click', () => {
+            const base = document.querySelector('base')?.getAttribute('href') || '/';
+            const cleanBase = base.endsWith('/') ? base : base + '/';
+            window.location.href = `${cleanBase}auth/google`;
+        });
+    }
 
     // Shared Auth Logic
     async function handleAuth(url, body, btn, defaultText) {
@@ -293,7 +115,6 @@ export function showLoginOverlay() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-
             const data = await res.json();
 
             if (data.success) {
@@ -308,11 +129,4 @@ export function showLoginOverlay() {
             btn.textContent = defaultText;
         }
     }
-
-    // Google Login
-    googleBtn.addEventListener('click', () => {
-        const base = document.querySelector('base')?.getAttribute('href') || '/';
-        const cleanBase = base.endsWith('/') ? base : base + '/';
-        window.location.href = `${cleanBase}auth/google`;
-    });
 }
