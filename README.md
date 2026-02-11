@@ -2,12 +2,12 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.6.0--beta1-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.5.0--beta40-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)
 
-** The Open-Source Unified Namespace Explorer for the AI Era **
+**The Open-Source Unified Namespace Explorer for the AI Era**
 
 [Live Demo](https://www.mqttunsviewer.com) • [Architecture](#-architecture--design) • [Installation](#-installation--deployment) • [User Manual](#-user-manual) • [Developer Guide](#-developer-guide) • [API](#-api-reference)
 
@@ -41,7 +41,7 @@ In the age of **Generative AI** and **Large Language Models (LLMs)**, context is
 1.  **Connect** to your existing messy brokers.
 2.  **Visualize** the chaos.
 3.  **Structure** it using the built-in **Mapper (ETL)** to normalize data into a clean UNS structure without changing the PLC code.
-4.  **Feed AI** via the **MCP Server**, allowing agents to query "What is the OEE of Line 1?" instead of parsing raw logs.
+4.  **Analyze** with the **Autonomous AI Agent** which monitors alerts, investigates root causes using available tools, and generates reports automatically.
 
 ---
 
@@ -62,12 +62,14 @@ graph TD
         Backend["Node.js Server"]
         DuckDB[("DuckDB Hot Storage")]
         Mapper["ETL Engine V8"]
-        MCP["MCP Server (AI Gateway)"]
+        Alerts["Alert Manager & AI Agent"]
+        MCP["MCP Server (External AI Gateway)"]
        
         Backend <-->|Subscribe| Broker1
         Backend <-->|Subscribe| Broker2
         Backend -->|Write| DuckDB
         Backend <-->|Execute| Mapper
+        Backend <-->|Orchestrate| Alerts
         MCP <-->|Context Query| Backend
     end
 
@@ -164,7 +166,7 @@ LLM_API_URL=...                 # OpenAI-compatible endpoint (Gemini, ChatGPT, L
 LLM_API_KEY=...                 # Key for the internal Chat Assistant
 
 # Granular Tool Permissions (true/false)
-LLM_TOOL_ENABLE_READ=true       # Inspect DB, Search
+LLM_TOOL_ENABLE_READ=true       # Inspect DB, topics list, history, and search
 LLM_TOOL_ENABLE_SEMANTIC=true   # Infer Schema, Model Definitions
 LLM_TOOL_ENABLE_PUBLISH=true    # Publish MQTT messages
 LLM_TOOL_ENABLE_FILES=true      # Read/Write files (SVGs, Simulators)
@@ -218,15 +220,19 @@ Visualize correlations instantly.
 * **Smart Axis:** Automatically groups variables with similar units (e.g., Temperature, Pressure) on shared Y-axes.
 * **Persistence:** Save chart configurations (Global for Admins, Private for Users).
 
-### 7. AI Chat Assistant
+### 7. AI Chat Assistant & Autonomous Alerts
 A floating assistant powered by LLMs.
 * **Context Aware:** Knows your topics, schemas, and file structure.
 * **Multi-Session:** Use the **☰** menu to switch between chat sessions, create new ones, or delete old ones.
 * **Capabilities:** Can generate SQL queries, analyze anomalies, creating SVG dashboards from scratch (`create_dynamic_view`), and even control simulators.
-* **Control:** Use the **⏹ Stop** button to cancel a long-running generation.
-* **Voice & Vision:** Supports voice input (Chrome/Safari) and camera capture for analyzing physical equipment.
+* **Vision:** Supports camera capture for analyzing physical equipment.
 
-### 8. Configuration Interface (Admin Only)
+### 8. Intelligent Alerting (New!)
+Define sophisticated detection rules using JavaScript conditions.
+* **Autonomous Analyst:** When an alert triggers, the built-in **AI Agent** wakes up. It autonomously performs an investigation (up to 10 iterations) using tools like `get_topic_history` or `search_data` to understand the root cause.
+* **Reporting:** The AI generates a Markdown summary of the incident, which is displayed in the dashboard and sent via Webhook (Slack/Teams/Google Chat).
+
+### 9. Configuration Interface (Admin Only)
 Accessible via the Cog icon (`/config.html`).
 * **Environment:** Modify `.env` variables and restart the server from the UI.
 * **Certificates:** Upload SSL/TLS certificates for MQTT connections.
@@ -245,12 +251,14 @@ Accessible via the Cog icon (`/config.html`).
  ┃ ┣ 📂 sessions/          # User Data (Private Charts/SVGs/History/Chats)
  ┃ ┣ 📄 charts.json        # Global Saved Charts
  ┃ ┣ 📄 mappings.json      # Global ETL Rules
+ ┃ ┣ 📄 uns_model.json     # Semantic Model Definition
  ┃ ┗ 📄 mqtt_events.duckdb # Hot DB
  ┣ 📂 database/            # DB Adapters (DuckDB, Timescale, UserManager)
  ┣ 📂 public/              # Frontend (Vanilla JS SPA)
  ┣ 📂 routes/              # Express API (Auth, Admin, Config, Chat, etc.)
  ┣ 📄 server.js            # Main Entry Point
- ┣ 📄 mcp_server.mjs       # AI Server (Model Context Protocol)
+ ┣ 📄 alert_manager.js     # AI-Powered Alert Engine
+ ┣ 📄 mcp_server.mjs       # External AI Interface (Model Context Protocol)
  ┗ 📄 mapper_engine.js     # ETL Sandbox
 ```
 
@@ -374,6 +382,7 @@ The application exposes a comprehensive REST API.
 | `DELETE` | `/api/chat/session/:id` | Delete a chat session. | ✅ (Session/Basic) |
 | `POST` | `/api/chat/stop` | Abort current generation. | ✅ (Session/Basic) |
 | `POST` | `/api/external/publish` | Publish data from 3rd party apps. | ✅ (API Key) |
+| `POST` | `/api/chat/completion` | Streamed LLM completion with Tools. | ✅ (Session/Basic) |
 | `GET` | `/api/admin/users` | List registered users. | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
 | `POST` | `/api/env/import-db` | Import JSON history data. | ✅ (Admin) |

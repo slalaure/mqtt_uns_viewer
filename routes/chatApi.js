@@ -9,8 +9,8 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
- * [UPDATED] Uses data/ai_tools_manifest.json as SSOT for System Prompt and Tools.
- * [SECURITY] Ensures only non-sensitive Broker IDs and Permissions are sent to LLM.
+ * [UPDATED] Exposes internal Agent Runner for Alert Manager.
+ * [UPDATED] Supports 10 iterations for autonomous analysis.
  */
 const express = require('express');
 const axios = require('axios');
@@ -19,10 +19,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto'); // For UUIDs
 const chrono = require('chrono-node');
+// [NEW] Import Alert Manager from ROOT to inject agent capability
+const alertManager = require('../alert_manager');
 
 // --- Constants ---
-const MAX_AGENT_TURNS = 8; // Limit recursion to prevent infinite loops
-const LLM_TIMEOUT_MS = 120000; // 120s timeout for LLM generation
+const MAX_AGENT_TURNS = 10; // Limit recursion to 10 turns
+const LLM_TIMEOUT_MS = 120000; // 120s timeout
 
 // --- State for Abort Control ---
 // Map<clientId, { abortController: AbortController, res: Response }>
@@ -87,7 +89,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
     loadManifest(); // Initial load
 
-    // --- [NEW] Helper to send chunks via HTTP AND WebSocket with Deduplication ID ---
+    // --- Helper to send chunks via HTTP AND WebSocket ---
     const sendChunk = (res, type, content, clientId) => {
         // Check if stream was aborted before sending
         if (clientId && !activeStreams.has(clientId)) return;
@@ -95,14 +97,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         // Generate a unique ID for this chunk to allow frontend deduplication
         const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         const chunkData = { type, content, id: chunkId };
-        const jsonStr = JSON.stringify(chunkData);
-
-        // 1. HTTP Streaming (NDJSON)
-        if (!res.writableEnded && res.writable) {
+        
+        // 1. HTTP Streaming
+        if (res && !res.writableEnded && res.writable) {
+            const jsonStr = JSON.stringify(chunkData);
             res.write(jsonStr + '\n');
             if (res.flush) res.flush();
         }
-
         // 2. WebSocket Unicast
         if (clientId) {
             wsManager.sendToClient(clientId, {
@@ -157,7 +158,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 let title = "New Chat";
                 try {
                     const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                    // Find first user message for title
                     const firstUserMsg = content.find(m => m.role === 'user');
                     if (firstUserMsg) {
                         const txt = Array.isArray(firstUserMsg.content) 
@@ -166,7 +166,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         if (txt) title = txt.substring(0, 30) + (txt.length > 30 ? "..." : "");
                     }
                 } catch(e) {}
-                
                 return {
                     id: file.replace('.json', ''),
                     title: title,
@@ -188,7 +187,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
-
         if (fs.existsSync(filePath)) {
             try {
                 const history = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -211,7 +209,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
-
         fs.writeFile(filePath, JSON.stringify(history, null, 2), (err) => {
             if (err) {
                 logger.error({ err }, "Failed to save chat history");
@@ -266,14 +263,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     const getEnabledToolsInfo = () => {
         const enabledTools = [];
         const descriptions = [];
-
         toolsManifest.tools.forEach(toolDef => {
-            const flagKey = toolDef.category; // e.g. ENABLE_READ
-            if (flagKey && config.AI_TOOLS && config.AI_TOOLS[flagKey] === false) {
-                return; // Skip disabled tool
-            }
-
-            // Add to Function Definitions
+            const flagKey = toolDef.category; 
+            if (flagKey && config.AI_TOOLS && config.AI_TOOLS[flagKey] === false) return; 
             enabledTools.push({
                 type: "function",
                 function: {
@@ -286,11 +278,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             // Add to Prompt Context
             descriptions.push(`- **${toolDef.name}**: ${toolDef.description}`);
         });
-
         return { tools: enabledTools, context: descriptions.join('\n') };
     };
 
-    // --- 2. Tool Implementations ---
+    // --- Tool Implementations ---
     const toolImplementations = {
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
@@ -328,20 +319,16 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
-                
                 let whereClauses = words.map(word => {
                     const safeWord = `%${escapeSQL(word)}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
                 });
-
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     whereClauses.push(`timestamp >= '${timeWindow.start.toISOString()}'`);
                     whereClauses.push(`timestamp <= '${timeWindow.end.toISOString()}'`);
                 }
-
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
                 db.serialize(() => {
                     db.all(sql, (err, rows) => {
                         if (err) return reject(err);
@@ -355,15 +342,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
                 let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
-
                 const timeWindow = parseTimeWindow(time_expression);
                 if (timeWindow) {
                     sql += ` AND timestamp >= ? AND timestamp <= ?`;
                     params.push(timeWindow.start.toISOString(), timeWindow.end.toISOString());
                 }
-
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-
                 db.serialize(() => {
                     db.all(sql, ...params, (err, rows) => {
                         if (err) return reject(err);
@@ -414,19 +398,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             loadUnsModel();
             const lowerConcept = concept.toLowerCase();
             const model = unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
-            
             if (!model) return { error: `Concept '${concept}' not found in model.` };
-
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-
             if (filters) {
                 for (const [key, value] of Object.entries(filters)) {
                     whereClauses.push(`(payload->>'${escapeSQL(key)}') = '${escapeSQL(value)}'`);
                 }
             }
-
             return new Promise((resolve, reject) => {
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                 db.serialize(() => {
@@ -461,17 +441,16 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
-
                 const usedBrokerId = targetBrokerConfig.id;
                 const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
-
+                
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
-
+                
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
-
+                
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                     if (err) resolve({ error: err.message });
                     else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
@@ -509,7 +488,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             
             const relative = path.relative(path.join(__dirname, '..'), resolvedPath);
             if (relative.startsWith('..') && !path.isAbsolute(resolvedPath)) return { error: "Path traversal blocked." };
-
+            
             return { filename, content: fs.readFileSync(resolvedPath, 'utf8') };
         },
         save_file_to_data_directory: async ({ filename, content }, user) => {
@@ -524,10 +503,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             } else {
                 if (!fs.existsSync(targetDir)) return { error: "Global Data directory not found." };
             }
-            
             const resolvedPath = path.resolve(targetDir, path.basename(filename)); 
             if (!resolvedPath.startsWith(targetDir)) return { error: "Path traversal blocked." };
-
+            
             fs.writeFileSync(resolvedPath, content, 'utf8');
             return { success: true, path: `${accessLevel}/data/${filename}`, note: accessLevel === "Private" ? "File saved to your private workspace." : "File saved globally." };
         },
@@ -536,7 +514,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
                 const svgFilename = `${baseName}.svg`;
                 const jsFilename = `${baseName}.svg.js`;
-                
                 let targetDir = DATA_PATH;
                 let contextMessage = "Global";
                 if (user && user.id) {
@@ -546,13 +523,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         fs.mkdirSync(targetDir, { recursive: true });
                     }
                 }
-
                 const svgPath = path.join(targetDir, svgFilename);
                 const jsPath = path.join(targetDir, jsFilename);
-
                 fs.writeFileSync(svgPath, svg_content, 'utf8');
                 fs.writeFileSync(jsPath, js_content, 'utf8');
-                
                 return { 
                     success: true, 
                     message: `View '${baseName}' created successfully in ${contextMessage} storage. Go to the SVG View tab to select it.` 
@@ -583,7 +557,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
-
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
@@ -592,7 +565,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
             // SANITIZATION: Handle non-breaking spaces from LLMs
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
-
             const newTarget = {
                 id: `tgt_${Date.now()}`,
                 enabled: true,
@@ -601,7 +573,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 code: sanitizedCode
             };
             rule.targets.push(newTarget);
-            
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -610,7 +581,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -639,7 +609,102 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
 
-    // --- 3. Streamed POST Endpoint ---
+    // --- [NEW] INTERNAL AGENT RUNNER ---
+    // Executes the agent loop autonomously (no HTTP res needed)
+    // Returns Promise<String> with the final response
+    const runInternalAgent = async (systemPrompt, userPrompt) => {
+        if (!config.LLM_API_KEY) throw new Error("LLM_API_KEY not configured.");
+        
+        let apiUrl = config.LLM_API_URL;
+        if (!apiUrl.endsWith('/')) apiUrl += '/';
+        apiUrl += 'chat/completions';
+
+        // Context
+        const brokerContext = config.BROKER_CONFIGS.map(b => {
+            const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
+            return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
+        }).join('\n');
+        const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
+        
+        let systemPromptText = toolsManifest.system_prompt_template || "You are an expert UNS Architect. CONTEXT:\n{{BROKER_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
+        systemPromptText = systemPromptText.replace('{{BROKER_CONTEXT}}', brokerContext);
+        systemPromptText = systemPromptText.replace('{{TOOLS_CONTEXT}}', toolsContext);
+        systemPromptText += `\n\nSYSTEM INSTRUCTION: ${systemPrompt}`;
+
+        let conversation = [
+            { role: "system", content: systemPromptText },
+            { role: "user", content: userPrompt }
+        ];
+
+        const headers = { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.LLM_API_KEY}`
+        };
+
+        // System User for Tool Execution
+        const systemUser = { id: 'system', role: 'admin', username: 'AlertSystem' };
+
+        let turnCount = 0;
+        let finalResponse = "";
+
+        // Agent Loop
+        while (turnCount < MAX_AGENT_TURNS && !finalResponse) {
+            turnCount++;
+            logger.info(`[InternalAgent] Turn ${turnCount}...`);
+            
+            const requestPayload = {
+                model: config.LLM_MODEL,
+                messages: conversation,
+                stream: false, 
+                temperature: 0.1,
+                tools: enabledTools.length > 0 ? enabledTools : undefined,
+                tool_choice: enabledTools.length > 0 ? "auto" : undefined
+            };
+
+            const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
+            const message = response.data.choices[0].message;
+
+            // Handle Tools
+            if (message.tool_calls && message.tool_calls.length > 0) {
+                conversation.push(message);
+                for (const toolCall of message.tool_calls) {
+                    const fnName = toolCall.function.name;
+                    let result;
+                    try {
+                        if (toolImplementations[fnName]) {
+                            let args = {};
+                            try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
+                            logger.info(`[InternalAgent] Executing tool: ${fnName}`);
+                            result = await toolImplementations[fnName](args, systemUser);
+                            result = JSON.stringify(result);
+                        } else {
+                            result = JSON.stringify({ error: "Tool not implemented." });
+                        }
+                    } catch (err) {
+                        result = JSON.stringify({ error: err.message });
+                    }
+                    conversation.push({
+                        tool_call_id: toolCall.id,
+                        role: "tool",
+                        name: fnName,
+                        content: result
+                    });
+                }
+            } else {
+                // Final Text
+                finalResponse = message.content;
+            }
+        }
+        return finalResponse || "No response generated.";
+    };
+
+    // --- [NEW] Inject the Runner into Alert Manager ---
+    if (alertManager && alertManager.registerAgentRunner) {
+        alertManager.registerAgentRunner(runInternalAgent);
+        logger.info("✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.");
+    }
+
+    // --- HTTP POST Endpoint (Standard Chat) ---
     router.post('/completion', async (req, res) => {
         const { messages, clientId } = req.body; 
         if (!messages) return res.status(400).json({ error: "Missing messages." });
@@ -693,7 +758,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const systemMessage = { role: "system", content: systemPromptText };
         const safeUserMessages = messages.filter(m => m.role !== 'system');
         let conversation = [systemMessage, ...safeUserMessages];
-
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -725,7 +789,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     timeout: LLM_TIMEOUT_MS,
                     signal: abortController.signal 
                 });
-
                 const message = response.data.choices[0].message;
 
                 // Case 1: The model wants to call tools
@@ -733,14 +796,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     conversation.push(message); 
                     for (const toolCall of message.tool_calls) {
                         if (abortController.signal.aborted) throw new Error("Generation cancelled by user.");
-
                         const fnName = toolCall.function.name;
                         sendChunk(res, 'tool_start', { name: fnName }, clientId);
-                        
                         let result;
                         let duration = 0;
                         const startTime = Date.now();
-
                         try {
                             if (toolImplementations[fnName]) { 
                                 let args = {};
@@ -754,10 +814,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
                             result = JSON.stringify({ error: err.message });
                         }
-                        
                         duration = Date.now() - startTime;
                         sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration }, clientId);
-
                         conversation.push({
                             tool_call_id: toolCall.id,
                             role: "tool",
@@ -772,11 +830,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     finalMessageSent = true;
                 }
             }
-
             if (!finalMessageSent) {
                 sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
             }
-
         } catch (error) {
             if (error.message === "Generation cancelled by user." || error.code === 'ERR_CANCELED') {
                 sendChunk(res, 'status', '⛔ Generation Stopped by User', clientId);

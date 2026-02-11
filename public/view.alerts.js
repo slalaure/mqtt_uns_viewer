@@ -10,7 +10,6 @@
  *
  * View Module for Alerts Management.
  */
-
 // --- Imports ---
 import { trackEvent } from './utils.js';
 
@@ -23,10 +22,10 @@ let btnNewRule = null;
 let ruleEditorContainer = null;
 let rulesListContainer = null;
 let helpModal = null;
+let analysisModal = null; // [NEW] Modal for AI report
 let ruleEditorTitle = null;
 
 // --- State ---
-let refreshTimer = null;
 let aceEditor = null; // For condition code
 let editingRuleId = null; // Track if we are editing an existing rule
 
@@ -38,13 +37,11 @@ export function initAlertsView() {
     if (!container) return;
 
     // --- 1. Inject UI Structure ---
-    // Note: We escape backticks inside the HTML string with a backslash (\`) to prevent syntax errors.
     container.innerHTML = `
         <div class="alerts-sub-nav">
             <button class="sub-tab-button active" data-target="active-alerts-panel">🚨 Active Alerts</button>
             <button class="sub-tab-button" data-target="alert-rules-panel">⚙️ Alert Rules</button>
         </div>
-
         <div id="active-alerts-panel" class="alerts-content-container active">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h2>Live Dashboard</h2>
@@ -64,7 +61,7 @@ export function initAlertsView() {
                         <th>Rule / Topic</th>
                         <th>Status</th>
                         <th>Trigger Value</th>
-                        <th>Analysis / Actions</th>
+                        <th style="width: 300px;">Analysis / Actions</th>
                     </tr>
                 </thead>
                 <tbody id="active-alerts-body">
@@ -152,46 +149,27 @@ export function initAlertsView() {
                     <h3 style="margin:0;">JavaScript Condition Examples</h3>
                     <button id="btn-close-help" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
                 </div>
-                
                 <div class="example-block">
                     <div class="example-title">1. Simple Threshold (Stark Industries)</div>
                     <div class="example-code">// Topic: stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/robotic_arm_01/temperature
 // Trigger if temp > 70
 return msg.payload.value > 70;</div>
                 </div>
-
-                <div class="example-block">
-                    <div class="example-title">2. Status Check (Paris Metro)</div>
-                    <div class="example-code">// Topic: ratp/uns/line/1/status
-// Trigger if status is NOT 'OK'
-if (msg.payload.status && msg.payload.status !== 'OK') {
-    return true; 
-}
-return false;</div>
-                </div>
-
-                <div class="example-block">
-                    <div class="example-title">3. Contextual Data (Death Star - Reactor)</div>
-                    <div class="example-code">// Topic: galactic_empire/death_star/power_systems/main_reactor/output
-// Trigger if current output is 20% higher than average of last 10 readings
-
-// Get average from history using SQL (Note: Backticks escaped)
-const result = await db.get(\`
-    SELECT AVG(CAST(payload->>'value' AS FLOAT)) as avg_val 
-    FROM mqtt_events 
-    WHERE topic = '\${msg.topic}' 
-    ORDER BY timestamp DESC LIMIT 10
-\`);
-
-if (result && result.avg_val) {
-    const threshold = result.avg_val * 1.20; // +20%
-    return msg.payload.value > threshold;
-}
-return false;</div>
-                </div>
-
                 <div style="text-align:right;">
                      <button id="btn-close-help-2" class="modal-button">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="analysis-modal" class="modal-backdrop" style="display:none; z-index: 3000;">
+            <div class="help-modal-content" style="max-width: 800px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:10px;">
+                    <h3 style="margin:0;">🤖 AI Analysis Report</h3>
+                    <button id="btn-close-analysis" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
+                </div>
+                <div id="analysis-content" class="analysis-content" style="line-height:1.6; white-space: pre-wrap;"></div>
+                <div style="text-align:right; margin-top:20px;">
+                     <button id="btn-close-analysis-2" class="modal-button">Close</button>
                 </div>
             </div>
         </div>
@@ -205,10 +183,10 @@ return false;</div>
     ruleEditorContainer = document.getElementById('rule-editor-container');
     rulesListContainer = document.getElementById('rules-list-container');
     helpModal = document.getElementById('alert-help-modal');
+    analysisModal = document.getElementById('analysis-modal'); // [NEW]
     ruleEditorTitle = document.getElementById('rule-editor-title');
 
     // --- 3. Event Listeners ---
-    
     // Tabs Navigation
     container.querySelectorAll('.sub-tab-button').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -216,15 +194,13 @@ return false;</div>
             container.querySelectorAll('.alerts-content-container').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(btn.dataset.target).classList.add('active');
-            
             if (btn.dataset.target === 'active-alerts-panel') loadActiveAlerts();
             if (btn.dataset.target === 'alert-rules-panel') loadRules();
         });
     });
-    
-    // [NEW] Checkbox listener
+
     document.getElementById('chk-hide-resolved').addEventListener('change', loadActiveAlerts);
-    
+
     // Rule Editor Controls
     btnNewRule.addEventListener('click', () => showRuleEditor());
     document.getElementById('btn-cancel-rule').addEventListener('click', hideRuleEditor);
@@ -234,6 +210,10 @@ return false;</div>
     document.getElementById('btn-close-help').addEventListener('click', () => helpModal.style.display = 'none');
     document.getElementById('btn-close-help-2').addEventListener('click', () => helpModal.style.display = 'none');
     
+    // [NEW] Analysis Modal Controls
+    document.getElementById('btn-close-analysis').addEventListener('click', () => analysisModal.style.display = 'none');
+    document.getElementById('btn-close-analysis-2').addEventListener('click', () => analysisModal.style.display = 'none');
+
     ruleForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         await saveRule();
@@ -251,33 +231,20 @@ return false;</div>
 // --- View Lifecycle ---
 export function onAlertsViewShow() {
     loadActiveAlerts();
-    // No polling anymore, driven by WS events from app.js
 }
-
-export function onAlertsViewHide() {
-    // Cleanup if needed
-}
+export function onAlertsViewHide() { }
 
 // --- Public API for app.js ---
 export function refreshAlerts() {
-    // Only refresh if the view is currently visible and on the dashboard tab
     if (container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
         loadActiveAlerts();
     }
 }
 
-/**
- * Open the Rule Editor, optionally pre-filled from Tree Context Menu.
- */
 export function openCreateRuleModal(topic, examplePayload) {
-    // Switch to Rules tab
     document.querySelector('.sub-tab-button[data-target="alert-rules-panel"]').click();
     showRuleEditor();
-    
-    // Pre-fill
     ruleForm.elements.topic_pattern.value = topic;
-    
-    // Generate simple condition based on payload type
     let condition = "return true;";
     if (examplePayload && typeof examplePayload === 'object') {
         const keys = Object.keys(examplePayload);
@@ -293,27 +260,21 @@ export function openCreateRuleModal(topic, examplePayload) {
 }
 
 // --- Logic: Rules ---
-
 function showRuleEditor(ruleToEdit = null) {
     rulesListContainer.style.display = 'none';
     ruleEditorContainer.style.display = 'block';
-    
     if (ruleToEdit) {
-        // Mode Edit
         editingRuleId = ruleToEdit.id;
         ruleEditorTitle.textContent = "Edit Rule";
-        
         ruleForm.elements.name.value = ruleToEdit.name;
         ruleForm.elements.topic_pattern.value = ruleToEdit.topic_pattern;
         ruleForm.elements.severity.value = ruleToEdit.severity;
         ruleForm.elements.workflow_prompt.value = ruleToEdit.workflow_prompt || '';
         ruleForm.elements.webhook.value = ruleToEdit.notifications?.webhook || '';
-        
         if (aceEditor) {
             aceEditor.setValue(ruleToEdit.condition_code, -1);
         }
     } else {
-        // Mode Create
         editingRuleId = null;
         ruleEditorTitle.textContent = "Create New Rule";
         ruleForm.reset();
@@ -332,12 +293,10 @@ async function loadRules() {
         const res = await fetch('api/alerts/rules');
         const rules = await res.json();
         rulesTableBody.innerHTML = '';
-        
         if (rules.length === 0) {
             rulesTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No rules defined.</td></tr>';
             return;
         }
-
         rules.forEach(rule => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -349,16 +308,11 @@ async function loadRules() {
                     <button class="btn-action btn-delete" title="Delete">Delete</button>
                 </td>
             `;
-            
-            // Attach event listeners safely
             tr.querySelector('.btn-edit').addEventListener('click', () => showRuleEditor(rule));
             tr.querySelector('.btn-delete').addEventListener('click', () => deleteRule(rule.id));
-            
             rulesTableBody.appendChild(tr);
         });
-    } catch (e) {
-        console.error("Failed to load rules", e);
-    }
+    } catch (e) { console.error("Failed to load rules", e); }
 }
 
 async function saveRule() {
@@ -373,31 +327,23 @@ async function saveRule() {
             webhook: formData.get('webhook')
         }
     };
-
     try {
         let url = 'api/alerts/rules';
         let method = 'POST';
-        
-        // If editing, switch to PUT and add ID
         if (editingRuleId) {
             url = `api/alerts/rules/${editingRuleId}`;
             method = 'PUT';
         }
-
         const res = await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        
         if (!res.ok) throw new Error((await res.json()).error);
-        
         alert("Rule saved successfully!");
         hideRuleEditor();
         loadRules();
-    } catch (e) {
-        alert("Error: " + e.message);
-    }
+    } catch (e) { alert("Error: " + e.message); }
 }
 
 async function deleteRule(id) {
@@ -405,50 +351,51 @@ async function deleteRule(id) {
     try {
         await fetch(`api/alerts/rules/${id}`, { method: 'DELETE' });
         loadRules();
-    } catch (e) {
-        alert("Delete failed.");
-    }
+    } catch (e) { alert("Delete failed."); }
 }
 
 // --- Logic: Alerts ---
-
 async function loadActiveAlerts() {
     try {
         const res = await fetch('api/alerts/active');
         let alerts = await res.json();
-        
-        // [NEW] Client-side Filtering
         const hideResolved = document.getElementById('chk-hide-resolved')?.checked;
         if (hideResolved) {
             alerts = alerts.filter(a => a.status !== 'resolved');
         }
-
         activeAlertsTableBody.innerHTML = '';
-
         if (alerts.length === 0) {
             activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts. All systems nominal.</td></tr>';
             return;
         }
-
         alerts.forEach(alert => {
             const tr = document.createElement('tr');
-            
-            // Format trigger value nicely
             let displayVal = alert.trigger_value;
             try { 
                 const j = JSON.parse(alert.trigger_value); 
-                displayVal = `<pre style="margin:0; font-size:0.8em;">${JSON.stringify(j, null, 2)}</pre>`;
+                displayVal = `<pre style="margin:0; font-size:0.8em; max-height:80px; overflow:auto;">${JSON.stringify(j, null, 2)}</pre>`;
             } catch(e){}
 
-            // Analysis Section
+            // [UPDATED] Analysis Section with Status
             let analysisHtml = '';
             if (alert.status === 'analyzing') {
-                analysisHtml = `<div style="color:var(--color-primary);"><span class="broker-dot" style="background:var(--color-primary); display:inline-block; animation:blink 1s infinite;"></span> AI Analyzing...</div>`;
+                analysisHtml = `<div style="color:var(--color-primary); display:flex; align-items:center; gap:6px;">
+                    <span class="broker-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> AI Analyzing...
+                </div>`;
             } else if (alert.analysis_result) {
-                analysisHtml = `<div class="analysis-box">🤖 <strong>AI Report:</strong><br>${alert.analysis_result}</div>`;
+                // Show snippet + Button
+                const snippet = alert.analysis_result.substring(0, 100) + (alert.analysis_result.length > 100 ? "..." : "");
+                analysisHtml = `
+                    <div style="font-size:0.9em;">
+                        🤖 <strong>AI Report:</strong> ${snippet}
+                        <br>
+                        <button class="mapper-button btn-view-analysis" style="margin-top:5px; font-size:0.8em; padding:2px 8px;">📄 View Full Report</button>
+                    </div>
+                `;
+            } else {
+                analysisHtml = '<span style="color:#ccc; font-style:italic;">No analysis requested.</span>';
             }
 
-            // Actions Buttons
             let actionsHtml = '';
             if (alert.status !== 'resolved') {
                 if (alert.status !== 'acknowledged') {
@@ -457,7 +404,6 @@ async function loadActiveAlerts() {
                 actionsHtml += `<button class="btn-action btn-resolve" data-id="${alert.id}">Resolve</button>`;
             }
 
-            // [NEW] Display who handled the alert
             let statusHtml = `<span class="badge badge-${alert.status}">${alert.status}</span>`;
             if (alert.handled_by) {
                 statusHtml += `<div style="font-size:0.8em; margin-top:4px; color:var(--color-text-secondary); font-style:italic;">by ${alert.handled_by}</div>`;
@@ -468,24 +414,33 @@ async function loadActiveAlerts() {
                 <td><span class="badge badge-${alert.severity}">${alert.severity}</span></td>
                 <td>
                     <div style="font-weight:bold;">${alert.rule_name}</div>
-                    <div style="font-size:0.8em; color:var(--color-text-secondary);">${alert.topic}</div>
+                    <div style="font-size:0.8em; color:var(--color-text-secondary); word-break:break-all;">${alert.topic}</div>
                 </td>
                 <td>${statusHtml}</td>
                 <td>${displayVal}</td>
                 <td>
-                    <div style="margin-bottom:5px;">${actionsHtml}</div>
+                    <div style="margin-bottom:8px;">${actionsHtml}</div>
                     ${analysisHtml}
                 </td>
             `;
-
+            
+            // Listeners
             tr.querySelectorAll('.btn-ack').forEach(b => b.addEventListener('click', () => updateStatus(alert.id, 'acknowledged')));
             tr.querySelectorAll('.btn-resolve').forEach(b => b.addEventListener('click', () => updateStatus(alert.id, 'resolved')));
+            
+            // [NEW] Open Analysis Modal
+            const viewBtn = tr.querySelector('.btn-view-analysis');
+            if(viewBtn) {
+                viewBtn.addEventListener('click', () => {
+                    const contentDiv = document.getElementById('analysis-content');
+                    if(contentDiv) contentDiv.textContent = alert.analysis_result; // Use textContent to show raw markdown safely
+                    if(analysisModal) analysisModal.style.display = 'flex';
+                });
+            }
 
             activeAlertsTableBody.appendChild(tr);
         });
-    } catch (e) {
-        console.error("Failed to load alerts", e);
-    }
+    } catch (e) { console.error("Failed to load alerts", e); }
 }
 
 async function updateStatus(id, status) {
@@ -496,7 +451,5 @@ async function updateStatus(id, status) {
             body: JSON.stringify({ status })
         });
         loadActiveAlerts();
-    } catch (e) {
-        console.error(e);
-    }
+    } catch (e) { console.error(e); }
 }
