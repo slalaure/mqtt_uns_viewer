@@ -16,7 +16,6 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="MQTT Real-Time Web Viewer | UNS & Sparkplug Dashboard">
     <meta name="twitter:description" content="A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B. Features topic trees, dynamic SVG, history, and a JS mapper.">
-    
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
@@ -26,7 +25,7 @@
     <link rel="stylesheet" href="css/view.chart.css">
     <link rel="stylesheet" href="css/view.publish.css"> 
     <link rel="stylesheet" href="css/view.chat.css"> 
-    <script src="libs/chart-min.js"></script>
+    <link rel="stylesheet" href="css/view.alerts.css"> <script src="libs/chart-min.js"></script>
     <script src="libs/chartjs-adapter-date-fns-min.js"></script>
     <script src="libs/hammer.min.js"></script>
     <script src="libs/chartjs-plugin-zoom.min.js"></script>
@@ -37,7 +36,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta39</p>
+                <p>v 1.5.0-beta40</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -57,7 +56,7 @@
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
-        <button id="btn-publish-view" class="tab-button">Publish</button> 
+        <button id="btn-alerts-view" class="tab-button">Alerts</button> <button id="btn-publish-view" class="tab-button">Publish</button> 
         <button id="btn-admin-view" class="tab-button" style="display: none; border-bottom-color: var(--color-danger);">Admin</button>
     </nav>
     <div class="view-container">
@@ -75,9 +74,12 @@
                 <div id="payload-main-area">
                     <div class="payload-header">
                         <h2>Payload</h2>
-                        <div class="payload-controls">
-                            <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
-                            <label for="live-payload-toggle">Live Update</label>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <button id="btn-create-alert-from-tree" class="mapper-button" style="display:none; font-size:0.8em;">🔔 Create Alert Rule</button>
+                            <div class="payload-controls">
+                                <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
+                                <label for="live-payload-toggle">Live Update</label>
+                            </div>
                         </div>
                     </div>
                     <div id="payload-topic" class="payload-topic-display">No topic selected</div>
@@ -92,6 +94,7 @@
                 </div>
             </div>
         </main>
+
         <main id="map-view" class="view">
             <div class="map-view-container">
                 <div class="map-view-controls">
@@ -115,6 +118,7 @@
                 <div id="svg-content" class="svg-content"></div>
             </div>
         </main>
+
         <main id="history-view" class="view">
             <div class="history-status-bar">
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
@@ -139,6 +143,7 @@
                 <p>Cleaning database, please wait...</p>
             </div>
         </main>
+
         <main id="mapper-view" class="view">
             <div class="mapper-tree-wrapper">
                 <div class="tree-controls">
@@ -221,6 +226,7 @@
                 </div>
             </div>
         </main>
+
         <main id="chart-view" class="view">
             <div class="chart-tree-wrapper">
                 <div class="tree-controls">
@@ -303,6 +309,10 @@
                 </div>
             </div>
         </main>
+
+        <main id="alerts-view" class="view">
+            </main>
+
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
                 <h2>Manual Publish</h2>
@@ -360,6 +370,7 @@
                 </div>
             </div>
         </main>
+
         <main id="admin-view" class="view">
             <div class="payload-container" style="padding: 20px; overflow-y: auto;">
                 <div class="payload-header">
@@ -385,6 +396,7 @@
             </div>
         </main>
         </div>
+
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
             <span>AI Assistant</span>
@@ -405,6 +417,7 @@
     <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
         💬
     </button>
+
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>
@@ -422,14 +435,16 @@
             </div>
         </div>
     </div>
+
     <footer class="app-footer">
         <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
                 rel="noopener noreferrer">github</a></p>
     </footer>
+
     <script src="view.login.js" type="module"></script>
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
     <script src="view.publish.js" type="module"></script> 
     <script src="view.chat.js" type="module"></script>
-</body>
+    <script src="view.alerts.js" type="module"></script> </body>
 </html>

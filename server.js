@@ -36,6 +36,8 @@ const simulatorManager = require('./simulator');
 const dataManager = require('./database/dataManager');
 const externalApiRouter = require('./routes/externalApi'); 
 const userManager = require('./database/userManager'); // Import User Manager
+const alertManager = require('./database/alertManager'); // [NEW] Alert Manager
+
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
@@ -129,6 +131,7 @@ const config = {
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
     VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
     VIEW_CHAT_ENABLED: process.env.VIEW_CHAT_ENABLED !== 'false',
+    VIEW_ALERTS_ENABLED: process.env.VIEW_ALERTS_ENABLED !== 'false', // [NEW] Configurable
     LLM_API_URL: process.env.LLM_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
     LLM_API_KEY: process.env.LLM_API_KEY || '',
     LLM_MODEL: process.env.LLM_MODEL || 'gemini-2.0-flash',
@@ -264,6 +267,7 @@ passport.deserializeUser(async (id, done) => {
         done(err);
     }
 });
+
 // Local Strategy
 passport.use(new LocalStrategy(async (username, password, done) => {
     try {
@@ -274,6 +278,7 @@ passport.use(new LocalStrategy(async (username, password, done) => {
         return done(null, user);
     } catch (err) { return done(err); }
 }));
+
 // Google Strategy
 if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
     logger.info("✅ Google OAuth Strategy Enabled.");
@@ -289,6 +294,7 @@ if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
         } catch (err) { return done(err); }
     }));
 }
+
 // --- CORS Middleware ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -296,6 +302,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
     next();
 });
+
 // --- Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
@@ -304,22 +311,30 @@ const mapperEngine = require('./mapper_engine')(
     longReplacer,
     config 
 );
+
 // ---  DuckDB Setup (Centralized Initialization) ---
 const dbFile = DB_PATH;
 const dbWalFile = dbFile + '.wal';
 let db; 
+
 db = new duckdb.Database(dbFile, (err) => {
     if (err) {
         logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
         process.exit(1);
     }
     logger.info("✅ 🦆 DuckDB database connected.");
-    // 1. Initialize User Manager Table (Passing Sessions Path now)
+
+    // 1. Initialize User Manager Table
     userManager.init(db, logger, SESSIONS_PATH);
+    
+    // [NEW] Initialize Alert Manager
+    alertManager.init(db, logger, config);
+
     // [NEW] 2. Ensure Admin User Exists
     if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
         userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
     }
+
     // 3. Ensure table exists
     db.exec(`
         CREATE TABLE IF NOT EXISTS mqtt_events (
@@ -332,6 +347,7 @@ db = new duckdb.Database(dbFile, (err) => {
             logger.error({ err: createErr }, "❌ FATAL: Failed to ensure table 'mqtt_events' exists.");
             return; 
         }
+        
         // 4. Schema Migration Check
         db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
             if (columns) {
@@ -345,36 +361,47 @@ db = new duckdb.Database(dbFile, (err) => {
             }
         });
     });
+
     mapperEngine.setDb(db);
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
+    
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
+    
     setInterval(performMaintenance, 15000);
+
     // Connect to ALL MQTT Brokers
     config.BROKER_CONFIGS.forEach(brokerConfig => {
         const brokerId = brokerConfig.id;
         const connection = createMqttClient(brokerConfig, logger, CERTS_PATH);
+        
         if (!connection) {
             logger.warn(`⚠️ Skipping broker '${brokerId}' due to initialization failure.`);
             updateBrokerStatus(brokerId, 'error', 'Initialization failed (Config/Certs)');
             return; // Skip this broker
         }
+
         activeConnections.set(brokerId, connection);
-        // Initialize the handler logic once
+
+        // Initialize the handler logic once (With AlertManager)
         const handleMessage = mqttHandler.init(
             logger,
             config,
             wsManager,
             mapperEngine,
             dataManager, 
-            broadcastDbStatus
+            broadcastDbStatus,
+            alertManager // [NEW] Pass Alert Manager
         );
+
         // --- Event Listeners ---
         connection.on('connect', () => {
             logger.info(`✅ MQTT Broker '${brokerId}' connected.`);
             updateBrokerStatus(brokerId, 'connected');
+            
             const rawTopics = (brokerConfig.subscribe && brokerConfig.subscribe.length > 0) ? brokerConfig.subscribe : brokerConfig.topics;
             const subscriptionTopics = Array.isArray(rawTopics) ? rawTopics.map(t => t.trim()) : [];
+            
             if (subscriptionTopics.length > 0) {
                 connection.subscribe(subscriptionTopics, { qos: 1 }, (err) => {
                     if (err) logger.error({ err }, `❌ Subscription failed for '${brokerId}'`);
@@ -382,20 +409,25 @@ db = new duckdb.Database(dbFile, (err) => {
                 });
             }
         });
+
         connection.on('message', (topic, payload) => {
             handleMessage(brokerId, topic, payload); 
         });
+
         connection.on('reconnect', () => {
             logger.info(`🔄 MQTT Broker '${brokerId}' reconnecting...`);
             updateBrokerStatus(brokerId, 'connecting');
         });
+
         connection.on('offline', () => {
             updateBrokerStatus(brokerId, 'offline');
         });
+
         connection.on('error', (err) => {
             logger.error(`❌ MQTT Error on '${brokerId}': ${err.message}`);
             updateBrokerStatus(brokerId, 'error', err.message);
         });
+
         connection.on('close', () => {
             if (!isShuttingDown) {
                updateBrokerStatus(brokerId, 'disconnected');
@@ -403,14 +435,17 @@ db = new duckdb.Database(dbFile, (err) => {
         });
     });
 });
+
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
     // 1. Allow if session is active (Passport)
     if (req.isAuthenticated()) return next();
+
     // 2. Allow if Asset file (css, js, etc) - Strict whitelisting
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf'];
     if (allowedExts.includes(ext)) return next();
+
     // 3. Fallback to Basic Auth if Configured (for API/M2M or legacy usage)
     if (config.HTTP_USER && config.HTTP_PASSWORD) {
         const credentials = basicAuth(req);
@@ -420,15 +455,18 @@ const authMiddleware = (req, res, next) => {
         res.setHeader('WWW-Authenticate', 'Basic realm="MQTT UNS Viewer"');
         return res.status(401).send('Authentication required.');
     }
+
     // 4. If no Basic Auth configured, we redirect to login page (index.html handles this)
     // BUT we need to ensure we don't loop redirecting /auth routes
     if (req.path.startsWith('/auth') || req.path === '/login') {
         return next();
     }
+
     // Default: Allow if no auth configured at all, otherwise block
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
     return res.status(401).send('Unauthorized. Please log in.');
 };
+
 // --- [NEW] Admin Middleware ---
 const requireAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
@@ -453,6 +491,7 @@ const ipFilterMiddleware = (req, res, next) => {
 const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
 app.set('trust proxy', true);
+
 // Simulator
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
@@ -460,10 +499,16 @@ simulatorManager.init(logger, (topic, payload) => {
         conn.publish(topic, payload, { qos: 1 });
     }
 }, config.IS_SPARKPLUG_ENABLED);
+
 // --- Auth Routes ---
 mainRouter.use('/auth', require('./routes/authApi')(logger));
+
 // --- [NEW] Admin Routes ---
 mainRouter.use('/api/admin', require('./routes/adminApi')(logger));
+
+// --- [NEW] Alert API Routes ---
+mainRouter.use('/api/alerts', ipFilterMiddleware, require('./routes/alertApi')(logger));
+
 // --- [NEW] Layered File System Helper for SVGs ---
 // Determines the priority file path (Private > Global)
 function resolveSvgPath(filename, req) {
@@ -535,7 +580,7 @@ mainRouter.delete('/api/svg/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
     if (!filename.endsWith('.svg')) return res.status(400).json({ error: "Invalid file type" });
-
+    
     const globalPath = path.join(DATA_PATH, filename);
     let targetPath = null;
     let isPrivate = false;
@@ -572,14 +617,12 @@ mainRouter.delete('/api/svg/file', (req, res) => {
         // Delete .svg
         fs.unlinkSync(targetPath);
         logger.info(`Deleted SVG: ${targetPath}`);
-        
         // Try delete .svg.js
         const jsPath = targetPath + ".js";
         if (fs.existsSync(jsPath)) {
             fs.unlinkSync(jsPath);
             logger.info(`Deleted SVG JS: ${jsPath}`);
         }
-        
         res.json({ success: true, message: "View deleted successfully." });
     } catch (err) {
         logger.error({ err }, "Error deleting SVG");
@@ -599,6 +642,7 @@ mainRouter.get('/api/config', (req, res) => {
         viewChartEnabled: config.VIEW_CHART_ENABLED,
         viewPublishEnabled: config.VIEW_PUBLISH_ENABLED,
         viewChatEnabled: config.VIEW_CHAT_ENABLED,
+        viewAlertsEnabled: config.VIEW_ALERTS_ENABLED, // [NEW] Send to frontend
         basePath: basePath,
         viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
         maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
@@ -606,6 +650,7 @@ mainRouter.get('/api/config', (req, res) => {
         svgFilePath: config.SVG_FILE_PATH
     });
 });
+
 if (config.IS_SIMULATOR_ENABLED) {
     mainRouter.get('/api/simulator/status', (req, res) => {
         // [FIX] Ensure we return an object with "statuses" property
@@ -623,21 +668,27 @@ if (config.IS_SIMULATOR_ENABLED) {
         res.json(r);
     });
 }
+
 mainRouter.use('/api/context', (req, res, next) => {
     if (!db) return res.status(503).json({ error: "DB not ready" });
     const dbManager = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     require('./routes/mcpApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next);
 });
+
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
+
 if (config.VIEW_CHAT_ENABLED) {
     mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
+
 if (config.VIEW_CONFIG_ENABLED) {
     // [SECURED] Apply Admin Middleware for Environment Config Access
     mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager));
 }
+
 mainRouter.use('/api/mapper', ipFilterMiddleware, require('./routes/mapperApi')(mapperEngine));
 mainRouter.use('/api/chart', ipFilterMiddleware, require('./routes/chartApi')(CHART_CONFIG_PATH, logger));
+
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
     const conn = getBrokerConnection(brokerId);
@@ -701,7 +752,7 @@ const serveSPA = (req, res) => {
     });
 };
 // Apply the dynamic SPA handler to all client routes
-const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish', 'login', 'admin'];
+const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish', 'login', 'admin', 'alerts']; // Added alerts route
 clientRoutes.forEach(route => {
     mainRouter.get('/' + route, serveSPA);
     mainRouter.get('/' + route + '/', serveSPA);
@@ -714,6 +765,7 @@ if (basePath !== '/') {
     logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/' to support path-stripping proxies.`);
     app.use('/', mainRouter);
 }
+
 // Handle Reverse Proxy Trailing Slash logic + Default to /tree/
 app.get('/', (req, res) => {
     if (req.isAuthenticated()) {
@@ -750,12 +802,15 @@ async function gracefulShutdown() {
                 resolve();
             });
         });
+        
         activeConnections.forEach((conn) => {
             if (conn) conn.end(true); 
         });
         logger.info("✅ MQTT Connections closed.");
+        
         await dataManager.close();
         logger.info("✅ Database closed.");
+        
         logger.info("✅ Shutdown complete.");
         process.exit(0);
     } catch (err) {
@@ -763,6 +818,7 @@ async function gracefulShutdown() {
         process.exit(1);
     }
 }
+
 // --- Process Signal Handling ---
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);

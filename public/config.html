@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configuration - MQTT Viewer</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
-    
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/config.css">
-
     <style>
         .cert-manager, .model-manager, .database-manager {
             background-color: var(--color-bg);
@@ -45,7 +43,6 @@
             border-radius: 3px;
         }
         .btn-copy-cert:hover { background-color: var(--color-primary); color: white; }
-        
         .danger-zone-text {
             color: var(--color-danger);
             font-weight: bold;
@@ -62,17 +59,15 @@
         </div>
         <a href="./" class="nav-button">Back to Viewer</a>
     </header>
-
     <main class="config-page-container">
         <h1>Configuration</h1>
         <p>Modify the application settings below. The server will require a restart after saving.</p>
-        
+
         <div class="database-manager" style="border-color: var(--color-primary);">
             <h3>Database Management</h3>
             <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 15px;">
                 Manage the embedded DuckDB database and import data.
             </p>
-            
             <div style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px dashed var(--color-border);">
                 <h4 style="margin-top: 0; font-size: 1em;">Import History (JSON)</h4>
                 <p style="font-size: 0.9em; margin-bottom: 10px;">
@@ -84,13 +79,28 @@
                     <span id="db-import-status" style="font-size: 0.9em; margin-left: 10px;"></span>
                 </div>
             </div>
-
+            
             <h4 style="color: var(--color-danger); margin-top: 0;">⚠️ Danger Zone</h4>
             <p style="font-size: 0.9em; margin-bottom: 15px;">
                 Resetting the database will permanently delete <strong>ALL</strong> recorded MQTT history and reclaim disk space. This action cannot be undone.
             </p>
             <button id="btn-reset-db" class="modal-button button-danger" type="button">Reset Database to 0</button>
             <span id="reset-db-status" style="font-size: 0.9em; margin-left: 10px; font-weight: bold;"></span>
+        </div>
+
+        <div class="database-manager" style="border-color: var(--color-warning);">
+            <h3>Alerts History Maintenance</h3>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 15px;">
+                Manage stored alert history.
+            </p>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom:10px;">
+                <div>
+                    <strong>Resolved Alerts:</strong> <span id="stats-resolved-count">--</span> 
+                    <span style="color: var(--color-text-secondary); margin-left:5px;">(~<span id="stats-resolved-size">--</span> MB)</span>
+                </div>
+                <button id="btn-purge-alerts" class="modal-button button-danger" type="button">Purge Resolved Alerts</button>
+            </div>
+            <span id="purge-alerts-status" style="font-size: 0.9em;"></span>
         </div>
 
         <div class="cert-manager">
@@ -132,7 +142,6 @@
             <div id="status-message" class="status-message"></div>
         </div>
     </main>
-
     <script src="config.js"></script>
 </body>
 </html>

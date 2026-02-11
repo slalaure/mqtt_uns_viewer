@@ -1,0 +1,237 @@
+/* public/css/view.alerts.css */
+
+main#alerts-view {
+    flex-direction: column;
+    padding: 0;
+    background-color: var(--color-bg);
+    overflow: hidden;
+}
+
+/* --- Sub-Navigation (Tabs inside the view) --- */
+.alerts-sub-nav {
+    display: flex;
+    padding: 10px 20px;
+    background-color: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border);
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+.sub-tab-button {
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-weight: 500;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.sub-tab-button:hover {
+    background-color: var(--color-bg-accent);
+    color: var(--color-text);
+}
+
+.sub-tab-button.active {
+    background-color: var(--color-bg-tertiary);
+    border-color: var(--color-border);
+    color: var(--color-primary);
+    font-weight: bold;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* --- Content Container --- */
+.alerts-content-container {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: none; /* Hidden by default, toggled by JS */
+}
+
+.alerts-content-container.active {
+    display: block;
+}
+
+/* --- Data Tables --- */
+.alerts-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--color-bg-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px var(--color-shadow);
+    border: 1px solid var(--color-border);
+}
+
+.alerts-table thead {
+    background-color: var(--color-bg-tertiary);
+    border-bottom: 2px solid var(--color-border);
+}
+
+.alerts-table th, .alerts-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border-secondary);
+}
+
+.alerts-table tr:last-child td {
+    border-bottom: none;
+}
+
+.alerts-table tr:hover {
+    background-color: var(--color-bg-accent);
+}
+
+/* --- Badges --- */
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+/* Severity */
+.badge-critical { background-color: rgba(220, 53, 69, 0.2); color: #dc3545; }
+.badge-warning { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; }
+.badge-info { background-color: rgba(23, 162, 184, 0.2); color: #17a2b8; }
+
+/* Status */
+.badge-new { background-color: rgba(0, 123, 255, 0.2); color: #007bff; animation: pulse-blue 2s infinite; }
+.badge-analyzing { background-color: rgba(111, 66, 193, 0.2); color: #6f42c1; }
+.badge-acknowledged { background-color: rgba(108, 117, 125, 0.2); color: #6c757d; }
+.badge-resolved { background-color: rgba(40, 167, 69, 0.2); color: #28a745; }
+
+@keyframes pulse-blue {
+    0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(0, 123, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+}
+
+/* --- Action Buttons --- */
+.btn-action {
+    padding: 4px 8px;
+    margin-right: 5px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.btn-action:hover {
+    background-color: var(--color-bg-accent);
+}
+
+.btn-ack { color: var(--color-primary); border-color: var(--color-primary); }
+.btn-resolve { color: var(--color-success); border-color: var(--color-success); }
+.btn-edit { color: var(--color-text); border-color: var(--color-border); } /* New Edit Style */
+.btn-delete { color: var(--color-danger); border-color: var(--color-danger); }
+
+/* --- Rule Creation Form (Modal-like inside view) --- */
+.rule-editor-container {
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.rule-editor-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 10px;
+}
+
+.code-editor-wrapper {
+    height: 150px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.label-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-icon {
+    cursor: pointer;
+    color: var(--color-primary);
+    font-size: 1.1em;
+    transition: opacity 0.2s;
+}
+
+.info-icon:hover {
+    opacity: 0.8;
+}
+
+/* Fixed spacing for help text to avoid overlap */
+.help-text {
+    font-size: 0.85em;
+    color: var(--color-text-secondary);
+    margin-top: 5px; 
+    margin-bottom: 10px;
+    display: block;
+    line-height: 1.4;
+}
+
+/* --- Analysis Result Box --- */
+.analysis-box {
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.9em;
+}
+
+/* --- Help Modal (Examples) --- */
+.help-modal-content {
+    background-color: var(--color-bg-secondary);
+    padding: 25px;
+    border-radius: 8px;
+    width: 650px;
+    max-width: 90%;
+    /* [FIX] Limit height and enable scroll */
+    max-height: 80vh; 
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.example-block {
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.example-title {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--color-primary);
+}
+
+.example-code {
+    background-color: var(--color-code-bg);
+    color: var(--color-code-text);
+    padding: 10px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+    border: 1px solid var(--color-border-secondary);
+}
