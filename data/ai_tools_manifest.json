@@ -426,6 +426,140 @@
         "properties": {},
         "required": []
       }
+    },
+    {
+      "name": "list_alert_rules",
+      "description": "Lists all defined alert rules. Includes rule ID, name, severity, and status.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "list_active_alerts",
+      "description": "Lists currently triggered alerts. Includes timestamp, severity, status (new, acknowledged, etc.) and analysis.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "create_alert_rule",
+      "description": "Creates a new detection rule. condition_code is JS returning boolean (e.g., `return msg.payload.value > 50`).",
+      "category": "ENABLE_ADMIN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Descriptive name for the rule."
+          },
+          "topic_pattern": {
+            "type": "string",
+            "description": "MQTT topic pattern (e.g., factory/+/temp)."
+          },
+          "condition_code": {
+            "type": "string",
+            "description": "JavaScript condition. Access `msg.payload`. Must return boolean."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "critical"],
+            "description": "Alert severity."
+          },
+          "workflow_prompt": {
+            "type": "string",
+            "description": "Optional instructions for AI Agent when alert triggers."
+          },
+          "is_global": {
+            "type": "boolean",
+            "description": "If true, creates a global rule (Admin only)."
+          }
+        },
+        "required": [
+          "name",
+          "topic_pattern",
+          "condition_code",
+          "severity"
+        ]
+      }
+    },
+    {
+      "name": "update_alert_rule",
+      "description": "Updates an existing alert rule.",
+      "category": "ENABLE_ADMIN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The ID of the rule to update."
+          },
+          "name": {
+            "type": "string"
+          },
+          "topic_pattern": {
+            "type": "string"
+          },
+          "condition_code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "critical"]
+          },
+          "workflow_prompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "delete_alert_rule",
+      "description": "Deletes an alert rule.",
+      "category": "ENABLE_ADMIN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The ID of the rule to delete."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "update_alert_status",
+      "description": "Updates the status of a triggered alert (e.g., acknowledge it).",
+      "category": "ENABLE_PUBLISH",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "alert_id": {
+            "type": "string",
+            "description": "The ID of the alert instance."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["acknowledged", "resolved"],
+            "description": "New status."
+          }
+        },
+        "required": [
+          "alert_id",
+          "status"
+        ]
+      }
     }
   ]
 }

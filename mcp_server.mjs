@@ -11,6 +11,7 @@
  * MCP Server
  * Controls the MQTT UNS Viewer via Model Context Protocol.
  * [UPDATED] Dynamically loads tool definitions from 'data/ai_tools_manifest.json'.
+ * [UPDATED] Added Alerts Management tools implementation.
  */
 // --- Imports (ESM) ---
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -307,6 +308,31 @@ const implementations = {
     restart_application_server: async () => {
         const res = await axios.post(`${API_BASE_URL}/env/restart`, {}, axiosConfig);
         return { content: [{ type: "text", text: JSON.stringify(res.data) }] };
+    },
+    // ALERTS [NEW]
+    list_alert_rules: async () => {
+        const res = await axios.get(`${API_BASE_URL}/alerts/rules`, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
+    },
+    list_active_alerts: async () => {
+        const res = await axios.get(`${API_BASE_URL}/alerts/active`, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
+    },
+    create_alert_rule: async (args) => {
+        const res = await axios.post(`${API_BASE_URL}/alerts/rules`, args, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
+    },
+    update_alert_rule: async ({ id, ...updates }) => {
+        const res = await axios.put(`${API_BASE_URL}/alerts/rules/${id}`, updates, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
+    },
+    delete_alert_rule: async ({ id }) => {
+        const res = await axios.delete(`${API_BASE_URL}/alerts/rules/${id}`, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
+    },
+    update_alert_status: async ({ alert_id, status }) => {
+        const res = await axios.post(`${API_BASE_URL}/alerts/${alert_id}/status`, { status }, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
     }
 };
 

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.5.0--beta40-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.5.0--beta42-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)
@@ -231,6 +231,7 @@ A floating assistant powered by LLMs.
 Define sophisticated detection rules using JavaScript conditions.
 * **Autonomous Analyst:** When an alert triggers, the built-in **AI Agent** wakes up. It autonomously performs an investigation (up to 10 iterations) using tools like `get_topic_history` or `search_data` to understand the root cause.
 * **Reporting:** The AI generates a Markdown summary of the incident, which is displayed in the dashboard and sent via Webhook (Slack/Teams/Google Chat).
+* **Tool Exposure:** Alert management is now fully exposed to the AI, allowing it to list, create, and acknowledge alerts via chat.
 
 ### 9. Configuration Interface (Admin Only)
 Accessible via the Cog icon (`/config.html`).
@@ -349,6 +350,10 @@ The **MCP Server** allows you to connect AI Agents (like **Claude Desktop**) dir
 * `infer_schema`: "Give me the JSON schema for the ERP work orders".
 * `get_topic_history`: "Analyze the last hour of data for anomalies".
 * `publish_message`: "Turn on the warning light".
+* **New! Alert Management:**
+    * `list_active_alerts`: See current issues.
+    * `create_alert_rule`: Define new detection logic.
+    * `update_alert_status`: Acknowledge or resolve alerts.
 
 **Client Config (Claude Desktop `config.json`):**
 ```json
@@ -383,6 +388,9 @@ The application exposes a comprehensive REST API.
 | `POST` | `/api/chat/stop` | Abort current generation. | ✅ (Session/Basic) |
 | `POST` | `/api/external/publish` | Publish data from 3rd party apps. | ✅ (API Key) |
 | `POST` | `/api/chat/completion` | Streamed LLM completion with Tools. | ✅ (Session/Basic) |
+| `GET` | `/api/alerts/active` | List triggered alerts. | ✅ (Session/Basic) |
+| `POST` | `/api/alerts/rules` | Create a new alert rule. | ✅ (Session/Basic) |
+| `POST` | `/api/alerts/:id/status` | Acknowledge/Resolve an alert. | ✅ (Session/Basic) |
 | `GET` | `/api/admin/users` | List registered users. | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
 | `POST` | `/api/env/import-db` | Import JSON history data. | ✅ (Admin) |
