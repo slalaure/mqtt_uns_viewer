@@ -10,7 +10,7 @@
  *
  * MCP Server
  * Controls the MQTT UNS Viewer via Model Context Protocol.
- * [UPDATED] Dynamically loads tool definitions from 'data/ai_tools_manifest.json'.
+ * [UPDATED] Dynamically loads tool definitions from 'public/ai_tools_manifest.json'.
  * [UPDATED] Added Alerts Management tools implementation.
  */
 // --- Imports (ESM) ---
@@ -64,7 +64,7 @@ function loadManifests() {
             toolsManifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
             console.error(`✅ Loaded AI Tools Manifest (${toolsManifest.tools.length} tools).`);
         } else {
-            console.error("❌ FATAL: data/ai_tools_manifest.json not found.");
+            console.error("❌ FATAL: public/ai_tools_manifest.json not found.");
         }
         if (fs.existsSync(MODEL_MANIFEST_PATH)) {
             unsModel = JSON.parse(fs.readFileSync(MODEL_MANIFEST_PATH, 'utf8'));
