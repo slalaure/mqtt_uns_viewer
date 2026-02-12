@@ -62,10 +62,12 @@ function _inferSchema(messages) {
 }
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
     const router = express.Router();
-    const DATA_PATH = path.join(__dirname, '..', 'data');
-    const MANIFEST_PATH = path.join(DATA_PATH, 'ai_tools_manifest.json');
+    const ROOT_PATH = path.join(__dirname, '..');
+    const DATA_PATH = path.join(ROOT_PATH, 'data');
+    const PUBLIC_PATH = path.join(ROOT_PATH, 'public');
+    const MANIFEST_PATH = path.join(PUBLIC_PATH, 'ai_tools_manifest.json');
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
-    const SESSIONS_DIR = path.join(DATA_PATH, 'sessions'); 
+    const SESSIONS_DIR = path.join(DATA_PATH, 'sessions');
     // --- Load Tools Manifest ---
     let toolsManifest = { system_prompt_template: "", tools: [] };
     const loadManifest = () => {
