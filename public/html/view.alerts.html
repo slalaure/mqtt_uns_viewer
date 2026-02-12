@@ -6,29 +6,29 @@
 <div id="active-alerts-panel" class="alerts-content-container active">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
         <h2>Live Dashboard</h2>
-        <div style="display:flex; align-items:center; gap:20px;">
+        <div style="display:flex; align-items:center; gap:15px;">
             <label style="font-size:0.9em; cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px;">
                 <input type="checkbox" id="chk-hide-resolved"> 
                 <strong>Hide Resolved</strong>
             </label>
+            <button id="btn-alerts-fullscreen" class="map-button" title="Toggle Fullscreen" style="padding: 4px 10px;">&#x2922;</button>
             <span style="font-size:0.8em; color:var(--color-text-secondary); border-left:1px solid #ccc; padding-left:15px;">Updates automatically</span>
         </div>
     </div>
-    <table class="alerts-table">
-        <thead>
-            <tr>
-                <th style="width: 120px;">Time</th>
-                <th>Severity</th>
-                <th>Rule / Topic</th>
-                <th>Status</th>
-                <th>Trigger Value</th>
-                <th style="width: 300px;">Analysis / Actions</th>
-            </tr>
-        </thead>
-        <tbody id="active-alerts-body">
-            <tr><td colspan="6" style="text-align:center;">Waiting for alerts...</td></tr>
-        </tbody>
-    </table>
+    
+    <div id="alerts-table-wrapper" style="overflow-x: auto;">
+        <table class="alerts-table">
+            <thead>
+                <tr>
+                    <th style="width: 130px;">Time</th> <th style="width: 90px;">Severity</th> <th style="width: 20%;">Rule / Topic</th>
+                    <th style="width: 90px;">Status</th>
+                    <th style="width: 15%;">Trigger Value</th> <th style="width: auto;">AI Analysis & Actions</th> </tr>
+            </thead>
+            <tbody id="active-alerts-body">
+                <tr><td colspan="6" style="text-align:center;">Waiting for alerts...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <div id="alert-rules-panel" class="alerts-content-container">
@@ -110,32 +110,26 @@
             <h3 style="margin:0;">JavaScript Condition Examples</h3>
             <button id="btn-close-help" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
         </div>
-        
         <div class="example-block">
             <div class="example-title">1. Simple Threshold (JSON)</div>
             <div class="example-code">// Topic: stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/robotic_arm_01/temperature
 // Trigger if temp > 70
 return msg.payload.value > 70;</div>
         </div>
-
         <div class="example-block">
             <div class="example-title">2. Sparkplug B (Complex Object)</div>
             <div class="example-code">// Topic: spBv1.0/stark_industries/DDATA/robot_arm_01
 // Find specific metric in array
 if (!msg.payload.metrics) return false;
-
 const metric = msg.payload.metrics.find(m => m.name === "Motor/Temp");
 // Trigger if temp > 80.0
 return metric && metric.value > 80.0;</div>
         </div>
-
         <div class="example-block">
             <div class="example-title">3. Anomaly Detection (Compare vs History)</div>
             <div class="example-code">// Topic: stark_industries/malibu_facility/bms/main_power_feed
 // Compare current value vs Average of last 10 values
-
 const currentVal = msg.payload.value;
-
 // SQL to get avg from history (DuckDB syntax)
 const sql = `
     SELECT AVG(CAST(payload->>'value' AS DOUBLE)) as avg_val 
@@ -143,17 +137,14 @@ const sql = `
     WHERE topic = '${msg.topic}' 
     ORDER BY timestamp DESC LIMIT 10
 `;
-
 // Async database call
 const result = await db.get(sql);
-
 // Trigger if current value is 20% higher than average
 if (result && result.avg_val) {
     return currentVal > (result.avg_val * 1.20);
 }
 return false;</div>
         </div>
-
         <div style="text-align:right;">
              <button id="btn-close-help-2" class="modal-button">Close</button>
         </div>
@@ -166,7 +157,7 @@ return false;</div>
             <h3 style="margin:0;">🤖 AI Analysis Report</h3>
             <button id="btn-close-analysis" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
         </div>
-        <div id="analysis-content" class="analysis-content" style="line-height:1.6; white-space: pre-wrap;"></div>
+        <div id="analysis-content" class="analysis-content" style="line-height:1.6;"></div>
         <div style="text-align:right; margin-top:20px;">
              <button id="btn-close-analysis-2" class="modal-button">Close</button>
         </div>

@@ -307,26 +307,39 @@ async function executeWorkflow(alertId, rule, msgContext) {
         if (logger) logger.info(`[AlertWorkflow] Starting AI Analysis for Alert ${alertId}...`);
         // Update status to analyzing
         updateAlertStatus(alertId, 'analyzing', 'System (AI)');
+        
+        // [MODIFIED] Structured Prompt for Section Extraction
         const systemPrompt = `
             You are an Autonomous Industrial Alert Analyst.
             An alert triggered with the following context:
             - Rule: "${rule.name}" (${rule.severity})
             - Topic: ${msgContext.topic}
-            - Trigger Value: ${JSON.stringify(msgContext.payload)}
-            TASK: ${rule.workflow_prompt}
-            Analyze the situation using available tools (history, model definitions, etc.).
-            Provide a concise summary of the root cause and recommended actions.
-            Format your response in Markdown.
+            - Trigger Payload: ${JSON.stringify(msgContext.payload)}
+            
+            USER INSTRUCTION: ${rule.workflow_prompt}
+            
+            Investigate using available tools to find the root cause.
+            
+            CRITICAL: You MUST end your response with the following structured sections exactly:
+
+            ## TRIGGER
+            [One short sentence explaining exactly WHY the alert triggered. Example: "Temp 75C > Threshold 70C" or "Sensor X reported Fault code 99"]
+
+            ## ACTION
+            [One short, imperative sentence for the operator. Example: "Inspect cooling fan motor" or "Evacuate area immediately"]
+
+            ## REPORT
+            [Your full detailed analysis in Markdown, including findings, history analysis, and reasoning.]
         `;
         try {
             // Run the Agent Loop (Max 10 turns)
-            finalAnalysis = await agentRunner(systemPrompt, "Proceed with analysis.");
+            finalAnalysis = await agentRunner(systemPrompt, "Proceed with investigation and provide the structured report.");
             // Save result to DB and set status to Open (Action required)
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
             if (logger) logger.info(`[AlertWorkflow] AI Analysis complete for ${alertId}`);
         } catch (aiError) {
             if (logger) logger.error({ err: aiError }, `[AlertWorkflow] AI Analysis failed for ${alertId}`);
-            finalAnalysis = `AI Analysis Failed: ${aiError.message}`;
+            finalAnalysis = `## TRIGGER\nUnknown Error\n## ACTION\nCheck logs manually\n## REPORT\nAI Analysis Failed: ${aiError.message}`;
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
         }
     }

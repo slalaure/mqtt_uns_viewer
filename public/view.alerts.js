@@ -9,11 +9,13 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * View Module for Alerts Management.
- * [UPDATED] Uses Dynamic HTML Fragment Loading to keep index.html clean.
- * [UPDATED] Integrated marked.js for Markdown rendering of AI analysis reports.
+ * [UPDATED] Robust AI Parsing fallback (shows raw text if parsing fails).
+ * [UPDATED] Displays Action Timestamp + User.
  */
+
 // --- Imports ---
 import { trackEvent } from './utils.js';
+
 // --- DOM Elements ---
 let container = null;
 let activeAlertsTableBody = null;
@@ -25,18 +27,20 @@ let rulesListContainer = null;
 let helpModal = null;
 let analysisModal = null;
 let ruleEditorTitle = null;
+let btnFullscreen = null;
+
 // --- State ---
-let aceEditor = null; // For condition code
-let editingRuleId = null; // Track if we are editing an existing rule
+let aceEditor = null;
+let editingRuleId = null;
 let isViewInitialized = false;
+
 /**
  * Initialize the Alerts View.
- * Fetches HTML template dynamically to keep JS clean and index.html light.
  */
 export async function initAlertsView() {
     container = document.getElementById('alerts-view');
     if (!container) return;
-    // --- 1. Fetch and Inject HTML Fragment ---
+
     try {
         const response = await fetch('html/view.alerts.html');
         if (!response.ok) throw new Error(`Failed to load alerts template: ${response.statusText}`);
@@ -47,7 +51,8 @@ export async function initAlertsView() {
         container.innerHTML = `<div style="padding:20px; color:red;">Error loading Alerts Interface. Please check console.</div>`;
         return;
     }
-    // --- 2. Element References ---
+
+    // --- Element References ---
     activeAlertsTableBody = document.getElementById('active-alerts-body');
     rulesTableBody = document.getElementById('alert-rules-body');
     ruleForm = document.getElementById('rule-form');
@@ -57,46 +62,53 @@ export async function initAlertsView() {
     helpModal = document.getElementById('alert-help-modal');
     analysisModal = document.getElementById('analysis-modal');
     ruleEditorTitle = document.getElementById('rule-editor-title');
-    // --- 3. Event Listeners ---
-    // Tabs Navigation
+    btnFullscreen = document.getElementById('btn-alerts-fullscreen');
+
+    // --- Event Listeners ---
     container.querySelectorAll('.sub-tab-button').forEach(btn => {
         btn.addEventListener('click', () => {
             container.querySelectorAll('.sub-tab-button').forEach(b => b.classList.remove('active'));
             container.querySelectorAll('.alerts-content-container').forEach(c => c.classList.remove('active'));
+            
             btn.classList.add('active');
             document.getElementById(btn.dataset.target).classList.add('active');
+            
             if (btn.dataset.target === 'active-alerts-panel') loadActiveAlerts();
             if (btn.dataset.target === 'alert-rules-panel') loadRules();
         });
     });
+
     document.getElementById('chk-hide-resolved').addEventListener('change', loadActiveAlerts);
-    // Rule Editor Controls
+
+    // Fullscreen
+    btnFullscreen?.addEventListener('click', toggleFullscreen);
+
+    // Rule & Modal Controls
     btnNewRule.addEventListener('click', () => showRuleEditor());
     document.getElementById('btn-cancel-rule').addEventListener('click', hideRuleEditor);
-    // Help Modal Controls
     document.getElementById('btn-js-help').addEventListener('click', () => helpModal.style.display = 'flex');
     document.getElementById('btn-close-help').addEventListener('click', () => helpModal.style.display = 'none');
     document.getElementById('btn-close-help-2').addEventListener('click', () => helpModal.style.display = 'none');
-    // Analysis Modal Controls
     document.getElementById('btn-close-analysis').addEventListener('click', () => analysisModal.style.display = 'none');
     document.getElementById('btn-close-analysis-2').addEventListener('click', () => analysisModal.style.display = 'none');
+
     ruleForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         await saveRule();
     });
-    // --- 4. Init Ace Editor ---
+
+    // --- Init Ace ---
     if (window.ace) {
         aceEditor = ace.edit("rule-condition-editor");
         aceEditor.setTheme(document.body.classList.contains('dark-mode') ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
         aceEditor.session.setMode("ace/mode/javascript");
         aceEditor.setValue("return msg.payload.value > 50;", -1);
     }
+
     isViewInitialized = true;
-    console.log("✅ Alerts View Initialized (Async HTML Load)");
-    // [FIX] Check if the view is ALREADY active (user clicked tab while loading)
-    // If so, trigger the data load now that DOM is ready.
+    console.log("✅ Alerts View Initialized");
+
     if (container.classList.contains('active')) {
-        // Determine which sub-tab is active to load the right data
         const activeSubTab = container.querySelector('.sub-tab-button.active');
         if (activeSubTab && activeSubTab.dataset.target === 'alert-rules-panel') {
             loadRules();
@@ -105,27 +117,21 @@ export async function initAlertsView() {
         }
     }
 }
-// --- View Lifecycle ---
+
+// --- Lifecycle ---
 export function onAlertsViewShow() {
-    // Only try to load if init is complete. 
-    // If not complete, the initAlertsView function (above) will handle the load when it finishes.
     if (isViewInitialized) {
         loadActiveAlerts();
     }
 }
 export function onAlertsViewHide() { }
-// --- Public API for app.js ---
 export function refreshAlerts() {
     if (isViewInitialized && container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
         loadActiveAlerts();
     }
 }
 export function openCreateRuleModal(topic, examplePayload) {
-    if (!isViewInitialized) {
-        console.warn("Alerts view not ready yet.");
-        return;
-    }
-    // Switch to Rules Tab
+    if (!isViewInitialized) { console.warn("Alerts view not ready."); return; }
     const rulesTabBtn = document.querySelector('.sub-tab-button[data-target="alert-rules-panel"]');
     if (rulesTabBtn) rulesTabBtn.click();
     showRuleEditor();
@@ -136,14 +142,26 @@ export function openCreateRuleModal(topic, examplePayload) {
         if (keys.length > 0) {
             const key = keys[0];
             const val = examplePayload[key];
-            if (typeof val === 'number') {
-                condition = `return msg.payload.${key} > ${val};`;
-            }
+            if (typeof val === 'number') condition = `return msg.payload.${key} > ${val};`;
         }
     }
     if (aceEditor) aceEditor.setValue(condition, -1);
 }
-// --- Logic: Rules ---
+
+// --- Logic ---
+function toggleFullscreen() {
+    const panel = document.getElementById('active-alerts-panel');
+    if (!document.fullscreenElement) {
+        panel.requestFullscreen().catch(err => {
+            console.error(`Error enabling fullscreen: ${err.message}`);
+        });
+        panel.classList.add('fullscreen-mode');
+    } else {
+        document.exitFullscreen();
+        panel.classList.remove('fullscreen-mode');
+    }
+}
+
 function showRuleEditor(ruleToEdit = null) {
     rulesListContainer.style.display = 'none';
     ruleEditorContainer.style.display = 'block';
@@ -155,9 +173,7 @@ function showRuleEditor(ruleToEdit = null) {
         ruleForm.elements.severity.value = ruleToEdit.severity;
         ruleForm.elements.workflow_prompt.value = ruleToEdit.workflow_prompt || '';
         ruleForm.elements.webhook.value = ruleToEdit.notifications?.webhook || '';
-        if (aceEditor) {
-            aceEditor.setValue(ruleToEdit.condition_code, -1);
-        }
+        if (aceEditor) aceEditor.setValue(ruleToEdit.condition_code, -1);
     } else {
         editingRuleId = null;
         ruleEditorTitle.textContent = "Create New Rule";
@@ -165,11 +181,13 @@ function showRuleEditor(ruleToEdit = null) {
         if (aceEditor) aceEditor.setValue("return msg.payload.value > 50;", -1);
     }
 }
+
 function hideRuleEditor() {
     rulesListContainer.style.display = 'block';
     ruleEditorContainer.style.display = 'none';
     editingRuleId = null;
 }
+
 async function loadRules() {
     try {
         const res = await fetch('api/alerts/rules');
@@ -182,10 +200,10 @@ async function loadRules() {
         rules.forEach(rule => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${rule.name}</strong></td>
-                <td><code>${rule.topic_pattern}</code></td>
-                <td><span class="badge badge-${rule.severity}">${rule.severity}</span></td>
-                <td>
+                <td data-label="Name"><strong>${rule.name}</strong></td>
+                <td data-label="Topic"><code>${rule.topic_pattern}</code></td>
+                <td data-label="Severity"><span class="badge badge-${rule.severity}">${rule.severity}</span></td>
+                <td data-label="Actions">
                     <button class="btn-action btn-edit" title="Edit">Edit</button>
                     <button class="btn-action btn-delete" title="Delete">Delete</button>
                 </td>
@@ -196,6 +214,7 @@ async function loadRules() {
         });
     } catch (e) { console.error("Failed to load rules", e); }
 }
+
 async function saveRule() {
     const formData = new FormData(ruleForm);
     const data = {
@@ -204,17 +223,12 @@ async function saveRule() {
         severity: formData.get('severity'),
         condition_code: aceEditor.getValue(),
         workflow_prompt: formData.get('workflow_prompt'),
-        notifications: {
-            webhook: formData.get('webhook')
-        }
+        notifications: { webhook: formData.get('webhook') }
     };
     try {
         let url = 'api/alerts/rules';
         let method = 'POST';
-        if (editingRuleId) {
-            url = `api/alerts/rules/${editingRuleId}`;
-            method = 'PUT';
-        }
+        if (editingRuleId) { url = `api/alerts/rules/${editingRuleId}`; method = 'PUT'; }
         const res = await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
@@ -226,6 +240,7 @@ async function saveRule() {
         loadRules();
     } catch (e) { alert("Error: " + e.message); }
 }
+
 async function deleteRule(id) {
     if (!confirm("Delete this rule?")) return;
     try {
@@ -233,7 +248,48 @@ async function deleteRule(id) {
         loadRules();
     } catch (e) { alert("Delete failed."); }
 }
+
 // --- Logic: Alerts ---
+
+function formatCompactTrigger(jsonStr) {
+    try {
+        const j = JSON.parse(jsonStr);
+        if (typeof j !== 'object' || j === null) return String(j);
+        
+        // Priority keys for concise display
+        if (j.value !== undefined) return `${j.value} ${j.unit || ''}`;
+        if (j.val !== undefined) return `${j.val}`;
+        if (j.status !== undefined) return `${j.status}`;
+        
+        const keys = Object.keys(j);
+        if (keys.length > 0) return `${j[keys[0]]}`;
+        
+        return "Complex Data";
+    } catch (e) {
+        return "Raw Data";
+    }
+}
+
+/**
+ * Helper to parse the Structured AI Response.
+ * Fallback to full text if tags are missing to ensure user sees *something*.
+ */
+function parseAiResponse(fullText) {
+    if (!fullText) return { trigger: null, action: null, report: null };
+    
+    // Regex based on markers in alert_manager.js
+    const triggerMatch = fullText.match(/## TRIGGER\n(.*?)(?=\n##|$)/s);
+    const actionMatch = fullText.match(/## ACTION\n(.*?)(?=\n##|$)/s);
+    const reportMatch = fullText.match(/## REPORT\n([\s\S]*)/s); // Grab everything after REPORT
+
+    return {
+        trigger: triggerMatch ? triggerMatch[1].trim() : null,
+        action: actionMatch ? actionMatch[1].trim() : null,
+        // Fallback: If no ## REPORT tag, use the whole text as the report
+        report: reportMatch ? reportMatch[1].trim() : fullText 
+    };
+}
+
 async function loadActiveAlerts() {
     try {
         const res = await fetch('api/alerts/active');
@@ -247,85 +303,130 @@ async function loadActiveAlerts() {
             activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts. All systems nominal.</td></tr>';
             return;
         }
+        
         alerts.forEach(alert => {
             const tr = document.createElement('tr');
-            let displayVal = alert.trigger_value;
+            
+            // --- Parse AI Result ---
+            const aiData = parseAiResponse(alert.analysis_result);
+            
+            // --- 1. Trigger Value Column ---
+            // Priority: AI-extracted trigger > Legacy extraction > Raw
+            let displayTrigger = aiData.trigger;
+            if (!displayTrigger) {
+                displayTrigger = formatCompactTrigger(alert.trigger_value);
+            }
+            
+            // Prepare tooltip (Raw JSON)
+            let fullJsonTooltip = "";
             try { 
-                const j = JSON.parse(alert.trigger_value); 
-                displayVal = `<pre style="margin:0; font-size:0.8em; max-height:80px; overflow:auto;">${JSON.stringify(j, null, 2)}</pre>`;
-            } catch(e){}
-            // Analysis Section with Status
-            let analysisHtml = '';
-            if (alert.status === 'analyzing') {
-                analysisHtml = `<div style="color:var(--color-primary); display:flex; align-items:center; gap:6px;">
-                    <span class="broker-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> AI Analyzing...
-                </div>`;
-            } else if (alert.analysis_result) {
-                // Use marked to render small snippet, then strip HTML for safety or just keep snippet clean
-                const rawMarkdown = alert.analysis_result;
-                const snippet = rawMarkdown.substring(0, 150) + (rawMarkdown.length > 150 ? "..." : "");
-                
-                // If marked is available, we render the snippet
-                const renderedSnippet = window.marked ? window.marked.parse(snippet) : snippet;
+                fullJsonTooltip = JSON.stringify(JSON.parse(alert.trigger_value), null, 2).replace(/"/g, '&quot;');
+            } catch(e) { fullJsonTooltip = alert.trigger_value; }
+            
+            const triggerHtml = `<div class="compact-json" title="${fullJsonTooltip}">${displayTrigger}</div>`;
 
+            // --- 2. Action & Analysis Column ---
+            let analysisHtml = '';
+            let contentToModal = aiData.report || alert.analysis_result; // The text to show in popup
+
+            if (alert.status === 'analyzing') {
+                analysisHtml = `<div style="color:var(--color-primary); font-size:0.85em;"><span class="broker-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> Analyzing...</div>`;
+            } else if (aiData.action) {
+                // If we have a structured action
                 analysisHtml = `
-                    <div style="font-size:0.9em; border: 1px solid var(--color-border-secondary); padding: 8px; border-radius: 4px; background: var(--color-bg-tertiary);">
-                        🤖 <strong>AI Report:</strong> 
-                        <div class="markdown-content">${renderedSnippet}</div>
-                        <button class="mapper-button btn-view-analysis" style="margin-top:10px; font-size:0.8em; padding:4px 10px; width: 100%;">📄 View Full Report</button>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="ai-action-pill" title="${aiData.action}">💡 ${aiData.action}</div>
+                        <button class="btn-view-analysis" title="View Full Report">👁️</button>
+                    </div>
+                `;
+            } else if (alert.analysis_result) {
+                 // Fallback for old alerts without structure
+                 const snippet = alert.analysis_result.substring(0, 60) + "...";
+                 analysisHtml = `
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:0.85em; opacity:0.8;">${snippet}</span>
+                        <button class="btn-view-analysis" title="View Full Report">👁️</button>
                     </div>
                 `;
             } else {
-                analysisHtml = '<span style="color:#ccc; font-style:italic;">No analysis requested.</span>';
+                analysisHtml = '<span style="color:#ccc; font-size:0.8em;">Waiting...</span>';
             }
-            let actionsHtml = '';
+
+            // --- 3. Buttons & Status Traceability ---
+            let actionsHtml = '<div style="display:flex; gap:5px; align-items:center;">';
             if (alert.status !== 'resolved') {
                 if (alert.status !== 'acknowledged') {
                     actionsHtml += `<button class="btn-action btn-ack" data-id="${alert.id}">Ack</button>`;
                 }
                 actionsHtml += `<button class="btn-action btn-resolve" data-id="${alert.id}">Resolve</button>`;
+            } else {
+                actionsHtml += '<span style="color:var(--color-success); font-size:0.8em; font-weight:bold;">Done</span>';
             }
+            actionsHtml += '</div>';
+
             let statusHtml = `<span class="badge badge-${alert.status}">${alert.status}</span>`;
+            
+            // [NEW] Display User AND Timestamp of last action
             if (alert.handled_by) {
-                statusHtml += `<div style="font-size:0.8em; margin-top:4px; color:var(--color-text-secondary); font-style:italic;">by ${alert.handled_by}</div>`;
+                let actionTime = "";
+                if (alert.updated_at) {
+                    const d = new Date(alert.updated_at);
+                    actionTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+                // Avoid displaying "System (AI)" time if we prefer it cleaner, but explicit is better
+                statusHtml += `<div class="alert-meta-info">by ${alert.handled_by} <span style="opacity:0.7">(${actionTime})</span></div>`;
             }
+
             tr.innerHTML = `
-                <td style="font-size:0.9em; white-space:nowrap;">${new Date(alert.created_at).toLocaleString()}</td>
-                <td><span class="badge badge-${alert.severity}">${alert.severity}</span></td>
-                <td>
-                    <div style="font-weight:bold;">${alert.rule_name}</div>
-                    <div style="font-size:0.8em; color:var(--color-text-secondary); word-break:break-all;">${alert.topic}</div>
+                <td data-label="Time" style="font-size:0.85em; white-space:nowrap;">${new Date(alert.created_at).toLocaleTimeString()}</td>
+                <td data-label="Severity"><span class="badge badge-${alert.severity}">${alert.severity}</span></td>
+                <td data-label="Rule / Topic">
+                    <div style="font-weight:bold; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${alert.rule_name}</div>
+                    <div style="font-size:0.75em; color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${alert.topic}">${alert.topic}</div>
                 </td>
-                <td>${statusHtml}</td>
-                <td>${displayVal}</td>
-                <td>
-                    <div style="margin-bottom:8px;">${actionsHtml}</div>
-                    ${analysisHtml}
+                <td data-label="Status">${statusHtml}</td>
+                <td data-label="Value">${triggerHtml}</td>
+                <td data-label="Action">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        ${analysisHtml}
+                        ${actionsHtml}
+                    </div>
                 </td>
             `;
+
             // Listeners
             tr.querySelectorAll('.btn-ack').forEach(b => b.addEventListener('click', () => updateStatus(alert.id, 'acknowledged')));
             tr.querySelectorAll('.btn-resolve').forEach(b => b.addEventListener('click', () => updateStatus(alert.id, 'resolved')));
-            // Open Analysis Modal
+            
+            // Modal Logic
             const viewBtn = tr.querySelector('.btn-view-analysis');
             if(viewBtn) {
                 viewBtn.addEventListener('click', () => {
                     const contentDiv = document.getElementById('analysis-content');
                     if(contentDiv) {
-                        // Full Markdown Render in modal
                         if (window.marked) {
-                            contentDiv.innerHTML = window.marked.parse(alert.analysis_result);
+                            contentDiv.innerHTML = window.marked.parse(contentToModal);
                         } else {
-                            contentDiv.textContent = alert.analysis_result;
+                            contentDiv.textContent = contentToModal;
                         }
                     }
-                    if(analysisModal) analysisModal.style.display = 'flex';
+                    if(analysisModal) {
+                        // Move to appropriate parent for Fullscreen visibility
+                        if (document.fullscreenElement) {
+                            document.fullscreenElement.appendChild(analysisModal);
+                        } else {
+                            document.body.appendChild(analysisModal);
+                        }
+                        analysisModal.style.display = 'flex';
+                    }
                 });
             }
+
             activeAlertsTableBody.appendChild(tr);
         });
     } catch (e) { console.error("Failed to load alerts", e); }
 }
+
 async function updateStatus(id, status) {
     try {
         await fetch(`api/alerts/${id}/status`, {
