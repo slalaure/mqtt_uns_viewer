@@ -15,6 +15,7 @@
  * [NEW] WebSocket Streaming support for bypassing Proxy buffering with DEDUPLICATION.
  * [NEW] Multi-Session Support & Stop Generation.
  * [UPDATED] Integrated marked.js for full Markdown rendering in chat bubbles.
+ * [UPDATED] Fullscreen API support (moves chat to fullscreen element dynamically).
  */
 import { trackEvent } from './utils.js';
 // --- DOM Elements ---
@@ -114,6 +115,21 @@ export function initChatView(basePath, onFileCreated) {
     btnClear?.addEventListener('click', () => {
         if (confirm('Delete current chat session?')) {
             deleteSession(currentSessionId);
+        }
+    });
+
+    // --- [NEW] Fullscreen Support ---
+    // Move chat widget inside the fullscreen element so it remains visible
+    document.addEventListener('fullscreenchange', () => {
+        const fsElement = document.fullscreenElement;
+        if (fsElement && fsElement !== document.body) {
+            fsElement.appendChild(chatContainer);
+            if (fabButton) fsElement.appendChild(fabButton);
+            if (cameraModal) fsElement.appendChild(cameraModal);
+        } else {
+            document.body.appendChild(chatContainer);
+            if (fabButton) document.body.appendChild(fabButton);
+            if (cameraModal) document.body.appendChild(cameraModal);
         }
     });
 }
@@ -559,7 +575,6 @@ function appendMessageToUI(msg) {
  */
 function formatMessageContent(text) {
     if (!text) return '';
-    
     // Check if marked is available for robust rendering
     if (window.marked) {
         try {
@@ -568,7 +583,6 @@ function formatMessageContent(text) {
             console.warn("Markdown parsing failed, falling back to basic formatting.", e);
         }
     }
-
     // Basic Fallback (original logic)
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')

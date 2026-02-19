@@ -12,6 +12,7 @@
  * [UPDATED] Exposes internal Agent Runner for Alert Manager.
  * [UPDATED] Supports 10 iterations for autonomous analysis.
  * [UPDATED] Added Alert Management Tools implementation.
+ * [UPDATED] Added backend logging for upstream LLM API errors.
  */
 const express = require('express');
 const axios = require('axios');
@@ -23,7 +24,7 @@ const chrono = require('chrono-node');
 // [NEW] Import Alert Manager from ROOT to inject agent capability
 const alertManager = require('../alert_manager');
 // --- Constants ---
-const MAX_AGENT_TURNS = 10; // Limit recursion to 10 turns
+const MAX_AGENT_TURNS = 16; // Limit recursion to 16 turns
 const LLM_TIMEOUT_MS = 120000; // 120s timeout
 // --- State for Abort Control ---
 // Map<clientId, { abortController: AbortController, res: Response }>
@@ -834,6 +835,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
             }
         } catch (error) {
+            // [NEW] Added logger.error to track upstream LLM API errors on backend
+            if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
+                logger.error({ 
+                    err: error.message, 
+                    status: error.response?.status, 
+                    data: error.response?.data 
+                }, "❌ [ChatAPI] Upstream LLM Error");
+            }
+            
             if (error.message === "Generation cancelled by user." || error.code === 'ERR_CANCELED') {
                 sendChunk(res, 'status', '⛔ Generation Stopped by User', clientId);
             } else if (error.response) {

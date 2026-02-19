@@ -12,12 +12,12 @@
  * Handles real-time updates of SVG synoptics with performance optimizations.
  * [UPDATED] Implemented RequestAnimationFrame and update throttling to fix UI freezes.
  * [UPDATED] Added DOM element caching for faster lookups.
+ * [UPDATED] Added safety try/finally to prevent frozen render loops.
+ * [UPDATED] Added instant refresh on tab activation.
  */
-
 // Import shared utilities
 import { formatTimestampForLabel, trackEvent } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
-
 // --- DOM Element Querying ---
 const svgContent = document.getElementById('svg-content');
 const svgHistoryToggle = document.getElementById('svg-history-toggle');
@@ -27,7 +27,6 @@ const svgLabel = document.getElementById('svg-label');
 const btnSvgFullscreen = document.getElementById('btn-svg-fullscreen');
 const mapView = document.getElementById('map-view');
 const svgSelectDropdown = document.getElementById('svg-select-dropdown');
-
 // --- Module-level State ---
 let svgInitialTextValues = new Map();
 let allHistoryEntries = [];
@@ -37,15 +36,12 @@ let currentMaxTimestamp = 0;
 let svgSlider = null;
 let appBasePath = '/'; 
 let isMultiBroker = false;
-
 // --- Performance Optimization State ---
 let elementCache = new Map(); // Cache for SVG elements by ID
 let updateQueue = new Map();  // Queue for throttled updates
 let animationFrameRequested = false;
 let highlightTimers = new Map(); // Track active highlight timeouts to prevent overlaps
-
 const BINDINGS_SCRIPT_ID = 'custom-svg-bindings-script';
-
 // API for custom bindings to accept brokerId
 let customSvgBindings = {
     isLoaded: false,
@@ -53,7 +49,6 @@ let customSvgBindings = {
     update: (brokerId, topic, payloadObject, svgRoot) => {},
     reset: (svgRoot) => {}
 };
-
 /**
  * Allows an external script (svg-bindings.js) to register its logic.
  */
@@ -65,7 +60,6 @@ window.registerSvgBindings = function(bindings) {
     if (bindings.reset) customSvgBindings.reset = bindings.reset;
     console.log("Custom SVG bindings registered.");
 }
-
 /**
  * Initializes the SVG View functionality.
  */
@@ -74,10 +68,8 @@ export function initSvgView(appConfig) {
     isMultiBroker = appConfig.isMultiBroker; // Store multi-broker state
     // Initial load
     refreshSvgList(appConfig.svgFilePath);
-    
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
     svgSelectDropdown?.addEventListener('change', onSvgFileChange);
-    
     svgHistoryToggle?.addEventListener('change', (e) => {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
@@ -86,12 +78,14 @@ export function initSvgView(appConfig) {
             // When turning on, fetch state for the current slider position
             const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
             fetchLastKnownState(replayTime);
+        } else {
+            // [FIX] When returning to live mode, fetch latest state immediately
+            fetchLastKnownState(Date.now());
         }
         if (svgSlider) {
             svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
         }
     });
-
     if (svgHandle) {
         svgSlider = createSingleTimeSlider({
             containerEl: svgTimelineSlider,
@@ -110,7 +104,6 @@ export function initSvgView(appConfig) {
             }
         });
     }
-
     // Add Delete Button to Controls
     const controlsContainer = document.querySelector('.map-view-controls');
     if (controlsContainer) {
@@ -123,14 +116,12 @@ export function initSvgView(appConfig) {
         controlsContainer.insertBefore(btnDelete, btnSvgFullscreen);
     }
 }
-
 /**
  * Receives the full history log from the main app.
  */
 export function setSvgHistoryData(entries) {
     allHistoryEntries = entries; 
 }
-
 /**
  * Publicly exported function to refresh the dropdown.
  */
@@ -267,7 +258,6 @@ async function loadSvgPlan(filename) {
     elementCache.clear();
     highlightTimers.forEach(t => clearTimeout(t));
     highlightTimers.clear();
-
     try {
         const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}&t=${Date.now()}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -286,6 +276,8 @@ async function loadSvgPlan(filename) {
             if (isSvgHistoryMode) {
                 const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
                 fetchLastKnownState(replayTime);
+            } else {
+                fetchLastKnownState(Date.now()); // Load current state
             }
         }
     } catch (error) {
@@ -335,14 +327,12 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
         default: return false;
     }
 }
-
 /**
  * Updates a single SVG element.
  */
 function updateSvgElement(el, keyPath, value) {
     // --- 1. SPECIAL VISUALS (by ID or data-key) ---
     const numericValue = parseFloat(value);
-    
     // Special visuals
     if (el.id === 'shield-visual-effect' && keyPath === 'power' && !isNaN(numericValue)) {
         const opacity = Math.max(0, Math.min(1, (numericValue / 100.0) * 0.7 + 0.1));
@@ -377,7 +367,6 @@ function updateSvgElement(el, keyPath, value) {
                 el.setAttribute('fill', '#d29922'); // Yellow for 'standby', 'charging', 'transit', 'perturbed', 'stopped_station' etc.
             }
         }
-        
         if (el.getAttribute('fill') === '#f85149' && !el.classList.contains('text-data')) {
             el.classList.add('alarm-text'); 
         } else {
@@ -388,7 +377,7 @@ function updateSvgElement(el, keyPath, value) {
             el.textContent = parseFloat(value).toFixed(2);
         } else {
             el.textContent = value;
-    }
+        }
     }
     // --- 4. ALARM LINE (Alarm check) ---
     const alarmType = el.dataset.alarmType;
@@ -396,80 +385,81 @@ function updateSvgElement(el, keyPath, value) {
     if (alarmType && alarmValue) {
         const alarmLineGroup = el.closest('.alarm-line');
         if (alarmLineGroup) {
-        const isAlarm = checkAlarm(value, alarmType, alarmValue);
-        alarmLineGroup.style.visibility = isAlarm ? 'visible' : 'hidden';
-    } else {
-         const isAlarm = checkAlarm(value, alarmType, alarmValue);
-         el.style.visibility = isAlarm ? 'visible' : 'hidden';
+            const isAlarm = checkAlarm(value, alarmType, alarmValue);
+            alarmLineGroup.style.visibility = isAlarm ? 'visible' : 'hidden';
+        } else {
+             const isAlarm = checkAlarm(value, alarmType, alarmValue);
+             el.style.visibility = isAlarm ? 'visible' : 'hidden';
+        }
     }
-  }
 }
-
 /**
  * Process the update queue via RequestAnimationFrame to prevent UI freezing.
+ * [FIX] Wrapped in try/finally to guarantee animationFrameRequested resets.
  */
 function flushUpdateQueue() {
-    const svgRoot = svgContent.querySelector('svg');
-    if (!svgRoot) {
-        animationFrameRequested = false;
-        return;
-    }
+    try {
+        const svgRoot = svgContent.querySelector('svg');
+        if (!svgRoot) return; // Will jump to finally block
 
-    updateQueue.forEach((data, key) => {
-        const { brokerId, topic, payloadObject, isJson } = data;
-        
-        if (customSvgBindings.isLoaded) {
-            try {
-                customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
-            } catch (err) {
-                console.error(`Error in custom binding update:`, err);
-            }
-        } else if (isJson) {
-            const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
-            const genericId = topic.replace(/\//g, '-');
-            
-            // Search for elements (optimized using local cache)
-            const idsToTry = [specificId, genericId];
-            idsToTry.forEach(id => {
-                let elements = elementCache.get(id);
-                if (elements === undefined) {
-                    elements = svgContent.querySelectorAll(`[id="${id}"]`);
-                    elementCache.set(id, elements);
+        updateQueue.forEach((data, key) => {
+            const { brokerId, topic, payloadObject, isJson } = data;
+            if (customSvgBindings.isLoaded) {
+                try {
+                    customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
+                } catch (err) {
+                    console.error(`Error in custom binding update:`, err);
                 }
-                
-                if (elements.length > 0) {
-                    elements.forEach(groupElement => {
-                        const dataElements = groupElement.querySelectorAll('[data-key]');
-                        dataElements.forEach(el => {
-                            const value = getNestedValue(payloadObject, el.dataset.key);
-                            if (value !== null && value !== undefined) {
-                                updateSvgElement(el, el.dataset.key, value);
-                            }
+            } else if (isJson) {
+                const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
+                const genericId = topic.replace(/\//g, '-');
+                // Search for elements (optimized using local cache)
+                const idsToTry = [specificId, genericId];
+                idsToTry.forEach(id => {
+                    let elements = elementCache.get(id);
+                    if (elements === undefined) {
+                        try {
+                            elements = svgContent.querySelectorAll(`[id="${id}"]`);
+                        } catch (qErr) {
+                            // Catch invalid selector errors safely
+                            elements = [];
+                        }
+                        elementCache.set(id, elements);
+                    }
+                    if (elements.length > 0) {
+                        elements.forEach(groupElement => {
+                            const dataElements = groupElement.querySelectorAll('[data-key]');
+                            dataElements.forEach(el => {
+                                const value = getNestedValue(payloadObject, el.dataset.key);
+                                if (value !== null && value !== undefined) {
+                                    updateSvgElement(el, el.dataset.key, value);
+                                }
+                            });
+                            // Optimized Highlight
+                            groupElement.classList.add('highlight-svg-default');
+                            if (highlightTimers.has(groupElement)) clearTimeout(highlightTimers.get(groupElement));
+                            highlightTimers.set(groupElement, setTimeout(() => {
+                                groupElement.classList.remove('highlight-svg-default');
+                                highlightTimers.delete(groupElement);
+                            }, 500));
                         });
-                        
-                        // Optimized Highlight
-                        groupElement.classList.add('highlight-svg-default');
-                        if (highlightTimers.has(groupElement)) clearTimeout(highlightTimers.get(groupElement));
-                        highlightTimers.set(groupElement, setTimeout(() => {
-                            groupElement.classList.remove('highlight-svg-default');
-                            highlightTimers.delete(groupElement);
-                        }, 500));
-                    });
-                }
-            });
-        }
-    });
-
-    updateQueue.clear();
-    animationFrameRequested = false;
+                    }
+                });
+            }
+        });
+    } catch (globalErr) {
+        console.error("Critical error in SVG render loop:", globalErr);
+    } finally {
+        // ALWAYS clear queue and release lock, even if querySelector throws
+        updateQueue.clear();
+        animationFrameRequested = false;
+    }
 }
-
 /**
  * Main update router function. Throttled via Queue.
  */
 export function updateMap(brokerId, topic, payload) {
     if (svgHistoryToggle?.checked || !svgContent) return;
-
     let payloadObject;
     let isJson = false;
     try {
@@ -478,11 +468,9 @@ export function updateMap(brokerId, topic, payload) {
     } catch (e) { 
         payloadObject = payload;
     }
-
     // Queue the update (keep only the latest value for this topic/broker)
     const queueKey = `${brokerId}:${topic}`;
     updateQueue.set(queueKey, { brokerId, topic, payloadObject, isJson });
-
     if (!animationFrameRequested) {
         animationFrameRequested = true;
         requestAnimationFrame(flushUpdateQueue);
@@ -501,6 +489,16 @@ export function updateSvgTimelineUI(min, max) {
 }
 
 /**
+ * [NEW] Force an explicit fetch of the latest real-time data from the DB.
+ * Used when switching tabs so the user doesn't wait for the next ping.
+ */
+export function refreshSvgLiveState() {
+    if (!isSvgHistoryMode && svgContent && svgContent.querySelector('svg')) {
+        fetchLastKnownState(Date.now());
+    }
+}
+
+/**
  * [NEW] Fetches the system state from DuckDB for a specific timestamp
  * and applies it to the SVG. Replaces local replaySvgHistory.
  * Renamed to fetchLastKnownState to match server semantic.
@@ -509,10 +507,8 @@ async function fetchLastKnownState(timestamp) {
     if (!svgContent) return;
     const svgRoot = svgContent.querySelector('svg');
     if (!svgRoot) return;
-    
     // 1. Visual Feedback
     svgContent.style.opacity = '0.5';
-    
     // 2. Clear current state (Reset)
     svgInitialTextValues.forEach((state, element) => {
         if (state.type === 'text') {
@@ -522,13 +518,12 @@ async function fetchLastKnownState(timestamp) {
         }
         element.classList.remove('alarm-text', 'highlight-svg-default');
         if (element.getAttribute('fill') === '#f85149' || element.getAttribute('fill') === '#d29922' || element.getAttribute('fill') === '#3fb950' || element.getAttribute('fill') === '#58a6ff') {
-        element.removeAttribute('fill');
+            element.removeAttribute('fill');
         }
     });
     svgContent.querySelectorAll('.alarm-line').forEach(el => el.style.visibility = 'hidden');
     highlightTimers.forEach(t => clearTimeout(t));
     highlightTimers.clear();
-
     if (customSvgBindings.isLoaded) {
         try {
             customSvgBindings.reset(svgRoot);
@@ -536,14 +531,13 @@ async function fetchLastKnownState(timestamp) {
             console.error("Error in custom SVG binding 'reset' function:", err);
         }
     }
-
     // 3. API Call to /last-known
     try {
         const isoTime = new Date(timestamp).toISOString();
         const response = await fetch(`api/context/last-known?timestamp=${encodeURIComponent(isoTime)}`);
         if (!response.ok) throw new Error("Failed to fetch state");
         const stateData = await response.json(); 
-        console.log(`[SVG History] Fetched ${stateData.length} records (Last Known State) for ${isoTime}`);
+        // console.log(`[SVG History] Fetched ${stateData.length} records (Last Known State) for ${isoTime}`);
         
         // 4. Apply State
         stateData.forEach(entry => {
@@ -556,7 +550,6 @@ async function fetchLastKnownState(timestamp) {
             } catch (e) {
                 payloadObject = payload;
             }
-            
             if (customSvgBindings.isLoaded) {
                 try {
                     customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
@@ -571,13 +564,15 @@ async function fetchLastKnownState(timestamp) {
             } else if (isJson) {
                 const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');
-                const groupElements = svgContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`);
-                groupElements.forEach(groupElement => {
-                    groupElement.querySelectorAll('[data-key]').forEach(el => {
-                        const value = getNestedValue(payloadObject, el.dataset.key);
-                        if (value !== null && value !== undefined) updateSvgElement(el, el.dataset.key, value);
+                try {
+                    const groupElements = svgContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`);
+                    groupElements.forEach(groupElement => {
+                        groupElement.querySelectorAll('[data-key]').forEach(el => {
+                            const value = getNestedValue(payloadObject, el.dataset.key);
+                            if (value !== null && value !== undefined) updateSvgElement(el, el.dataset.key, value);
+                        });
                     });
-                });
+                } catch(e) {} // Catch invalid selector characters
             }
         });
     } catch (err) {
