@@ -24,7 +24,6 @@ main#chart-view {
     box-sizing: border-box;
     background-color: var(--color-bg-secondary);
 }
-
 /* --- Chart Controls (Top-left)  --- */
 .chart-tree-wrapper .tree-controls {
     padding: 10px;
@@ -60,10 +59,8 @@ main#chart-view {
 .chart-tree-wrapper .tree-controls button:hover {
     background-color: var(--color-bg-accent);
 }
-
 /* --- #chart-tree Specifics --- */
 #chart-tree .node-filter-checkbox { display: none; }
-#chart-tree li { padding-left: 2px; }
 #chart-tree ul { margin-left: 20px; }
 #chart-tree .node-container { cursor: pointer; }
 #chart-tree .node-container:hover { background-color: var(--color-bg-accent); }
@@ -79,7 +76,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     display: none; 
 }
 #chart-tree .is-folder > .node-container { font-weight: 500; }
-
 /* --- Chart Variable List (Top-right) --- */
 .chart-variable-list {
     flex-grow: 1;
@@ -109,7 +105,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     color: var(--color-text-secondary);
     margin-left: 5px;
 }
-
 /* --- Chart Main Area (Bottom-right) --- */
 #chart-main-area {
     flex-grow: 1;
@@ -223,7 +218,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     color: var(--color-text-secondary);
     font-style: italic;
 }
-
 /* --- Chart Fullscreen --- */
 #chart-main-area:fullscreen {
     background-color: var(--color-bg-secondary);
@@ -240,7 +234,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 #chart-main-area:-webkit-full-screen { background-color: var(--color-bg-secondary); }
 #chart-main-area:-moz-full-screen { background-color: var(--color-bg-secondary); }
 #chart-main-area:-ms-fullscreen { background-color: var(--color-bg-secondary); }
-
 /* --- Chart Save Status --- */
 #chart-save-status {
     font-size: 0.9em;
@@ -254,7 +247,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 #chart-save-status.error {
     color: var(--color-danger);
 }
-
 /* ---  Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     main#chart-view {
@@ -288,7 +280,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
         /* [FIX] Ensure container has layout stability in scroll mode */
         min-height: 450px;
     }
-    
     /* [FIX] Explicit height for the canvas container on mobile
        to prevent infinite resizing loops (flickering) */
     #chart-canvas-container {
@@ -296,7 +287,6 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
         min-height: 350px;
         flex-grow: 0; /* Stop trying to fill undefined height */
     }
-
     .chart-config-bar {
         gap: 8px; /* Reduce gap */
     }

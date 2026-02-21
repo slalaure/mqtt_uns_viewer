@@ -1,5 +1,4 @@
 /* public/css/base.css */
-
 /* --- Root Theme Variables --- */
 :root {
     --color-bg: #f4f7f9;
@@ -27,7 +26,6 @@
     --selected-text: #fff;
     --tree-line-color: #ccc;
     --pruning-bg: rgba(33, 37, 41, 0.9);
-
     /* Mapper & Form Colors */
     --color-danger: #dc3545;
     --color-danger-hover: #c82333;
@@ -37,14 +35,12 @@
     --color-code-text: var(--color-text);
     --color-mapped-source: #8e44ad; /* Purple */
     --color-mapped-target: #27ae60; /* Green */
-
     /* Status Colors */
     --status-connected: #28a745; /* Green */
     --status-connecting: #ffc107; /* Yellow/Orange */
     --status-error: #dc3545; /* Red */
     --status-offline: #6c757d; /* Gray */
 }
-
 /* --- Dark Mode Theme Variables --- */
 body.dark-mode {
     --color-bg: #1a1a1a;
@@ -72,7 +68,6 @@ body.dark-mode {
     --selected-text: #1a1a1a;
     --tree-line-color: #555;
     --pruning-bg: rgba(200, 200, 200, 0.9);
-
     /* Mapper & Form Colors */
     --color-danger: #e06c75;
     --color-danger-hover: #f08080;
@@ -83,7 +78,6 @@ body.dark-mode {
     --color-mapped-source: #bb86fc; /* Light Purple */
     --color-mapped-target: #03dac6; /* Teal */
 }
-
 /* --- Base Layout & Typography --- */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -95,7 +89,6 @@ body {
     height: 100vh;
     /* Removed overflow: hidden; */
 }
-
 /* --- Global Alert Banner --- */
 .global-alert-banner {
     position: fixed;
@@ -116,22 +109,18 @@ body {
     justify-content: center;
     gap: 15px;
 }
-
 .global-alert-banner.visible {
     transform: translateY(0);
 }
-
 .alert-banner-icon {
     font-size: 1.2em;
     animation: pulse-white 1s infinite;
 }
-
 @keyframes pulse-white {
     0% { opacity: 0.7; transform: scale(0.9); }
     50% { opacity: 1; transform: scale(1.1); }
     100% { opacity: 0.7; transform: scale(0.9); }
 }
-
 /* --- Header  --- */
 header {
     background-color: var(--color-header-bg);
@@ -142,9 +131,7 @@ header {
     justify-content: space-between;
     align-items: center;
 }
-
 header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font size */
-
 /* Header Sub-row for Version and Status */
 .header-sub-row {
     display: flex;
@@ -152,20 +139,17 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     gap: 15px;
     margin-left: 10px;
 }
-
 .header-sub-row p { 
     margin: 0; 
     font-size: 0.8em; 
     opacity: 0.9; 
 }
-
 /* Broker Status Container */
 .broker-status-container {
     display: flex;
     gap: 12px;
     align-items: center;
 }
-
 .broker-status-item {
     display: flex;
     align-items: center;
@@ -176,7 +160,6 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     border-radius: 12px;
     cursor: default;
 }
-
 .broker-dot {
     width: 8px;
     height: 8px;
@@ -184,17 +167,14 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     background-color: var(--status-offline); /* Default */
     box-shadow: 0 0 2px rgba(0,0,0,0.3);
 }
-
 .status-connected .broker-dot { background-color: var(--status-connected); box-shadow: 0 0 4px var(--status-connected); }
 .status-connecting .broker-dot { background-color: var(--status-connecting); animation: blink 1s infinite; }
 .status-error .broker-dot { background-color: var(--status-error); }
 .status-offline .broker-dot { background-color: var(--status-offline); }
 .status-disconnected .broker-dot { background-color: var(--status-offline); }
-
 @keyframes blink {
     50% { opacity: 0.5; }
 }
-
 .datetime-container {
     font-family: 'Courier New', Courier, monospace;
     font-size: 1em; /* Reduced font size */
@@ -203,33 +183,28 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     padding: 4px 8px; /* Reduced padding */
     border-radius: 4px;
 }
-
 /* --- Theme Switcher --- */
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
     gap: 8px;
 }
-
 .theme-label {
     font-size: 0.9em;
     color: var(--color-header-text);
     user-select: none;
 }
-
 .theme-switch {
     position: relative;
     display: inline-block;
     width: 44px;
     height: 24px;
 }
-
 .theme-switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
-
 .slider {
     position: absolute;
     cursor: pointer;
@@ -240,7 +215,6 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     background-color: #777;
     transition: .4s;
 }
-
 .slider:before {
     position: absolute;
     content: "";
@@ -251,23 +225,18 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; } /* Reduced font si
     background-color: white;
     transition: .4s;
 }
-
 input:checked + .slider {
     background-color: var(--color-primary);
 }
-
 input:checked + .slider:before {
     transform: translateX(20px);
 }
-
 .slider.round {
     border-radius: 24px;
 }
-
 .slider.round:before {
     border-radius: 50%;
 }
-
 /* --- Simulator Controls --- */
 .simulator-controls {
     display: none;
@@ -277,7 +246,6 @@ input:checked + .slider:before {
     padding: 5px 10px;
     border-radius: 4px;
 }
-
 .simulator-controls button {
     background-color: var(--color-bg-secondary);
     color: var(--color-text);
@@ -288,11 +256,9 @@ input:checked + .slider:before {
     font-size: 14px;
     transition: background-color 0.2s;
 }
-
 .simulator-controls button:hover {
     background-color: var(--color-bg-accent);
 }
-
 /* Added disabled styles */
 .simulator-controls button:disabled {
     background-color: var(--color-bg-accent);
@@ -300,11 +266,9 @@ input:checked + .slider:before {
     cursor: not-allowed;
     opacity: 0.6;
 }
-
 .simulator-controls button:disabled:hover {
     background-color: var(--color-bg-accent);
 }
-
 .status-indicator {
     font-weight: bold;
     font-size: 14px;
@@ -312,7 +276,6 @@ input:checked + .slider:before {
     position: relative;
     color: var(--color-header-text);
 }
-
 .status-indicator::before {
     content: '';
     position: absolute;
@@ -324,22 +287,18 @@ input:checked + .slider:before {
     border-radius: 50%;
     background-color: grey;
 }
-
 .status-indicator.stopped::before {
     background-color: #dc3545;
 }
-
 .status-indicator.running::before {
     background-color: #28a745;
     animation: pulse-green 2s infinite;
 }
-
 @keyframes pulse-green {
     0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
     70% { box-shadow: 0 0 0 8px rgba(40, 167, 69, 0); }
     100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
 }
-
 /* --- Header Buttons --- */
 .nav-button {
     color: var(--color-header-text);
@@ -355,12 +314,10 @@ body.dark-mode .nav-button {
 .nav-button:hover {
     background-color: rgba(255, 255, 255, 0.3);
 }
-
 .icon-button {
     font-size: 1.25em; /* Reduced font size */
     padding: 0 10px;
 }
-
 /* --- Tab Navigation --- */
 .tab-nav {
     background-color: var(--color-bg-accent);
@@ -369,7 +326,6 @@ body.dark-mode .nav-button {
     display: flex;
     flex-shrink: 0;
 }
-
 .tab-button {
     padding: 8px 16px;
     border: none;
@@ -381,10 +337,8 @@ body.dark-mode .nav-button {
     border-bottom: 3px solid transparent;
     transition: all 0.2s ease-in-out;
 }
-
 .tab-button:hover { color: var(--color-primary); }
 .tab-button.active { color: var(--color-primary); border-bottom: 3px solid var(--color-primary); }
-
 /* --- View Container --- */
 .view-container {
     flex-grow: 1;
@@ -392,7 +346,6 @@ body.dark-mode .nav-button {
     position: relative;
     display: flex; /* Make this a flex container */
 }
-
 .view {
     display: none;
     width: 100%;
@@ -400,11 +353,9 @@ body.dark-mode .nav-button {
     /* Was position: absolute, now let it be a flex item */
     flex-direction: column; /* Default to column for mobile */
 }
-
 .view.active {
     display: flex;
 }
-
 /* --- Footer  --- */
 .app-footer {
     background-color: var(--color-footer-bg);
@@ -414,16 +365,13 @@ body.dark-mode .nav-button {
     font-size: 0.75em; /* Reduced font size */
     flex-shrink: 0;
 }
-
 .app-footer a {
     color: var(--color-footer-link);
     text-decoration: none;
 }
-
 .app-footer a:hover {
     text-decoration: underline;
 }
-
 /* --- Shared: Panel Resizers --- */
 .resizer { /* Vertical */
     flex: 0 0 5px;
@@ -437,7 +385,6 @@ body.dark-mode .nav-button {
 .resizer:hover {
     background-color: var(--color-primary);
 }
-
 .resizer-horizontal { /* Horizontal */
     flex: 0 0 5px;
     cursor: row-resize;
@@ -452,7 +399,6 @@ body.dark-mode .nav-button {
 .resizer-horizontal:hover {
     background-color: var(--color-primary);
 }
-
 /* --- Shared: Base Payload Panel Styles --- */
 /* (Used by Tree, Mapper, Chart) */
 .payload-container {
@@ -465,7 +411,6 @@ body.dark-mode .nav-button {
     flex-direction: column;
     background-color: var(--color-bg-secondary);
 }
-
 #payload-main-area,
 #mapper-payload-area,
 #chart-payload-area {
@@ -474,18 +419,15 @@ body.dark-mode .nav-button {
     flex-direction: column;
     min-height: 0; /* Was 0, changed to 150px for safety */
 }
-
 .payload-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 10px;
 }
-
 .payload-header h2 {
     margin: 0;
 }
-
 .payload-topic-display {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.9em;
@@ -498,7 +440,6 @@ body.dark-mode .nav-button {
     word-break: break-all;
     margin-top: 10px;
 }
-
 pre#payload-content,
 pre#mapper-payload-content,
 #chart-payload-area pre { /* chart pre is not used, but good to have */
@@ -518,13 +459,19 @@ pre#mapper-payload-content,
 /* --- Shared: Base Tree Styles --- */
 /* (Used by Tree, Mapper, Chart) */
 .tree-container {
-    padding: 10px 20px;
+    padding: 10px 8px; /* Reduced from 20px for tighter left alignment */
     overflow-y: auto;
     box-sizing: border-box;
     flex-grow: 1;
 }
-
-.tree-container ul { list-style-type: none; padding-left: 0; margin-left: 20px; }
+.tree-container > ul {
+    margin-left: 0 !important; /* Forces the root UL to be flush left */
+}
+.tree-container ul { 
+    list-style-type: none; 
+    padding-left: 0; 
+    margin-left: 18px !important; /* Slightly tighter nested indent, overrides specific view rules */
+}
 .tree-container li {
     margin: 0;
     padding: 0 0 0 22px;
@@ -532,7 +479,6 @@ pre#mapper-payload-content,
     line-height: 24px;
     --line-color: var(--tree-line-color);
 }
-
 .tree-container li::before, .tree-container li::after {
     content: '';
     position: absolute;
@@ -542,7 +488,6 @@ pre#mapper-payload-content,
 .tree-container li::before { top: 0; left: 0; border-left: 1px solid; width: 1px; height: 100%; }
 .tree-container li::after { top: 12px; left: 0; border-top: 1px solid; width: 15px; height: 1px; }
 .tree-container li:last-child::before { height: 12px; }
-
 .tree-container .node-container {
     display: flex;
     justify-content: space-between;
@@ -552,24 +497,18 @@ pre#mapper-payload-content,
     background-color: transparent;
     position: relative;
 }
-
 .tree-container .node-name { display: inline-flex; align-items: center; }
 .tree-container .node-timestamp { font-size: 0.75em; color: var(--color-text-muted); margin-left: 15px; font-family: 'Courier New', Courier, monospace; }
-
 .node-name::before { content: ''; display: inline-block; width: 16px; height: 16px; margin-right: 6px; background-size: contain; background-repeat: no-repeat; background-position: center; }
-
 /* Folder/File icons */
 .is-folder > .node-container { font-weight: 500; cursor: pointer; }
 .is-folder:not(.collapsed) .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M1 2.5A1.5 1.5 0 0 1 2.5 1h3.793a1.5 1.5 0 0 1 1.06.44L8.854 2.94a.5.5 0 0 1 .146.353V4.5h6.5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5H1a.5.5 0 0 1-.5-.5V2.5zM2.5 2a.5.5 0 0 0-.5.5V12h12V5H8.5a.5.5 0 0 1-.5-.5V3.354a.5.5 0 0 1 .146-.353L9.146 2H2.5z'/%3E%3C/svg%3E"); }
 .is-folder.collapsed .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%235a6268'%3E%3Cpath d='M.5 1a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h15a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H8.5a.5.5 0 0 1-.408-.182L6.818 1.09A.5.5 0 0 0 6.409 1H.5z'/%3E%3C/svg%3E"); }
-
 body.dark-mode .is-folder .node-name::before { filter: brightness(0) invert(0.8); }
-
 .is-file > .node-container { color: var(--color-primary-hover); cursor: pointer; }
 .is-file > .node-container:hover { background-color: var(--color-bg-accent); }
 .is-file .node-name::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23007bff'%3E%3Cpath d='M4 0h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H4z'/%3E%3Cpath d='M4.5 3h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1zM4.5 5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z'/%3E%3C/svg%3E"); }
 body.dark-mode .is-file .node-name::before { filter: brightness(0) invert(0.6) sepia(1) hue-rotate(180deg) saturate(5); }
-
 /* --- Shared: Tree Coloring (Mapper & Chart) --- */
 .tree-container .mapped-source > .node-container > .node-name {
     color: var(--color-mapped-source);
@@ -578,7 +517,6 @@ body.dark-mode .is-file .node-name::before { filter: brightness(0) invert(0.6) s
 .tree-container .is-file.mapped-source > .node-container > .node-name {
     color: var(--color-mapped-source);
 }
-
 .tree-container .mapped-target > .node-container > .node-name {
     color: var(--color-mapped-target);
     font-style: italic;
@@ -592,13 +530,11 @@ body.dark-mode .is-file .node-name::before { filter: brightness(0) invert(0.6) s
 body.dark-mode .is-file.mapped-target .node-name::before {
     filter: invert(80%) sepia(50%) saturate(2000%) hue-rotate(100deg);
 }
-
 .tree-container .has-charted-variable > .node-container > .node-name {
     color: var(--color-mapped-target); /* Use the green 'target' color */
     font-weight: bold;
     font-style: italic;
 }
-
 /* --- Shared: Time Slider --- */
 /* (Used by History, SVG, Chart) */
 .time-slider-container {
@@ -608,7 +544,6 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     padding: 8px 0;
     box-sizing: content-box;
 }
-
 .slider-track, .slider-range {
     position: absolute;
     left: 0;
@@ -617,16 +552,13 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     top: 50%;
     transform: translateY(-50%);
 }
-
 .slider-track {
     width: 100%;
     background-color: var(--color-bg-accent);
 }
-
 .slider-range {
     background-color: var(--color-primary);
 }
-
 .slider-handle {
     position: absolute;
     top: 50%;
@@ -639,12 +571,10 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     cursor: grab;
     z-index: 2;
 }
-
 .slider-handle:active {
     cursor: grabbing;
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
-
 .slider-label {
     position: absolute;
     bottom: 20px;
@@ -661,11 +591,9 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     transition: opacity 0.2s;
     pointer-events: none;
 }
-
 .slider-handle:hover .slider-label, .slider-handle:active .slider-label {
     opacity: 1;
 }
-
 /* --- Shared: Placeholders --- */
 .history-placeholder {
     padding: 15px;
@@ -673,7 +601,6 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     font-style: italic;
     margin: 0;
 }
-
 /* --- Shared: Modal Styles --- */
 .modal-backdrop {
     position: fixed;
@@ -687,7 +614,6 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     align-items: center;
     z-index: 2000;
 }
-
 .modal-content {
     background-color: var(--color-bg-secondary);
     padding: 25px 30px;
@@ -696,12 +622,10 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     width: 90%;
     max-width: 500px;
 }
-
 .modal-content h3 {
     margin-top: 0;
     color: var(--color-text);
 }
-
 .modal-topic-display {
     font-family: 'Courier New', Courier, monospace;
     font-weight: bold;
@@ -710,7 +634,6 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     border-radius: 4px;
     word-break: break-all;
 }
-
 .modal-input {
     width: 100%;
     padding: 8px 12px;
@@ -722,19 +645,16 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     color: var(--color-text);
     font-family: 'Courier New', Courier, monospace;
 }
-
 .modal-input:focus {
     outline: none;
     border-color: var(--color-primary);
 }
-
 .modal-actions {
     margin-top: 25px;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
 }
-
 .modal-button {
     padding: 8px 15px;
     font-size: 0.9em;
@@ -746,23 +666,19 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
 }
-
 .modal-button:hover {
     background-color: var(--color-bg-accent);
     border-color: var(--color-border-secondary);
 }
-
 .modal-button.button-primary {
     background-color: var(--color-primary);
     color: var(--color-header-text);
     border-color: var(--color-primary);
 }
-
 .modal-button.button-primary:hover {
     background-color: var(--color-primary-hover);
     border-color: var(--color-primary-hover);
 }
-
 .modal-button.button-danger,
 .danger-button {
     background-color: var(--color-danger);
@@ -770,13 +686,11 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     border-color: var(--color-danger);
     border: none;
 }
-
 .modal-button.button-danger:hover,
 .danger-button:hover {
     background-color: var(--color-danger-hover);
     border-color: var(--color-danger-hover);
 }
-
 .danger-button {
     padding: 4px 10px;
     font-size: 0.9em;
@@ -784,18 +698,15 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     border-radius: 4px;
     transition: background-color 0.2s;
 }
-
 /* --- Shared: Form Styles --- */
 .form-group {
     margin-bottom: 20px;
 }
-
 .form-group label {
     display: block;
     font-weight: 500;
     margin-bottom: 5px;
 }
-
 .form-group input[type="text"], 
 .form-group select,
 .form-group textarea {
@@ -808,17 +719,14 @@ body.dark-mode .is-file.mapped-target .node-name::before {
     background-color: var(--color-bg);
     color: var(--color-text);
 }
-
 .form-group select {
     padding: 8px 10px;
 }
-
 .checkbox-label {
     font-weight: 500;
     cursor: pointer;
     user-select: none;
 }
-
 /* ---  Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     /* --- Base Layout --- */
@@ -826,18 +734,15 @@ body.dark-mode .is-file.mapped-target .node-name::before {
         height: auto; /* Allow scrolling on mobile */
         min-height: 100vh;
     }
-
     .view-container {
         /* Allow view-container to grow and enable scrolling */
         overflow: auto; 
         height: auto;
     }
-
     .view.active {
         /* Views are already flex-direction: column by default now */
         height: auto; /* Allow view to grow with content */
     }
-
     /* --- Header --- */
     header {
         flex-direction: column;
@@ -845,44 +750,36 @@ body.dark-mode .is-file.mapped-target .node-name::before {
         gap: 8px;
         padding: 10px 15px;
     }
-    
     header h1 { font-size: 1.1em; }
-
     .header-sub-row {
         margin-left: 0;
         width: 100%;
         justify-content: space-between;
     }
-
     .datetime-container {
         font-size: 0.9em;
         align-self: flex-end; /* Move to the right on its own line */
         margin-top: -30px; /* Pull it up next to title */
     }
-
     .header-content {
         max-width: calc(100% - 100px); /* Don't overlap datetime */
         width: 100%;
     }
-
     /* Stack theme switcher and config button */
     .theme-switch-wrapper {
         align-self: flex-start;
         padding: 5px 0;
     }
-
     #btn-config-view {
         align-self: flex-start;
         margin-left: 0;
         margin-top: 5px;
     }
-
     .simulator-controls {
         flex-wrap: wrap;
         width: 100%;
         justify-content: center;
     }
-
     /* --- Tab Navigation --- */
     .tab-nav {
         padding: 0 5px;
@@ -890,18 +787,15 @@ body.dark-mode .is-file.mapped-target .node-name::before {
         overflow-x: auto;
         white-space: nowrap;
     }
-
     .tab-button {
         font-size: 14px;
         padding: 8px 10px;
     }
-
     /* --- Resizers --- */
     /* Hide all resizers on mobile, as we force a column layout */
     .resizer, .resizer-horizontal {
         display: none;
     }
-
     /* --- Shared Panels --- */
     .payload-container {
         padding: 10px;
@@ -909,7 +803,6 @@ body.dark-mode .is-file.mapped-target .node-name::before {
         height: auto;
         flex-grow: 1;
     }
-
     #payload-main-area,
     #mapper-payload-area,
     #chart-payload-area {
@@ -917,17 +810,14 @@ body.dark-mode .is-file.mapped-target .node-name::before {
         flex-grow: 1;
         min-height: 200px; /* Ensure it's visible */
     }
-
     .tree-container {
         padding: 10px;
     }
-
     /* --- Improved Time Slider for Mobile --- */
     .slider-handle {
         width: 24px; /* Bigger visual handle */
         height: 24px;
     }
-
     /* Expand touch area for slider handles */
     .slider-handle::after {
         content: '';

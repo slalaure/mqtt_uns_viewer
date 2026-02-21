@@ -12,8 +12,9 @@
  * [UPDATED] Robust AI Parsing fallback (shows raw text if parsing fails).
  * [UPDATED] Displays Action Timestamp + User.
  * [UPDATED] Updated Fullscreen button UI & Event Tracking.
+ * [UPDATED] Added Date to Time column (YYYY/MM/DD HH:mm:ss).
+ * [UPDATED] Added ellipsis truncation and hover title for long topics in rules table.
  */
-
 // --- Imports ---
 import { trackEvent } from './utils.js';
 
@@ -78,17 +79,17 @@ export async function initAlertsView() {
             
             btn.classList.add('active');
             document.getElementById(btn.dataset.target).classList.add('active');
-            
+
             if (btn.dataset.target === 'active-alerts-panel') loadActiveAlerts();
             if (btn.dataset.target === 'alert-rules-panel') loadRules();
         });
     });
 
     document.getElementById('chk-hide-resolved').addEventListener('change', loadActiveAlerts);
-    
+
     // Fullscreen
     btnFullscreen?.addEventListener('click', toggleFullscreen);
-
+    
     // Track native fullscreen changes (sync button state on ESC)
     document.addEventListener('fullscreenchange', () => {
         const panel = document.getElementById('active-alerts-panel');
@@ -105,9 +106,11 @@ export async function initAlertsView() {
     // Rule & Modal Controls
     btnNewRule.addEventListener('click', () => showRuleEditor());
     document.getElementById('btn-cancel-rule').addEventListener('click', hideRuleEditor);
+    
     document.getElementById('btn-js-help').addEventListener('click', () => helpModal.style.display = 'flex');
     document.getElementById('btn-close-help').addEventListener('click', () => helpModal.style.display = 'none');
     document.getElementById('btn-close-help-2').addEventListener('click', () => helpModal.style.display = 'none');
+    
     document.getElementById('btn-close-analysis').addEventListener('click', () => analysisModal.style.display = 'none');
     document.getElementById('btn-close-analysis-2').addEventListener('click', () => analysisModal.style.display = 'none');
 
@@ -143,18 +146,24 @@ export function onAlertsViewShow() {
         loadActiveAlerts();
     }
 }
+
 export function onAlertsViewHide() { }
+
 export function refreshAlerts() {
     if (isViewInitialized && container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
         loadActiveAlerts();
     }
 }
+
 export function openCreateRuleModal(topic, examplePayload) {
     if (!isViewInitialized) { console.warn("Alerts view not ready."); return; }
+    
     const rulesTabBtn = document.querySelector('.sub-tab-button[data-target="alert-rules-panel"]');
     if (rulesTabBtn) rulesTabBtn.click();
+    
     showRuleEditor();
     ruleForm.elements.topic_pattern.value = topic;
+    
     let condition = "return true;";
     if (examplePayload && typeof examplePayload === 'object') {
         const keys = Object.keys(examplePayload);
@@ -184,6 +193,7 @@ function toggleFullscreen() {
 function showRuleEditor(ruleToEdit = null) {
     rulesListContainer.style.display = 'none';
     ruleEditorContainer.style.display = 'block';
+
     if (ruleToEdit) {
         editingRuleId = ruleToEdit.id;
         ruleEditorTitle.textContent = "Edit Rule";
@@ -216,11 +226,16 @@ async function loadRules() {
             rulesTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No rules defined.</td></tr>';
             return;
         }
+
         rules.forEach(rule => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td data-label="Name"><strong>${rule.name}</strong></td>
-                <td data-label="Topic"><code>${rule.topic_pattern}</code></td>
+                <td data-label="Name" title="${rule.name}">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>${rule.name}</strong></div>
+                </td>
+                <td data-label="Topic" title="${rule.topic_pattern}">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><code>${rule.topic_pattern}</code></div>
+                </td>
                 <td data-label="Severity"><span class="badge badge-${rule.severity}">${rule.severity}</span></td>
                 <td data-label="Actions">
                     <button class="btn-action btn-edit" title="Edit">Edit</button>
@@ -244,15 +259,18 @@ async function saveRule() {
         workflow_prompt: formData.get('workflow_prompt'),
         notifications: { webhook: formData.get('webhook') }
     };
+
     try {
         let url = 'api/alerts/rules';
         let method = 'POST';
         if (editingRuleId) { url = `api/alerts/rules/${editingRuleId}`; method = 'PUT'; }
+
         const res = await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
+
         if (!res.ok) throw new Error((await res.json()).error);
         alert("Rule saved successfully!");
         hideRuleEditor();
@@ -269,7 +287,6 @@ async function deleteRule(id) {
 }
 
 // --- Logic: Alerts ---
-
 function formatCompactTrigger(jsonStr) {
     try {
         const j = JSON.parse(jsonStr);
@@ -282,7 +299,6 @@ function formatCompactTrigger(jsonStr) {
         
         const keys = Object.keys(j);
         if (keys.length > 0) return `${j[keys[0]]}`;
-        
         return "Complex Data";
     } catch (e) {
         return "Raw Data";
@@ -295,12 +311,12 @@ function formatCompactTrigger(jsonStr) {
  */
 function parseAiResponse(fullText) {
     if (!fullText) return { trigger: null, action: null, report: null };
-
+    
     // Regex based on markers in alert_manager.js
     const triggerMatch = fullText.match(/## TRIGGER\n(.*?)(?=\n##|$)/s);
     const actionMatch = fullText.match(/## ACTION\n(.*?)(?=\n##|$)/s);
     const reportMatch = fullText.match(/## REPORT\n([\s\S]*)/s); // Grab everything after REPORT
-
+    
     return {
         trigger: triggerMatch ? triggerMatch[1].trim() : null,
         action: actionMatch ? actionMatch[1].trim() : null,
@@ -313,10 +329,12 @@ async function loadActiveAlerts() {
     try {
         const res = await fetch('api/alerts/active');
         let alerts = await res.json();
+        
         const hideResolved = document.getElementById('chk-hide-resolved')?.checked;
         if (hideResolved) {
             alerts = alerts.filter(a => a.status !== 'resolved');
         }
+
         activeAlertsTableBody.innerHTML = '';
         if (alerts.length === 0) {
             activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts. All systems nominal.</td></tr>';
@@ -335,13 +353,12 @@ async function loadActiveAlerts() {
             if (!displayTrigger) {
                 displayTrigger = formatCompactTrigger(alert.trigger_value);
             }
-
             // Prepare tooltip (Raw JSON)
             let fullJsonTooltip = "";
             try { 
                 fullJsonTooltip = JSON.stringify(JSON.parse(alert.trigger_value), null, 2).replace(/"/g, '&quot;');
             } catch(e) { fullJsonTooltip = alert.trigger_value; }
-
+            
             const triggerHtml = `<div class="compact-json" title="${fullJsonTooltip}">${displayTrigger}</div>`;
 
             // --- 2. Action & Analysis Column ---
@@ -384,7 +401,6 @@ async function loadActiveAlerts() {
             actionsHtml += '</div>';
 
             let statusHtml = `<span class="badge badge-${alert.status}">${alert.status}</span>`;
-            
             // [NEW] Display User AND Timestamp of last action
             if (alert.handled_by) {
                 let actionTime = "";
@@ -396,8 +412,15 @@ async function loadActiveAlerts() {
                 statusHtml += `<div class="alert-meta-info">by ${alert.handled_by} <span style="opacity:0.7">(${actionTime})</span></div>`;
             }
 
+            // [NEW] Format Date column
+            const alertDate = new Date(alert.created_at);
+            const yyyy = alertDate.getFullYear();
+            const mm = String(alertDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(alertDate.getDate()).padStart(2, '0');
+            const displayTime = `${yyyy}/${mm}/${dd} ${alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+
             tr.innerHTML = `
-                <td data-label="Time" style="font-size:0.85em; white-space:nowrap;">${new Date(alert.created_at).toLocaleTimeString()}</td>
+                <td data-label="Time" style="font-size:0.85em; white-space:nowrap;">${displayTime}</td>
                 <td data-label="Severity"><span class="badge badge-${alert.severity}">${alert.severity}</span></td>
                 <td data-label="Rule / Topic">
                     <div style="font-weight:bold; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${alert.rule_name}</div>
@@ -443,7 +466,6 @@ async function loadActiveAlerts() {
 
             activeAlertsTableBody.appendChild(tr);
         });
-
     } catch (e) { console.error("Failed to load alerts", e); }
 }
 

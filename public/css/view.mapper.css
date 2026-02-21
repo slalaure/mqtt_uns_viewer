@@ -117,7 +117,6 @@ main#mapper-view {
 #mapper-save-status.error {
     color: var(--color-danger);
 }
-
 /* --- Unsaved State Indicator --- */
 .btn-unsaved {
     background-color: #ff9800 !important; /* Orange */
@@ -130,11 +129,8 @@ main#mapper-view {
     70% { box-shadow: 0 0 0 6px rgba(255, 152, 0, 0); }
     100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
 }
-
 /* --- #mapper-tree Specifics --- */
 #mapper-tree .node-filter-checkbox { display: none; }
-#mapper-tree li { padding-left: 2px; } /* Remove padding for checkbox */
-#mapper-tree ul { margin-left: 20px; }
 #mapper-tree .node-container { cursor: pointer; }
 #mapper-tree .node-container:hover { background-color: var(--color-bg-accent); }
 #mapper-tree .selected { background-color: var(--selected-bg); color: var(--selected-text); }
@@ -206,7 +202,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     border-radius: 4px;
     background-color: var(--color-bg-tertiary);
 }
-
 /* --- Target Editor Styles --- */
 .mapper-target-editor {
     padding: 15px;
@@ -234,7 +229,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
 .mapper-target-editor:not(.collapsed) .target-toggle-collapse {
     transform: rotate(90deg);
 }
-
 .target-editor-title-input {
     background: transparent;
     border: 1px solid transparent;
@@ -252,7 +246,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     border: 1px solid var(--color-border);
     outline: none;
 }
-
 .target-editor-header {
     display: flex;
     justify-content: space-between;
@@ -264,7 +257,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     align-items: center;
     gap: 15px;
 }
-
 /* Base Styles for Target Workspace */
 .target-workspace {
     display: flex;
@@ -298,7 +290,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     word-wrap: break-word;
     color: var(--color-text);
 }
-
 /* Base Styles for the Ace Editor <div> */
 .target-code-editor {
     width: 100%;
@@ -309,7 +300,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     min-height: 300px; /* Base height */
     flex-grow: 1;
 }
-
 /* Maximized Editor Mode Styles (Applied to .mapper-target-editor) */
 .mapper-target-editor.maximized {
     position: fixed;
@@ -331,7 +321,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
 .mapper-target-editor.maximized .target-maximize-code {
     display: none !important;
 }
-
 .mapper-target-editor.maximized .target-editor-body {
     display: flex;
     flex-direction: column;
@@ -353,7 +342,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     flex: 1; /* Take half the side panel */
     min-height: 200px;
 }
-
 /* Let metrics scroll inside when maximized */
 .mapper-target-editor.maximized .target-metrics {
     flex: 1; /* Take half the side panel */
@@ -378,7 +366,6 @@ body.dark-mode #mapper-tree .selected .node-name::before { filter: brightness(0)
     flex-grow: 1;
     max-height: none;
 }
-
 /* ---  Wildcard Hint --- */
 .wildcard-hint {
     font-size: 0.85em;
