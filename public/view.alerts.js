@@ -11,6 +11,7 @@
  * View Module for Alerts Management.
  * [UPDATED] Robust AI Parsing fallback (shows raw text if parsing fails).
  * [UPDATED] Displays Action Timestamp + User.
+ * [UPDATED] Updated Fullscreen button UI & Event Tracking.
  */
 
 // --- Imports ---
@@ -64,6 +65,11 @@ export async function initAlertsView() {
     ruleEditorTitle = document.getElementById('rule-editor-title');
     btnFullscreen = document.getElementById('btn-alerts-fullscreen');
 
+    if (btnFullscreen) {
+        btnFullscreen.innerHTML = '⛶ Maximize';
+        btnFullscreen.style.fontSize = '0.85em';
+    }
+
     // --- Event Listeners ---
     container.querySelectorAll('.sub-tab-button').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -79,9 +85,22 @@ export async function initAlertsView() {
     });
 
     document.getElementById('chk-hide-resolved').addEventListener('change', loadActiveAlerts);
-
+    
     // Fullscreen
     btnFullscreen?.addEventListener('click', toggleFullscreen);
+
+    // Track native fullscreen changes (sync button state on ESC)
+    document.addEventListener('fullscreenchange', () => {
+        const panel = document.getElementById('active-alerts-panel');
+        if (btnFullscreen) {
+            if (document.fullscreenElement === panel) {
+                btnFullscreen.innerHTML = '✖ Minimize';
+            } else {
+                btnFullscreen.innerHTML = '⛶ Maximize';
+                panel?.classList.remove('fullscreen-mode');
+            }
+        }
+    });
 
     // Rule & Modal Controls
     btnNewRule.addEventListener('click', () => showRuleEditor());
@@ -276,7 +295,7 @@ function formatCompactTrigger(jsonStr) {
  */
 function parseAiResponse(fullText) {
     if (!fullText) return { trigger: null, action: null, report: null };
-    
+
     // Regex based on markers in alert_manager.js
     const triggerMatch = fullText.match(/## TRIGGER\n(.*?)(?=\n##|$)/s);
     const actionMatch = fullText.match(/## ACTION\n(.*?)(?=\n##|$)/s);
@@ -303,26 +322,26 @@ async function loadActiveAlerts() {
             activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts. All systems nominal.</td></tr>';
             return;
         }
-        
+
         alerts.forEach(alert => {
             const tr = document.createElement('tr');
             
             // --- Parse AI Result ---
             const aiData = parseAiResponse(alert.analysis_result);
-            
+
             // --- 1. Trigger Value Column ---
             // Priority: AI-extracted trigger > Legacy extraction > Raw
             let displayTrigger = aiData.trigger;
             if (!displayTrigger) {
                 displayTrigger = formatCompactTrigger(alert.trigger_value);
             }
-            
+
             // Prepare tooltip (Raw JSON)
             let fullJsonTooltip = "";
             try { 
                 fullJsonTooltip = JSON.stringify(JSON.parse(alert.trigger_value), null, 2).replace(/"/g, '&quot;');
             } catch(e) { fullJsonTooltip = alert.trigger_value; }
-            
+
             const triggerHtml = `<div class="compact-json" title="${fullJsonTooltip}">${displayTrigger}</div>`;
 
             // --- 2. Action & Analysis Column ---
@@ -424,6 +443,7 @@ async function loadActiveAlerts() {
 
             activeAlertsTableBody.appendChild(tr);
         });
+
     } catch (e) { console.error("Failed to load alerts", e); }
 }
 

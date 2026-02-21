@@ -14,6 +14,7 @@
  * [UPDATED] Added DOM element caching for faster lookups.
  * [UPDATED] Added safety try/finally to prevent frozen render loops.
  * [UPDATED] Added instant refresh on tab activation.
+ * [UPDATED] Updated Fullscreen button UI & Event Tracking.
  */
 // Import shared utilities
 import { formatTimestampForLabel, trackEvent } from './utils.js';
@@ -66,9 +67,28 @@ window.registerSvgBindings = function(bindings) {
 export function initSvgView(appConfig) {
     appBasePath = appConfig.basePath; 
     isMultiBroker = appConfig.isMultiBroker; // Store multi-broker state
+
+    if (btnSvgFullscreen) {
+        btnSvgFullscreen.innerHTML = '⛶ Maximize';
+        btnSvgFullscreen.style.fontSize = '0.85em';
+        btnSvgFullscreen.style.padding = '4px 10px';
+    }
+
     // Initial load
     refreshSvgList(appConfig.svgFilePath);
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
+
+    // Track native fullscreen changes (e.g. user presses ESC)
+    document.addEventListener('fullscreenchange', () => {
+        if (btnSvgFullscreen) {
+            if (document.fullscreenElement === mapView) {
+                btnSvgFullscreen.innerHTML = '✖ Minimize';
+            } else {
+                btnSvgFullscreen.innerHTML = '⛶ Maximize';
+            }
+        }
+    });
+
     svgSelectDropdown?.addEventListener('change', onSvgFileChange);
     svgHistoryToggle?.addEventListener('change', (e) => {
         isSvgHistoryMode = e.target.checked;
@@ -535,10 +555,10 @@ async function fetchLastKnownState(timestamp) {
     try {
         const isoTime = new Date(timestamp).toISOString();
         const response = await fetch(`api/context/last-known?timestamp=${encodeURIComponent(isoTime)}`);
-        if (!response.ok) throw new Error("Failed to fetch state");
+        if (!response.ok) throw new Error("Failed to fetch state");       
         const stateData = await response.json(); 
         // console.log(`[SVG History] Fetched ${stateData.length} records (Last Known State) for ${isoTime}`);
-        
+
         // 4. Apply State
         stateData.forEach(entry => {
             const { broker_id: brokerId, topic, payload } = entry;
@@ -563,7 +583,7 @@ async function fetchLastKnownState(timestamp) {
                 }
             } else if (isJson) {
                 const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
-                const genericId = topic.replace(/\//g, '-');
+                const genericId = topic.replace(/\//g, '-');         
                 try {
                     const groupElements = svgContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`);
                     groupElements.forEach(groupElement => {

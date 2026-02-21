@@ -112,8 +112,26 @@ document.addEventListener('DOMContentLoaded', () => {
             userDiv.style.width = '100%';
             userDiv.style.justifyContent = 'space-between';
         }
-        const avatarUrl = user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.username)}&background=random`;
+
+        // Generate a local SVG avatar data URI instead of using an external API
+        function generateLocalAvatar(name) {
+            const initial = (name || 'U').charAt(0).toUpperCase();
+            let hash = 0;
+            for (let i = 0; i < (name || '').length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = Math.abs(hash % 360);
+            const color = `hsl(${hue}, 70%, 50%)`;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+                <rect width="32" height="32" fill="${color}" />
+                <text x="16" y="22" font-family="-apple-system, Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">${initial}</text>
+            </svg>`;
+            return `data:image/svg+xml;base64,${btoa(svg)}`;
+        }
+
+        const avatarUrl = user.avatar || generateLocalAvatar(user.displayName || user.username);
         const isAdminLabel = (user.role === 'admin') ? '<span style="background:var(--color-danger); font-size:0.7em; padding:2px 4px; border-radius:3px; margin-left:5px;">ADMIN</span>' : '';
+        
         userDiv.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
                 <img src="${avatarUrl}" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);">
