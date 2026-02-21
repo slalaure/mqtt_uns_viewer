@@ -11,18 +11,21 @@
  * Mapper Engine for real-time topic and payload transformation.
  * Supports versioning, multi-target rules, JS/Mustache modes, and metrics.
  */
+
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const mustache = require('mustache');
 const mqttMatch = require('mqtt-match');
 const spBv10Codec = require('sparkplug-payload').get("spBv10"); 
+
 const MAPPINGS_FILE_PATH = path.join(__dirname, 'data', 'mappings.json');
 
 let config = {
     versions: [],
     activeVersionId: null
 };
+
 let metrics = new Map(); 
 let metricsUpdateTimer = null;
 let activeConnections = new Map();
@@ -30,32 +33,25 @@ let broadcastCallback = (message) => {};
 let engineLogger = null;
 let payloadReplacer = null; 
 let internalDb = null; 
+
 //  Store server configuration for permission checks
 let serverConfig = null;
 
 const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
-// Return the modified 'msg' object to publish.
-// Return null or undefined to skip publishing.
-/* // Example: Get average of last 5 values for this topic
-try {
-    const sql = \`
-        SELECT AVG(CAST(payload->>'value' AS DOUBLE)) as avg_val 
-        FROM (
-            SELECT payload FROM mqtt_events 
-            WHERE topic = '\${msg.topic}' AND broker_id = '\${msg.brokerId}'
-            ORDER BY timestamp DESC 
-            LIMIT 5
-        )
-    \`;
-    const result = await db.get(sql);
-    if (result && result.avg_val) {
-        msg.payload.average_5 = result.avg_val;
-    }
-} catch (e) {
-    console.error(\"DB query failed: \" + e.message);
-}
+
+// CASE 1: Single Output (Fan-out)
+// Return 'msg' to automatically publish it to all Target Topic(s) defined above.
+// return msg;
+
+// CASE 2: Multiple Specific Outputs
+// Return an array of messages to explicitly route different payloads to different topics.
+/*
+const msg1 = { topic: "uns/factory/temp", payload: { value: msg.payload.T1 } };
+const msg2 = { topic: "uns/factory/press", payload: { value: msg.payload.P1 } };
+return [msg1, msg2];
 */
+
 return msg;
 `;
 
@@ -131,7 +127,6 @@ const saveMappings = (newConfig) => {
         config = newConfig; 
         fs.writeFileSync(MAPPINGS_FILE_PATH, JSON.stringify(config, null, 2));
         engineLogger.info(`✅ Mapper Engine: Saved config. Active: ${config.activeVersionId}`);
-        
         broadcastCallback(JSON.stringify({
             type: 'mapper-config-update',
             config: config
@@ -169,9 +164,11 @@ const broadcastMetrics = () => {
 
 const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg = null, debugMsg = null) => {
     const ruleId = `${rule.sourceTopic}::${target.id}`;
+    
     if (!metrics.has(ruleId)) {
         metrics.set(ruleId, { count: 0, logs: [] });
     }
+    
     const ruleMetrics = metrics.get(ruleId);
     
     if (!errorMsg && !debugMsg) {
@@ -233,6 +230,7 @@ const isPublishAllowed = (brokerId, topic) => {
     if (!brokerConfig) return false; // Broker unknown
     const publishPatterns = brokerConfig.publish || [];
     if (publishPatterns.length === 0) return false; // Read-Only
+    
     return publishPatterns.some(pattern => mqttMatch(pattern, topic));
 };
 
@@ -248,9 +246,10 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
 
     for (const rule of activeRules) {
         if (mqttMatch(rule.sourceTopic.trim(), topic)) {
+            
             const targetPromises = rule.targets.map(async (target) => {
                 if (!target.enabled) return;
-
+                
                 updateMetrics(rule, target, topic, null, null, null, "Rule matched. Attempting execution...");
 
                 try {
@@ -270,65 +269,94 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                     
                     resultMsg = await script.runInContext(context, { timeout: 2000 }); 
 
-                    if (resultMsg && resultMsg.payload !== undefined) {
-                        //  Simplified view context (removed wildcard logic)
-                        const viewContext = {
-                            ...resultMsg.payload,
-                            topic: topic,
-                            brokerId: brokerId
-                        };
-                        const outputTopic = mustache.render(target.outputTopic, viewContext);
+                    if (resultMsg !== null && resultMsg !== undefined) {
+                        // Support returning an array of messages
+                        const results = Array.isArray(resultMsg) ? resultMsg : [resultMsg];
                         
-                        let outputPayload; 
-                        let outputPayloadForMetrics; 
-                        const shouldOutputSparkplug = isSparkplugOrigin && outputTopic.startsWith('spBv1.0/');
+                        // Parse UI declared topics for fan-out
+                        const declaredTopics = target.outputTopic ? target.outputTopic.split(',').map(t => t.trim()).filter(t => t) : [];
 
-                        if (shouldOutputSparkplug) {
-                            try {
-                                outputPayload = spBv10Codec.encodePayload(resultMsg.payload);
-                                outputPayloadForMetrics = JSON.stringify(resultMsg.payload, payloadReplacer);
-                            } catch (encodeErr) {
-                                engineLogger.error({ err: encodeErr, rule: rule.sourceTopic, target: target.id, payload: resultMsg.payload }, "❌ Mapper Engine: Failed to re-encode payload as Sparkplug Protobuf.");
-                                return; 
-                            }
-                        } else {
-                            outputPayload = JSON.stringify(resultMsg.payload, payloadReplacer);
-                            outputPayloadForMetrics = outputPayload;
-                        }
+                        for (const res of results) {
+                            if (!res || res.payload === undefined) continue;
 
-                        // Default to the source broker if targetBrokerId is not specified
-                        const targetBrokerId = target.targetBrokerId || brokerId; 
-                        const connection = activeConnections.get(targetBrokerId);
-
-                        // [MODIFIED] Check connection AND permissions
-                        if (connection && connection.connected) {
-                            if (isPublishAllowed(targetBrokerId, outputTopic)) {
-                                connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
-                                
-                                broadcastCallback(JSON.stringify({
-                                    type: 'mapped-topic-generated',
-                                    brokerId: targetBrokerId, 
-                                    topic: outputTopic
-                                }));
-                                
-                                updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
+                            let outputTopicsToPublish = [];
+                            
+                            if (Array.isArray(resultMsg)) {
+                                // Array return: The script explicitly defines the routing
+                                if (res.topic) {
+                                    outputTopicsToPublish.push(res.topic);
+                                } else {
+                                    engineLogger.warn("Mapper Engine: Array item missing 'topic' property. Skipping.");
+                                    continue;
+                                }
                             } else {
-                                const errorMessage = `Target broker '${targetBrokerId}' does not allow publishing to '${outputTopic}'. Check config.`;
-                                engineLogger.warn(errorMessage);
-                                updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                                // Single object return: Use the declared UI topics (fan-out via Mustache)
+                                const viewContext = {
+                                    ...res.payload,
+                                    topic: topic,
+                                    brokerId: brokerId
+                                };
+                                if (declaredTopics.length > 0) {
+                                    for (const dt of declaredTopics) {
+                                        outputTopicsToPublish.push(mustache.render(dt, viewContext));
+                                    }
+                                } else {
+                                    // Fallback if UI is empty but script overrides topic
+                                    if (res.topic && res.topic !== topic) {
+                                         outputTopicsToPublish.push(res.topic);
+                                    }
+                                }
                             }
-                        } else {
-                            const errorMessage = `Target broker '${targetBrokerId}' not found or not connected. Cannot publish.`;
-                            engineLogger.error(errorMessage);
-                            updateMetrics(rule, target, topic, null, null, errorMessage, null);
-                            return; 
+
+                            // Now publish to all resolved output topics
+                            for (const outputTopic of outputTopicsToPublish) {
+                                let outputPayload; 
+                                let outputPayloadForMetrics; 
+                                
+                                const shouldOutputSparkplug = isSparkplugOrigin && outputTopic.startsWith('spBv1.0/');
+                                
+                                if (shouldOutputSparkplug) {
+                                    try {
+                                        outputPayload = spBv10Codec.encodePayload(res.payload);
+                                        outputPayloadForMetrics = JSON.stringify(res.payload, payloadReplacer);
+                                    } catch (encodeErr) {
+                                        engineLogger.error({ err: encodeErr, rule: rule.sourceTopic, target: target.id, payload: res.payload }, "❌ Mapper Engine: Failed to re-encode payload as Sparkplug Protobuf.");
+                                        continue; 
+                                    }
+                                } else {
+                                    outputPayload = JSON.stringify(res.payload, payloadReplacer);
+                                    outputPayloadForMetrics = outputPayload;
+                                }
+
+                                const targetBrokerId = target.targetBrokerId || brokerId; 
+                                const connection = activeConnections.get(targetBrokerId);
+
+                                if (connection && connection.connected) {
+                                    if (isPublishAllowed(targetBrokerId, outputTopic)) {
+                                        connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
+                                        broadcastCallback(JSON.stringify({
+                                            type: 'mapped-topic-generated',
+                                            brokerId: targetBrokerId, 
+                                            topic: outputTopic
+                                        }));
+                                        updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
+                                    } else {
+                                        const errorMessage = `Target broker '${targetBrokerId}' does not allow publishing to '${outputTopic}'. Check config.`;
+                                        engineLogger.warn(errorMessage);
+                                        updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                                    }
+                                } else {
+                                    const errorMessage = `Target broker '${targetBrokerId}' not found or not connected. Cannot publish.`;
+                                    engineLogger.error(errorMessage);
+                                    updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                                }
+                            }
                         }
                     } else if (resultMsg === null) {
                         updateMetrics(rule, target, topic, null, null, null, "Script executed and returned null (skipped publish).");
                     }
                 } catch (err) {
                     engineLogger.error({ err, ruleName: rule.sourceTopic, targetId: target.id }, "❌ Mapper Engine: Error executing async JS transform.");
-                    
                     let errorString = "Unknown execution error"; 
                     if (err) {
                         if (err.stack) {
@@ -342,13 +370,11 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                     updateMetrics(rule, target, topic, null, null, errorString, null);
                 }
             }); 
-            
             await Promise.all(targetPromises);
         }
     }
 };
 
-// [MODIFIED] Accept 'serverConfig' as 5th argument
 module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerConfig) => {
     if (!connectionsMap || !broadcaster || !logger || !longReplacer) {
         throw new Error("Mapper Engine V2 requires a connections map, broadcaster, logger, and longReplacer function.");
@@ -358,7 +384,7 @@ module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerCo
     broadcastCallback = broadcaster;
     engineLogger = logger.child({ component: 'MapperEngineV2' });
     payloadReplacer = longReplacer;
-    serverConfig = appServerConfig; // Store config
+    serverConfig = appServerConfig; 
 
     loadMappings();
 
@@ -369,7 +395,7 @@ module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerCo
         },
         saveMappings,
         getMappings,
-        getConfig: getMappings, // [FIX] Add alias so API calls to getConfig() work
+        getConfig: getMappings, 
         getMetrics,
         processMessage,
         rulesForTopicRequireDb,

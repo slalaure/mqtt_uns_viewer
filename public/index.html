@@ -27,7 +27,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta50</p>
+                <p>v 1.5.0-beta51</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -188,37 +188,52 @@
                                         <input type="text" class="target-editor-title-input" title="Target Name" placeholder="Target Name">
                                     </div>
                                     <div class="target-editor-controls">
+                                        <button type="button" class="target-save-maximized mapper-button button-primary" style="display:none; margin-right:15px;">💾 Save Live</button>
+                                        <button type="button" class="target-minimize-button mapper-button" style="display:none; margin-right:15px;">✖ Minimize</button>
+                                        
                                         <input type="checkbox" class="target-enabled-toggle">
-                                        <label class="checkbox-label">Enabled</label>
+                                        <label class="checkbox-label" style="margin-right: 15px;">Enabled</label>
                                         <button type="button" class="target-delete-button danger-button">Delete</button>
                                     </div>
                                 </div>
                                 <div class="target-editor-body">
-                                    <div class="form-group">
-                                        <label>Target Topic</label>
-                                        <input type="text" class="target-output-topic"
-                                            placeholder="e.g., my_uns/facility/{{id}}">
-                                    </div>
-                                    <div class="form-group target-code-group">
-                                        <div class="target-code-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                                            <label class="target-code-label" style="margin:0;">Transform (JavaScript)</label>
-                                            <button type="button" class="target-maximize-code mapper-button" style="font-size:0.8em; padding:4px 10px;">⛶ Maximize</button>
+                                    <div class="target-settings-row" style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px; padding-bottom:15px; border-bottom:1px dashed var(--color-border-secondary);">
+                                        <div class="form-group routing-mode-group" style="flex:1; min-width: 250px; margin:0;">
+                                            <label style="margin-bottom:5px;">Routing Mode:</label>
+                                            <select class="routing-mode-select" style="width: 100%;">
+                                                <option value="ui">UI Defined (Publish single 'msg' to topics below)</option>
+                                                <option value="code">Code Defined (Return array of {topic, payload})</option>
+                                            </select>
                                         </div>
-                                        <div class="editor-and-ref-wrapper">
+                                        <div class="form-group target-topic-group" style="flex:2; min-width: 300px; margin:0;">
+                                            <label style="margin-bottom:5px;">Target Topic(s) (comma-separated)</label>
+                                            <input type="text" class="target-output-topic" placeholder="e.g., my_uns/facility/{{id}}">
+                                        </div>
+                                    </div>
+
+                                    <div class="target-workspace">
+                                        <div class="target-code-group">
+                                            <div class="target-code-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                                <label class="target-code-label" style="margin:0;">Transform (JavaScript)</label>
+                                                <button type="button" class="target-maximize-code mapper-button" style="font-size:0.8em; padding:4px 10px;">⛶ Maximize</button>
+                                            </div>
                                             <div class="target-code-editor" spellcheck="false"></div>
+                                        </div>
+                                        
+                                        <div class="target-side-panel">
                                             <div class="maximized-payload-ref">
                                                 <label style="margin:0 0 10px 0; font-weight:bold; border-bottom:1px solid var(--color-border); padding-bottom:5px;">Source Payload Reference</label>
                                                 <pre class="maximized-payload-content"></pre>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div class="target-metrics">
-                                        <h5 class="target-metrics-title">Metrics</h5>
-                                        <div class="target-metrics-counter">Count: <span class="metric-count">0</span></div>
-                                        <div class="target-metrics-logs">
-                                            <h6 class="target-logs-title">Recent Executions:</h6>
-                                            <div class="target-logs-list">
-                                                <p class="history-placeholder">No executions yet.</p>
+                                            <div class="target-metrics">
+                                                <h5 class="target-metrics-title">Metrics</h5>
+                                                <div class="target-metrics-counter">Count: <span class="metric-count">0</span></div>
+                                                <div class="target-metrics-logs">
+                                                    <h6 class="target-logs-title">Recent Executions:</h6>
+                                                    <div class="target-logs-list">
+                                                        <p class="history-placeholder">No executions yet.</p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
