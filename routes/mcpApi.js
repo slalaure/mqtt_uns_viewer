@@ -13,6 +13,7 @@
  * [MODIFIED] Added db.serialize() to prevent DuckDB locking errors.
  * [MODIFIED] Added 'startDate' and 'endDate' support for time filtering.
  * [MODIFIED] Added Admin check for Prune Topic.
+ * [NEW] Added /aggregate endpoint for optimized time-bucketed charting.
  */
 const express = require('express');
 // Helper simple pour échapper les apostrophes
@@ -87,7 +88,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             });
         });
     });
-    
+
     // --- [NEW] Get Last Known State AS OF a specific timestamp ---
     // This implements the "State at Point in Time" logic.
     // Even if the last message was 6 hours ago, if it's the latest relative to the timestamp, it returns it.
@@ -125,6 +126,77 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                 
                 res.json(results);
             });
+        });
+    });
+
+    // --- [NEW] Backend Aggregation for Charts (TIME_BUCKET strategy) ---
+    router.post('/aggregate', (req, res) => {
+        const { topics, startDate, endDate, aggregation, maxPoints } = req.body;
+        
+        if (!topics || !startDate || !endDate) {
+            return res.status(400).json({ error: "Missing required fields." });
+        }
+
+        const startMs = new Date(startDate).getTime();
+        const endMs = new Date(endDate).getTime();
+        const spanMs = endMs - startMs;
+        // Limit to minimum 1s buckets, aiming for maxPoints
+        const bucketMs = Math.max(1000, Math.floor(spanMs / (maxPoints || 500)));
+
+        const aggFuncMap = {
+            'AUTO': 'AVG',
+            'MEAN': 'AVG',
+            'MAX': 'MAX',
+            'MIN': 'MIN',
+            'MEDIAN': 'MEDIAN',
+            'SD': 'STDDEV',
+            'RANGE': 'RANGE',
+            'SUM': 'SUM'
+        };
+        const aggType = aggFuncMap[aggregation] || 'AVG';
+
+        db.serialize(() => {
+            const promises = topics.map(t => {
+                return new Promise((resolve) => {
+                    let selectCols = `extract('epoch' FROM time_bucket(INTERVAL '${bucketMs} MILLISECONDS', timestamp)) * 1000 AS ts_ms`;
+                    
+                    t.variables.forEach(v => {
+                        let valExpr;
+                        if (v.path === '(value)') {
+                            valExpr = `TRY_CAST(CAST(payload AS VARCHAR) AS DOUBLE)`;
+                        } else {
+                            const safePath = escapeSQL(v.path); // e.g. $.temperature_c
+                            valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
+                        }
+
+                        if (aggType === 'RANGE') {
+                            selectCols += `, (MAX(${valExpr}) - MIN(${valExpr})) AS "${v.id}"`;
+                        } else {
+                            selectCols += `, ${aggType}(${valExpr}) AS "${v.id}"`;
+                        }
+                    });
+
+                    const safeTopic = escapeSQL(t.topic);
+                    const safeBroker = escapeSQL(t.brokerId);
+                    
+                    const query = `
+                        SELECT ${selectCols}
+                        FROM mqtt_events
+                        WHERE topic = '${safeTopic}' 
+                          AND broker_id = '${safeBroker}'
+                          AND timestamp >= CAST('${startDate}' AS TIMESTAMPTZ)
+                          AND timestamp <= CAST('${endDate}' AS TIMESTAMPTZ)
+                        GROUP BY 1 ORDER BY 1 ASC
+                    `;
+
+                    db.all(query, (err, rows) => {
+                        if (err) resolve({ brokerId: t.brokerId, topic: t.topic, error: err.message });
+                        else resolve({ brokerId: t.brokerId, topic: t.topic, data: rows });
+                    });
+                });
+            });
+
+            Promise.all(promises).then(results => res.json(results));
         });
     });
 

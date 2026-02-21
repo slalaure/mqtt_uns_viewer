@@ -90,6 +90,39 @@
       }
     },
     {
+      "name": "aggregate_time_series",
+      "description": "Aggregates numerical time-series data for a topic over a specific time range using a chosen math function (MEAN, MAX, MIN, etc). Returns max 500 points. Use this to analyze trends, generate summaries, or inspect long periods without overloading your context limit.",
+      "category": "ENABLE_READ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "The exact MQTT topic."
+          },
+          "variables": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of JSON paths for the numeric variables to aggregate (e.g., ['temperature_c', 'metrics[0].value'])."
+          },
+          "time_expression": {
+            "type": "string",
+            "description": "Natural language time range (e.g., 'last 7 days', 'yesterday')."
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": ["MEAN", "MAX", "MIN", "MEDIAN", "SD", "RANGE", "SUM"],
+            "description": "Aggregation function to apply. Default is MEAN."
+          },
+          "broker_id": {
+            "type": "string",
+            "description": "Optional broker ID."
+          }
+        },
+        "required": ["topic", "variables", "time_expression"]
+      }
+    },
+    {
       "name": "get_latest_message",
       "description": "Retrieves the most recent message for a single, exact MQTT topic.",
       "category": "ENABLE_READ",

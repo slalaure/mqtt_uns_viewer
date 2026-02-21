@@ -13,6 +13,7 @@
  * [UPDATED] Supports 10 iterations for autonomous analysis.
  * [UPDATED] Added Alert Management Tools implementation.
  * [UPDATED] Added backend logging for upstream LLM API errors.
+ * [NEW] Added aggregate_time_series tool implementation.
  */
 const express = require('express');
 const axios = require('axios');
@@ -337,6 +338,70 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
+        
+        // [NEW] Aggregate Time Series Tool (Leveraging DuckDB time_bucket)
+        aggregate_time_series: async ({ topic, variables, time_expression, aggregation = 'MEAN', broker_id }) => {
+            return new Promise((resolve, reject) => {
+                const timeWindow = parseTimeWindow(time_expression);
+                if (!timeWindow) return resolve({ error: "Could not parse time_expression into a valid date range." });
+                if (!variables || variables.length === 0) return resolve({ error: "Variables array is required." });
+
+                const startMs = timeWindow.start.getTime();
+                const endMs = timeWindow.end.getTime();
+                const spanMs = endMs - startMs;
+                // Target exactly 500 buckets to keep response size optimal for the LLM
+                const bucketMs = Math.max(1000, Math.floor(spanMs / 500));
+
+                const aggFuncMap = { 'MEAN': 'AVG', 'MAX': 'MAX', 'MIN': 'MIN', 'MEDIAN': 'MEDIAN', 'SD': 'STDDEV', 'RANGE': 'RANGE', 'SUM': 'SUM' };
+                const aggType = aggFuncMap[aggregation] || 'AVG';
+
+                let selectCols = `extract('epoch' FROM time_bucket(INTERVAL '${bucketMs} MILLISECONDS', timestamp)) * 1000 AS ts_ms`;
+
+                variables.forEach((v, idx) => {
+                    let valExpr;
+                    if (v === '(value)') {
+                        valExpr = `TRY_CAST(CAST(payload AS VARCHAR) AS DOUBLE)`;
+                    } else {
+                        // Support JSON path extraction properly
+                        let safePath = escapeSQL(v);
+                        if (!safePath.startsWith('$')) {
+                             safePath = safePath.startsWith('[') ? '$' + safePath : '$.' + safePath;
+                        }
+                        valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
+                    }
+
+                    const alias = `var_${idx}`;
+                    if (aggType === 'RANGE') {
+                        selectCols += `, (MAX(${valExpr}) - MIN(${valExpr})) AS "${alias}"`;
+                    } else {
+                        selectCols += `, ${aggType}(${valExpr}) AS "${alias}"`;
+                    }
+                });
+
+                const safeTopic = escapeSQL(topic);
+                let whereClauses = [
+                    `topic = '${safeTopic}'`, 
+                    `timestamp >= CAST('${timeWindow.start.toISOString()}' AS TIMESTAMPTZ)`, 
+                    `timestamp <= CAST('${timeWindow.end.toISOString()}' AS TIMESTAMPTZ)`
+                ];
+                if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+
+                const sql = `SELECT ${selectCols} FROM mqtt_events WHERE ${whereClauses.join(' AND ')} GROUP BY 1 ORDER BY 1 ASC`;
+
+                db.serialize(() => {
+                    db.all(sql, (err, rows) => {
+                        if (err) return reject(err);
+                        resolve({ 
+                            aggregation_type: aggType, 
+                            bucket_size_ms: bucketMs, 
+                            variables_mapped: variables, 
+                            data_points: rows 
+                        });
+                    });
+                });
+            });
+        },
+
         get_latest_message: async ({ topic, broker_id }) => {
             return new Promise((resolve, reject) => {
                 let sql = `SELECT * FROM mqtt_events WHERE topic = ?`;
@@ -414,7 +479,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
-                let targetBrokerConfig = config.BROKER_CONFIGS[0];
+                let targetBrokerConfig = config.BROKER_CONFIGS[0]; 
                 if (broker_id) {
                     targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
                     if (!targetBrokerConfig) return resolve({ error: `Broker '${broker_id}' not found.` });
@@ -843,7 +908,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     data: error.response?.data 
                 }, "❌ [ChatAPI] Upstream LLM Error");
             }
-            
+
             if (error.message === "Generation cancelled by user." || error.code === 'ERR_CANCELED') {
                 sendChunk(res, 'status', '⛔ Generation Stopped by User', clientId);
             } else if (error.response) {

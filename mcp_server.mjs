@@ -11,7 +11,7 @@
  * MCP Server
  * Controls the MQTT UNS Viewer via Model Context Protocol.
  * [UPDATED] Dynamically loads tool definitions from 'public/ai_tools_manifest.json'.
- * [UPDATED] Added Alerts Management tools implementation.
+ * [UPDATED] Added aggregate_time_series tool implementation.
  */
 // --- Imports (ESM) ---
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -128,6 +128,7 @@ function jsonSchemaToZod(schema) {
             else if (prop.type === 'number') zodType = z.number();
             else if (prop.type === 'boolean') zodType = z.boolean();
             else if (prop.type === 'object') zodType = z.record(z.any()); 
+            else if (prop.type === 'array') zodType = z.array(z.string()); // Assumes array of strings for simplicity
             else zodType = z.any();
 
             // Add description
@@ -186,6 +187,27 @@ const implementations = {
         const qs = params.toString() ? `?${params.toString()}` : '';
         const res = await axios.get(`${API_BASE_URL}/context/history/${encodedTopic}${qs}`, axiosConfig);
         return { content: [{ type: "text", text: JSON.stringify({ history: res.data }, null, 2) }] };
+    },
+    aggregate_time_series: async ({ topic, variables, time_expression, aggregation, broker_id }) => {
+        const timeWindow = parseTimeWindow(time_expression);
+        if (!timeWindow) return { content: [{ type: "text", text: "Error: Could not parse time_expression." }], isError: true };
+
+        const formattedTopics = [{
+            topic: topic,
+            brokerId: broker_id || 'default_broker',
+            variables: variables.map((v, i) => ({ id: `var_${i}`, path: v }))
+        }];
+
+        const body = {
+            topics: formattedTopics,
+            startDate: timeWindow.start,
+            endDate: timeWindow.end,
+            aggregation: aggregation || 'MEAN',
+            maxPoints: 500
+        };
+
+        const res = await axios.post(`${API_BASE_URL}/context/aggregate`, body, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
     },
     get_latest_message: async ({ topic, broker_id }) => {
         const encodedTopic = encodeURIComponent(topic);

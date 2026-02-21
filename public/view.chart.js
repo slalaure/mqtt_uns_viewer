@@ -10,7 +10,7 @@
  *
  * View module for the Chart tab.
  * Handles configuration, data extraction (including primitives), and rendering.
- * [UPDATED] Optimized data processing (Single Pass) and cleaner debugging.
+ * [UPDATED] Uses backend DuckDB aggregation (TIME_BUCKET) for extreme performance.
  */
 // Import shared utilities
 import { formatTimestampForLabel, trackEvent } from './utils.js'; 
@@ -65,8 +65,8 @@ let chartRefreshTimer = null;
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
 
-// Configuration for Downsampling
-const MAX_POINTS_PER_SERIES = 1500; 
+// Configuration for Chart
+const MAX_POINTS_PER_SERIES = 500; 
 
 // --- Semantic Color Palette ---
 const PALETTE_HUES = [
@@ -89,8 +89,6 @@ let payloadViewer = createPayloadViewer({
 });
 
 let appCallbacks = {
-    getHistory: () => [],
-    requestRangeCallback: null, 
     colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"), 
 };
 
@@ -128,7 +126,7 @@ function showChartLoader() {
         chartPlaceholder.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
                 <div class="broker-dot" style="background-color: var(--color-primary); animation: blink 1s infinite;"></div>
-                <span>Loading and processing data...</span>
+                <span>Loading and processing data from database...</span>
             </div>`;
     }
     if (chartCanvas) chartCanvas.style.opacity = '0.5';
@@ -139,12 +137,34 @@ function hideChartLoader() {
 }
 
 export function initChartView(callbacks) {
-    const { displayPayload, maxSavedChartConfigs, isMultiBroker: multiBrokerState, requestRangeCallback, ...otherCallbacks } = callbacks;
+    const { displayPayload, maxSavedChartConfigs, isMultiBroker: multiBrokerState, requestRangeCallback, getHistory, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
-    if (requestRangeCallback) appCallbacks.requestRangeCallback = requestRangeCallback;
+    
     maxChartsLimit = maxSavedChartConfigs || 0; 
     isMultiBroker = multiBrokerState || false; 
-    
+
+    // Inject Aggregation Dropdown Dynamically
+    if (chartTypeSelect && !document.getElementById('chart-aggregation-select')) {
+        const typeGroup = chartTypeSelect.closest('.form-group');
+        const aggGroup = document.createElement('div');
+        aggGroup.className = 'form-group';
+        aggGroup.innerHTML = `
+            <label for="chart-aggregation-select">Aggregation:</label>
+            <select id="chart-aggregation-select" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
+                <option value="AUTO">Auto (Mean)</option>
+                <option value="MAX">Max</option>
+                <option value="MIN">Min</option>
+                <option value="MEAN">Mean</option>
+                <option value="MEDIAN">Median</option>
+                <option value="SD">Std Dev</option>
+                <option value="RANGE">Range</option>
+                <option value="SUM">Sum</option>
+            </select>
+        `;
+        typeGroup.parentNode.insertBefore(aggGroup, typeGroup);
+        document.getElementById('chart-aggregation-select').addEventListener('change', () => onGenerateChart(true));
+    }
+
     payloadViewer = createPayloadViewer({
         topicEl: document.getElementById('chart-payload-topic'),
         contentEl: document.getElementById('chart-payload-content'),
@@ -189,10 +209,9 @@ export function initChartView(callbacks) {
             currentMinTimestamp = start;
             currentMaxTimestamp = end;
             updateChartSliderUI(minTimestamp, maxTimestamp, false, true); 
-            triggerDataFetch(start, end);
+            triggerDataFetch();
         }
     };
-
     chartStartDateInput?.addEventListener('change', onDateChange);
     chartEndDateInput?.addEventListener('change', onDateChange);
 
@@ -215,7 +234,6 @@ export function initChartView(callbacks) {
                 }
                 if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
                 if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-                
                 if (chartSlider) {
                     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
                 }
@@ -226,22 +244,18 @@ export function initChartView(callbacks) {
                 currentMaxTimestamp = newMax;
                 if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
                 if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-                triggerDataFetch(newMin, newMax);
+                triggerDataFetch();
             }
         });
     }
     loadChartConfig(); 
 }
 
-function triggerDataFetch(start, end) {
+function triggerDataFetch() {
     showChartLoader();
     clearTimeout(chartRefreshTimer);
     chartRefreshTimer = setTimeout(() => {
-        if (appCallbacks.requestRangeCallback) {
-            appCallbacks.requestRangeCallback(start, end, null);
-        } else {
-            onGenerateChart();
-        }
+        onGenerateChart(); // Will trigger the backend API fetch
     }, 200);
 }
 
@@ -259,7 +273,7 @@ function setRelativeRange(hours) {
     currentMinTimestamp = start;
     currentMaxTimestamp = end;
     updateChartSliderUI(minTimestamp, maxTimestamp, false, true);
-    triggerDataFetch(start, end);
+    triggerDataFetch();
 }
 
 export function handleChartNodeClick(event, nodeContainer, brokerId, topic) {
@@ -293,11 +307,11 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
 
     if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
     if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-    
+
     if (chartTimeSliderContainer) chartTimeSliderContainer.style.display = (min === 0 && max === 0) ? 'none' : 'flex';
     
     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
-    
+
     if (isChartLive && !isInitialLoad && !force && chartedVariables.size > 0) {
         onGenerateChart(false); 
     }
@@ -365,7 +379,7 @@ function populateChartVariables(payloadString) {
          chartVariableList.innerHTML = '<p class="history-placeholder">No payload for this topic.</p>';
          return;
     }
-    
+
     try {
         const payload = JSON.parse(payloadString);
         let numericKeys = [];
@@ -399,11 +413,11 @@ function populateChartVariables(payloadString) {
             checkbox.dataset.path = key.path; 
             checkbox.checked = chartedVariables.has(varId);
             checkbox.addEventListener('change', onChartVariableToggle);
-            
+
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = key.path; 
-            
+
             const typeSpan = document.createElement('span');
             typeSpan.className = 'var-type';
             typeSpan.textContent = `(${key.type})`; 
@@ -452,32 +466,6 @@ function onChartVariableToggle(event) {
     appCallbacks.colorChartTreeCallback();
 }
 
-function downsampleData(data, targetCount) {
-    if (data.length <= targetCount) return data;
-    const sampled = [];
-    const bucketSize = Math.ceil(data.length / targetCount);
-    for (let i = 0; i < data.length; i += bucketSize) {
-        const bucket = data.slice(i, i + bucketSize);
-        let sumVal = 0;
-        let sumTs = 0;
-        let count = 0;
-        for (const point of bucket) {
-            if (point && point.y !== null && point.y !== undefined) {
-                sumVal += point.y;
-                sumTs += point.x;
-                count++;
-            }
-        }
-        if (count > 0) {
-            sampled.push({
-                x: Math.round(sumTs / count),
-                y: sumVal / count
-            });
-        }
-    }
-    return sampled;
-}
-
 function isBooleanLike(dataPoints) {
     if (!dataPoints || dataPoints.length === 0) return false;
     for (const p of dataPoints) {
@@ -507,7 +495,6 @@ function guessGroupKey(topic, path) {
     return (lastPart + '_' + path).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 }
 
-// [MODIFIED] Helper: Select hue based on index, optionally ignoring semantics if Smart Axis is off
 function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
     const key = axisKey.toLowerCase();
     
@@ -538,13 +525,15 @@ function onGenerateChart(showLoader = false) {
 
     if (showLoader) showChartLoader();
     
-    setTimeout(() => {
+    // Debounce to prevent API spam in live mode
+    clearTimeout(chartRefreshTimer);
+    chartRefreshTimer = setTimeout(() => {
         processChartData();
-    }, 10);
+    }, 300);
 }
 
-// [OPTIMIZED] Process Chart Data - Single Pass
-function processChartData() {
+// [NEW] Calls Backend API for Aggregated Data
+async function processChartData() {
     if (chartedVariables.size === 0) {
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
         chartPlaceholder.style.display = 'block';
@@ -555,257 +544,229 @@ function processChartData() {
         return;
     }
 
-    const allHistory = appCallbacks.getHistory();
-    console.log(`[Chart Debug] Processing Data. View Range: ${new Date(currentMinTimestamp).toISOString()} - ${new Date(currentMaxTimestamp).toISOString()}`);
-    console.log(`[Chart Debug] Total History Available: ${allHistory.length}`);
+    const aggregationSelect = document.getElementById('chart-aggregation-select');
+    const aggregation = aggregationSelect ? aggregationSelect.value : 'AUTO';
 
-    // 1. Filter History by Time Range
-    // Safety check for invalid timestamps in history
-    const timeFilteredHistory = allHistory.filter(entry => {
-        let ts = entry.timestampMs;
-        if (!ts && entry.timestamp) {
-            ts = new Date(entry.timestamp).getTime();
-            entry.timestampMs = ts; // Cache it
-        }
-        return ts >= (currentMinTimestamp - 500) && ts <= (currentMaxTimestamp + 500);
-    }); 
-
-    console.log(`[Chart Debug] Items in Time Range: ${timeFilteredHistory.length}`);
-
-    if (timeFilteredHistory.length === 0) {
-        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-        chartPlaceholder.style.display = 'block';
-        chartPlaceholder.textContent = "No data found in the selected time range.";
-        chartCanvas.style.display = 'none';
-        lastGeneratedData = { labels: [], datasets: [] };
-        hideChartLoader();
-        return;
-    }
-
-    // 2. [OPTIMIZATION] Build a Map for fast lookup: "broker|topic" -> [List of target variables]
-    // This avoids the Nested Loop (N*M) and allows Single Pass (N).
-    const topicMap = new Map();
-    const rawPointsMap = new Map(); // varId -> Array of points {x, y}
-
+    // Group variables by topic/broker
+    const topicsMap = new Map();
     chartedVariables.forEach((varInfo, varId) => {
         const key = `${varInfo.brokerId}|${varInfo.topic}`;
-        if (!topicMap.has(key)) topicMap.set(key, []);
-        topicMap.get(key).push({ varId, path: varInfo.path });
-        rawPointsMap.set(varId, []); // Initialize buckets
+        if (!topicsMap.has(key)) {
+            topicsMap.set(key, { brokerId: varInfo.brokerId, topic: varInfo.topic, variables: [] });
+        }
+        
+        // Convert JS path to valid JSONPath
+        let jsonPath = varInfo.path;
+        if (jsonPath !== '(value)') {
+            jsonPath = jsonPath.startsWith('[') ? '$' + jsonPath : '$.' + jsonPath;
+        }
+        
+        topicsMap.get(key).variables.push({ id: varId, path: jsonPath, originalPath: varInfo.path });
     });
 
-    // 3. Single Pass Loop over Data
-    for (const entry of timeFilteredHistory) {
-        const key = `${entry.brokerId}|${entry.topic}`;
-        const targets = topicMap.get(key);
+    const topicsArray = Array.from(topicsMap.values());
 
-        if (targets) {
-            // We have variables interested in this message
-            let payloadObj = null;
-            try {
-                // Parse once
-                payloadObj = (typeof entry.payload === 'string') ? JSON.parse(entry.payload) : entry.payload;
-            } catch (e) { continue; } // Skip malformed
-
-            const ts = entry.timestampMs || new Date(entry.timestamp).getTime();
-
-            // Distribute to variables
-            for (const target of targets) {
-                let value;
-                if (target.path === "(value)") {
-                    if (typeof payloadObj === 'boolean') value = payloadObj ? 1 : 0;
-                    else if (typeof payloadObj === 'number') value = payloadObj;
-                    else if (typeof payloadObj === 'string') {
-                        const parsed = parseFloat(payloadObj);
-                        if (!isNaN(parsed)) value = parsed;
-                    }
-                } else {
-                    value = getNestedValue(payloadObj, target.path);
-                }
-
-                if (typeof value === 'string') {
-                    const numVal = parseFloat(value);
-                    if (!isNaN(numVal) && isFinite(Number(value))) value = numVal;
-                }
-
-                if (typeof value === 'number') {
-                    rawPointsMap.get(target.varId).push({ x: ts, y: value });
-                }
-            }
-        }
-    }
-
-    // 4. Build Datasets from Buckets
-    const chartType = chartTypeSelect.value;
-    const connectNulls = chartConnectNulls.checked;
-    const useSmartAxis = chartSmartAxis && chartSmartAxis.checked;
-    let datasets = [];
-    const isDarkMode = document.body.classList.contains('dark-mode');
-    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-    const textColor = isDarkMode ? '#e0e0e0' : '#333';
-
-    // Pie Chart Logic (Simplified for brevity, similar structure)
-    if (chartType === 'pie') {
-        const totals = {};
-        chartedVariables.forEach((varInfo, varId) => {
-            const topicParts = varInfo.topic.split('/');
-            const cleanPath = varInfo.path.replace(/\[|\]/g, ''); 
-            const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
-            
-            const points = rawPointsMap.get(varId) || [];
-            // Sum values for Pie
-            totals[label] = points.reduce((acc, p) => acc + p.y, 0);
+    try {
+        const response = await fetch('api/context/aggregate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                topics: topicsArray,
+                startDate: new Date(currentMinTimestamp).toISOString(),
+                endDate: new Date(currentMaxTimestamp).toISOString(),
+                aggregation: aggregation,
+                maxPoints: MAX_POINTS_PER_SERIES
+            })
         });
 
-        datasets = [{
-            data: Object.values(totals),
-            backgroundColor: Object.keys(totals).map((_, i) => `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`),
-        }];
-        lastGeneratedData = { labels: Object.keys(totals), datasets };
-    
-    } 
-    // Line / Bar Chart Logic
-    else {
-        const axisGroups = new Map();
-        
-        // Smart Axis Grouping Logic
-        chartedVariables.forEach((varInfo, varId) => {
-            const topicParts = varInfo.topic.split('/');
-            const cleanPath = varInfo.path.replace(/\[|\]/g, '');
-            const axisKey = useSmartAxis ? guessGroupKey(varInfo.topic, cleanPath) : varId;
-            
-            if (!axisGroups.has(axisKey)) axisGroups.set(axisKey, 0);
-            axisGroups.set(axisKey, axisGroups.get(axisKey) + 1);
+        if (!response.ok) throw new Error('Aggregation API failed');
+        const results = await response.json();
+
+        // Transform results back to rawPointsMap format for drawing
+        const rawPointsMap = new Map();
+        chartedVariables.forEach((v, id) => rawPointsMap.set(id, []));
+
+        results.forEach(topicResult => {
+            if (topicResult.error) {
+                console.error("Aggregation error for topic:", topicResult.topic, topicResult.error);
+                return;
+            }
+            if (topicResult.data) {
+                topicResult.data.forEach(row => {
+                    const ts = row.ts_ms;
+                    Object.keys(row).forEach(col => {
+                        if (col !== 'ts_ms' && row[col] !== null) {
+                            rawPointsMap.get(col).push({ x: ts, y: row[col] });
+                        }
+                    });
+                });
+            }
         });
 
-        const distinctAxes = Array.from(axisGroups.keys());
-        const dynamicScales = {
-            x: {
-                type: 'time',
-                time: {
-                    tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
-                    displayFormats: { millisecond: 'HH:mm:ss.SSS', second: 'HH:mm:ss', minute: 'HH:mm', hour: 'dd/MM HH:mm', day: 'yyyy-MM-dd' }
-                },
-                grid: { color: gridColor },
-                ticks: { color: textColor },
-                min: currentMinTimestamp,
-                max: currentMaxTimestamp
-            }
-        };
+        // --- Build Datasets ---
+        const chartType = chartTypeSelect.value;
+        const connectNulls = chartConnectNulls.checked;
+        const useSmartAxis = chartSmartAxis && chartSmartAxis.checked;
+        let datasets = [];
+        const isDarkMode = document.body.classList.contains('dark-mode');
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        const textColor = isDarkMode ? '#e0e0e0' : '#333';
 
-        const axisMap = new Map(); // AxisKey -> yAxisID (y0, y1...)
-
-        // Dataset Construction Loop
-        for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
-            const rawPoints = rawPointsMap.get(varId) || [];
-            const topicParts = topic.split('/');
-            const cleanPath = path.replace(/\[|\]/g, '');
-            const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
-            
-            console.log(`[Chart Debug] Variable '${label}': Found ${rawPoints.length} points.`);
-
-            // Sort by time
-            rawPoints.sort((a, b) => a.x - b.x);
-
-            // Determine Axis
-            const axisKey = useSmartAxis ? guessGroupKey(topic, cleanPath) : varId;
-            if (!axisMap.has(axisKey)) axisMap.set(axisKey, `y${axisMap.size}`);
-            const yAxisId = axisMap.get(axisKey);
-
-            // Determine Color
-            const axisIndex = distinctAxes.indexOf(axisKey);
-            const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
-            const color = `hsl(${hue}, 85%, 60%)`;
-
-            // Downsample if needed
-            let processedPoints = rawPoints;
-            if (rawPoints.length > MAX_POINTS_PER_SERIES) {
-                processedPoints = downsampleData(rawPoints, MAX_POINTS_PER_SERIES);
-            }
-
-            // Create Dataset
-            datasets.push({
-                label: label,
-                data: processedPoints,
-                borderColor: color,
-                backgroundColor: color,
-                fill: false,
-                spanGaps: connectNulls,
-                tension: 0.1,
-                yAxisID: yAxisId,
-                pointRadius: processedPoints.length > 200 ? 0 : 3 // Visual dot if few points
+        // Pie Chart Logic
+        if (chartType === 'pie') {
+            const totals = {};
+            chartedVariables.forEach((varInfo, varId) => {
+                const topicParts = varInfo.topic.split('/');
+                const cleanPath = varInfo.path.replace(/\[|\]/g, ''); 
+                const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
+                const points = rawPointsMap.get(varId) || [];
+                // Sum the buckets
+                totals[label] = points.reduce((acc, p) => acc + p.y, 0);
             });
 
-            // Config Scale
-            if (!dynamicScales[yAxisId]) {
-                const position = (Array.from(axisMap.values()).indexOf(yAxisId) % 2 === 0) ? 'left' : 'right';
-                dynamicScales[yAxisId] = {
-                    type: 'linear',
-                    display: true,
-                    position: position,
-                    // [CRITICAL] Stack logic: only if smart axis ON
-                    // If OFF, 'stack' property is removed (undefined) to allow overlapping.
-                    stack: useSmartAxis ? ((position === 'left') ? 'left-stack' : 'right-stack') : undefined,
-                    title: { display: true, text: useSmartAxis ? axisKey.toUpperCase() : label, color: `hsl(${hue}, 100%, 40%)` }
-                };
-                if (isBooleanLike(rawPoints)) {
-                    dynamicScales[yAxisId].min = 0;
-                    dynamicScales[yAxisId].max = 1.2;
-                    dynamicScales[yAxisId].ticks = { stepSize: 1 };
+            datasets = [{
+                data: Object.values(totals),
+                backgroundColor: Object.keys(totals).map((_, i) => `hsl(${(i * 360 / chartedVariables.size)}, 70%, 50%)`),
+            }];
+            lastGeneratedData = { labels: Object.keys(totals), datasets };
+        } 
+        // Line / Bar Chart Logic
+        else {
+            const axisGroups = new Map();
+            
+            // Smart Axis Grouping Logic
+            chartedVariables.forEach((varInfo, varId) => {
+                const topicParts = varInfo.topic.split('/');
+                const cleanPath = varInfo.path.replace(/\[|\]/g, '');
+                const axisKey = useSmartAxis ? guessGroupKey(varInfo.topic, cleanPath) : varId;
+                
+                if (!axisGroups.has(axisKey)) axisGroups.set(axisKey, 0);
+                axisGroups.set(axisKey, axisGroups.get(axisKey) + 1);
+            });
+
+            const distinctAxes = Array.from(axisGroups.keys());
+            const dynamicScales = {
+                x: {
+                    type: 'time',
+                    time: {
+                        tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
+                        displayFormats: { millisecond: 'HH:mm:ss.SSS', second: 'HH:mm:ss', minute: 'HH:mm', hour: 'dd/MM HH:mm', day: 'yyyy-MM-dd' }
+                    },
+                    grid: { color: gridColor },
+                    ticks: { color: textColor },
+                    min: currentMinTimestamp,
+                    max: currentMaxTimestamp
+                }
+            };
+
+            const axisMap = new Map(); // AxisKey -> yAxisID (y0, y1...)
+
+            // Dataset Construction Loop
+            for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
+                const rawPoints = rawPointsMap.get(varId) || [];
+                const topicParts = topic.split('/');
+                const cleanPath = path.replace(/\[|\]/g, '');
+                const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
+            
+                console.log(`[Chart Debug] Variable '${label}': Found ${rawPoints.length} points.`);
+                
+                // Sort by time
+                rawPoints.sort((a, b) => a.x - b.x);
+
+                // Determine Axis
+                const axisKey = useSmartAxis ? guessGroupKey(topic, cleanPath) : varId;
+                if (!axisMap.has(axisKey)) axisMap.set(axisKey, `y${axisMap.size}`);
+                const yAxisId = axisMap.get(axisKey);
+
+                // Determine Color
+                const axisIndex = distinctAxes.indexOf(axisKey);
+                const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
+                const color = `hsl(${hue}, 85%, 60%)`;
+
+                // Create Dataset (No local downsampling needed)
+                datasets.push({
+                    label: label,
+                    data: rawPoints,
+                    borderColor: color,
+                    backgroundColor: color,
+                    fill: false,
+                    spanGaps: connectNulls,
+                    tension: 0.1,
+                    yAxisID: yAxisId,
+                    pointRadius: rawPoints.length > 200 ? 0 : 3 
+                });
+
+                // Config Scale
+                if (!dynamicScales[yAxisId]) {
+                    const position = (Array.from(axisMap.values()).indexOf(yAxisId) % 2 === 0) ? 'left' : 'right';
+                    dynamicScales[yAxisId] = {
+                        type: 'linear',
+                        display: true,
+                        position: position,
+                        stack: useSmartAxis ? ((position === 'left') ? 'left-stack' : 'right-stack') : undefined,
+                        title: { display: true, text: useSmartAxis ? axisKey.toUpperCase() : label, color: `hsl(${hue}, 100%, 40%)` }
+                    };
+                    if (isBooleanLike(rawPoints)) {
+                        dynamicScales[yAxisId].min = 0;
+                        dynamicScales[yAxisId].max = 1.2;
+                        dynamicScales[yAxisId].ticks = { stepSize: 1 };
+                    }
                 }
             }
-        }
-        
-        // Prolong last value for live chart logic
-        if (connectNulls && datasets.length > 0 && isChartLive) {
-             const prolongTarget = currentMaxTimestamp;
-             datasets.forEach(ds => {
-                 if (ds.data.length > 0) {
-                     const lastPt = ds.data[ds.data.length - 1];
-                     if (lastPt.x < prolongTarget) {
-                         ds.data.push({ x: prolongTarget, y: lastPt.y });
+
+            // Prolong last value for live chart logic
+            if (connectNulls && datasets.length > 0 && isChartLive) {
+                 const prolongTarget = currentMaxTimestamp;
+                 datasets.forEach(ds => {
+                     if (ds.data.length > 0) {
+                         const lastPt = ds.data[ds.data.length - 1];
+                         if (lastPt.x < prolongTarget) {
+                             ds.data.push({ x: prolongTarget, y: lastPt.y });
+                         }
                      }
-                 }
-             });
-        }
+                 });
+            }
 
-        if (chartInstance) chartInstance.destroy();
-        chartPlaceholder.style.display = 'none';
-        chartCanvas.style.display = 'block';
-
-        chartInstance = new Chart(chartCanvas, {
-            type: chartType,
-            data: { datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: dynamicScales,
-                plugins: {
-                    legend: { labels: { color: textColor } },
-                    zoom: {
+            if (chartInstance) chartInstance.destroy();
+            chartPlaceholder.style.display = 'none';
+            chartCanvas.style.display = 'block';
+            
+            chartInstance = new Chart(chartCanvas, {
+                type: chartType,
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: dynamicScales,
+                    plugins: {
+                        legend: { labels: { color: textColor } },
                         zoom: {
-                            drag: { enabled: true, backgroundColor: 'rgba(54, 162, 235, 0.3)' },
-                            mode: 'x',
-                            onZoomComplete: ({chart}) => {
-                                const {min, max} = chart.scales.x;
-                                currentMinTimestamp = min;
-                                currentMaxTimestamp = max;
-                                isUserInteracting = true;
-                                isChartLive = false;
-                                updateChartSliderUI(min, max, false, true);
-                                triggerDataFetch(min, max);
+                            zoom: {
+                                drag: { enabled: true, backgroundColor: 'rgba(54, 162, 235, 0.3)' },
+                                mode: 'x',
+                                onZoomComplete: ({chart}) => {
+                                    const {min, max} = chart.scales.x;
+                                    currentMinTimestamp = min;
+                                    currentMaxTimestamp = max;
+                                    isUserInteracting = true;
+                                    isChartLive = false;
+                                    updateChartSliderUI(min, max, false, true);
+                                    triggerDataFetch();
+                                }
                             }
                         }
-                    }
-                },
-                animation: false,
-                parsing: false,
-                normalized: true
-            }
-        });
+                    },
+                    animation: false,
+                    parsing: false,
+                    normalized: true
+                }
+            });
+        }
+        hideChartLoader();
+    } catch (err) {
+        console.error("Chart aggregation error:", err);
+        hideChartLoader();
     }
-
-    hideChartLoader();
 }
 
 function toggleChartFullscreen() {
@@ -852,7 +813,7 @@ function onExportCSV() {
             ds.data.forEach(point => allTimestamps.add(point.x));
         });
         const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
-
+        
         const dataMap = chartInstance.data.datasets.map(ds => {
             const map = new Map();
             ds.data.forEach(p => map.set(p.x, p.y));
@@ -920,11 +881,11 @@ function populateChartConfigSelect() {
     newOption.value = "";
     newOption.textContent = "-- New Chart --";
     chartConfigSelect.appendChild(newOption);
-    
+
     allChartConfigs.configurations.forEach(config => {
         const option = document.createElement('option');
         option.value = config.id;
-        option.textContent = config.name; // Already formatted as [GLOBAL] in API if needed
+        option.textContent = config.name;
         chartConfigSelect.appendChild(option);
     });
     chartConfigSelect.value = currentConfigId || "";
@@ -934,16 +895,14 @@ function onChartConfigChange() {
     const configId = chartConfigSelect.value;
     currentConfigId = configId;
     if (!configId) { onClearAll(); return; }
-    
+
     const config = allChartConfigs.configurations.find(c => c.id === configId);
     if (!config) { onClearAll(); return; }
 
-    // --- [MODIFIED] Role-Based UI Logic ---
     const userRole = window.currentUser ? window.currentUser.role : 'user';
     const isGlobal = config._isGlobal === true;
-
+    
     if (isGlobal && userRole !== 'admin') {
-        // Lock controls for Standard Users on Global Charts
         btnChartSaveCurrent.disabled = true;
         btnChartSaveCurrent.textContent = "🔒 Locked";
         btnChartSaveCurrent.title = "Global charts are read-only. Use 'Save As' to create a private copy.";
@@ -964,8 +923,8 @@ function onChartConfigChange() {
 
     chartTypeSelect.value = config.chartType || 'line';
     chartConnectNulls.checked = config.connectNulls || false;
-    chartedVariables.clear();
     
+    chartedVariables.clear();
     if (Array.isArray(config.variables)) {
         config.variables.forEach(v => {
             const brokerId = v.brokerId || 'default_broker'; 
@@ -973,8 +932,8 @@ function onChartConfigChange() {
             chartedVariables.set(varId, { ...v, brokerId: brokerId });
         });
     }
-    
-    onGenerateChart();
+
+    onGenerateChart(true);
     appCallbacks.colorChartTreeCallback();
     
     if(selectedChartTopic && selectedChartBrokerId) {
@@ -1030,7 +989,7 @@ async function onSaveAsNew() {
     }
     const name = prompt("Enter a name for this new chart configuration:");
     if (!name || name.trim().length === 0) return; 
-    
+
     const newConfig = {
         id: `chart_${Date.now()}`,
         name: name.trim(),
@@ -1038,7 +997,7 @@ async function onSaveAsNew() {
         connectNulls: chartConnectNulls.checked,
         variables: Array.from(chartedVariables.values()) 
     };
-    
+
     allChartConfigs.configurations.push(newConfig);
     currentConfigId = newConfig.id; 
     
