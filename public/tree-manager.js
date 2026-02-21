@@ -47,26 +47,34 @@ export function createTreeManager(rootElement, options = {}) {
      */
     function update(brokerId, topic, payload, timestamp, updateOptions = {}) {
         const { enableAnimations = false } = updateOptions;
-        
+
         //  Safety check for brokerId to prevent "undefined" root folders
         const safeBrokerId = brokerId || 'default';
 
         //  Create the topic path that will be displayed in the tree.
         const displayTopic = isMultiBroker ? `${safeBrokerId}/${topic}` : topic;
+
         const parts = displayTopic.split('/');
-        
         let currentTopicPath = '';
         // Used to reconstruct the actual MQTT topic (without broker prefix if needed)
         let currentRealTopic = ''; 
         let currentUl = rootNode;
         const affectedNodes = [];
-        const formattedTimestamp = new Date(timestamp).toLocaleTimeString('en-GB');
+        
+        // Format timestamp to YYYY/MM/DD HH:mm:ss
+        const dateObj = new Date(timestamp);
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const timeStr = dateObj.toLocaleTimeString('en-GB');
+        const formattedTimestamp = `${yyyy}/${mm}/${dd} ${timeStr}`;
+
         let li; 
 
         for (let index = 0; index < parts.length; index++) {
             const part = parts[index];
             currentTopicPath += (index > 0 ? '/' : '') + part;
-
+            
             // Reconstruct the real topic for data attributes
             if (isMultiBroker) {
                 // If multi-broker, skip the first part (brokerId) for the topic string
@@ -80,7 +88,7 @@ export function createTreeManager(rootElement, options = {}) {
             const isLastPart = index === parts.length - 1;
             // The node ID must be unique *per tree*
             const partId = `node-${treeId}-${currentTopicPath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-            
+
             li = nodeMap.get(currentTopicPath); 
 
             // --- FILTERING LOGIC ---
@@ -101,6 +109,7 @@ export function createTreeManager(rootElement, options = {}) {
                 isNewNode = true;
                 li = document.createElement('li');
                 li.id = partId;
+
                 if (enableAnimations) li.classList.add('new-node');
 
                 const nodeContainer = document.createElement('div');
@@ -179,16 +188,25 @@ export function createTreeManager(rootElement, options = {}) {
         } // end for loop
 
         if (enableAnimations) {
-            const animationDelay = 150;
-            const animationDuration = 1200;
-            
-            affectedNodes.forEach((nodeInfo, index) => {
-                setTimeout(() => {
+            const disableAnimCheckbox = document.getElementById('disable-tree-animations');
+            const isAnimDisabled = disableAnimCheckbox ? disableAnimCheckbox.checked : false;
+
+            if (!isAnimDisabled) {
+                const animationDelay = 150;
+                const animationDuration = 1200;
+                affectedNodes.forEach((nodeInfo, index) => {
+                    setTimeout(() => {
+                        if (nodeInfo.isNew) nodeInfo.element.classList.remove('new-node');
+                        nodeInfo.element.classList.add('pulse');
+                        setTimeout(() => nodeInfo.element.classList.remove('pulse'), animationDuration);
+                    }, index * animationDelay);
+                });
+            } else {
+                // If animation is disabled, instantly remove the 'new-node' hidden class to make it visible right away
+                affectedNodes.forEach((nodeInfo) => {
                     if (nodeInfo.isNew) nodeInfo.element.classList.remove('new-node');
-                    nodeInfo.element.classList.add('pulse');
-                    setTimeout(() => nodeInfo.element.classList.remove('pulse'), animationDuration);
-                }, index * animationDelay);
-            });
+                });
+            }
         }
 
         return li; 
@@ -200,7 +218,6 @@ export function createTreeManager(rootElement, options = {}) {
      */
     function rebuild(entries) {
         console.log(`[tree-manager ${treeId}] Rebuilding tree with ${entries.length} topics...`); 
-        
         const rootUl = rootNode.querySelector(':scope > ul');
         if (rootUl) {
             rootUl.innerHTML = '';
@@ -236,6 +253,7 @@ export function createTreeManager(rootElement, options = {}) {
             const li = nodeContainer.closest('li');
             const brokerId = nodeContainer.dataset.brokerId;
             const topic = nodeContainer.dataset.topic;
+
             if (brokerId !== undefined && topic !== undefined) {
                  colorLogicFn(brokerId, topic, li);
             }
@@ -245,6 +263,7 @@ export function createTreeManager(rootElement, options = {}) {
     function toggleAllFolders(collapse) {
         const rootUl = rootNode.querySelector(':scope > ul');
         if (!rootUl) return;
+        
         rootUl.querySelectorAll('.is-folder').forEach(folderLi => {
             folderLi.classList.toggle('collapsed', collapse);
         });
@@ -257,7 +276,7 @@ export function createTreeManager(rootElement, options = {}) {
         const nodeName = nodeContainer.querySelector('.node-name').textContent.toLowerCase();
         const originalTopic = nodeContainer.dataset.topic?.toLowerCase() || '';
         const brokerId = nodeContainer.dataset.brokerId?.toLowerCase() || '';
-        
+
         const isMatch = nodeName.includes(filterText) || 
                         originalTopic.includes(filterText) || 
                         (isMultiBroker && brokerId.includes(filterText));

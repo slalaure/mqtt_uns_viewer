@@ -27,7 +27,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta53</p>
+                <p>v 1.5.0-beta54</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -54,10 +54,13 @@
     <div class="view-container">
         <main id="tree-view" class="view active">
             <div class="tree-view-wrapper">
-                <div class="tree-controls">
+                <div class="tree-controls" style="align-items: center;">
                     <input type="text" id="tree-filter-input" placeholder="Filter topics...">
                     <button id="btn-expand-all" title="Expand All">▲</button>
                     <button id="btn-collapse-all" title="Collapse All">▼</button>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.85em; color: var(--color-text-secondary); white-space: nowrap; margin-left: 2px;" title="Disable data traversal animations">
+                        <input type="checkbox" id="disable-tree-animations" style="margin: 0; padding: 0;"> Disable Anim.
+                    </label>
                 </div>
                 <div id="mqtt-tree" class="tree-container"></div>
             </div>
@@ -190,7 +193,6 @@
                                     <div class="target-editor-controls">
                                         <button type="button" class="target-save-maximized mapper-button button-primary" style="display:none; margin-right:15px;">💾 Save Live</button>
                                         <button type="button" class="target-minimize-button mapper-button" style="display:none; margin-right:15px;">✖ Minimize</button>
-                                        
                                         <input type="checkbox" class="target-enabled-toggle">
                                         <label class="checkbox-label" style="margin-right: 15px;">Enabled</label>
                                         <button type="button" class="target-delete-button danger-button">Delete</button>
@@ -210,7 +212,6 @@
                                             <input type="text" class="target-output-topic" placeholder="e.g., my_uns/facility/{{id}}">
                                         </div>
                                     </div>
-
                                     <div class="target-workspace">
                                         <div class="target-code-group">
                                             <div class="target-code-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
@@ -219,7 +220,6 @@
                                             </div>
                                             <div class="target-code-editor" spellcheck="false"></div>
                                         </div>
-                                        
                                         <div class="target-side-panel">
                                             <div class="maximized-payload-ref">
                                                 <label style="margin:0 0 10px 0; font-weight:bold; border-bottom:1px solid var(--color-border); padding-bottom:5px;">Source Payload Reference</label>
