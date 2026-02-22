@@ -22,12 +22,14 @@ const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const mqttMatch = require('mqtt-match');
+
 // --- Auth Imports ---
 const session = require('express-session');
 const FileStore = require('session-file-store')(session); 
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
 // --- Module Imports  ---
 const wsManager = require('./websocket-manager');
 const mqttHandler = require('./mqtt-handler');
@@ -37,6 +39,7 @@ const dataManager = require('./database/dataManager');
 const externalApiRouter = require('./routes/externalApi'); 
 const userManager = require('./database/userManager'); // Import User Manager
 const alertManager = require('./alert_manager'); // [NEW] Moved to root
+
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
@@ -46,10 +49,12 @@ const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const API_KEYS_FILE_PATH = path.join(DATA_PATH, process.env.EXTERNAL_API_KEYS_FILE || 'api_keys.json');
 const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
+
 // Ensure sessions directory exists
 if (!fs.existsSync(SESSIONS_PATH)) {
     try { fs.mkdirSync(SESSIONS_PATH, { recursive: true }); } catch (e) {}
 }
+
 // --- Analytics Script ---
 // This script will only be injected if ANALYTICS_ENABLED=true
 const ANALYTICS_SCRIPT = `
@@ -61,6 +66,7 @@ const ANALYTICS_SCRIPT = `
         })(window, document, "clarity", "script", "u3mhr7cn0n");
     </script>
 `;
+
 // --- Logger Setup ---
 const logger = pino({
     transport: {
@@ -68,6 +74,7 @@ const logger = pino({
         options: { colorize: true }
     }
 });
+
 // --- Initial .env File Setup ---
 if (!fs.existsSync(ENV_PATH)) {
     logger.info("✅ No .env file found in 'data' directory. Creating one from project root .env.example...");
@@ -80,12 +87,14 @@ if (!fs.existsSync(ENV_PATH)) {
     }
 }
 require('dotenv').config({ path: ENV_PATH });
+
 // --- Initial charts.json File Setup ---
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
     try {
         fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2));
     } catch (err) { /* ignore */ }
 }
+
 // --- Helper Function for Sparkplug (handles BigInt) ---
 function longReplacer(key, value) {
     if (typeof value === 'bigint') {
@@ -93,12 +102,14 @@ function longReplacer(key, value) {
     }
     return value;
 }
+
 // --- Global Variables ---
 let activeConnections = new Map(); 
 let brokerStatuses = new Map(); 
 let isPruning = false;
 let apiKeysConfig = { keys: [] };
 let isShuttingDown = false; // Global shutdown flag
+
 // --- Configuration from Environment ---
 const config = {
     BROKER_CONFIGS: [],
@@ -130,7 +141,7 @@ const config = {
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
     VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
     VIEW_CHAT_ENABLED: process.env.VIEW_CHAT_ENABLED !== 'false',
-    VIEW_ALERTS_ENABLED: process.env.VIEW_ALERTS_ENABLED !== 'false', // [NEW] Configurable
+    VIEW_ALERTS_ENABLED: process.env.VIEW_ALERTS_ENABLED !== 'false', 
     LLM_API_URL: process.env.LLM_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
     LLM_API_KEY: process.env.LLM_API_KEY || '',
     LLM_MODEL: process.env.LLM_MODEL || 'gemini-2.0-flash',
@@ -157,10 +168,10 @@ const config = {
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     PUBLIC_URL: process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`,
-    // [NEW] Admin Credentials
     ADMIN_USERNAME: process.env.ADMIN_USERNAME,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 };
+
 // ---  Broker Configuration Parsing ---
 try {
     if (process.env.MQTT_BROKERS) {
@@ -205,13 +216,16 @@ try {
     logger.error({ err }, "❌ Unexpected error during broker configuration parsing. Proceeding without brokers.");
     config.BROKER_CONFIGS = [];
 }
+
 // --- Configuration Validation ---
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.ANALYTICS_ENABLED) logger.info("✅ 📈 Analytics (Clarity) tracking is ENABLED.");
+
 // --- Normalize Base Path ---
 let basePath = config.BASE_PATH;
 if (!basePath.startsWith('/')) basePath = '/' + basePath;
 if (basePath.endsWith('/') && basePath.length > 1) basePath = basePath.slice(0, -1);
+
 // ---  Load External API Keys ---
 if (config.EXTERNAL_API_ENABLED) {
     const keysFilePath = path.join(DATA_PATH, config.EXTERNAL_API_KEYS_FILE);
@@ -224,40 +238,58 @@ if (config.EXTERNAL_API_ENABLED) {
         logger.error("❌ Failed to load API keys.");
     }
 }
+
 // ---  Helper to get connections ---
 function getPrimaryConnection() {
     if (activeConnections.size === 0) return null;
     return activeConnections.values().next().value || null;
 }
+
 function getBrokerConnection(brokerId) {
     if (!brokerId) return getPrimaryConnection();
     return activeConnections.get(brokerId) || null;
 }
+
 // --- Helper to update and broadcast broker status ---
 function updateBrokerStatus(brokerId, status, error = null) {
     const info = { status, error, timestamp: Date.now() };
     brokerStatuses.set(brokerId, info);
     wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
 }
+
 // --- Express App & Server Setup ---
 const app = express();
 const server = http.createServer(app);
+
 // Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
+
 // --- Session & Passport Setup ---
 app.use(session({
-    store: new FileStore({ path: SESSIONS_PATH, ttl: 86400 }), // 1 day persistence
+    store: new FileStore({ 
+        path: SESSIONS_PATH, 
+        ttl: 30 * 86400, // 30 days persistence (in seconds)
+        logFn: function(){} // Optional: suppresses repetitive file store logs
+    }), 
     secret: config.SESSION_SECRET,
     resave: false,
+    rolling: true, // [FIX] Forces the session cookie to be set on every response, auto-renewing the expiration
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // Secure should be true in HTTPS
+    cookie: { 
+        secure: 'auto', // [FIX] Uses secure cookies if HTTPS is detected via trust proxy
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days expiration (in milliseconds)
+        sameSite: 'lax' // [FIX] Prevents CSRF while allowing proper cookie retention across network changes
+    }
 }));
+
 app.use(passport.initialize());
 app.use(passport.session());
+
 // Passport Serialization
 passport.serializeUser((user, done) => {
     done(null, user.id);
 });
+
 passport.deserializeUser(async (id, done) => {
     try {
         const user = await userManager.findById(id);
@@ -266,6 +298,7 @@ passport.deserializeUser(async (id, done) => {
         done(err);
     }
 });
+
 // Local Strategy
 passport.use(new LocalStrategy(async (username, password, done) => {
     try {
@@ -276,6 +309,7 @@ passport.use(new LocalStrategy(async (username, password, done) => {
         return done(null, user);
     } catch (err) { return done(err); }
 }));
+
 // Google Strategy
 if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
     logger.info("✅ Google OAuth Strategy Enabled.");
@@ -291,6 +325,7 @@ if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
         } catch (err) { return done(err); }
     }));
 }
+
 // --- CORS Middleware ---
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -298,6 +333,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
     next();
 });
+
 // --- Mapper Engine Setup ---
 const mapperEngine = require('./mapper_engine')(
     activeConnections, 
@@ -306,25 +342,31 @@ const mapperEngine = require('./mapper_engine')(
     longReplacer,
     config 
 );
+
 // ---  DuckDB Setup (Centralized Initialization) ---
 const dbFile = DB_PATH;
 const dbWalFile = dbFile + '.wal';
 let db; 
+
 db = new duckdb.Database(dbFile, (err) => {
     if (err) {
         logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
         process.exit(1);
     }
     logger.info("✅ 🦆 DuckDB database connected.");
+
     // 1. Initialize User Manager Table
     userManager.init(db, logger, SESSIONS_PATH);
-    // [NEW] Initialize Alert Manager
+
+    // 2. Initialize Alert Manager
     alertManager.init(db, logger, config, wsManager.broadcast);
-    // [NEW] 2. Ensure Admin User Exists
+
+    // 3. Ensure Admin User Exists
     if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
         userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
     }
-    // 3. Ensure table exists
+
+    // 4. Ensure table exists
     db.exec(`
         CREATE TABLE IF NOT EXISTS mqtt_events (
             timestamp TIMESTAMPTZ,
@@ -336,7 +378,8 @@ db = new duckdb.Database(dbFile, (err) => {
             logger.error({ err: createErr }, "❌ FATAL: Failed to ensure table 'mqtt_events' exists.");
             return; 
         }
-        // 4. Schema Migration Check
+
+        // 5. Schema Migration Check
         db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
             if (columns) {
                 const hasBrokerId = columns.some(col => col.name === 'broker_id');
@@ -349,21 +392,28 @@ db = new duckdb.Database(dbFile, (err) => {
             }
         });
     });
+
     mapperEngine.setDb(db);
+
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
+
     setInterval(performMaintenance, 15000);
+
     // Connect to ALL MQTT Brokers
     config.BROKER_CONFIGS.forEach(brokerConfig => {
         const brokerId = brokerConfig.id;
         const connection = createMqttClient(brokerConfig, logger, CERTS_PATH);
+        
         if (!connection) {
             logger.warn(`⚠️ Skipping broker '${brokerId}' due to initialization failure.`);
             updateBrokerStatus(brokerId, 'error', 'Initialization failed (Config/Certs)');
             return; // Skip this broker
         }
+
         activeConnections.set(brokerId, connection);
+
         // Initialize the handler logic once (With AlertManager)
         const handleMessage = mqttHandler.init(
             logger,
@@ -372,14 +422,17 @@ db = new duckdb.Database(dbFile, (err) => {
             mapperEngine,
             dataManager, 
             broadcastDbStatus,
-            alertManager // [NEW] Pass Alert Manager
+            alertManager 
         );
+
         // --- Event Listeners ---
         connection.on('connect', () => {
             logger.info(`✅ MQTT Broker '${brokerId}' connected.`);
             updateBrokerStatus(brokerId, 'connected');
+            
             const rawTopics = (brokerConfig.subscribe && brokerConfig.subscribe.length > 0) ? brokerConfig.subscribe : brokerConfig.topics;
             const subscriptionTopics = Array.isArray(rawTopics) ? rawTopics.map(t => t.trim()) : [];
+
             if (subscriptionTopics.length > 0) {
                 connection.subscribe(subscriptionTopics, { qos: 1 }, (err) => {
                     if (err) logger.error({ err }, `❌ Subscription failed for '${brokerId}'`);
@@ -387,20 +440,25 @@ db = new duckdb.Database(dbFile, (err) => {
                 });
             }
         });
+
         connection.on('message', (topic, payload) => {
             handleMessage(brokerId, topic, payload); 
         });
+
         connection.on('reconnect', () => {
             logger.info(`🔄 MQTT Broker '${brokerId}' reconnecting...`);
             updateBrokerStatus(brokerId, 'connecting');
         });
+
         connection.on('offline', () => {
             updateBrokerStatus(brokerId, 'offline');
         });
+
         connection.on('error', (err) => {
             logger.error(`❌ MQTT Error on '${brokerId}': ${err.message}`);
             updateBrokerStatus(brokerId, 'error', err.message);
         });
+
         connection.on('close', () => {
             if (!isShuttingDown) {
                updateBrokerStatus(brokerId, 'disconnected');
@@ -408,14 +466,17 @@ db = new duckdb.Database(dbFile, (err) => {
         });
     });
 });
+
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
     // 1. Allow if session is active (Passport)
     if (req.isAuthenticated()) return next();
+
     // 2. Allow if Asset file (css, js, etc) - Strict whitelisting
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf'];
     if (allowedExts.includes(ext)) return next();
+
     // 3. Fallback to Basic Auth if Configured (for API/M2M or legacy usage)
     if (config.HTTP_USER && config.HTTP_PASSWORD) {
         const credentials = basicAuth(req);
@@ -425,39 +486,48 @@ const authMiddleware = (req, res, next) => {
         res.setHeader('WWW-Authenticate', 'Basic realm="MQTT UNS Viewer"');
         return res.status(401).send('Authentication required.');
     }
+
     // 4. If no Basic Auth configured, we redirect to login page (index.html handles this)
     // BUT we need to ensure we don't loop redirecting /auth routes
     if (req.path.startsWith('/auth') || req.path === '/login') {
         return next();
     }
+
     // Default: Allow if no auth configured at all, otherwise block
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
+    
     return res.status(401).send('Unauthorized. Please log in.');
 };
+
 // --- [NEW] Admin Middleware ---
 const requireAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
         return next();
     }
+    
     // Also allow Basic Auth admin (legacy/API use case)
     if (config.HTTP_USER && config.HTTP_PASSWORD) {
         const credentials = basicAuth(req);
         if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
-            // Implicitly treat env-configured Basic Auth user as admin for API tasks
             return next();
         }
     }
+
     logger.warn(`[Security] Admin access denied for ${req.user ? req.user.username : req.ip} on ${req.originalUrl}`);
     return res.status(403).send("Forbidden: Admin privileges required.");
 };
+
 let ALLOWED_IPS = config.API_ALLOWED_IPS ? config.API_ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const ipFilterMiddleware = (req, res, next) => {
     if (ALLOWED_IPS.length === 0 || ALLOWED_IPS.includes(req.ip)) return next();
     res.status(403).json({ error: `Access denied for IP ${req.ip}` });
 };
+
 const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
+
 app.set('trust proxy', true);
+
 // Simulator
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
@@ -465,13 +535,17 @@ simulatorManager.init(logger, (topic, payload) => {
         conn.publish(topic, payload, { qos: 1 });
     }
 }, config.IS_SPARKPLUG_ENABLED);
+
 // --- Auth Routes ---
 mainRouter.use('/auth', require('./routes/authApi')(logger));
-// --- [UPDATED] Admin Routes (Injection of DB deps) ---
+
+// --- Admin Routes ---
 mainRouter.use('/api/admin', require('./routes/adminApi')(logger, db, dataManager, DATA_PATH));
-// --- [NEW] Alert API Routes ---
+
+// --- Alert API Routes ---
 mainRouter.use('/api/alerts', ipFilterMiddleware, require('./routes/alertApi')(logger));
-// --- [NEW] Layered File System Helper for SVGs ---
+
+// --- Layered File System Helper for SVGs ---
 // Determines the priority file path (Private > Global)
 function resolveSvgPath(filename, req) {
     const globalPath = path.join(DATA_PATH, filename);
@@ -486,11 +560,12 @@ function resolveSvgPath(filename, req) {
     // Fallback to global
     return globalPath;
 }
+
 // --- API Routes ---
-// [MODIFIED] Serve SVG file with precedence (Private > Global)
 mainRouter.get('/api/svg/file', (req, res) => {
     const filename = path.basename(req.query.name || '');
     if (!filename.endsWith('.svg')) return res.status(400).send('Invalid file type');
+    
     const filePath = resolveSvgPath(filename, req);
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
@@ -498,7 +573,7 @@ mainRouter.get('/api/svg/file', (req, res) => {
         res.status(404).send('Not found');
     }
 });
-// [MODIFIED] List SVGs (Merge Global + Private)
+// List SVGs (Merge Global + Private)
 mainRouter.get('/api/svg/list', (req, res) => {
     try {
         let files = new Set();
@@ -517,17 +592,19 @@ mainRouter.get('/api/svg/list', (req, res) => {
                 });
             }
         }
+        
         res.json(Array.from(files).sort());
     } catch { 
         res.status(500).json([]); 
     }
 });
-// [MODIFIED] Serve Bindings JS with precedence
+// Serve Bindings JS with precedence
 mainRouter.get('/api/svg/bindings.js', (req, res) => {
     const filename = path.basename(req.query.name || '');
     // filename comes in as "view.svg.js" likely, or we construct it? 
     // The client calls: bindings.js?name=view.svg.js
     const filePath = resolveSvgPath(filename, req);
+    
     if (fs.existsSync(filePath)) { 
         res.setHeader('Content-Type', 'application/javascript'); 
         res.sendFile(filePath); 
@@ -536,11 +613,12 @@ mainRouter.get('/api/svg/bindings.js', (req, res) => {
         res.send('// No bindings'); 
     }
 });
-// [NEW] Delete SVG View (File + JS)
+// Delete SVG View (File + JS)
 mainRouter.delete('/api/svg/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
     if (!filename.endsWith('.svg')) return res.status(400).json({ error: "Invalid file type" });
+    
     const globalPath = path.join(DATA_PATH, filename);
     let targetPath = null;
     let isPrivate = false;
@@ -558,9 +636,11 @@ mainRouter.delete('/api/svg/file', (req, res) => {
         targetPath = globalPath;
         isPrivate = false;
     }
+
     if (!targetPath) {
         return res.status(404).json({ error: "File not found" });
     }
+
     // Permission Logic
     if (!isPrivate) {
         // Only Admin can delete global files
@@ -568,6 +648,7 @@ mainRouter.delete('/api/svg/file', (req, res) => {
             return res.status(403).json({ error: "Forbidden: Only Admins can delete Global SVG views." });
         }
     }
+
     try {
         // Delete .svg
         fs.unlinkSync(targetPath);
@@ -584,6 +665,7 @@ mainRouter.delete('/api/svg/file', (req, res) => {
         res.status(500).json({ error: "Failed to delete file" });
     }
 });
+
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
@@ -596,7 +678,7 @@ mainRouter.get('/api/config', (req, res) => {
         viewChartEnabled: config.VIEW_CHART_ENABLED,
         viewPublishEnabled: config.VIEW_PUBLISH_ENABLED,
         viewChatEnabled: config.VIEW_CHAT_ENABLED,
-        viewAlertsEnabled: config.VIEW_ALERTS_ENABLED, // [NEW] Send to frontend
+        viewAlertsEnabled: config.VIEW_ALERTS_ENABLED, 
         basePath: basePath,
         viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
         maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
@@ -604,6 +686,7 @@ mainRouter.get('/api/config', (req, res) => {
         svgFilePath: config.SVG_FILE_PATH
     });
 });
+
 if (config.IS_SIMULATOR_ENABLED) {
     mainRouter.get('/api/simulator/status', (req, res) => {
         // [FIX] Ensure we return an object with "statuses" property
@@ -615,42 +698,55 @@ if (config.IS_SIMULATOR_ENABLED) {
         wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
         res.json(r);
     });
+
     mainRouter.post('/api/simulator/stop/:name', requireAdmin, (req, res) => {
         const r = simulatorManager.stopSimulator(req.params.name);
         wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
         res.json(r);
     });
 }
+
 mainRouter.use('/api/context', (req, res, next) => {
     if (!db) return res.status(503).json({ error: "DB not ready" });
     const dbManager = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     require('./routes/mcpApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next);
 });
+
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
+
 if (config.VIEW_CHAT_ENABLED) {
     mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
+
 if (config.VIEW_CONFIG_ENABLED) {
     // [SECURED] Apply Admin Middleware for Environment Config Access
     mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager));
 }
+
 mainRouter.use('/api/mapper', ipFilterMiddleware, require('./routes/mapperApi')(mapperEngine));
+
 mainRouter.use('/api/chart', ipFilterMiddleware, require('./routes/chartApi')(CHART_CONFIG_PATH, logger));
+
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
     const conn = getBrokerConnection(brokerId);
+    
     if (!conn || !conn.connected) return res.status(503).json({ error: "Broker not connected" });
+    
     let finalPayload = payload;
+    
     if (format === 'json' || typeof payload === 'object') {
         try { finalPayload = JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload); } catch(e) {}
     } else if (format === 'sparkplugb') {
         try { finalPayload = spBv10Codec.encodePayload(JSON.parse(payload)); } catch(e) { return res.status(400).json({ error: e.message }); }
     }
+    
     conn.publish(topic, finalPayload, { qos: parseInt(qos)||0, retain: !!retain }, (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
+
 if (config.EXTERNAL_API_ENABLED) {
     mainRouter.use('/api/external', ipFilterMiddleware, require('./routes/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer));
 }
@@ -672,6 +768,7 @@ const serveSPA = (req, res) => {
             logger.error({ err }, "Failed to read index.html");
             return res.status(500).send("Server Error");
         }
+        
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
         let modifiedHtml = data;
         // 1. Inject <base href="...">
@@ -687,6 +784,7 @@ const serveSPA = (req, res) => {
                 role: req.user.role // Inject role for frontend checks
             });
         }
+        
         modifiedHtml = modifiedHtml.replace('</head>', `<script>window.currentUser = ${userState};</script>\n</head>`);
         // 3. Analytics
         const analyticsPlaceholder = '';
@@ -695,6 +793,7 @@ const serveSPA = (req, res) => {
         } else {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); 
         }
+        
         res.send(modifiedHtml);
     });
 };
@@ -708,6 +807,7 @@ clientRoutes.forEach(route => {
 app.use(authMiddleware);
 // Hybrid Routing Strategy
 app.use(basePath, mainRouter);
+
 if (basePath !== '/') {
     logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/' to support path-stripping proxies.`);
     app.use('/', mainRouter);
@@ -726,6 +826,7 @@ app.get('/', (req, res) => {
 server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
 });
+
 server.timeout = 600000;
 server.keepAliveTimeout = 600000;
 server.headersTimeout = 600005;
@@ -733,27 +834,35 @@ server.headersTimeout = 600005;
 async function gracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    
     logger.info("\n✅ Gracefully shutting down...");
+    
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
+
     try {
         dataManager.stop();
         simulatorManager.getStatuses();
+        
         await new Promise(resolve => wsManager.close(resolve));
+        
         await new Promise((resolve) => {
             server.close(() => {
                 logger.info("✅ HTTP Server closed.");
                 resolve();
             });
         });
+
         activeConnections.forEach((conn) => {
             if (conn) conn.end(true); 
         });
         logger.info("✅ MQTT Connections closed.");
+
         await dataManager.close();
         logger.info("✅ Database closed.");
+
         logger.info("✅ Shutdown complete.");
         process.exit(0);
     } catch (err) {
@@ -764,10 +873,12 @@ async function gracefulShutdown() {
 // --- Process Signal Handling ---
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
+
 process.on('uncaughtException', (err) => {
     logger.fatal({ err }, "❌ FATAL: Uncaught Exception. Shutting down...");
     gracefulShutdown();
 });
+
 process.on('unhandledRejection', (reason, promise) => {
     logger.fatal({ err: reason }, "❌ FATAL: Unhandled Rejection. Shutting down...");
     gracefulShutdown();

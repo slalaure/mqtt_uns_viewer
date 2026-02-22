@@ -27,7 +27,7 @@
         <div class="header-content">
             <h1>MQTT UNS Viewer</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0-beta55</p>
+                <p>v 1.5.0-beta56</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -56,8 +56,8 @@
             <div class="tree-view-wrapper">
                 <div class="tree-controls" style="align-items: center;">
                     <input type="text" id="tree-filter-input" placeholder="Filter topics...">
-                    <button id="btn-expand-all" title="Expand All">▲</button>
-                    <button id="btn-collapse-all" title="Collapse All">▼</button>
+                    <button id="btn-expand-all" class="tool-button" title="Expand All">▲</button>
+                    <button id="btn-collapse-all" class="tool-button" title="Collapse All">▼</button>
                     <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.85em; color: var(--color-text-secondary); white-space: nowrap; margin-left: 2px;" title="Disable data traversal animations">
                         <input type="checkbox" id="disable-tree-animations" style="margin: 0; padding: 0;"> Disable Anim.
                     </label>
@@ -70,7 +70,7 @@
                     <div class="payload-header">
                         <h2>Payload</h2>
                         <div style="display:flex; align-items:center; gap:10px;">
-                            <button id="btn-create-alert-from-tree" class="mapper-button" style="display:none; font-size:0.8em;">🔔 Create Alert Rule</button>
+                            <button id="btn-create-alert-from-tree" class="tool-button" style="display:none; font-size:0.8em;">🔔 Create Alert Rule</button>
                             <div class="payload-controls">
                                 <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
                                 <label for="live-payload-toggle">Live Update</label>
@@ -89,6 +89,7 @@
                 </div>
             </div>
         </main>
+        
         <main id="map-view" class="view">
             <div class="map-view-container">
                 <div class="map-view-controls">
@@ -107,11 +108,12 @@
                             <div class="slider-label" id="svg-label"></div>
                         </div>
                     </div>
-                    <button id="btn-svg-fullscreen" class="map-button" title="Toggle Fullscreen">&#x2922;</button>
+                    <button id="btn-svg-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
                 </div>
                 <div id="svg-content" class="svg-content"></div>
             </div>
         </main>
+
         <main id="history-view" class="view">
             <div class="history-status-bar">
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
@@ -136,12 +138,13 @@
                 <p>Cleaning database, please wait...</p>
             </div>
         </main>
+
         <main id="mapper-view" class="view">
             <div class="mapper-tree-wrapper">
                 <div class="tree-controls">
                     <input type="text" id="mapper-filter-input" placeholder="Filter topics...">
-                    <button id="btn-mapper-expand-all" title="Expand All">▲</button>
-                    <button id="btn-mapper-collapse-all" title="Collapse All">▼</button>
+                    <button id="btn-mapper-expand-all" class="tool-button" title="Expand All">▲</button>
+                    <button id="btn-mapper-collapse-all" class="tool-button" title="Collapse All">▼</button>
                 </div>
                 <div id="mapper-tree" class="tree-container">
                 </div>
@@ -163,8 +166,8 @@
                             <label for="mapper-version-select">Active Version:</label>
                             <select id="mapper-version-select"></select>
                         </div>
-                        <button id="mapper-save-button" class="mapper-button">Save</button>
-                        <button id="mapper-save-as-new-button" class="mapper-button">Save as New...</button>
+                        <button id="mapper-save-button" class="tool-button button-primary">Save</button>
+                        <button id="mapper-save-as-new-button" class="tool-button">Save as New...</button>
                         <span id="mapper-save-status"></span>
                     </div>
                     <div id="mapper-transform-placeholder" class="history-placeholder">
@@ -176,13 +179,14 @@
                                 <label for="mapper-source-topic">Source Topic (Pattern):</label>
                                 <input type="text" id="mapper-source-topic" readonly>
                             </div>
-                            <button type="button" id="mapper-add-target-button">Add Target</button>
+                            <button type="button" id="mapper-add-target-button" class="tool-button">Add Target</button>
                         </div>
                         <div id="mapper-targets-list">
                         </div>
                         <div id="mapper-targets-placeholder" class="history-placeholder" style="display: none;">
                             <p>No targets defined for this rule. Click "Add Target" to create one.</p>
                         </div>
+
                         <template id="mapper-target-template">
                             <div class="mapper-target-editor collapsed">
                                 <div class="target-editor-header">
@@ -191,11 +195,11 @@
                                         <input type="text" class="target-editor-title-input" title="Target Name" placeholder="Target Name">
                                     </div>
                                     <div class="target-editor-controls">
-                                        <button type="button" class="target-save-maximized mapper-button button-primary" style="display:none; margin-right:15px;">💾 Save Live</button>
-                                        <button type="button" class="target-minimize-button mapper-button" style="display:none; margin-right:15px;">✖ Minimize</button>
+                                        <button type="button" class="target-save-maximized tool-button button-primary" style="display:none; margin-right:15px;">💾 Save Live</button>
+                                        <button type="button" class="target-minimize-button tool-button" style="display:none; margin-right:15px;">✖ Minimize</button>
                                         <input type="checkbox" class="target-enabled-toggle">
                                         <label class="checkbox-label" style="margin-right: 15px;">Enabled</label>
-                                        <button type="button" class="target-delete-button danger-button">Delete</button>
+                                        <button type="button" class="target-delete-button tool-button button-danger">Delete</button>
                                     </div>
                                 </div>
                                 <div class="target-editor-body">
@@ -216,7 +220,7 @@
                                         <div class="target-code-group">
                                             <div class="target-code-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                                                 <label class="target-code-label" style="margin:0;">Transform (JavaScript)</label>
-                                                <button type="button" class="target-maximize-code mapper-button" style="font-size:0.8em; padding:4px 10px;">⛶ Maximize</button>
+                                                <button type="button" class="target-maximize-code tool-button" style="font-size:0.8em; padding:4px 10px;">⛶ Maximize</button>
                                             </div>
                                             <div class="target-code-editor" spellcheck="false"></div>
                                         </div>
@@ -244,12 +248,13 @@
                 </div>
             </div>
         </main>
+
         <main id="chart-view" class="view">
             <div class="chart-tree-wrapper">
                 <div class="tree-controls">
                     <input type="text" id="chart-filter-input" placeholder="Filter topics...">
-                    <button id="btn-chart-expand-all" title="Expand All">▲</button>
-                    <button id="btn-chart-collapse-all" title="Collapse All">▼</button>
+                    <button id="btn-chart-expand-all" class="tool-button" title="Expand All">▲</button>
+                    <button id="btn-chart-collapse-all" class="tool-button" title="Collapse All">▼</button>
                 </div>
                 <div id="chart-tree" class="tree-container">
                     </div>
@@ -275,9 +280,10 @@
                                 <option value="">-- New Chart --</option>
                             </select>
                         </div>
-                        <button id="btn-chart-save-current" class="chart-button" title="Save">Save</button>
-                        <button id="btn-chart-save-as" class="chart-button" title="Save As New...">Save As...</button>
-                        <button id="btn-chart-delete-config" class="chart-button danger-button" title="Delete Selected Chart">Delete</button>
+                        <button id="btn-chart-save-current" class="tool-button button-primary" title="Save">Save</button>
+                        <button id="btn-chart-save-as" class="tool-button" title="Save As New...">Save As...</button>
+                        <button id="btn-chart-delete-config" class="tool-button button-danger" title="Delete Selected Chart">Delete</button>
+                        
                         <div class="form-group">
                             <label for="chart-type-select">Type:</label>
                             <select id="chart-type-select">
@@ -303,12 +309,13 @@
                             <input type="datetime-local" id="chart-end-date" style="padding: 4px; font-size: 0.85em;">
                         </div>
                         <div id="chart-range-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
-                        <button id="btn-chart-clear" class="chart-button" title="Clear All Selections">Clear All</button>
-                        <button id="btn-chart-export-csv" class="chart-button" title="Export CSV">CSV</button>
-                        <button id="btn-chart-export-png" class="chart-button" title="Export PNG">PNG</button>
-                        <button id="btn-chart-fullscreen" class="chart-button" title="Toggle Fullscreen">&#x2922;</button>
+                        <button id="btn-chart-clear" class="tool-button" style="color:var(--color-danger); border-color:var(--color-danger);" title="Clear All Selections">Clear All</button>
+                        <button id="btn-chart-export-csv" class="tool-button" title="Export CSV">CSV</button>
+                        <button id="btn-chart-export-png" class="tool-button" title="Export PNG">PNG</button>
+                        <button id="btn-chart-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
                         <span id="chart-save-status"></span>
                     </div>
+                    
                     <div id="chart-time-range-slider-container" class="time-slider-container">
                         <div class="slider-track"></div>
                         <div class="slider-range" id="chart-slider-range"></div>
@@ -319,6 +326,7 @@
                             <div class="slider-label" id="chart-label-max"></div>
                         </div>
                     </div>
+
                     <div id="chart-canvas-container">
                         <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
                         <canvas id="chart-canvas" style="display: none;"></canvas>
@@ -326,8 +334,10 @@
                 </div>
             </div>
         </main>
+
         <main id="alerts-view" class="view">
             </main>
+
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
                 <h2>Manual Publish</h2>
@@ -363,12 +373,13 @@
                         <div id="publish-payload-editor" spellcheck="false"></div>
                     </div>
                     <div class="publish-actions">
-                        <button type="submit" id="publish-button">Publish Message</button>
+                        <button type="submit" id="publish-button" class="tool-button button-primary" style="padding: 10px 20px; font-size: 1em;">Publish Message</button>
                         <span id="publish-status"></span>
                     </div>
                 </form>
             </div>
             <div class="resizer" id="drag-handle-vertical-publish"></div>
+            
             <div class="simulator-panel-wrapper">
                 <h2>Simulator</h2>
                 <div class="simulator-controls-container">
@@ -379,16 +390,18 @@
                         <div class="simulator-instance-controls">
                             <h3 class="simulator-name"></h3>
                             <span class="status-indicator stopped">Stopped</span>
-                            <button class="btn-start-sim">Start</button>
-                            <button class="btn-stop-sim" disabled>Stop</button>
+                            <button class="tool-button btn-start-sim">Start</button>
+                            <button class="tool-button btn-stop-sim" disabled>Stop</button>
                         </div>
                     </template>
                 </div>
             </div>
         </main>
+        
         <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;">
             </main>
     </div>
+
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
             <span>AI Assistant</span>
@@ -406,9 +419,11 @@
             </div>
         </div>
     </div>
+    
     <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
         💬
     </button>
+
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>
@@ -419,17 +434,19 @@
                 <input type="text" id="delete-modal-pattern" class="modal-input">
             </div>
             <div class="modal-actions">
-                <button id="modal-btn-cancel" class="modal-button">Cancel</button>
-                <button id="modal-btn-delete-rule" class="modal-button button-primary">Delete Rule Only</button>
-                <button id="modal-btn-delete-prune" class="modal-button button-danger">Delete Rule &amp; Prune
+                <button id="modal-btn-cancel" class="tool-button">Cancel</button>
+                <button id="modal-btn-delete-rule" class="tool-button button-primary">Delete Rule Only</button>
+                <button id="modal-btn-delete-prune" class="tool-button button-danger">Delete Rule &amp; Prune
                     History</button>
             </div>
         </div>
     </div>
+
     <footer class="app-footer">
         <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
                 rel="noopener noreferrer">github</a></p>
     </footer>
+
     <script src="view.login.js" type="module"></script>
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>

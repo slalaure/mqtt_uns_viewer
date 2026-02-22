@@ -10,12 +10,10 @@
  *
  * View module for the Chart tab.
  * Handles configuration, data extraction (including primitives), and rendering.
- * [UPDATED] Uses backend DuckDB aggregation (TIME_BUCKET) for extreme performance.
- * [UPDATED] Replaced native fullscreen with CSS Maximized mode.
- * [UPDATED] Improved loading spinner & fixed zoom interaction lock.
  */
+
 // Import shared utilities
-import { formatTimestampForLabel, trackEvent } from './utils.js'; 
+import { formatTimestampForLabel, trackEvent, confirmModal } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 import { createDualTimeSlider }from './time-slider.js';
 
@@ -65,6 +63,7 @@ let chartSlider = null;
 let chartRefreshTimer = null; 
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
+let hasUnsavedChanges = false; // State for UI feedback
 
 // Configuration for Chart
 const MAX_POINTS_PER_SERIES = 500; 
@@ -93,6 +92,21 @@ let appCallbacks = {
     colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"), 
 };
 
+// --- Unsaved Changes Feedback ---
+function markUnsaved() {
+    if (!hasUnsavedChanges && btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
+        hasUnsavedChanges = true;
+        btnChartSaveCurrent.classList.add('btn-unsaved');
+    }
+}
+
+function clearUnsaved() {
+    hasUnsavedChanges = false;
+    if (btnChartSaveCurrent) {
+        btnChartSaveCurrent.classList.remove('btn-unsaved');
+    }
+}
+
 export function refreshChart() {
     onGenerateChart(false); 
 }
@@ -108,6 +122,7 @@ export function pruneChartedVariables(regex) {
         }
     }
     if (wasPruned) {
+        markUnsaved();
         onGenerateChart(); 
         appCallbacks.colorChartTreeCallback(); 
         if (selectedChartTopic && regex.test(selectedChartTopic)) populateChartVariables(null);
@@ -123,7 +138,6 @@ function toDateTimeLocal(timestamp) {
 
 function showChartLoader() {
     if (chartCanvas) chartCanvas.style.opacity = '0.3';
-    
     if (!document.getElementById('chart-spinner-overlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'chart-spinner-overlay';
@@ -138,13 +152,11 @@ function showChartLoader() {
         overlay.style.backgroundColor = 'var(--color-bg-secondary)';
         overlay.style.opacity = '0.7';
         overlay.style.zIndex = '10';
-        
         // CSS Spinner
         overlay.innerHTML = `
             <div style="border: 4px solid var(--color-border); border-top: 4px solid var(--color-primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         `;
-        
         const container = document.getElementById('chart-canvas-container');
         if (container) container.appendChild(overlay);
     }
@@ -154,7 +166,6 @@ function hideChartLoader() {
     if (chartCanvas) chartCanvas.style.opacity = '1';
     const overlay = document.getElementById('chart-spinner-overlay');
     if (overlay) overlay.remove();
-    
     if (chartedVariables.size === 0 && chartPlaceholder) {
         chartPlaceholder.style.display = 'block';
         chartPlaceholder.textContent = 'Select a topic and check variables to plot, or load a saved chart.';
@@ -195,17 +206,17 @@ export function initChartView(callbacks) {
             <label for="chart-aggregation-select">Aggregation:</label>
             <select id="chart-aggregation-select" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
                 <option value="AUTO">Auto (Mean)</option>
-                <option value="MAX">Max</option>
                 <option value="MIN">Min</option>
+                <option value="MAX">Max</option>
                 <option value="MEAN">Mean</option>
                 <option value="MEDIAN">Median</option>
-                <option value="SD">Std Dev</option>
-                <option value="RANGE">Range</option>
-                <option value="SUM">Sum</option>
             </select>
         `;
         typeGroup.parentNode.insertBefore(aggGroup, typeGroup);
-        document.getElementById('chart-aggregation-select').addEventListener('change', () => onGenerateChart(true));
+        document.getElementById('chart-aggregation-select').addEventListener('change', () => {
+            markUnsaved();
+            onGenerateChart(true);
+        });
     }
 
     payloadViewer = createPayloadViewer({
@@ -222,15 +233,16 @@ export function initChartView(callbacks) {
     btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
     btnChartSaveAs?.addEventListener('click', onSaveAsNew);
     btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
-    chartTypeSelect?.addEventListener('change', () => onGenerateChart(true));
-    chartConnectNulls?.addEventListener('change', () => onGenerateChart(true));
-    chartSmartAxis?.addEventListener('change', () => onGenerateChart(true)); 
+    
+    chartTypeSelect?.addEventListener('change', () => { markUnsaved(); onGenerateChart(true); });
+    chartConnectNulls?.addEventListener('change', () => { markUnsaved(); onGenerateChart(true); });
+    chartSmartAxis?.addEventListener('change', () => { markUnsaved(); onGenerateChart(true); }); 
 
     if (chartRangeButtonsContainer) {
         const createRangeBtn = (text, hours) => {
             const btn = document.createElement('button');
             btn.textContent = text;
-            btn.className = 'chart-button';
+            btn.className = 'tool-button';
             btn.style.padding = '4px 8px';
             btn.style.fontSize = '0.85em';
             btn.onclick = () => setRelativeRange(hours);
@@ -241,6 +253,9 @@ export function initChartView(callbacks) {
         chartRangeButtonsContainer.appendChild(createRangeBtn('6h', 6));
         chartRangeButtonsContainer.appendChild(createRangeBtn('24h', 24));
         chartRangeButtonsContainer.appendChild(createRangeBtn('7d', 24*7));
+        chartRangeButtonsContainer.appendChild(createRangeBtn('1M', 24*30));
+        chartRangeButtonsContainer.appendChild(createRangeBtn('3M', 24*30*3));
+        chartRangeButtonsContainer.appendChild(createRangeBtn('1Y', 24*365));
         chartRangeButtonsContainer.appendChild(createRangeBtn('Full', 'FULL'));
     }
 
@@ -291,6 +306,7 @@ export function initChartView(callbacks) {
             }
         });
     }
+
     loadChartConfig(); 
 }
 
@@ -329,7 +345,6 @@ export function handleChartNodeClick(event, nodeContainer, brokerId, topic) {
 
 export function updateChartSliderUI(min, max, isInitialLoad = false, force = false) {
     if (!chartSlider) return; 
-    
     if (isUserInteracting && !force) return;
     if (!isInitialLoad && !force && Date.now() - lastSliderUpdate < 1000) return;
     
@@ -350,7 +365,6 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
 
     if (chartStartDateInput) chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
     if (chartEndDateInput) chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-
     if (chartTimeSliderContainer) chartTimeSliderContainer.style.display = (min === 0 && max === 0) ? 'none' : 'flex';
     
     chartSlider.updateUI(minTimestamp, maxTimestamp, currentMinTimestamp, currentMaxTimestamp);
@@ -422,11 +436,9 @@ function populateChartVariables(payloadString) {
          chartVariableList.innerHTML = '<p class="history-placeholder">No payload for this topic.</p>';
          return;
     }
-
     try {
         const payload = JSON.parse(payloadString);
         let numericKeys = [];
-        
         if (typeof payload === 'number' || typeof payload === 'boolean') {
              numericKeys.push({ path: "(value)", type: typeof payload });
         } 
@@ -436,7 +448,6 @@ function populateChartVariables(payloadString) {
         else {
              numericKeys = findNumericKeys(payload);
         }
-
         if (numericKeys.length === 0) {
             chartVariableList.innerHTML = '<p class="history-placeholder">No numeric properties found in this payload.</p>';
             return;
@@ -445,7 +456,6 @@ function populateChartVariables(payloadString) {
         numericKeys.forEach(key => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'chart-variable-item';
-            
             const varId = `${selectedChartBrokerId}|${selectedChartTopic}|${key.path}`;
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
@@ -456,15 +466,13 @@ function populateChartVariables(payloadString) {
             checkbox.dataset.path = key.path; 
             checkbox.checked = chartedVariables.has(varId);
             checkbox.addEventListener('change', onChartVariableToggle);
-
+            
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = key.path; 
-
             const typeSpan = document.createElement('span');
             typeSpan.className = 'var-type';
             typeSpan.textContent = `(${key.type})`; 
-
             label.appendChild(typeSpan);
             itemDiv.appendChild(checkbox);
             itemDiv.appendChild(label);
@@ -487,6 +495,7 @@ function onClearAll() {
     chartConnectNulls.checked = false;
     currentConfigId = null;
     chartConfigSelect.value = ""; 
+    clearUnsaved();
     onGenerateChart(true); 
     appCallbacks.colorChartTreeCallback(); 
 }
@@ -494,6 +503,8 @@ function onClearAll() {
 function onChartVariableToggle(event) {
     const checkbox = event.target;
     const varId = checkbox.value; 
+    markUnsaved();
+
     if (checkbox.checked) {
         chartedVariables.set(varId, {
             brokerId: checkbox.dataset.brokerId,
@@ -560,12 +571,9 @@ function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
 
 function onGenerateChart(showLoader = false) {
     trackEvent('chart_generate_refresh'); 
-    
     if (isUserInteracting) {
-        console.log("[Chart Debug] Chart generation blocked: User is interacting with slider.");
         return;
     }
-    
     if (showLoader) showChartLoader();
     
     // Debounce to prevent API spam in live mode
@@ -600,7 +608,6 @@ async function processChartData() {
         if (jsonPath !== '(value)') {
             jsonPath = jsonPath.startsWith('[') ? '$' + jsonPath : '$.' + jsonPath;
         }
-        
         topicsMap.get(key).variables.push({ id: varId, path: jsonPath, originalPath: varInfo.path });
     });
 
@@ -648,22 +655,21 @@ async function processChartData() {
         const connectNulls = chartConnectNulls.checked;
         const useSmartAxis = chartSmartAxis && chartSmartAxis.checked;
         let datasets = [];
+
         const isDarkMode = document.body.classList.contains('dark-mode');
         const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
         const textColor = isDarkMode ? '#e0e0e0' : '#333';
 
         const axisGroups = new Map();
-        
         chartedVariables.forEach((varInfo, varId) => {
             const topicParts = varInfo.topic.split('/');
             const cleanPath = varInfo.path.replace(/\[|\]/g, '');
             const axisKey = useSmartAxis ? guessGroupKey(varInfo.topic, cleanPath) : varId;
-                
             if (!axisGroups.has(axisKey)) axisGroups.set(axisKey, 0);
             axisGroups.set(axisKey, axisGroups.get(axisKey) + 1);
         });
-
         const distinctAxes = Array.from(axisGroups.keys());
+
         const dynamicScales = {
             x: {
                 type: 'time',
@@ -686,22 +692,22 @@ async function processChartData() {
             const topicParts = topic.split('/');
             const cleanPath = path.replace(/\[|\]/g, '');
             const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
-
+            
                 console.log(`[Chart Debug] Variable '${label}': Found ${rawPoints.length} points.`);
                 
                 // Sort by time
             rawPoints.sort((a, b) => a.x - b.x);
-
+            
                 // Determine Axis
             const axisKey = useSmartAxis ? guessGroupKey(topic, cleanPath) : varId;
             if (!axisMap.has(axisKey)) axisMap.set(axisKey, `y${axisMap.size}`);
             const yAxisId = axisMap.get(axisKey);
-
+            
                 // Determine Color
             const axisIndex = distinctAxes.indexOf(axisKey);
             const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
             const color = `hsl(${hue}, 85%, 60%)`;
-
+            
                 // Create Dataset (No local downsampling needed)
             datasets.push({
                 label: label,
@@ -750,7 +756,7 @@ async function processChartData() {
             // Unlink current chart safely
             chartInstance.destroy();
         }
-        
+
         chartCanvas.style.display = 'block';
         chartInstance = new Chart(chartCanvas, {
             type: chartType,
@@ -772,7 +778,7 @@ async function processChartData() {
                                 isUserInteracting = false; // Fix infinite load
                                 isChartLive = false;
                                 updateChartSliderUI(min, max, false, true);
-                                setTimeout(() => triggerDataFetch(), 0); // Defer re-render to avoid loop
+                                setTimeout(() => triggerDataFetch(), 0); 
                             }
                         }
                     }
@@ -782,9 +788,7 @@ async function processChartData() {
                 normalized: true
             }
         });
-
         hideChartLoader();
-
     } catch (err) {
         console.error("Chart aggregation error:", err);
         hideChartLoader();
@@ -794,9 +798,7 @@ async function processChartData() {
 function toggleChartFullscreen() {
     trackEvent('chart_fullscreen'); 
     if (!chartMainArea) return;
-    
     const isMaximized = chartMainArea.classList.toggle('maximized');
-    
     if (isMaximized) {
         btnChartFullscreen.innerHTML = '✖ Minimize';
         chartMainArea.style.position = 'fixed';
@@ -816,7 +818,6 @@ function toggleChartFullscreen() {
         chartMainArea.style.zIndex = '';
         chartMainArea.style.backgroundColor = '';
     }
-    
     if (chartInstance) {
         setTimeout(() => chartInstance.resize(), 50);
     }
@@ -837,7 +838,6 @@ function onExportCSV() {
         alert("Please generate a chart first.");
         return;
     }
-    
     let csvContent = "data:text/csv;charset=utf-8,";
     const headers = ['timestamp', ...chartInstance.data.datasets.map(d => `"${d.label}"`)];
     csvContent += headers.join(',') + '\r\n';
@@ -885,7 +885,6 @@ async function loadChartConfig() {
         const response = await fetch('api/chart/config');
         if (!response.ok) throw new Error('Failed to fetch chart config');
         let savedConfig = await response.json(); 
-        
         if (Array.isArray(savedConfig)) {
             allChartConfigs = { configurations: [{ id: `chart_${Date.now()}`, name: "Migrated Chart", chartType: "line", connectNulls: false, variables: savedConfig.map(v => ({ brokerId: 'default', topic: v.topic, path: v.path })) }] };
             await saveAllChartConfigs(allChartConfigs, false); 
@@ -894,7 +893,6 @@ async function loadChartConfig() {
         } else {
             allChartConfigs = { configurations: [] }; 
         }
-        
         populateChartConfigSelect(); 
         if (allChartConfigs.configurations.length > 0) {
             chartConfigSelect.value = allChartConfigs.configurations[0].id; 
@@ -939,7 +937,6 @@ function onChartConfigChange() {
         btnChartSaveCurrent.disabled = true;
         btnChartSaveCurrent.textContent = "🔒 Locked";
         btnChartSaveCurrent.title = "Global charts are read-only. Use 'Save As' to create a private copy.";
-        
         btnChartDeleteConfig.disabled = true;
         btnChartDeleteConfig.title = "Cannot delete Global chart.";
         
@@ -966,6 +963,7 @@ function onChartConfigChange() {
         });
     }
     
+    clearUnsaved();
     onGenerateChart(true);
     appCallbacks.colorChartTreeCallback();
     
@@ -1011,7 +1009,10 @@ async function onSaveCurrent() {
     config.connectNulls = chartConnectNulls.checked;
     config.variables = Array.from(chartedVariables.values());
     
-    await saveAllChartConfigs(allChartConfigs);
+    const success = await saveAllChartConfigs(allChartConfigs);
+    if (success) {
+        clearUnsaved();
+    }
 }
 
 async function onSaveAsNew() {
@@ -1020,7 +1021,9 @@ async function onSaveAsNew() {
         alert(`Limit reached (${maxChartsLimit}). Delete a chart first.`);
         return; 
     }
-    const name = prompt("Enter a name for this new chart configuration:");
+    
+    const activeVersionName = chartConfigSelect.options[chartConfigSelect.selectedIndex]?.text || 'current';
+    const name = prompt("Enter a name for this new chart configuration:", `Copy of ${activeVersionName}`);
     if (!name || name.trim().length === 0) return; 
     
     const newConfig = {
@@ -1044,15 +1047,23 @@ async function onSaveAsNew() {
         btnChartSaveCurrent.disabled = false;
         btnChartSaveCurrent.textContent = "Save";
         btnChartDeleteConfig.disabled = false;
+        clearUnsaved();
     }
 }
 
 async function onDeleteConfig() {
     trackEvent('chart_delete_config'); 
     if (!currentConfigId) { alert("No chart selected."); return; }
-    if (!confirm(`Delete chart?`)) return;
+    
+    const chartName = chartConfigSelect.options[chartConfigSelect.selectedIndex].text;
+    const isConfirmed = await confirmModal('Delete Chart', `Are you sure you want to delete the chart '${chartName}'?\nThis action cannot be undone.`, 'Delete', true);
+    
+    if (!isConfirmed) return;
     
     allChartConfigs.configurations = allChartConfigs.configurations.filter(c => c.id !== currentConfigId);
     const success = await saveAllChartConfigs(allChartConfigs);
-    if (success) { onClearAll(); populateChartConfigSelect(); }
+    if (success) { 
+        onClearAll(); 
+        populateChartConfigSelect(); 
+    }
 }

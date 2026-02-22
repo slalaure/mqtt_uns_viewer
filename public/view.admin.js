@@ -10,18 +10,23 @@
  *
  * Admin View Module
  * Handles User Management, Database Maintenance, and Alerts Maintenance.
- * [UPDATED] Uses Async HTML Fragment Loading.
+ * [UPDATED] Replaced native confirm() with unified confirmModal().
  */
 
+import { confirmModal } from './utils.js';
+
 let usersTableBody = null;
+
 // --- Elements for Tabs ---
 let subNavButtons = null;
+
 // --- Elements for DB Maintenance ---
 let btnImportDb = null;
 let importInput = null;
 let importStatus = null;
 let btnResetDb = null;
 let resetDbStatus = null;
+
 // --- Elements for Alerts Maintenance ---
 let resolvedCountEl = null;
 let resolvedSizeEl = null;
@@ -36,6 +41,7 @@ let isViewInitialized = false;
 export async function initAdminView() {
     const container = document.getElementById('admin-view');
     if (!container) return;
+    
     if (isViewInitialized) return;
 
     try {
@@ -49,7 +55,6 @@ export async function initAdminView() {
         initializeElements(container);
         isViewInitialized = true;
         console.log("✅ Admin View Initialized (Async HTML Load)");
-
     } catch (err) {
         console.error("Error initializing Admin View:", err);
         container.innerHTML = `<div style="padding:20px; color:red;">Error loading Admin Interface. Check console.</div>`;
@@ -64,12 +69,14 @@ function initializeElements(container) {
     usersTableBody = document.getElementById('admin-users-table-body');
     const refreshBtn = document.getElementById('btn-admin-refresh');
     if (refreshBtn) {
+        refreshBtn.className = 'tool-button';
         refreshBtn.addEventListener('click', loadUsers);
     }
 
     // 2. Tab Navigation Logic
     subNavButtons = container.querySelectorAll('.sub-tab-button');
     const panelClass = 'alerts-content-container'; 
+    
     subNavButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             // Remove active from all buttons
@@ -94,11 +101,13 @@ function initializeElements(container) {
     importStatus = document.getElementById('db-import-status');
     btnResetDb = document.getElementById('btn-reset-db');
     resetDbStatus = document.getElementById('reset-db-status');
-
+    
     if (btnImportDb && importInput) {
+        btnImportDb.className = 'tool-button button-primary';
         btnImportDb.addEventListener('click', onImportDB);
     }
     if (btnResetDb) {
+        btnResetDb.className = 'tool-button button-danger';
         btnResetDb.addEventListener('click', onResetDB);
     }
 
@@ -107,8 +116,9 @@ function initializeElements(container) {
     resolvedSizeEl = document.getElementById('stats-resolved-size');
     btnPurgeAlerts = document.getElementById('btn-purge-alerts');
     purgeStatus = document.getElementById('purge-alerts-status');
-
+    
     if (btnPurgeAlerts) {
+        btnPurgeAlerts.className = 'tool-button button-danger';
         btnPurgeAlerts.addEventListener('click', onPurgeAlerts);
     }
 }
@@ -138,7 +148,6 @@ export function onAdminViewShow() {
 async function loadUsers() {
     if (!usersTableBody) return;
     usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading users...</td></tr>';
-    
     try {
         const res = await fetch('api/admin/users');
         if (!res.ok) {
@@ -184,7 +193,7 @@ function renderUsers(users) {
             <td style="padding: 10px;">${roleBadge}</td>
             <td style="padding: 10px; font-size: 0.9em;">${lastLogin}</td>
             <td style="padding: 10px; text-align: right;">
-                <button class="danger-button btn-delete-user" data-id="${user.id}" data-username="${user.username || user.display_name}" ${deleteDisabled} style="${deleteStyle}">Delete</button>
+                <button class="tool-button button-danger btn-delete-user" data-id="${user.id}" data-username="${user.username || user.display_name}" ${deleteDisabled} style="${deleteStyle}">Delete</button>
             </td>
         `;
         usersTableBody.appendChild(tr);
@@ -204,7 +213,8 @@ function renderUsers(users) {
  * Handles user deletion.
  */
 async function deleteUser(id, username) {
-    if (!confirm(`⚠️ WARNING: Are you sure you want to delete user "${username}"?\n\nThis will permanently delete their account AND all their saved data (charts, mapper configs, history).`)) return;
+    const isConfirmed = await confirmModal('Delete User', `⚠️ WARNING: Are you sure you want to delete user "${username}"?\n\nThis will permanently delete their account AND all their saved data (charts, mapper configs, history).`, 'Delete', true);
+    if (!isConfirmed) return;
 
     try {
         const res = await fetch(`api/admin/users/${id}`, { method: 'DELETE' });
@@ -227,13 +237,13 @@ async function onImportDB() {
         alert("Please select a JSON export file first.");
         return;
     }
-    if (!confirm(`Import data from '${file.name}'?\nThis will be added to the existing history queue.`)) {
-        return;
-    }
+    
+    const isConfirmed = await confirmModal('Import Database', `Import data from '${file.name}'?\nThis will be queued and processed in the background.`, 'Import', false);
+    if (!isConfirmed) return;
 
     const formData = new FormData();
     formData.append('db_import', file);
-
+    
     btnImportDb.disabled = true;
     btnImportDb.textContent = "Importing...";
     importStatus.textContent = "Uploading & Processing...";
@@ -248,6 +258,7 @@ async function onImportDB() {
         if (!response.ok) {
             throw new Error(result.error || "Import failed.");
         }
+        
         importStatus.textContent = result.message; 
         importStatus.style.color = 'var(--color-success)';
         importInput.value = ''; 
@@ -266,8 +277,8 @@ async function onImportDB() {
 }
 
 async function onResetDB() {
-    const confirmed = confirm("⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?");
-    if (!confirmed) return;
+    const isConfirmed = await confirmModal('Reset Database', '⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?', 'Reset DB', true);
+    if (!isConfirmed) return;
 
     btnResetDb.disabled = true;
     btnResetDb.textContent = "Resetting...";
@@ -310,8 +321,9 @@ async function loadResolvedStats() {
 }
 
 async function onPurgeAlerts() {
-    if (!confirm("Are you sure you want to delete ALL resolved alerts?")) return;
-    
+    const isConfirmed = await confirmModal('Purge Alerts', 'Are you sure you want to delete ALL resolved alerts?', 'Purge', true);
+    if (!isConfirmed) return;
+
     btnPurgeAlerts.disabled = true;
     btnPurgeAlerts.textContent = "Purging...";
     purgeStatus.textContent = "";
