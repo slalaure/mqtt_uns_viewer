@@ -10,8 +10,9 @@
  *
  * WebSocket Manager
  * Handles WebSocket server setup, client connections, and broadcasting.
- * [UPDATED] Added Client ID generation and unicast (sendToClient) capability for Chat.
+ * [UPDATED] Implemented Backpressure on broadcast to prevent memory leaks.
  */
+
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto'); // Used for generating Client IDs
 
@@ -25,6 +26,9 @@ let getBrokerStatuses = null;
 
 // Map to store clients by ID: Map<string, WebSocket>
 const clients = new Map();
+
+// Maximum bytes a single WS client can buffer before we start dropping messages
+const MAX_WS_BUFFER_BYTES = 5 * 1024 * 1024; // 5 MB
 
 // Helper to escape single quotes for SQL strings
 const escapeSQL = (str) => {
@@ -50,7 +54,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
     getDbStatus = getDbCallback;
     getBrokerStatuses = getBrokerStatusesCallback;
 
-    // [CRITICAL FIX] "noServer: true"
+    // "noServer: true"
     // We detach the WebSocket server from the HTTP server's default routing.
     wss = new WebSocketServer({ noServer: true });
 
@@ -58,6 +62,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
     server.on('upgrade', (request, socket, head) => {
         const reqUrl = request.url;
         logger.info(`🔄 HTTP Upgrade Request received on path: '${reqUrl}'`);
+
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit('connection', ws, request);
         });
@@ -67,7 +72,6 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         // 1. Assign a Unique ID to this client
         const clientId = crypto.randomUUID();
         clients.set(clientId, ws);
-        
         logger.info(`✅ ➡️ WebSocket client connected. Assigned ID: ${clientId}`);
 
         // 2. Send Welcome Message with ID (Handshake)
@@ -146,8 +150,8 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                         `timestamp >= CAST('${startIso}' AS TIMESTAMPTZ)`, 
                         `timestamp <= CAST('${endIso}' AS TIMESTAMPTZ)`
                     ];
-
                     let limit = 20000;
+
                     if (filter && filter.length >= 3) {
                          const safeSearchTerm = `%${escapeSQL(filter)}%`;
                          whereClauses.push(
@@ -185,13 +189,14 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                     let brokerId = parsedMessage.brokerId; 
                     let query = "SELECT timestamp, topic, payload, broker_id FROM mqtt_events WHERE topic = ?";
                     let params = [topic];
+                    
                     if (brokerId) {
                         if (brokerId === 'default') brokerId = 'default_broker';
                         query += " AND broker_id = ?";
                         params.push(brokerId);
                     }
                     query += " ORDER BY timestamp DESC LIMIT 20";
-                    
+
                     db.all(query, ...params, (err, rows) => {
                         if (!err && ws.readyState === ws.OPEN) {
                             const processedRows = rows.map(row => processRow(row));
@@ -199,6 +204,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                         }
                     });
                 }
+
             } catch (e) {
                 logger.error({ err: e }, "❌ Error processing WS message");
             }
@@ -229,6 +235,7 @@ function processRow(row) {
     } else {
          row.timestampMs = row.timestamp;
     }
+    
     if (typeof row.payload === 'object' && row.payload !== null) {
         try { row.payload = JSON.stringify(row.payload, longReplacer); } 
         catch (e) { row.payload = JSON.stringify({ "error": "Failed to stringify" }); }
@@ -240,12 +247,22 @@ function processRow(row) {
 
 /**
  * Broadcasts a message to all connected WebSocket clients.
+ * [FIX] Added Backpressure to avoid ENOBUFS and OOM.
  * @param {string} message - The JSON string to send.
  */
 function broadcast(message) {
     if (!wss) return;
+
     wss.clients.forEach(client => {
-        if (client.readyState === client.OPEN) client.send(message);
+        if (client.readyState === client.OPEN) {
+            // BACKPRESSURE: If the client's network buffer is full, drop the real-time message
+            if (client.bufferedAmount > MAX_WS_BUFFER_BYTES) {
+                // To avoid log spamming, we do not log every single dropped message.
+                // The client will miss a frame, but the app won't crash.
+                return;
+            }
+            client.send(message);
+        }
     });
 }
 

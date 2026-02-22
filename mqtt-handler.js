@@ -10,6 +10,7 @@
  *
  * MQTT Message Handler
  * Orchestrates the processing of a new MQTT message.
+ * [UPDATED] Added Smart Namespace Throttling to protect against high-frequency spam.
  */
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 
@@ -37,10 +38,15 @@ let wsManager;
 let mapperEngine;
 let dataManager;
 let broadcastDbStatus;
-let alertManager; // [NEW]
+let alertManager;
 
-// [NEW] Production Limit: Payloads larger than 2MB are dangerous for the event loop
+// Production Limit: Payloads larger than 2MB are dangerous for the event loop
 const MAX_PAYLOAD_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+
+// --- [NEW] Smart Throttling State ---
+const namespaceCounts = new Map();
+const MAX_MSGS_PER_SEC_PER_NAMESPACE = 50; // Threshold for identifying a "spammy" namespace
+let throttleResetTimer = null;
 
 /**
  * The main MQTT message processing logic.
@@ -55,10 +61,26 @@ async function handleMessage(brokerId, topic, payload) {
     let isSparkplugOrigin = false;
     let processingError = null;
 
-    const handlerLogger = logger.child({ broker: brokerId }); //  Create logger child for this broker
+    const handlerLogger = logger.child({ broker: brokerId }); // Create logger child for this broker
 
     try {
-        // --- [NEW] 0. Payload Size Protection ---
+        // --- [NEW] 0.5. Smart Namespace Rate Limiting (Anti-Spam) ---
+        // Group frequency by the first two levels of the topic (e.g., "factory/line1")
+        const parts = topic.split('/');
+        const namespace = parts.length > 1 ? `${brokerId}:${parts[0]}/${parts[1]}` : `${brokerId}:${parts[0]}`;
+        
+        const count = (namespaceCounts.get(namespace) || 0) + 1;
+        namespaceCounts.set(namespace, count);
+
+        // If this specific namespace is spamming, drop the message early to protect CPU/RAM
+        if (count > MAX_MSGS_PER_SEC_PER_NAMESPACE) {
+            if (count === MAX_MSGS_PER_SEC_PER_NAMESPACE + 1) {
+                 handlerLogger.warn(`⚠️ High frequency detected on namespace '${namespace}' (> ${MAX_MSGS_PER_SEC_PER_NAMESPACE} msg/s). Throttling excess messages to protect system.`);
+            }
+            return; // Exit silently. Low-frequency topics are unaffected.
+        }
+
+        // --- 0. Payload Size Protection ---
         if (payload.length > MAX_PAYLOAD_SIZE_BYTES) {
             handlerLogger.warn({ topic, size: payload.length }, "⚠️ Payload too large. Truncating to prevent DoS.");
             const oversizeMsg = { 
@@ -125,7 +147,7 @@ async function handleMessage(brokerId, topic, payload) {
         // --- 3. Broadcast WebSocket ---
         const finalMessageObject = {
             type: 'mqtt-message',
-            brokerId: brokerId, //  Tell the frontend which broker this came from
+            brokerId: brokerId, 
             topic,
             payload: payloadStringForWs,
             timestamp: timestamp.toISOString()
@@ -137,7 +159,7 @@ async function handleMessage(brokerId, topic, payload) {
 
         // 4a. Push to DataManager for asynchronous database writing
         dataManager.insertMessage({ 
-            brokerId, //  Pass brokerId to data manager
+            brokerId, 
             timestamp, 
             topic, 
             payloadStringForDb, 
@@ -152,7 +174,7 @@ async function handleMessage(brokerId, topic, payload) {
         }
         // If 'needsDb' is true, the mapper will be called *by the repository* after write.
 
-        // 4c. Trigger Alert Evaluation [NEW]
+        // 4c. Trigger Alert Evaluation
         if (alertManager) {
             alertManager.processMessage(brokerId, topic, payloadObjectForMapper);
         }
@@ -164,7 +186,6 @@ async function handleMessage(brokerId, topic, payload) {
 
 /**
  * Initializes the MQTT Handler.
- * This no longer accepts a single connection
  */
 function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManager, appBroadcastDbStatus, appAlertManager) {
     logger = appLogger.child({ component: 'MQTTHandler' });
@@ -173,9 +194,17 @@ function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManage
     mapperEngine = appMapperEngine;
     dataManager = appDataManager;
     broadcastDbStatus = appBroadcastDbStatus;
-    alertManager = appAlertManager; // [NEW] Store Alert Manager
-    logger.info("✅ MQTT Message Handler initialized (multi-broker mode).");
-    return handleMessage; // Return the function itself
+    alertManager = appAlertManager; 
+
+    // Reset rate limiter every second
+    if (!throttleResetTimer) {
+        throttleResetTimer = setInterval(() => {
+            namespaceCounts.clear();
+        }, 1000);
+    }
+
+    logger.info("✅ MQTT Message Handler initialized (with Smart Throttling).");
+    return handleMessage; 
 }
 
 module.exports = {

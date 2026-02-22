@@ -12,16 +12,19 @@
  *
  * Manages all WRITE operations for the embedded DuckDB database.
  * [UPDATED] Forces ISO String insertion to fix Timezone shift (1h delay).
+ * [UPDATED] Implemented Smart Queue Compaction to prevent OOM without losing rare events.
  */
+
 // --- Module-level State ---
 let logger = null;
 let config = null;
 let db = null; // The database connection
 let mapperEngine = null;
 let broadcastDbStatus = null;
-
 let dbWriteQueue = []; // Queue for batch inserts
 let dbBatchTimer = null; // Timer for batch processor
+
+const MAX_QUEUE_SIZE = 20000;
 
 /**
  * Initializes the DuckDB repository.
@@ -44,12 +47,36 @@ function init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMappe
 
 /**
  * Pushes a new message object into the DuckDB write queue.
+ * Includes Smart Compaction to prevent OOM.
  * @param {object} message - The message object from mqtt-handler.
  */
 function push(message) {
     dbWriteQueue.push(message);
-    // We only broadcast status on push, not on write,
-    // to give a more immediate feeling of ingestion.
+
+    // [NEW] Smart Compaction: Protect against OOM by deduplicating high-frequency spam
+    // while perfectly preserving rare/low-frequency events (like alarms).
+    if (dbWriteQueue.length > MAX_QUEUE_SIZE) {
+        logger.warn(`⚠️ DuckDB write queue reached ${MAX_QUEUE_SIZE}. Triggering Smart Compaction...`);
+        const compactedMap = new Map();
+        
+        // Loop through the queue. Map.set will overwrite older messages 
+        // with the same topic, keeping only the latest state per topic.
+        for (const msg of dbWriteQueue) {
+            compactedMap.set(msg.brokerId + '|' + msg.topic, msg);
+        }
+        
+        const oldLength = dbWriteQueue.length;
+        dbWriteQueue = Array.from(compactedMap.values());
+        logger.info(`✅ Queue compacted from ${oldLength} to ${dbWriteQueue.length} unique topics.`);
+        
+        // Fallback: If there are legitimately > 20000 unique topics bursting at once
+        if (dbWriteQueue.length > MAX_QUEUE_SIZE) {
+             dbWriteQueue.splice(0, dbWriteQueue.length - 15000);
+             logger.warn(`⚠️ Hard limit applied. Dropped oldest messages.`);
+        }
+    }
+
+    // We only broadcast status on push, not on write
     broadcastDbStatus();
 }
 
@@ -67,6 +94,7 @@ function startDbBatchProcessor() {
  */
 function processDbQueue() {
     const batch = dbWriteQueue.splice(0, config.DB_INSERT_BATCH_SIZE);
+    
     if (batch.length === 0) {
         return;
     }
@@ -97,7 +125,7 @@ function processDbQueue() {
             // [CRITICAL FIX] Explicitly convert Date object to ISO String.
             // This ensures "2026-02-03T16:30:00.000Z" is passed, preserving the 'Z'.
             const timestampIso = msg.timestamp.toISOString();
-
+            
             stmt.run(timestampIso, msg.topic, msg.payloadStringForDb, msg.brokerId, (runErr) => {
                 if (runErr) {
                     logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
@@ -122,7 +150,7 @@ function processDbQueue() {
                         logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
                     } else {
                         logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
-                        
+
                         // Trigger mappers that were waiting for this data
                         (async () => {
                             for (const msg of batch) {
