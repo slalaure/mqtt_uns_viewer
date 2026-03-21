@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" style="background-color:#161b22; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <defs>
+      <linearGradient id="heatGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#444" />
+        <stop offset="50%" stop-color="#8a6d3b" />
+        <stop offset="100%" stop-color="#333" />
+      </linearGradient>
+      <linearGradient id="membraneGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#e0e0e0" />
+        <stop offset="50%" stop-color="#d4c48a" />
+        <stop offset="100%" stop-color="#c9b057" />
+      </linearGradient>
+      
+      <style>
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        .anim-blink {
+          animation: blink 1.5s infinite;
+        }
+        .panel-bg {
+          fill: #21262d;
+          stroke: #30363d;
+          stroke-width: 1.5;
+          rx: 6;
+        }
+        .text-title { fill: #c9d1d9; font-size: 14px; font-weight: 600; }
+        .text-value { fill: #ffffff; font-size: 20px; font-weight: 300; font-family: 'Courier New', monospace; }
+        .text-status { font-size: 12px; font-weight: 600; }
+        .text-label { fill: #8b949e; font-size: 12px; }
+        
+        .callout-box { fill: #21262d; stroke: #8a6d3b; stroke-width: 1.5; rx: 6; }
+        .callout-line { stroke: #8a6d3b; stroke-width: 2; stroke-dasharray: 4 2; }
+        
+        .alert-box { fill: #21262d; stroke: #f85149; stroke-width: 1.5; rx: 4; }
+      </style>
+    </defs>
+  
+    <rect x="0" y="0" width="1200" height="50" fill="#0d1117" />
+    <text x="600" y="32" fill="#c9d1d9" font-size="18" font-weight="600" text-anchor="middle" letter-spacing="1">MAINCHEM FRANKFURT: PEM PRODUCTION OVERVIEW - MANUCHEM 2026 DEMO</text>
+  
+    <g transform="translate(50, 100)">
+      <rect width="800" height="550" class="panel-bg" />
+      <text x="20" y="30" fill="#8b949e" font-size="14" font-weight="bold">2D SVG plan view » Coating Line 2</text>
+      
+      <rect x="50" y="380" width="700" height="15" fill="#30363d" rx="3" />
+  
+      <text x="110" y="220" class="text-label" text-anchor="middle">Unwinding</text>
+      <path d="M 60 380 L 60 280 L 160 280 L 160 380 Z" fill="#383e47" />
+      <circle cx="110" cy="300" r="40" fill="#c9d1d9" />
+      <circle cx="110" cy="300" r="10" fill="#161b22" />
+      <circle cx="110" cy="300" r="30" fill="none" stroke="#8b949e" stroke-width="2" stroke-dasharray="10 5" id="anim_roll_1" style="transform-origin: 110px 300px;" />
+      
+      <circle cx="200" cy="310" r="30" fill="#c9d1d9" />
+      <circle cx="200" cy="310" r="8" fill="#161b22" />
+      <circle cx="200" cy="310" r="20" fill="none" stroke="#8b949e" stroke-width="2" stroke-dasharray="8 4" id="anim_roll_2" style="transform-origin: 200px 310px;" />
+      <text x="110" y="420" class="text-label" text-anchor="middle">Unwinding Station</text>
+  
+      <text x="300" y="210" class="text-label" text-anchor="middle">Catalyst</text>
+      <text x="300" y="225" class="text-label" text-anchor="middle">Coating</text>
+      <path d="M 270 380 L 270 260 L 330 260 L 330 380 Z" fill="#383e47" />
+      <rect x="280" y="280" width="40" height="50" fill="#21262d" rx="4" />
+      <path d="M 280 305 Q 300 280 320 305 Q 300 330 280 305 Z" fill="#8a6d3b" />
+      <text x="300" y="420" class="text-label" text-anchor="middle">Catalyst Station</text>
+  
+      <rect x="350" y="250" width="300" height="80" fill="#383e47" rx="4" />
+      <rect x="360" y="260" width="280" height="60" fill="url(#heatGradient)" rx="2" />
+      
+      <circle cx="610" cy="220" r="18" fill="#21262d" stroke="#555" stroke-width="2" />
+      <g transform="translate(610, 220)">
+        <g id="anim_fan" style="transform-origin: 0px 0px;">
+          <path d="M 0 0 L 10 -15 A 15 15 0 0 1 15 -5 Z" fill="#8b949e" />
+          <path d="M 0 0 L 10 -15 A 15 15 0 0 1 15 -5 Z" fill="#8b949e" transform="rotate(120)" />
+          <path d="M 0 0 L 10 -15 A 15 15 0 0 1 15 -5 Z" fill="#8b949e" transform="rotate(240)" />
+          <circle cx="0" cy="0" r="4" fill="#c9d1d9" />
+        </g>
+      </g>
+      <text x="500" y="370" class="text-label" text-anchor="middle">Drying Oven</text>
+  
+      <path d="M 650 250 L 680 250 L 680 380 L 650 380 Z" fill="#383e47" />
+      <path d="M 680 260 L 730 260 L 730 330 L 680 330 Z" fill="#c9d1d9" />
+      <circle cx="750" cy="330" r="35" fill="#c9d1d9" />
+      <circle cx="750" cy="330" r="10" fill="#161b22" />
+      <circle cx="750" cy="330" r="25" fill="none" stroke="#8b949e" stroke-width="2" stroke-dasharray="10 5" id="anim_roll_3" style="transform-origin: 750px 330px;" />
+      <text x="730" y="420" class="text-label" text-anchor="middle">Cleanroom</text>
+  
+      <path d="M 110 260 L 110 240 L 200 240 L 200 305 L 750 305 L 750 295 L 700 295 L 700 270 L 750 270" fill="none" stroke="url(#membraneGrad)" stroke-width="4" stroke-linejoin="round" />
+  
+      <g id="g_temp_callout" transform="translate(380, 160)">
+        <line x1="80" y1="50" x2="80" y2="120" class="callout-line" />
+        <circle cx="80" cy="120" r="4" fill="#8a6d3b" />
+        <rect x="0" y="0" width="160" height="60" class="callout-box" />
+        <text x="10" y="20" class="text-label" fill="#c9d1d9">Drying oven Temp.</text>
+        <text id="val_oven_temp" x="10" y="45" fill="#ffcc00" font-size="22" font-weight="bold">--°C</text>
+        <text id="val_oven_status" x="10" y="55" font-size="10" fill="#8a6d3b">Status: Waiting...</text>
+      </g>
+  
+      <g id="g_fan_callout" transform="translate(560, 160)">
+        <line x1="30" y1="50" x2="50" y2="50" class="callout-line" />
+        <rect x="0" y="0" width="80" height="60" class="panel-bg" />
+        <text x="10" y="20" class="text-label" fill="#c9d1d9">Fan speed</text>
+        <text id="val_fan_speed" x="10" y="45" class="text-value">--%</text>
+        <text id="val_fan_target" x="10" y="55" font-size="10" fill="#8b949e">Target: 100%</text>
+      </g>
+  
+      <g id="g_alert_box" transform="translate(450, 360)" style="display: none;">
+        <path d="M 120 -20 L 130 0 L 110 0 Z" fill="rgba(248,81,73,0.2)" stroke="#f85149" stroke-width="2" class="anim-blink" />
+        <circle cx="120" cy="2" r="2" fill="#f85149" class="anim-blink" />
+        <rect x="0" y="10" width="310" height="30" class="alert-box" />
+        <text id="val_alert_msg" x="10" y="30" fill="#f85149" font-size="11" font-weight="500">ALERT: Waiting...</text>
+      </g>
+    </g>
+  
+    <g transform="translate(870, 100)">
+      
+      <rect x="0" y="0" width="300" height="110" class="panel-bg" />
+      <rect x="0" y="0" width="300" height="25" fill="#30363d" rx="6" />
+      <text x="10" y="17" class="text-title">Manufacturing Execution (MES)</text>
+      
+      <text x="10" y="45" class="text-label">Current Work Order</text>
+      <text id="val_wo_id" x="10" y="70" class="text-value">WO-WAITING</text>
+      <text id="val_wo_status" x="290" y="70" class="text-status" text-anchor="end">--</text>
+      
+      <rect x="10" y="95" width="280" height="4" fill="#30363d" rx="2" />
+      <rect id="anim_wo_progress" x="10" y="95" width="80" height="4" fill="#3391ff" rx="2" />
+  
+      <rect x="0" y="130" width="300" height="90" class="panel-bg" />
+      <rect x="0" y="130" width="300" height="25" fill="#30363d" rx="6" />
+      <text x="10" y="147" class="text-title">Quality Management (QMS)</text>
+      
+      <text x="10" y="175" class="text-label">Pre-Inspection AOI Scan</text>
+      <text x="10" y="200" class="text-value">Fissure Rate:</text>
+      <text id="val_qms_fissure" x="165" y="200" class="text-value">--%</text>
+      <text id="val_qms_status" x="290" y="200" class="text-status" text-anchor="end">WAITING</text>
+  
+      <rect x="0" y="240" width="300" height="230" class="panel-bg" />
+      <rect x="0" y="240" width="300" height="25" fill="#30363d" rx="6" />
+      <text x="10" y="257" class="text-title">Infrastructure &amp; Utilities</text>
+      
+      <text x="10" y="290" class="text-label">Main Power Input</text>
+      <text id="val_power_volts" x="10" y="315" class="text-value">-- V</text>
+      <text id="val_power_status" x="290" y="315" class="text-status" text-anchor="end">--</text>
+  
+      <line x1="10" y1="340" x2="290" y2="340" stroke="#30363d" stroke-width="1" />
+      
+      <text x="10" y="365" class="text-label">Chiller Plant Temperature</text>
+      <text id="val_chiller_temp" x="10" y="390" class="text-value">-- °C</text>
+      <text id="val_chiller_status" x="290" y="390" class="text-status" text-anchor="end">--</text>
+  
+      <line x1="10" y1="415" x2="290" y2="415" stroke="#30363d" stroke-width="1" />
+  
+      <text x="10" y="440" class="text-label">Cleanroom Pressure</text>
+      <text id="val_cleanroom_pressure" x="10" y="465" class="text-value">-- Pa</text>
+      <text id="val_cleanroom_status" x="290" y="465" class="text-status" text-anchor="end">--</text>
+    </g>
+  
+  </svg>
+  

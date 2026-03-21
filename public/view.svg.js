@@ -6,24 +6,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
- *
- * SVG View Module
- * Handles real-time updates of SVG synoptics with performance optimizations.
- * [UPDATED] Implemented RequestAnimationFrame and update throttling to fix UI freezes.
- * [UPDATED] Added DOM element caching for faster lookups.
- * [UPDATED] Added safety try/finally to prevent frozen render loops.
- * [UPDATED] Added instant refresh on tab activation.
- * [UPDATED] Updated Fullscreen button UI & Event Tracking.
- * [UPDATED] Replaced native confirm() with unified confirmModal().
+ * @copyright (c) 2025 Sebastien Lalaurette * @author Sebastien Lalaurette
+ * HMI View Module (Formerly SVG View)
+ * Handles HTML pages, dynamic A-Frame, generic HTML data binding, 
+ * embedded live charts, AND Embedded SVGs with their own JS logic.
  */
-
-// Import shared utilities
 import { formatTimestampForLabel, trackEvent, confirmModal } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
-const svgContent = document.getElementById('svg-content');
+const hmiContent = document.getElementById('svg-content'); 
 const svgHistoryToggle = document.getElementById('svg-history-toggle');
 const svgTimelineSlider = document.getElementById('svg-timeline-slider-container');
 const svgHandle = document.getElementById('svg-handle');
@@ -33,7 +25,7 @@ const mapView = document.getElementById('map-view');
 const svgSelectDropdown = document.getElementById('svg-select-dropdown');
 
 // --- Module-level State ---
-let svgInitialTextValues = new Map();
+let hmiInitialStates = new Map();
 let allHistoryEntries = [];
 let isSvgHistoryMode = false;
 let currentMinTimestamp = 0;
@@ -42,41 +34,30 @@ let svgSlider = null;
 let appBasePath = '/'; 
 let isMultiBroker = false;
 
-// --- Performance Optimization State ---
-let elementCache = new Map(); // Cache for SVG elements by ID
-let updateQueue = new Map();  // Queue for throttled updates
+// --- Performance Optimization & Chart State ---
+let elementCache = new Map(); 
+let updateQueue = new Map();  
 let animationFrameRequested = false;
-let highlightTimers = new Map(); // Track active highlight timeouts to prevent overlaps
+let highlightTimers = new Map(); 
+let embeddedChartInstances = new Map(); 
 
-const BINDINGS_SCRIPT_ID = 'custom-svg-bindings-script';
-
-// API for custom bindings to accept brokerId
-let customSvgBindings = {
-    isLoaded: false,
-    initialize: (svgRoot) => {},
-    update: (brokerId, topic, payloadObject, svgRoot) => {},
-    reset: (svgRoot) => {}
-};
+// --- [NOUVEAU] Tableau des bindings actifs ---
+let activeBindings = [];
 
 /**
- * Allows an external script (svg-bindings.js) to register its logic.
+ * Universal bindings register (Accumule les scripts au lieu d'en avoir un seul)
  */
-window.registerSvgBindings = function(bindings) {
+window.registerHmiBindings = window.registerSvgBindings = function(bindings) {
     if (!bindings) return;
-    customSvgBindings.isLoaded = true;
-    if (bindings.initialize) customSvgBindings.initialize = bindings.initialize;
-    if (bindings.update) customSvgBindings.update = bindings.update;
-    if (bindings.reset) customSvgBindings.reset = bindings.reset;
-    console.log("Custom SVG bindings registered.");
+    activeBindings.push(bindings);
+    console.log(`Custom HMI/SVG bindings registered. Total active scripts: ${activeBindings.length}`);
 }
-
 /**
  * Initializes the SVG View functionality.
- */
-export function initSvgView(appConfig) {
+ */export function initSvgView(appConfig) {
     appBasePath = appConfig.basePath; 
-    isMultiBroker = appConfig.isMultiBroker; // Store multi-broker state
-
+    isMultiBroker = appConfig.isMultiBroker; 
+    
     if (btnSvgFullscreen) {
         btnSvgFullscreen.innerHTML = '⛶ Maximize';
         btnSvgFullscreen.style.fontSize = '0.85em';
@@ -85,7 +66,7 @@ export function initSvgView(appConfig) {
 
     // Initial load
     refreshSvgList(appConfig.svgFilePath);
-
+    
     btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
 
     // Track native fullscreen changes (e.g. user presses ESC)
@@ -99,14 +80,11 @@ export function initSvgView(appConfig) {
         }
     });
 
-    svgSelectDropdown?.addEventListener('change', onSvgFileChange);
-
+    svgSelectDropdown?.addEventListener('change', onHmiFileChange);
     svgHistoryToggle?.addEventListener('change', (e) => {
         isSvgHistoryMode = e.target.checked;
         if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
-        
-        trackEvent(isSvgHistoryMode ? 'svg_history_on' : 'svg_history_off');
-
+        trackEvent(isSvgHistoryMode ? 'hmi_history_on' : 'hmi_history_off');
         if (isSvgHistoryMode) {
             // When turning on, fetch state for the current slider position
             const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
@@ -115,7 +93,6 @@ export function initSvgView(appConfig) {
             // When returning to live mode, fetch latest state immediately
             fetchLastKnownState(Date.now());
         }
-
         if (svgSlider) {
             svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
         }
@@ -126,13 +103,9 @@ export function initSvgView(appConfig) {
             containerEl: svgTimelineSlider,
             handleEl: svgHandle,
             labelEl: svgLabel,
-            // onDrag only updates UI now
-            onDrag: (newTime) => {
-                // UI update managed by slider
-            },
-            // onDragEnd triggers the DB fetch
+            onDrag: (newTime) => {},
             onDragEnd: (newTime) => {
-                trackEvent('svg_slider_drag_end');
+                trackEvent('hmi_slider_drag_end');
                 if (isSvgHistoryMode) {
                     fetchLastKnownState(newTime);
                 }
@@ -142,13 +115,14 @@ export function initSvgView(appConfig) {
 
     // Add Delete Button to Controls
     const controlsContainer = document.querySelector('.map-view-controls');
-    if (controlsContainer) {
+    if (controlsContainer && !document.getElementById('btn-delete-hmi')) {
         const btnDelete = document.createElement('button');
+        btnDelete.id = 'btn-delete-hmi';
         btnDelete.className = 'tool-button button-danger'; 
-        btnDelete.textContent = 'Delete'; // Replaced trash icon with text
+        btnDelete.textContent = 'Delete'; 
         btnDelete.title = "Delete current view";
         btnDelete.style.marginLeft = "10px";
-        btnDelete.onclick = deleteCurrentSvg;
+        btnDelete.onclick = deleteCurrentHmi;
         controlsContainer.insertBefore(btnDelete, btnSvgFullscreen);
     }
 }
@@ -166,20 +140,17 @@ export function setSvgHistoryData(entries) {
 export async function refreshSvgList(targetFilenameToSelect = null) {
     if (!svgSelectDropdown) return;
     const currentSelection = targetFilenameToSelect || svgSelectDropdown.value;
-
     try {
         const response = await fetch('api/svg/list');
-        if (!response.ok) throw new Error('Failed to fetch SVG list');
-        const svgFiles = await response.json();
-        
+        if (!response.ok) throw new Error('Failed to fetch HMI list');
+        const hmiFiles = await response.json();
         svgSelectDropdown.innerHTML = '';
-        if (svgFiles.length === 0) {
-            svgSelectDropdown.innerHTML = '<option value="">No SVGs found</option>';
+        if (hmiFiles.length === 0) {
+            svgSelectDropdown.innerHTML = '<option value="">No Views found</option>';
             return;
         }
-
         let matchFound = false;
-        svgFiles.forEach(filename => {
+        hmiFiles.forEach(filename => {
             const option = document.createElement('option');
             option.value = filename;
             option.textContent = filename;
@@ -189,39 +160,30 @@ export async function refreshSvgList(targetFilenameToSelect = null) {
             }
             svgSelectDropdown.appendChild(option);
         });
-
-        if (!matchFound && svgFiles.length > 0) {
-            svgSelectDropdown.value = svgFiles[0];
-            await loadSvgPlan(svgFiles[0]);
+        if (!matchFound && hmiFiles.length > 0) {
+            svgSelectDropdown.value = hmiFiles[0];
+            await loadSvgPlan(hmiFiles[0]);
         } else if (matchFound) {
-            // Reload the view to ensure we have the latest content
             await loadSvgPlan(currentSelection);
         }
-
     } catch (error) {
-        console.error("Could not populate SVG list:", error);
+        console.error("Could not populate HMI list:", error);
         svgSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
     }
 }
 
-/**
- * Handles the change event when a new SVG is selected.
- */
-async function onSvgFileChange(event) {
+async function onHmiFileChange(event) {
     const filename = event.target.value;
     if (!filename) return;
-    trackEvent('svg_file_change');
+    trackEvent('hmi_file_change');
     await loadSvgPlan(filename);
 }
 
-// Logic to delete the current SVG view
-async function deleteCurrentSvg() {
+async function deleteCurrentHmi() {
     const filename = svgSelectDropdown.value;
     if(!filename) return;
-    
     const isConfirmed = await confirmModal('Delete View', `Are you sure you want to delete '${filename}'?\nThis action cannot be undone.`, 'Delete', true);
     if(!isConfirmed) return;
-
     try {
         const res = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
         if(res.ok) {
@@ -239,38 +201,20 @@ async function deleteCurrentSvg() {
  * Dynamically loads the custom svg-bindings.js script *by name*.
  */
 async function loadCustomBindingsScript(bindingFilename) {
-    // 1. Reset bindings to default
-    customSvgBindings = {
-        isLoaded: false,
-        initialize: (svgRoot) => {},
-        update: (brokerId, topic, payloadObject, svgRoot) => {},
-        reset: (svgRoot) => {}
-    };
-
-    // 2. Remove old script tag if it exists
-    const oldScript = document.getElementById(BINDINGS_SCRIPT_ID);
-    if (oldScript) {
-        oldScript.remove();
-    }
-
-    // 3. Create new script tag
-    const script = document.createElement('script');
-    script.id = BINDINGS_SCRIPT_ID;
-    script.type = 'module';
-    
-    // 4. Set src to the new API endpoint with the 'name' param
-    const apiBasePath = (appBasePath === '/') ? '' : appBasePath;
-    script.src = `${apiBasePath}/api/svg/bindings.js?name=${encodeURIComponent(bindingFilename)}&v=${Date.now()}`;
-    
-    // 5. Add to head and await load
     return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.className = 'custom-hmi-script'; // Tag to remove them later
+        script.type = 'module';
+        const apiBasePath = (appBasePath === '/') ? '' : appBasePath;
+        script.src = `${apiBasePath}/api/svg/bindings.js?name=${encodeURIComponent(bindingFilename)}&v=${Date.now()}`;
+        
         script.onload = () => {
-            console.log(`Custom SVG bindings script loaded: ${bindingFilename}`);
+            console.log(`Custom script loaded: ${bindingFilename}`);
             resolve();
         };
-        script.onerror = (err) => {
-            console.log(`No custom SVG bindings script found at /data/${bindingFilename}. Using default logic.`);
-            resolve(); // Resolve anyway, don't break the app
+        script.onerror = () => {
+            console.log(`No script found for: ${bindingFilename}`);
+            resolve(); 
         };
         document.head.appendChild(script);
     });
@@ -280,71 +224,191 @@ async function loadCustomBindingsScript(bindingFilename) {
  * Scans the SVG for [data-key] elements to use with default logic.
  */
 function scanForDataKeys() {
-    elementCache.clear(); // Important to clear cache on new SVG load
-    const dataElements = svgContent.querySelectorAll('[data-key]');
+    elementCache.clear(); 
+    const dataElements = hmiContent.querySelectorAll('[data-key]');
+    
     dataElements.forEach(el => {
         const keyPath = el.dataset.key;
-        if (el.tagName === 'text' || el.tagName === 'tspan') {
-            svgInitialTextValues.set(el, { type: 'text', value: el.textContent });
-        } else if (el.tagName === 'path' && (keyPath === 'status')) {
-            svgInitialTextValues.set(el, { type: 'attr', attr: 'class', value: el.getAttribute('class') });
-        } else if (el.tagName === 'circle' && keyPath === 'occupancy_percent') {
-            svgInitialTextValues.set(el, { type: 'attr', attr: 'fill-opacity', value: el.getAttribute('fill-opacity') });
-        } else if (el.id === 'shield-visual-effect' && keyPath === 'power') {
-            svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-opacity', value: el.getAttribute('stroke-opacity') });
-            svgInitialTextValues.set(el, { type: 'attr', attr: 'stroke-width', value: el.getAttribute('stroke-width') });
-        } else if (el.id === 'laser-charge-visual' && keyPath === 'value') {
-            svgInitialTextValues.set(el, { type: 'attr', attr: 'width', value: el.getAttribute('width') });
+        const tagName = el.tagName.toUpperCase();
+
+        if (tagName.startsWith('A-')) {
+            const attr = el.dataset.attr || 'value';
+            hmiInitialStates.set(el, { type: 'aframe', attr: attr, prop: el.dataset.property, value: el.getAttribute(attr) });
+        } else if (el.dataset.attr) {
+            if (el.dataset.attr === 'style') {
+                const sp = el.dataset.styleProp;
+                hmiInitialStates.set(el, { type: 'style', prop: sp, value: sp ? el.style[sp] : el.style.cssText });
+            } else if (el.dataset.attr === 'class') {
+                hmiInitialStates.set(el, { type: 'class', value: el.className });
+            } else {
+                hmiInitialStates.set(el, { type: 'attr', attr: el.dataset.attr, value: el.getAttribute(el.dataset.attr) });
+            }
+        } else if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
+            hmiInitialStates.set(el, { type: 'prop', prop: 'value', value: el.value });
+        } else if (['TEXT', 'TSPAN', 'DIV', 'SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
+            hmiInitialStates.set(el, { type: 'text', value: el.textContent });
+        } else {
+            if (tagName === 'PATH' && keyPath === 'status') {
+                hmiInitialStates.set(el, { type: 'attr', attr: 'class', value: el.getAttribute('class') });
+            } else if (tagName === 'CIRCLE' && keyPath === 'occupancy_percent') {
+                hmiInitialStates.set(el, { type: 'attr', attr: 'fill-opacity', value: el.getAttribute('fill-opacity') });
+            }
         }
     });
 }
 
+function executeEmbeddedScripts() {
+    const scripts = hmiContent.querySelectorAll('script');
+    scripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+}
+
+async function ensureAFrame(htmlText) {
+    if (htmlText && htmlText.includes('<a-scene') && !window.AFRAME) {
+        console.log("[HMI] A-Frame 3D Scene detected. Loading A-Frame library...");
+        await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = "https://aframe.io/releases/1.4.2/aframe.min.js";
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+}
+
+async function initEmbeddedCharts() {
+    const chartDivs = hmiContent.querySelectorAll('.embedded-chart');
+    if (chartDivs.length === 0) return;
+    
+    try {
+        const res = await fetch('api/chart/config');
+        const configData = await res.json();
+        const allConfigs = configData.configurations || configData;
+        
+        chartDivs.forEach(div => {
+            const chartId = div.dataset.chartId;
+            const config = allConfigs.find(c => c.id === chartId);
+            if (!config) return;
+            
+            div.style.position = 'relative';
+            const canvas = document.createElement('canvas');
+            div.appendChild(canvas);
+            
+            const datasets = config.variables.map(v => ({
+                label: `${v.topic} | ${v.path}`,
+                data: [],
+                borderColor: '#3391ff',
+                fill: false,
+                tension: 0.1,
+                _brokerId: v.brokerId || 'default_broker',
+                _topic: v.topic,
+                _path: v.path
+            }));
+
+            const chartInst = new Chart(canvas, {
+                type: config.chartType || 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: { x: { type: 'time', time: { tooltipFormat: 'HH:mm:ss' } } }
+                }
+            });
+
+            embeddedChartInstances.set(chartId, chartInst);
+        });
+    } catch (e) {
+        console.error("Failed to init embedded charts", e);
+    }
+}
+
 /**
- * Loads a specific view.svg file from the server.
+ * --- [NOUVEAU] Charge les SVGs imbriqués ---
  */
+async function initEmbeddedSvgs() {
+    const svgContainers = hmiContent.querySelectorAll('.embedded-svg');
+    for (const container of svgContainers) {
+        const svgName = container.dataset.svgName;
+        if (!svgName) continue;
+        try {
+            // Fetch SVG file content
+            const res = await fetch(`api/svg/file?name=${encodeURIComponent(svgName)}`);
+            if (res.ok) {
+                container.innerHTML = await res.text();
+            } else {
+                container.innerHTML = `<span style="color:red">Failed to load ${svgName}</span>`;
+            }
+            // Fetch associated JS script (it will push to activeBindings automatically)
+            await loadCustomBindingsScript(svgName + '.js');
+        } catch (err) {
+            console.error(`Failed to embed SVG ${svgName}:`, err);
+        }
+    }
+}
+
 async function loadSvgPlan(filename) {
     if (!filename) {
-        svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No SVG file selected.</p>`;
+        hmiContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No file selected.</p>`;
         return;
     }
-
+    
     // Clear performance state
     updateQueue.clear();
     elementCache.clear();
     highlightTimers.forEach(t => clearTimeout(t));
     highlightTimers.clear();
+    embeddedChartInstances.forEach(c => c.destroy());
+    embeddedChartInstances.clear();
+    
+    // Suppression des anciens scripts injectés
+    document.querySelectorAll('.custom-hmi-script').forEach(s => s.remove());
+    activeBindings = []; // Réinitialise les bindings
+
+    // Appel à reset sur les anciens bindings avant de les vider (si nécessaire)
+    activeBindings.forEach(b => { try { b.reset(hmiContent); } catch(e){} });
 
     try {
         const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}&t=${Date.now()}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const svgText = await response.text();
+        const text = await response.text();
         
-        if (svgContent) {
-            svgContent.innerHTML = svgText;
-            svgInitialTextValues.clear();
-
+        if (hmiContent) {
+            await ensureAFrame(text);
+            hmiContent.innerHTML = text;
+            hmiInitialStates.clear();
+            
+            executeEmbeddedScripts();
+            await initEmbeddedCharts();
+            
+            // --- [NOUVEAU] Charge les vues imbriquées ---
+            await initEmbeddedSvgs();
+            
+            // --- Charge le script de la vue principale ---
             const bindingFilename = filename + '.js'; 
             await loadCustomBindingsScript(bindingFilename);
 
-            const svgRoot = svgContent.querySelector('svg');
-            if (!svgRoot) return;
-
-            if (customSvgBindings.isLoaded) {
-                customSvgBindings.initialize(svgRoot);
-            }
-
+            // Initialise tous les scripts chargés
+            activeBindings.forEach(binding => {
+                try { binding.initialize(hmiContent); } catch(e) { console.error(e); }
+            });
+            
             scanForDataKeys();
-
+            
             if (isSvgHistoryMode) {
                 const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
                 fetchLastKnownState(replayTime);
             } else {
-                fetchLastKnownState(Date.now()); // Load current state
+                fetchLastKnownState(Date.now());
             }
         }
     } catch (error) {
-        console.error(`Could not load the SVG file '${filename}':`, error);
-        if (svgContent) svgContent.innerHTML = `<p style="color: red; padding: 20px;">Error: The SVG file '${filename}' could not be loaded.</p>`;
+        console.error(`Could not load the file '${filename}':`, error);
+        if (hmiContent) hmiContent.innerHTML = `<p style="color: red; padding: 20px;">Error: The file '${filename}' could not be loaded.</p>`;
     }
 }
 
@@ -352,7 +416,7 @@ async function loadSvgPlan(filename) {
  * Toggles fullscreen mode for the SVG map view.
  */
 function toggleFullscreen() {
-    trackEvent('svg_fullscreen_toggle');
+    trackEvent('hmi_fullscreen_toggle');
     if (!mapView) return;
     if (!document.fullscreenElement) {
         mapView.requestFullscreen().catch(err => {
@@ -386,7 +450,6 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
     const value = parseFloat(currentValue);
     const threshold = parseFloat(alarmThreshold);
     if (isNaN(value) || isNaN(threshold)) return false;
-    
     switch (alarmType) {
         case 'H': return value > threshold;
         case 'L': return value < threshold;
@@ -397,11 +460,57 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
 /**
  * Updates a single SVG element.
  */
-function updateSvgElement(el, keyPath, value) {
-    // --- 1. SPECIAL VISUALS (by ID or data-key) ---
+function updateHmiElement(el, keyPath, value) {
     const numericValue = parseFloat(value);
+    const tagName = el.tagName.toUpperCase();
+
+    if (tagName.startsWith('A-')) {
+        const attr = el.dataset.attr || 'value';
+        const prop = el.dataset.property;
+        if (prop) el.setAttribute(attr, prop, value); 
+        else el.setAttribute(attr, value);
+        return;
+    }
+
+    const attr = el.dataset.attr;
+    if (attr) {
+        if (attr === 'style') {
+            const styleProp = el.dataset.styleProp;
+            if (styleProp) el.style[styleProp] = value;
+            else el.style.cssText = value;
+        } else if (attr === 'class') {
+            el.className = value;
+        } else {
+            el.setAttribute(attr, value);
+        }
+        return;
+    }
+
+    if (tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA') {
+        el.value = value;
+        return;
+    }
+
+    if (['TEXT', 'TSPAN', 'DIV', 'SPAN', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
+        if (keyPath.includes('status') || keyPath === 'alert_level' || keyPath === 'global_status') {
+            const v = String(value).toLowerCase();
+            let color = '';
+            if (['damaged', 'offline', 'breached', 'error', 'stopped_emergency', 'cancelled', 'interrupted', 'sag detected'].some(s => v.includes(s))) color = '#f85149';
+            else if (['online', 'empty', 'green', 'clear', 'patrol', 'ok', 'running', 'nominal'].includes(v)) color = '#3fb950';
+            else color = '#d29922';
+
+            if (tagName === 'TEXT' || tagName === 'TSPAN') el.setAttribute('fill', color);
+            else el.style.color = color;
+            
+            if (color === '#f85149' && !el.classList.contains('text-data')) el.classList.add('alarm-text');
+            else el.classList.remove('alarm-text');
+        }
+        if (typeof value === 'number' && !Number.isInteger(value)) el.textContent = parseFloat(value).toFixed(2);
+        else el.textContent = value;
+        return;
+    }
     
-    // Special visuals
+    // Legacy SVG
     if (el.id === 'shield-visual-effect' && keyPath === 'power' && !isNaN(numericValue)) {
         const opacity = Math.max(0, Math.min(1, (numericValue / 100.0) * 0.7 + 0.1));
         const width = 2 + (numericValue / 100.0) * 8;
@@ -410,60 +519,9 @@ function updateSvgElement(el, keyPath, value) {
         return; 
     }
     if (el.id === 'laser-charge-visual' && keyPath === 'value' && !isNaN(numericValue)) {
-        const maxWidth = 140; 
-        const chargeWidth = Math.max(0, (numericValue / 100.0) * maxWidth);
+        const chargeWidth = Math.max(0, (numericValue / 100.0) * 140);
         el.setAttribute('width', chargeWidth.toFixed(2));
         return; 
-    }
-
-    // --- 2. TEXT COLOR (by keyPath or value) ---
-    if (el.tagName === 'text' || el.tagName === 'tspan') {
-        let isStatus = false;
-
-        if (keyPath === 'alert_level' || keyPath === 'global_status') {
-            isStatus = true;
-            if (value === 'red' || value === 'INTERRUPTED') el.setAttribute('fill', '#f85149');
-            else if (value === 'yellow' || value === 'PERTURBED') el.setAttribute('fill', '#d29922');
-            else el.setAttribute('fill', '#58a6ff'); // Blue for OK/green
-        }
-        else if (keyPath.includes('status') || keyPath === 'metrics[Status]') {
-            isStatus = true;
-            const v = String(value).toLowerCase();
-            if (v === 'damaged' || v === 'offline' || v === 'breached' || v === 'error' || v === 'stopped_emergency' || v === 'cancelled' || v.includes('interrupted')) {
-                el.setAttribute('fill', '#f85149'); // Red
-            } else if (v === 'online' || v === 'empty' || v === 'green' || v === 'clear' || v === 'patrol' || v === 'ok' || v === 'running') {
-                el.setAttribute('fill', '#3fb950'); // Green
-            } else {
-                el.setAttribute('fill', '#d29922'); // Yellow for 'standby', 'charging', 'transit', 'perturbed', 'stopped_station' etc.
-            }
-        }
-
-        if (el.getAttribute('fill') === '#f85149' && !el.classList.contains('text-data')) {
-            el.classList.add('alarm-text'); 
-        } else {
-            el.classList.remove('alarm-text');
-        }
-
-        // --- 3. DEFAULT TEXT UPDATE ---
-        if (typeof value === 'number' && !Number.isInteger(value)) {
-            el.textContent = parseFloat(value).toFixed(2);
-        } else {
-            el.textContent = value;
-        }
-    }
-
-    // --- 4. ALARM LINE (Alarm check) ---
-    const alarmType = el.dataset.alarmType;
-    const alarmValue = el.dataset.alarmValue;
-    if (alarmType && alarmValue) {
-        const alarmLineGroup = el.closest('.alarm-line');
-        if (alarmLineGroup) {
-            const isAlarm = checkAlarm(value, alarmType, alarmValue);
-            alarmLineGroup.style.visibility = isAlarm ? 'visible' : 'hidden';
-        } else {
-             const isAlarm = checkAlarm(value, alarmType, alarmValue);
-             el.style.visibility = isAlarm ? 'visible' : 'hidden';
-        }
     }
 }
 
@@ -473,59 +531,64 @@ function updateSvgElement(el, keyPath, value) {
  */
 function flushUpdateQueue() {
     try {
-        const svgRoot = svgContent.querySelector('svg');
-        if (!svgRoot) return; // Will jump to finally block
-
+        const root = hmiContent;
+        if (!root) return;
+        
         updateQueue.forEach((data, key) => {
             const { brokerId, topic, payloadObject, isJson } = data;
-
-            if (customSvgBindings.isLoaded) {
-                try {
-                    customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
-                } catch (err) {
-                    console.error(`Error in custom binding update:`, err);
-                }
-            } else if (isJson) {
+            
+            // --- Exécute TOUS les scripts de bindings actifs ---
+            activeBindings.forEach(binding => {
+                try { binding.update(brokerId, topic, payloadObject, root); } 
+                catch (err) { console.error(`[HMI Script Error] Topic ${topic}:`, err); }
+            });
+            
+            if (isJson) {
                 const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');
-                
-                // Search for elements (optimized using local cache)
                 const idsToTry = [specificId, genericId];
+                
                 idsToTry.forEach(id => {
                     let elements = elementCache.get(id);
                     if (elements === undefined) {
-                        try {
-                            elements = svgContent.querySelectorAll(`[id="${id}"]`);
-                        } catch (qErr) {
-                            elements = [];
-                        }
+                        try { elements = hmiContent.querySelectorAll(`[id="${id}"]`); } catch (e) { elements = []; }
                         elementCache.set(id, elements);
                     }
-
-                    if (elements.length > 0) {
-                        elements.forEach(groupElement => {
-                            const dataElements = groupElement.querySelectorAll('[data-key]');
-                            dataElements.forEach(el => {
-                                const value = getNestedValue(payloadObject, el.dataset.key);
-                                if (value !== null && value !== undefined) {
-                                    updateSvgElement(el, el.dataset.key, value);
-                                }
-                            });
-
-                            // Optimized Highlight
-                            groupElement.classList.add('highlight-svg-default');
-                            if (highlightTimers.has(groupElement)) clearTimeout(highlightTimers.get(groupElement));
-                            highlightTimers.set(groupElement, setTimeout(() => {
-                                groupElement.classList.remove('highlight-svg-default');
-                                highlightTimers.delete(groupElement);
-                            }, 500));
+                    elements.forEach(groupElement => {
+                        groupElement.querySelectorAll('[data-key]').forEach(el => {
+                            const value = getNestedValue(payloadObject, el.dataset.key);
+                            if (value !== null && value !== undefined) updateHmiElement(el, el.dataset.key, value);
                         });
-                    }
+                        groupElement.classList.add('highlight-svg-default');
+                        if (highlightTimers.has(groupElement)) clearTimeout(highlightTimers.get(groupElement));
+                        highlightTimers.set(groupElement, setTimeout(() => {
+                            groupElement.classList.remove('highlight-svg-default');
+                            highlightTimers.delete(groupElement);
+                        }, 500));
+                    });
                 });
             }
         });
+
+        embeddedChartInstances.forEach((chartInst, chartId) => {
+            let updated = false;
+            chartInst.data.datasets.forEach(ds => {
+                const queueKey = `${ds._brokerId}:${ds._topic}`;
+                if (updateQueue.has(queueKey)) {
+                    const data = updateQueue.get(queueKey);
+                    const val = getNestedValue(data.payloadObject, ds._path);
+                    if (val !== null && val !== undefined) {
+                        ds.data.push({ x: Date.now(), y: parseFloat(val) });
+                        if (ds.data.length > 100) ds.data.shift(); 
+                        updated = true;
+                    }
+                }
+            });
+            if (updated) chartInst.update();
+        });
+
     } catch (globalErr) {
-        console.error("Critical error in SVG render loop:", globalErr);
+        console.error("Critical error in HMI render loop:", globalErr);
     } finally {
         updateQueue.clear();
         animationFrameRequested = false;
@@ -536,21 +599,12 @@ function flushUpdateQueue() {
  * Main update router function. Throttled via Queue.
  */
 export function updateMap(brokerId, topic, payload) {
-    if (svgHistoryToggle?.checked || !svgContent) return;
-
+    if (svgHistoryToggle?.checked || !hmiContent) return;
     let payloadObject;
     let isJson = false;
-    try {
-        payloadObject = JSON.parse(payload); 
-        isJson = true;
-    } catch (e) { 
-        payloadObject = payload;
-    }
-
-    // Queue the update (keep only the latest value for this topic/broker)
-    const queueKey = `${brokerId}:${topic}`;
-    updateQueue.set(queueKey, { brokerId, topic, payloadObject, isJson });
-
+    try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
+    
+    updateQueue.set(`${brokerId}:${topic}`, { brokerId, topic, payloadObject, isJson });
     if (!animationFrameRequested) {
         animationFrameRequested = true;
         requestAnimationFrame(flushUpdateQueue);
@@ -565,7 +619,6 @@ export function updateSvgTimelineUI(min, max) {
     currentMinTimestamp = min;
     currentMaxTimestamp = max;
     if (!isSvgHistoryMode) return; 
-    
     const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
     svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentTimestamp);
 }
@@ -575,7 +628,7 @@ export function updateSvgTimelineUI(min, max) {
  * Used when switching tabs so the user doesn't wait for the next ping.
  */
 export function refreshSvgLiveState() {
-    if (!isSvgHistoryMode && svgContent && svgContent.querySelector('svg')) {
+    if (!isSvgHistoryMode && hmiContent && hmiContent.children.length > 0) {
         fetchLastKnownState(Date.now());
     }
 }
@@ -585,86 +638,65 @@ export function refreshSvgLiveState() {
  * and applies it to the SVG. Replaces local replaySvgHistory.
  */
 async function fetchLastKnownState(timestamp) {
-    if (!svgContent) return;
-    const svgRoot = svgContent.querySelector('svg');
-    if (!svgRoot) return;
+    if (!hmiContent || hmiContent.children.length === 0) return;
+    hmiContent.style.opacity = '0.5';
+    
+    hmiInitialStates.forEach((state, element) => {
+        if (state.type === 'text') element.textContent = state.value;
+        else if (state.type === 'attr' || state.type === 'aframe') element.setAttribute(state.attr, state.value);
+        else if (state.type === 'style') element.style[state.prop] = state.value;
+        else if (state.type === 'class') element.className = state.value;
+        else if (state.type === 'prop') element[state.prop] = state.value;
 
-    // 1. Visual Feedback
-    svgContent.style.opacity = '0.5';
-
-    // 2. Clear current state (Reset)
-    svgInitialTextValues.forEach((state, element) => {
-        if (state.type === 'text') {
-            element.textContent = state.value;
-        } else if (state.type === 'attr') {
-            element.setAttribute(state.attr, state.value);
-        }
         element.classList.remove('alarm-text', 'highlight-svg-default');
-        if (element.getAttribute('fill') === '#f85149' || element.getAttribute('fill') === '#d29922' || element.getAttribute('fill') === '#3fb950' || element.getAttribute('fill') === '#58a6ff') {
+        if (['#f85149', '#d29922', '#3fb950', '#58a6ff'].includes(element.getAttribute('fill') || element.style.color)) {
             element.removeAttribute('fill');
+            element.style.color = '';
         }
     });
 
-    svgContent.querySelectorAll('.alarm-line').forEach(el => el.style.visibility = 'hidden');
+    hmiContent.querySelectorAll('.alarm-line').forEach(el => el.style.visibility = 'hidden');
     highlightTimers.forEach(t => clearTimeout(t));
     highlightTimers.clear();
 
-    if (customSvgBindings.isLoaded) {
-        try {
-            customSvgBindings.reset(svgRoot);
-        } catch (err) {
-            console.error("Error in custom SVG binding 'reset' function:", err);
-        }
-    }
+    // Reset sur TOUS les bindings actifs
+    activeBindings.forEach(binding => {
+        try { binding.reset(hmiContent); } catch (err) {}
+    });
 
-    // 3. API Call to /last-known
     try {
         const isoTime = new Date(timestamp).toISOString();
         const response = await fetch(`api/context/last-known?timestamp=${encodeURIComponent(isoTime)}`);
         if (!response.ok) throw new Error("Failed to fetch state");       
         const stateData = await response.json(); 
-        // console.log(`[SVG History] Fetched ${stateData.length} records (Last Known State) for ${isoTime}`);
-
-        // 4. Apply State
+        
         stateData.forEach(entry => {
             const { broker_id: brokerId, topic, payload } = entry;
             let payloadObject;
             let isJson = false;
-            try {
-                payloadObject = JSON.parse(payload);
-                isJson = true;
-            } catch (e) {
-                payloadObject = payload;
-            }
+            try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
+            
+            // Mise à jour via TOUS les bindings
+            activeBindings.forEach(binding => {
+                try { binding.update(brokerId, topic, payloadObject, hmiContent); } catch (err) {}
+            });
 
-            if (customSvgBindings.isLoaded) {
-                try {
-                    customSvgBindings.update(brokerId, topic, payloadObject, svgRoot);
-                } catch (err) {
-                     // Retry with raw string if object fail
-                    if (isJson && typeof payloadObject === 'object') {
-                         try {
-                             customSvgBindings.update(brokerId, topic, payload, svgRoot);
-                         } catch(e) {}
-                    }
-                }
-            } else if (isJson) {
+            if (isJson) {
                 const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');         
                 try {
-                    const groupElements = svgContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`);
-                    groupElements.forEach(groupElement => {
+                    hmiContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`).forEach(groupElement => {
                         groupElement.querySelectorAll('[data-key]').forEach(el => {
                             const value = getNestedValue(payloadObject, el.dataset.key);
-                            if (value !== null && value !== undefined) updateSvgElement(el, el.dataset.key, value);
+                            if (value !== null && value !== undefined) updateHmiElement(el, el.dataset.key, value);
                         });
                     });
-                } catch(e) {} // Catch invalid selector characters
+                } catch(e) {} 
             }
         });
     } catch (err) {
         console.error("Error fetching historical state:", err);
     } finally {
-        svgContent.style.opacity = '1';
+        hmiContent.style.opacity = '1';
     }
 }

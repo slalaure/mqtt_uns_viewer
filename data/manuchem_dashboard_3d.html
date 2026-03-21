@@ -1,0 +1,179 @@
+<div style="display: flex; flex-direction: column; height: 100%; width: 100%; background-color: #1a1e24; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    
+    <div style="flex: 0 0 50px; background-color: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: center;">
+        <h2 style="margin: 0; font-size: 1.2rem; letter-spacing: 1px; color: #8b949e;">MAINCHEM FRANKFURT: PEM PRODUCTION OVERVIEW - MANUCHEM 2026 DEMO</h2>
+    </div>
+
+    <div style="flex: 1; display: flex; padding: 20px; gap: 20px; overflow: hidden;">
+        
+        <div style="flex: 3; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+            
+            <div style="flex: 1; background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; position: relative; min-height: 250px; overflow: hidden;">
+                <div style="position: absolute; top: 10px; left: 10px; z-index: 10; font-size: 0.9em; color: #8b949e; background: rgba(13,17,23,0.8); padding: 5px; border-radius: 4px;">
+                    3D Digital Twin » Drying Oven Zone
+                </div>
+                
+                <a-scene embedded style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                    
+                    <a-light type="ambient" color="#445451"></a-light>
+                    <a-light type="directional" position="1 2 2" intensity="0.8"></a-light>
+
+                    <a-entity position="0 0 -4">
+                        <a-box position="0 0 0" width="6" height="1.5" depth="2" color="#444c56" material="metalness: 0.6; roughness: 0.4"></a-box>
+                        
+                        <a-box position="0 0 0.1" width="5.8" height="0.6" depth="1.9" color="#010409"></a-box>
+                        
+                        <a-box id="oven-glow-3d" position="0 0 0.15" width="5.6" height="0.4" depth="1.8" color="#d29922" material="shader: flat; transparent: true; opacity: 0.8"></a-box>
+                        <a-light id="oven-light-3d" type="point" position="0 0 1" intensity="0.8" color="#d29922" distance="4"></a-light>
+                        
+                        <a-cylinder position="0 0.8 0" radius="0.5" height="0.3" color="#21262d"></a-cylinder>
+                        
+                        <a-entity id="fan-blades-3d" position="0 1.0 0" rotation="0 0 0">
+                            <a-box width="0.9" height="0.05" depth="0.1" color="#8b949e"></a-box>
+                            <a-box width="0.1" height="0.05" depth="0.9" color="#8b949e"></a-box>
+                        </a-entity>
+
+                        <a-plane id="moving-web-3d" position="0 0 0.2" rotation="-90 0 0" width="8" height="0.8" color="#f0f6fc" material="shader: flat;"></a-plane>
+                    </a-entity>
+
+                    <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
+                </a-scene>
+                
+                <div style="position: absolute; bottom: 10px; left: 10px; z-index: 10; background: rgba(22, 27, 34, 0.85); padding: 10px; border-radius: 4px; border: 1px solid #30363d;">
+                    <div style="font-size: 0.8em; color: #8b949e; margin-bottom: 5px;">Oven Core Temp</div>
+                    <div style="font-size: 1.8em; font-weight: bold; color: #d29922;" id="label-3d-temp">-- °C</div>
+                    <div style="font-size: 0.85em; margin-top: 5px; color: #8b949e;" id="label-3d-status">Status: Waiting...</div>
+                </div>
+            </div>
+
+            <div style="flex: 1; background-color: #21262d; border: 1px solid #30363d; border-radius: 6px; position: relative; padding: 20px; display: flex; flex-direction: column;">
+                <div style="font-size: 0.9em; color: #8b949e; margin-bottom: 10px;">2D Schematic » Coating Line 2</div>
+                
+                <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                    <svg viewBox="0 0 800 250" style="width: 100%; height: 100%;">
+                        <rect x="50" y="180" width="700" height="15" fill="#30363d" />
+                        <text x="110" y="215" fill="#8b949e" font-size="12" text-anchor="middle">Unwinding Station</text>
+                        <text x="250" y="215" fill="#8b949e" font-size="12" text-anchor="middle">Catalyst Station</text>
+                        <text x="450" y="215" fill="#8b949e" font-size="12" text-anchor="middle">Drying Oven</text>
+                        
+                        <rect x="80" y="130" width="60" height="50" fill="#30363d" />
+                        <circle cx="110" cy="130" r="30" fill="#c9d1d9" stroke="#8b949e" stroke-width="4" class="svg_anim_roll" />
+                        <circle cx="110" cy="130" r="10" fill="#161b22" />
+                        
+                        <rect x="160" y="140" width="30" height="40" fill="#30363d" />
+                        <circle cx="175" cy="140" r="20" fill="#c9d1d9" stroke="#8b949e" stroke-width="4" class="svg_anim_roll" />
+                        <circle cx="175" cy="140" r="6" fill="#161b22" />
+
+                        <rect x="230" y="120" width="40" height="60" fill="#30363d" />
+                        <circle cx="250" cy="135" r="15" fill="#d29922" />
+
+                        <rect x="290" y="110" width="320" height="60" fill="#30363d" rx="4" />
+                        <rect x="300" y="120" width="300" height="40" fill="url(#ovenGrad)" />
+                        <defs>
+                            <linearGradient id="ovenGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#30363d" />
+                                <stop offset="50%" stop-color="#d29922" stop-opacity="0.5" id="svg-oven-glow" />
+                                <stop offset="100%" stop-color="#30363d" />
+                            </linearGradient>
+                        </defs>
+
+                        <path d="M110 100 L175 100 L175 135 L250 135 L610 135" fill="none" stroke="#f0f6fc" stroke-width="4" />
+                        
+                        <rect x="320" y="30" width="120" height="55" fill="#161b22" stroke="#8b949e" />
+                        <text x="330" y="48" fill="#8b949e" font-size="11">Drying oven Temp.</text>
+                        <text x="330" y="70" fill="#d29922" font-size="18" font-weight="bold" id="label-svg-temp">-- °C</text>
+                        <path d="M380 85 L380 135" fill="none" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4" />
+                        <circle cx="380" cy="135" r="4" fill="#d29922" />
+
+                        <rect x="470" y="30" width="90" height="55" fill="#161b22" stroke="#8b949e" />
+                        <text x="480" y="48" fill="#8b949e" font-size="11">Fan speed</text>
+                        <text x="480" y="70" fill="#c9d1d9" font-size="18" font-weight="bold" id="label-svg-fan">--%</text>
+                        <path d="M515 85 L515 110" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4" />
+
+                        <g transform="translate(515, 125)">
+                            <circle cx="0" cy="0" r="12" fill="#161b22" stroke="#8b949e" stroke-width="2"/>
+                            <g id="svg_anim_fan">
+                                <path d="M0 0 L8 -8 L8 8 Z" fill="#8b949e" transform="rotate(0)" />
+                                <path d="M0 0 L8 -8 L8 8 Z" fill="#8b949e" transform="rotate(120)" />
+                                <path d="M0 0 L8 -8 L8 8 Z" fill="#8b949e" transform="rotate(240)" />
+                            </g>
+                            <circle cx="0" cy="0" r="3" fill="#c9d1d9"/>
+                        </g>
+
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 280px; overflow-y: auto;">
+            
+            <div id="frankfurt-mes-operations-line_2-status">
+                <div style="background-color: #21262d; border: 1px solid #30363d; border-radius: 6px;">
+                    <div style="padding: 10px 15px; border-bottom: 1px solid #30363d; background-color: #30363d; color: #c9d1d9; font-size: 0.9em;">
+                        Manufacturing Execution (MES)
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="font-size: 0.8em; color: #8b949e; margin-bottom: 5px;">Current Work Order</div>
+                        <div style="font-size: 1.2em; font-weight: bold; margin-bottom: 10px; color: #e6edf3;" data-key="active_wo" id="panel-wo">WO-WAITING</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold; color: #8b949e;" data-key="status" id="panel-mes-status">IDLE</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="frankfurt-qms-aoi_inspection-result">
+                <div style="background-color: #21262d; border: 1px solid #30363d; border-radius: 6px;">
+                    <div style="padding: 10px 15px; border-bottom: 1px solid #30363d; background-color: #30363d; color: #c9d1d9; font-size: 0.9em;">
+                        Quality Management (QMS)
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="font-size: 0.8em; color: #8b949e; margin-bottom: 5px;">Pre-Inspection AOI Scan</div>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                            <div style="font-size: 1.1em;">Fissure Rate:</div>
+                            <div style="font-size: 1.6em; font-weight: bold;" data-key="fissure_rate_pct" id="panel-qms-fissure">--%</div>
+                        </div>
+                        <div style="text-align: right; margin-top: 10px; font-size: 0.85em; font-weight: bold;" data-key="result" id="panel-qms-status">WAITING</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background-color: #21262d; border: 1px solid #30363d; border-radius: 6px;">
+                <div style="padding: 10px 15px; border-bottom: 1px solid #30363d; background-color: #30363d; color: #c9d1d9; font-size: 0.9em;">
+                    Infrastructure &amp; Utilities
+                </div>
+                <div style="padding: 15px; display: flex; flex-direction: column; gap: 15px;">
+                    
+                    <div id="frankfurt-ot-infrastructure-main_power-telemetry">
+                        <div style="font-size: 0.8em; color: #8b949e; margin-bottom: 2px;">Main Power Input</div>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                            <div style="font-size: 1.2em; font-weight: bold;" data-key="voltage_v" id="panel-infra-volts">-- V</div>
+                            <div style="font-size: 0.8em; font-weight: bold;" data-key="status" id="panel-infra-status">--</div>
+                        </div>
+                    </div>
+
+                    <div id="frankfurt-ot-utilities-chiller_plant-telemetry" style="border-top: 1px solid #30363d; padding-top: 10px;">
+                        <div style="font-size: 0.8em; color: #8b949e; margin-bottom: 2px;">Chiller Plant Temperature</div>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                            <div style="font-size: 1.2em; font-weight: bold;" data-key="supply_temp_c" id="panel-util-chiller">-- °C</div>
+                        </div>
+                    </div>
+
+                    <div id="frankfurt-ot-bms-cleanroom_A-telemetry" style="border-top: 1px solid #30363d; padding-top: 10px;">
+                        <div style="font-size: 0.8em; color: #8b949e; margin-bottom: 2px;">Cleanroom Pressure</div>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                            <div style="font-size: 1.2em; font-weight: bold;" data-key="pressure_pa" id="panel-bms-press">-- Pa</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div style="flex: 1; background-color: #21262d; border: 1px solid #30363d; border-radius: 6px; display: flex; flex-direction: column; min-height: 200px;">
+                 <div style="padding: 10px 15px; border-bottom: 1px solid #30363d; background-color: #30363d; color: #c9d1d9; font-size: 0.9em;">
+                    Live Telemetry Trend
+                </div>
+                <div class="embedded-chart" data-chart-id="chart_manuchem_demo" style="flex: 1; padding: 10px; min-height: 0;"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
