@@ -9,7 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Server Entry Point
- * [UPDATED] Modified /api/svg routes to support serving .html and .htm files for the HMI View.
+ * [UPDATED] Refactored all SVG references to HMI (Human-Machine Interface).
  */
 // --- Imports ---
 const pino = require('pino');
@@ -125,7 +125,7 @@ const config = {
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
     VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false',
-    VIEW_SVG_ENABLED: process.env.VIEW_SVG_ENABLED !== 'false',
+    VIEW_HMI_ENABLED: process.env.VIEW_HMI_ENABLED !== 'false', // [REFACTORED]
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false',
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false',
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
@@ -135,7 +135,7 @@ const config = {
     LLM_API_URL: process.env.LLM_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
     LLM_API_KEY: process.env.LLM_API_KEY || '',
     LLM_MODEL: process.env.LLM_MODEL || 'gemini-2.0-flash',
-    SVG_FILE_PATH: process.env.SVG_FILE_PATH?.trim() || 'view.svg',
+    HMI_FILE_PATH: process.env.HMI_FILE_PATH?.trim() || process.env.SVG_FILE_PATH?.trim() || 'view.html', // [REFACTORED]
     BASE_PATH: process.env.BASE_PATH?.trim() || '/',
     VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false',
     MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
@@ -423,7 +423,7 @@ const authMiddleware = (req, res, next) => {
     if (req.isAuthenticated()) return next();
     // 2. Allow if Asset file (css, js, etc) - Strict whitelisting
     const ext = path.extname(req.path).toLowerCase();
-    const allowedExts = ['.css', '.js', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf'];
+    const allowedExts = ['.css', '.js', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.gltf', '.glb', '.bin'];
     if (allowedExts.includes(ext)) return next();
     // 3. Fallback to Basic Auth if Configured (for API/M2M or legacy usage)
     if (config.HTTP_USER && config.HTTP_PASSWORD) {
@@ -479,13 +479,14 @@ mainRouter.use('/auth', require('./routes/authApi')(logger));
 mainRouter.use('/api/admin', require('./routes/adminApi')(logger, db, dataManager, DATA_PATH));
 // --- Alert API Routes ---
 mainRouter.use('/api/alerts', ipFilterMiddleware, require('./routes/alertApi')(logger));
-// --- Layered File System Helper for SVGs/HMI ---
+
+/// --- Layered File System Helper for SVGs/HMI ---
 // Determines the priority file path (Private > Global)
-function resolveSvgPath(filename, req) {
+function resolveHmiPath(filename, req) {
     const globalPath = path.join(DATA_PATH, filename);
     if (req.user && req.user.id) {
-        const userSvgDir = path.join(SESSIONS_PATH, req.user.id, 'svgs');
-        const userPath = path.join(userSvgDir, filename);
+        const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis'); // Changed svgs to hmis
+        const userPath = path.join(userHmiDir, filename);
         // If user has a private copy, serve it
         if (fs.existsSync(userPath)) {
             return userPath;
@@ -494,19 +495,23 @@ function resolveSvgPath(filename, req) {
     // Fallback to global
     return globalPath;
 }
-// --- API Routes ---
-mainRouter.get('/api/svg/file', (req, res) => {
+
+// --- API Routes for HMI ---
+mainRouter.get('/api/hmi/file', (req, res) => {
     const filename = path.basename(req.query.name || '');
-    if (!filename.match(/\.(svg|html|htm)$/i)) return res.status(400).send('Invalid file type');
-    const filePath = resolveSvgPath(filename, req);
+    if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).send('Invalid file type');
+    const filePath = resolveHmiPath(filename, req);
     if (fs.existsSync(filePath)) {
+        if (filename.endsWith('.glb')) res.setHeader('Content-Type', 'model/gltf-binary');
+        if (filename.endsWith('.gltf')) res.setHeader('Content-Type', 'model/gltf+json');
+        if (filename.endsWith('.bin')) res.setHeader('Content-Type', 'application/octet-stream');
         res.sendFile(filePath);
     } else {
         res.status(404).send('Not found');
     }
 });
 // List SVGs/HTMLs (Merge Global + Private)
-mainRouter.get('/api/svg/list', (req, res) => {
+mainRouter.get('/api/hmi/list', (req, res) => {
     try {
         let files = new Set();
         // 1. Add Global Files
@@ -517,9 +522,9 @@ mainRouter.get('/api/svg/list', (req, res) => {
         }
         // 2. Add Private Files (if logged in)
         if (req.user && req.user.id) {
-            const userSvgDir = path.join(SESSIONS_PATH, req.user.id, 'svgs');
-            if (fs.existsSync(userSvgDir)) {
-                fs.readdirSync(userSvgDir).forEach(f => {
+            const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
+            if (fs.existsSync(userHmiDir)) {
+                fs.readdirSync(userHmiDir).forEach(f => {
                     if (f.match(/\.(svg|html|htm)$/i)) files.add(f);
                 });
             }
@@ -530,9 +535,10 @@ mainRouter.get('/api/svg/list', (req, res) => {
     }
 });
 // Serve Bindings JS with precedence
-mainRouter.get('/api/svg/bindings.js', (req, res) => {
+mainRouter.get('/api/hmi/bindings.js', (req, res) => {
     const filename = path.basename(req.query.name || '');
-    const filePath = resolveSvgPath(filename, req);
+    const filePath = resolveHmiPath(filename, req);
+    res.setHeader('Content-Type', 'application/javascript'); 
     if (fs.existsSync(filePath)) { 
         res.setHeader('Content-Type', 'application/javascript'); 
         res.sendFile(filePath); 
@@ -542,21 +548,19 @@ mainRouter.get('/api/svg/bindings.js', (req, res) => {
     }
 });
 // Delete SVG/HMI View (File + JS)
-mainRouter.delete('/api/svg/file', (req, res) => {
+mainRouter.delete('/api/hmi/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
-    if (!filename.match(/\.(svg|html|htm)$/i)) return res.status(400).json({ error: "Invalid file type" });
+    if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).json({ error: "Invalid file type" });
+    
     const globalPath = path.join(DATA_PATH, filename);
     let targetPath = null;
     let isPrivate = false;
     // Check for private file first
     if (req.user && req.user.id) {
-        const userSvgDir = path.join(SESSIONS_PATH, req.user.id, 'svgs');
-        const userPath = path.join(userSvgDir, filename);
-        if (fs.existsSync(userPath)) {
-            targetPath = userPath;
-            isPrivate = true;
-        }
+        const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
+        const userPath = path.join(userHmiDir, filename);
+        if (fs.existsSync(userPath)) { targetPath = userPath; isPrivate = true; }
     }
     // Fallback to global if private not found
     if (!targetPath && fs.existsSync(globalPath)) {
@@ -570,7 +574,7 @@ mainRouter.delete('/api/svg/file', (req, res) => {
     if (!isPrivate) {
         // Only Admin can delete global files
         if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
+        return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
         }
     }
     try {
@@ -589,13 +593,19 @@ mainRouter.delete('/api/svg/file', (req, res) => {
         res.status(500).json({ error: "Failed to delete file" });
     }
 });
+
+// Retro-compatibility routes for old UI elements calling /api/svg
+mainRouter.get('/api/svg/file', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
+mainRouter.get('/api/svg/list', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
+mainRouter.get('/api/svg/bindings.js', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
+
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
         brokerConfigs: config.BROKER_CONFIGS.map(b => ({ id: b.id, host: b.host, port: b.port, subscribe: b.subscribe, publish: b.publish })),
         isMultiBroker: config.BROKER_CONFIGS.length > 1,
         viewTreeEnabled: config.VIEW_TREE_ENABLED,
-        viewSvgEnabled: config.VIEW_SVG_ENABLED,
+        viewHmiEnabled: config.VIEW_HMI_ENABLED, // [REFACTORED]
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
@@ -606,7 +616,7 @@ mainRouter.get('/api/config', (req, res) => {
         viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
         maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
         maxSavedMapperVersions: config.MAX_SAVED_MAPPER_VERSIONS,
-        svgFilePath: config.SVG_FILE_PATH
+        hmiFilePath: config.HMI_FILE_PATH // [REFACTORED]
     });
 });
 if (config.IS_SIMULATOR_ENABLED) {
@@ -700,7 +710,7 @@ const serveSPA = (req, res) => {
     });
 };
 // Apply the dynamic SPA handler to all client routes
-const clientRoutes = ['tree', 'chart', 'svg', 'map', 'mapper', 'history', 'publish', 'login', 'admin', 'alerts'];
+const clientRoutes = ['tree', 'chart', 'hmi', 'mapper', 'history', 'publish', 'login', 'admin', 'alerts'];
 clientRoutes.forEach(route => {
     mainRouter.get('/' + route, serveSPA);
     mainRouter.get('/' + route + '/', serveSPA);

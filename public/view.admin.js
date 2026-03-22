@@ -9,8 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin View Module
- * Handles User Management, Database Maintenance, and Alerts Maintenance.
- * [UPDATED] Replaced native confirm() with unified confirmModal().
+ * Handles User Management, Database Maintenance, Alerts Maintenance, and HMI Assets.
  */
 
 import { confirmModal } from './utils.js';
@@ -32,6 +31,13 @@ let resolvedCountEl = null;
 let resolvedSizeEl = null;
 let btnPurgeAlerts = null;
 let purgeStatus = null;
+
+// --- [NEW] Elements for HMI Assets Maintenance ---
+let hmiAssetsTableBody = null;
+let btnUploadHmi = null;
+let hmiUploadInput = null;
+let hmiUploadStatus = null;
+let btnHmiRefresh = null;
 
 let isViewInitialized = false;
 
@@ -88,10 +94,11 @@ function initializeElements(container) {
             const targetId = btn.dataset.target;
             const targetPanel = document.getElementById(targetId);
             if (targetPanel) targetPanel.classList.add('active');
-            
+
             // Load data based on tab
             if (targetId === 'admin-users-panel') loadUsers();
             if (targetId === 'admin-alerts-panel') loadResolvedStats();
+            if (targetId === 'admin-assets-panel') loadHmiAssets(); // [NEW] Trigger HMI Assets load
         });
     });
 
@@ -101,7 +108,7 @@ function initializeElements(container) {
     importStatus = document.getElementById('db-import-status');
     btnResetDb = document.getElementById('btn-reset-db');
     resetDbStatus = document.getElementById('reset-db-status');
-    
+
     if (btnImportDb && importInput) {
         btnImportDb.className = 'tool-button button-primary';
         btnImportDb.addEventListener('click', onImportDB);
@@ -116,10 +123,24 @@ function initializeElements(container) {
     resolvedSizeEl = document.getElementById('stats-resolved-size');
     btnPurgeAlerts = document.getElementById('btn-purge-alerts');
     purgeStatus = document.getElementById('purge-alerts-status');
-    
+
     if (btnPurgeAlerts) {
         btnPurgeAlerts.className = 'tool-button button-danger';
         btnPurgeAlerts.addEventListener('click', onPurgeAlerts);
+    }
+
+    // 5. [NEW] HMI Assets Maintenance Logic
+    hmiAssetsTableBody = document.getElementById('admin-hmi-table-body');
+    btnUploadHmi = document.getElementById('btn-upload-hmi');
+    hmiUploadInput = document.getElementById('hmi-upload-input');
+    hmiUploadStatus = document.getElementById('hmi-upload-status');
+    btnHmiRefresh = document.getElementById('btn-hmi-refresh');
+
+    if (btnUploadHmi && hmiUploadInput) {
+        btnUploadHmi.addEventListener('click', onUploadHmiAssets);
+    }
+    if (btnHmiRefresh) {
+        btnHmiRefresh.addEventListener('click', loadHmiAssets);
     }
 }
 
@@ -133,10 +154,12 @@ export function onAdminViewShow() {
         // initAdminView is called on app load, so usually it's ready.
         return;
     }
-
+    
     const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
     if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') {
         loadResolvedStats();
+    } else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') {
+        loadHmiAssets();
     } else {
         loadUsers();
     }
@@ -243,7 +266,7 @@ async function onImportDB() {
 
     const formData = new FormData();
     formData.append('db_import', file);
-    
+
     btnImportDb.disabled = true;
     btnImportDb.textContent = "Importing...";
     importStatus.textContent = "Uploading & Processing...";
@@ -345,5 +368,140 @@ async function onPurgeAlerts() {
         btnPurgeAlerts.disabled = false;
         btnPurgeAlerts.textContent = "Purge Resolved Alerts";
         setTimeout(() => { purgeStatus.textContent = ''; }, 3000);
+    }
+}
+
+// --- [NEW] HMI Assets Maintenance Functions ---
+
+function formatBytes(bytes, decimals = 2) {
+    if (!+bytes) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
+function getFileTypeBadge(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    let color = '#6c757d'; // Default gray
+    if (['html', 'htm'].includes(ext)) color = '#e34c26'; // HTML Orange
+    else if (ext === 'svg') color = '#ffb13b'; // SVG Yellow
+    else if (ext === 'js') color = '#f1e05a'; // JS Yellow
+    else if (['glb', 'gltf', 'bin'].includes(ext)) color = '#8e44ad'; // 3D Purple
+    else if (['png', 'jpg', 'jpeg'].includes(ext)) color = '#17a2b8'; // Image Teal
+    
+    return `<span style="background-color: ${color}; color: ${color === '#f1e05a' || color === '#ffb13b' ? '#333' : '#fff'}; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; text-transform: uppercase;">${ext}</span>`;
+}
+
+async function loadHmiAssets() {
+    if (!hmiAssetsTableBody) return;
+    hmiAssetsTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading assets...</td></tr>';
+    
+    try {
+        const res = await fetch('api/admin/hmi-assets');
+        if (!res.ok) throw new Error("Failed to fetch HMI assets list.");
+        const assets = await res.json();
+        renderHmiAssets(assets);
+    } catch (e) {
+        console.error("HMI Assets Load Error:", e);
+        hmiAssetsTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function renderHmiAssets(assets) {
+    hmiAssetsTableBody.innerHTML = '';
+    if (assets.length === 0) {
+        hmiAssetsTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No HMI assets found.</td></tr>';
+        return;
+    }
+
+    assets.forEach(asset => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--color-border)';
+        
+        const lastModified = new Date(asset.mtime).toLocaleString();
+        
+        tr.innerHTML = `
+            <td style="padding: 10px; font-family: monospace;"><strong>${asset.name}</strong></td>
+            <td style="padding: 10px;">${getFileTypeBadge(asset.name)}</td>
+            <td style="padding: 10px; font-size: 0.9em;">${formatBytes(asset.size)}</td>
+            <td style="padding: 10px; font-size: 0.9em;">${lastModified}</td>
+            <td style="padding: 10px; text-align: right;">
+                <button class="tool-button button-danger btn-delete-asset" data-filename="${asset.name}">Delete</button>
+            </td>
+        `;
+        hmiAssetsTableBody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.btn-delete-asset').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const filename = e.target.dataset.filename;
+            deleteHmiAsset(filename);
+        });
+    });
+}
+
+async function onUploadHmiAssets() {
+    const files = hmiUploadInput.files;
+    if (!files || files.length === 0) {
+        alert("Please select at least one file to upload.");
+        return;
+    }
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('assets', files[i]);
+    }
+
+    btnUploadHmi.disabled = true;
+    btnUploadHmi.textContent = "Uploading...";
+    hmiUploadStatus.textContent = "Processing upload...";
+    hmiUploadStatus.style.color = "var(--color-text)";
+
+    try {
+        const response = await fetch('api/admin/hmi-assets', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || "Upload failed.");
+        }
+        
+        hmiUploadStatus.textContent = `✅ ${result.message}`; 
+        hmiUploadStatus.style.color = 'var(--color-success)';
+        hmiUploadInput.value = ''; // Clear input
+        loadHmiAssets(); // Refresh list automatically
+        
+    } catch (e) {
+        hmiUploadStatus.textContent = `❌ Error: ${e.message}`;
+        hmiUploadStatus.style.color = 'var(--color-danger)';
+    } finally {
+        btnUploadHmi.disabled = false;
+        btnUploadHmi.textContent = "Upload Files";
+        setTimeout(() => {
+            if (hmiUploadStatus.textContent.includes('✅')) {
+                hmiUploadStatus.textContent = '';
+            }
+        }, 5000);
+    }
+}
+
+async function deleteHmiAsset(filename) {
+    const isConfirmed = await confirmModal('Delete HMI Asset', `⚠️ Are you sure you want to permanently delete "${filename}"?\n\nDashboards depending on this asset will break.`, 'Delete', true);
+    if (!isConfirmed) return;
+
+    try {
+        const res = await fetch(`api/admin/hmi-assets/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            loadHmiAssets(); // Refresh list
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (e) {
+        alert("Request failed: " + e.message);
     }
 }

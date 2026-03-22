@@ -9,8 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin API
- * Protected routes for User Management and System Maintenance.
- * [UPDATED] Added Database Maintenance routes (Import/Reset).
+ * Protected routes for User Management, System Maintenance, and HMI Asset Management.
  */
 const express = require('express');
 const userManager = require('../database/userManager');
@@ -21,7 +20,7 @@ const multer = require('multer');
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
 
-    // --- Multer Configuration for Imports ---
+    // --- Multer Configuration for Imports (JSON) ---
     const storageJson = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, dataPath);
@@ -30,6 +29,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
             cb(null, `import_${Date.now()}_${path.basename(file.originalname)}`);
         }
     });
+
     const uploadJson = multer({ 
         storage: storageJson, 
         fileFilter: (req, file, cb) => {
@@ -37,6 +37,27 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 cb(null, true);
             } else {
                 cb(new Error('Only JSON files are allowed!'), false);
+            }
+        }
+    });
+
+    // --- [NEW] Multer Configuration for HMI Assets ---
+    const storageHmi = multer.diskStorage({
+        destination: function (req, file, cb) {
+            cb(null, dataPath); // We store global HMI assets in the root data folder
+        },
+        filename: function (req, file, cb) {
+            cb(null, path.basename(file.originalname)); // Keep original filename for linking
+        }
+    });
+
+    const uploadHmi = multer({ 
+        storage: storageHmi, 
+        fileFilter: (req, file, cb) => {
+            if (file.originalname.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) {
+                cb(null, true);
+            } else {
+                cb(new Error('Invalid HMI asset file type! Only svg, html, js, and 3d formats allowed.'), false);
             }
         }
     });
@@ -66,11 +87,11 @@ module.exports = (logger, db, dataManager, dataPath) => {
     // --- Delete User ---
     router.delete('/users/:id', async (req, res) => {
         const userIdToDelete = req.params.id;
-        
         // Prevent self-deletion
         if (userIdToDelete === req.user.id) {
             return res.status(400).json({ error: "You cannot delete your own account while logged in." });
         }
+
         try {
             await userManager.deleteUser(userIdToDelete);
             logger.info(`[AdminAPI] User ${userIdToDelete} deleted by admin ${req.user.username}`);
@@ -90,14 +111,15 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
         const filePath = req.file.path;
         logger.info(`[AdminAPI] Starting DB import from ${req.file.originalname}...`);
-        
+
         try {
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const entries = JSON.parse(fileContent);
-            
+
             if (!Array.isArray(entries)) {
                 throw new Error("Invalid JSON structure. Expected an array.");
             }
+
             if (!dataManager) {
                 throw new Error("DataManager is not available.");
             }
@@ -112,12 +134,13 @@ module.exports = (logger, db, dataManager, dataPath) => {
                     isSparkplugOrigin: false,
                     needsDb: true
                 };
+
                 if (message.topic) {
                     dataManager.insertMessage(message);
                     count++;
                 }
             }
-            
+
             logger.info(`[AdminAPI] Queued ${count} messages for import.`);
             fs.unlinkSync(filePath); // Cleanup temp file
             res.json({ success: true, message: `Successfully queued ${count} entries for import.` });
@@ -134,7 +157,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         if (!db) return res.status(503).json({ error: "Database not available." });
         
         logger.warn(`⚠️ [AdminAPI] Admin ${req.user.username} initiated full DB RESET.`);
-        
+
         db.serialize(() => {
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
@@ -144,11 +167,69 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 db.run("VACUUM;", (vacErr) => {
                     if (vacErr) logger.error({ err: vacErr }, "Failed to vacuum DB");
                     else logger.info("✅ Database truncated and vacuumed.");
-                    
                     res.json({ message: 'Database has been reset successfully.' });
                 });
             });
         });
+    });
+
+    // --- [NEW] HMI Assets Management ---
+
+    // GET /api/admin/hmi-assets
+    router.get('/hmi-assets', (req, res) => {
+        try {
+            if (!fs.existsSync(dataPath)) return res.json([]);
+            
+            const files = fs.readdirSync(dataPath).filter(f => f.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i));
+            
+            const fileStats = files.map(f => {
+                const stat = fs.statSync(path.join(dataPath, f));
+                return {
+                    name: f,
+                    size: stat.size,
+                    mtime: stat.mtime
+                };
+            });
+            
+            // Sort newest first
+            fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
+            
+            res.json(fileStats);
+        } catch (err) {
+            logger.error({ err }, "Failed to list HMI assets");
+            res.status(500).json({ error: "Failed to list assets." });
+        }
+    });
+
+    // POST /api/admin/hmi-assets
+    router.post('/hmi-assets', uploadHmi.array('assets', 20), (req, res) => {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No valid files uploaded. Check allowed extensions.' });
+        }
+        
+        const fileNames = req.files.map(f => f.filename);
+        logger.info(`[AdminAPI] HMI Assets uploaded: ${fileNames.join(', ')}`);
+        
+        res.json({ success: true, message: `Successfully uploaded ${req.files.length} assets.`, files: fileNames });
+    });
+
+    // DELETE /api/admin/hmi-assets/:filename
+    router.delete('/hmi-assets/:filename', (req, res) => {
+        const filename = path.basename(req.params.filename); // Prevent path traversal
+        const filepath = path.join(dataPath, filename);
+
+        try {
+            if (fs.existsSync(filepath)) {
+                fs.unlinkSync(filepath);
+                logger.info(`[AdminAPI] HMI Asset deleted: ${filename}`);
+                res.json({ success: true, message: `Asset '${filename}' deleted.` });
+            } else {
+                res.status(404).json({ error: "Asset not found." });
+            }
+        } catch (err) {
+            logger.error({ err }, `Failed to delete HMI Asset: ${filename}`);
+            res.status(500).json({ error: err.message });
+        }
     });
 
     return router;

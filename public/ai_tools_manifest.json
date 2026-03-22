@@ -1,5 +1,5 @@
 {
-  "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or SVG), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n3. **UNS Model Adherence (Publishing & Simulating)**: When asked to trigger an alarm, publish data, or simulate an event, you MUST FIRST use `get_model_definition` to find the exact `topic_template` and `schema`.\n   - DO NOT invent topic structures. If the template is `ALAT/Sassenage/{building}/Safety/Alarm/Status`, you must publish to exactly that path.\n   - DO NOT invent JSON payloads. Strictly respect the enums, casing, and types defined in the schema (e.g., if schema requires `\"alarm\": \"ACTIVE\"`, do not use `\"HIGH\"`).\n\n### DEVELOPER GUIDE FOR DYNAMIC SVG VIEWS\nWhen the user asks for a diagram, synoptic, or view, use `create_dynamic_view`.\n1. You MUST generate valid SVG XML with unique `id` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerSvgBindings({\n  initialize: (svgRoot) => { console.log(\"SVG initialized\"); },\n  update: (brokerId, topic, payload, svgRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema (Example logic to generate):\n    // const data = msg.variables || msg; // ADAPT THIS LINE BASED ON DETECTED SCHEMA\n    \n    // 3. Update DOM using REAL tag names\n    // const el = svgRoot.getElementById('val_temp');\n    // if(el) el.textContent = data.AI_TT_Real_Tag;\n  },\n  reset: (svgRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names or topic structures. Use the tools provided to discover the environment state.",
+  "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or HMI), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n3. **UNS Model Adherence (Publishing & Simulating)**: When asked to trigger an alarm, publish data, or simulate an event, you MUST FIRST use `get_model_definition` to find the exact `topic_template` and `schema`.\n   - DO NOT invent topic structures.\n   - DO NOT invent JSON payloads. Strictly respect the enums, casing, and types defined in the schema.\n\n### DEVELOPER GUIDE FOR HMI DASHBOARDS & 3D DIGITAL TWINS\nWhen the user asks for a diagram, synoptic, dashboard, or 3D view, use `create_hmi_view`.\n1. You can generate HTML (including `<a-scene>` for A-Frame 3D) or pure SVG XML. Ensure elements have unique `id` or `data-key` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerHmiBindings({\n  initialize: (hmiRoot) => { console.log(\"HMI initialized\"); },\n  update: (brokerId, topic, payload, hmiRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema\n    // 3. Update DOM using REAL tag names\n  },\n  reset: (hmiRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names or topic structures. Use the tools provided to discover the environment state.",
   "tools": [
     {
       "name": "get_application_status",
@@ -264,7 +264,7 @@
     },
     {
       "name": "list_project_files",
-      "description": "Lists files in the project root and `data` directory. Useful for finding existing views or simulators.",
+      "description": "Lists files in the project root and `data` directory. Useful for finding existing views, 3D models (.glb), or simulators.",
       "category": "ENABLE_FILES",
       "inputSchema": {
         "type": "object",
@@ -274,14 +274,14 @@
     },
     {
       "name": "get_file_content",
-      "description": "Reads the content of a file (SVG, JS, JSON).",
+      "description": "Reads the content of a file (HTML, SVG, JS, JSON). Cannot read binary 3D files.",
       "category": "ENABLE_FILES",
       "inputSchema": {
         "type": "object",
         "properties": {
           "filename": {
             "type": "string",
-            "description": "Relative path (e.g., 'data/view.svg')."
+            "description": "Relative path (e.g., 'data/view.html')."
           }
         },
         "required": [
@@ -291,18 +291,18 @@
     },
     {
       "name": "save_file_to_data_directory",
-      "description": "Saves content to a file in the `data/` directory. Use for SVGs, JS bindings, or Simulators.",
+      "description": "Saves content to a file in the `data/` directory. Use for HTML, SVGs, JS bindings, or Simulators.",
       "category": "ENABLE_FILES",
       "inputSchema": {
         "type": "object",
         "properties": {
           "filename": {
             "type": "string",
-            "description": "The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_animated_view.svg')."
+            "description": "The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_dashboard.html')."
           },
           "content": {
             "type": "string",
-            "description": "The full text content (JavaScript or SVG) to save."
+            "description": "The full text content to save."
           }
         },
         "required": [
@@ -312,35 +312,35 @@
       }
     },
     {
-      "name": "create_dynamic_view",
-      "description": "Creates a new interactive SVG dashboard by saving TWO files: the SVG graphic (.svg) and its logic script (.svg.js). Use this when the user asks for a 'diagram', 'synoptic', or 'view' of data. Ensure you have identified the relevant MQTT topics first.",
+      "name": "create_hmi_view",
+      "description": "Creates a new interactive HMI dashboard by saving TWO files: the view (.html or .svg) and its logic script (.js). Use this when the user asks for a 'dashboard', 'diagram', 'synoptic', or '3D view'. Ensure you have identified the relevant MQTT topics first.",
       "category": "ENABLE_FILES",
       "inputSchema": {
         "type": "object",
         "properties": {
           "view_name": {
             "type": "string",
-            "description": "Filename without extension (e.g., 'pump_station')."
+            "description": "Filename with extension (e.g., 'pump_station.html' or 'motor.svg')."
           },
-          "svg_content": {
+          "hmi_content": {
             "type": "string",
-            "description": "The complete XML SVG code. Must include unique IDs for dynamic elements."
+            "description": "The complete HTML or XML SVG code. Can include <a-scene> for 3D. Must include unique IDs or data-keys for dynamic elements."
           },
           "js_content": {
             "type": "string",
-            "description": "The JavaScript code using 'window.registerSvgBindings({...})' to animate the SVG based on MQTT data."
+            "description": "The JavaScript code using 'window.registerHmiBindings({...})' to animate the HMI based on MQTT data."
           }
         },
         "required": [
           "view_name",
-          "svg_content",
+          "hmi_content",
           "js_content"
         ]
       }
     },
     {
-      "name": "get_available_svg_views",
-      "description": "Lists all .svg files available in the /data directory that can be displayed in the 'SVG View' tab.",
+      "name": "get_available_hmi_views",
+      "description": "Lists all HMI files (.html, .svg) available in the /data directory that can be displayed in the 'HMI Dashboard' tab.",
       "category": "ENABLE_FILES",
       "inputSchema": {
         "type": "object",

@@ -10,8 +10,7 @@
  *
  * MCP Server
  * Controls the MQTT UNS Viewer via Model Context Protocol.
- * [UPDATED] Dynamically loads tool definitions from 'public/ai_tools_manifest.json'.
- * [UPDATED] Added aggregate_time_series tool implementation.
+ * [UPDATED] Refactored Tool handlers to support HMI assets (HTML/SVG/GLB) instead of just SVGs.
  */
 // --- Imports (ESM) ---
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -60,11 +59,17 @@ let unsModel = [];
 
 function loadManifests() {
     try {
-        if (fs.existsSync(MANIFEST_PATH)) {
-            toolsManifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+        // Fallback pour localiser le manifest s'il est dans public
+        let targetManifestPath = MANIFEST_PATH;
+        if (!fs.existsSync(targetManifestPath)) {
+            targetManifestPath = path.join(__dirname, 'public', 'ai_tools_manifest.json');
+        }
+        
+        if (fs.existsSync(targetManifestPath)) {
+            toolsManifest = JSON.parse(fs.readFileSync(targetManifestPath, 'utf8'));
             console.error(`✅ Loaded AI Tools Manifest (${toolsManifest.tools.length} tools).`);
         } else {
-            console.error("❌ FATAL: public/ai_tools_manifest.json not found.");
+            console.error("❌ FATAL: ai_tools_manifest.json not found.");
         }
         if (fs.existsSync(MODEL_MANIFEST_PATH)) {
             unsModel = JSON.parse(fs.readFileSync(MODEL_MANIFEST_PATH, 'utf8'));
@@ -93,7 +98,7 @@ function _inferSchema(messages) {
     for (const msg of messages) {
         if (count > 20) break;
         try {
-            const payload = JSON.parse(msg.payload);
+            const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
             if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) continue;
             for (const [key, value] of Object.entries(payload)) {
                 if (!schema[key]) schema[key] = typeof value;
@@ -128,7 +133,7 @@ function jsonSchemaToZod(schema) {
             else if (prop.type === 'number') zodType = z.number();
             else if (prop.type === 'boolean') zodType = z.boolean();
             else if (prop.type === 'object') zodType = z.record(z.any()); 
-            else if (prop.type === 'array') zodType = z.array(z.string()); // Assumes array of strings for simplicity
+            else if (prop.type === 'array') zodType = z.array(z.string());
             else zodType = z.any();
 
             // Add description
@@ -256,15 +261,20 @@ const implementations = {
         const res = await axios.post(`${API_BASE_URL}/publish/message`, body, axiosConfig);
         return { content: [{ type: "text", text: JSON.stringify(res.data) }] };
     },
-    // FILES
+    // --- [UPDATED] FILES CAPABILITIES FOR HMI ---
     list_project_files: async () => {
         const rootFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.json'));
-        const dataFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js'));
+        const dataFiles = fs.readdirSync(DATA_DIR).filter(f => f.match(/\.(svg|html|htm|js|json|gltf|glb|bin)$/i));
         return { content: [{ type: "text", text: JSON.stringify({ root_files: rootFiles, data_files: dataFiles }, null, 2) }] };
     },
     get_file_content: async ({ filename }) => {
         const resolvedPath = path.resolve(__dirname, filename);
         if (!resolvedPath.startsWith(__dirname)) return { content: [{ type: "text", text: "Path traversal blocked." }], isError: true };
+        
+        if (resolvedPath.match(/\.(glb|bin|png|jpg|jpeg|ico)$/i)) {
+             return { content: [{ type: "text", text: "Cannot read binary file contents via MCP." }], isError: true };
+        }
+        
         const content = fs.readFileSync(resolvedPath, 'utf8');
         return { content: [{ type: "text", text: content }] };
     },
@@ -274,15 +284,23 @@ const implementations = {
         fs.writeFileSync(resolvedPath, content, 'utf8');
         return { content: [{ type: "text", text: `File saved to data/${filename}` }] };
     },
-    create_dynamic_view: async ({ view_name, svg_content, js_content }) => {
-        const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
-        fs.writeFileSync(path.join(DATA_DIR, `${baseName}.svg`), svg_content, 'utf8');
-        fs.writeFileSync(path.join(DATA_DIR, `${baseName}.svg.js`), js_content, 'utf8');
-        return { content: [{ type: "text", text: `Created view '${baseName}'.` }] };
+    create_hmi_view: async ({ view_name, hmi_content, js_content }) => {
+        let ext = path.extname(view_name).toLowerCase();
+        let baseName = path.basename(view_name, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (ext !== '.svg' && ext !== '.html' && ext !== '.htm') {
+            ext = '.html';
+        }
+        
+        const hmiFilename = `${baseName}${ext}`;
+        const jsFilename = `${baseName}${ext}.js`;
+        
+        fs.writeFileSync(path.join(DATA_DIR, hmiFilename), hmi_content, 'utf8');
+        fs.writeFileSync(path.join(DATA_DIR, jsFilename), js_content, 'utf8');
+        return { content: [{ type: "text", text: `Created HMI view '${hmiFilename}'.` }] };
     },
-    get_available_svg_views: async () => {
-        const res = await axios.get(`${API_BASE_URL}/svg/list`, axiosConfig);
-        return { content: [{ type: "text", text: JSON.stringify({ svg_files: res.data }, null, 2) }] };
+    get_available_hmi_views: async () => {
+        const res = await axios.get(`${API_BASE_URL}/hmi/list`, axiosConfig);
+        return { content: [{ type: "text", text: JSON.stringify({ hmi_files: res.data }, null, 2) }] };
     },
     // MAPPER
     get_mapper_config: async () => {
@@ -364,7 +382,7 @@ const implementations = {
 async function createMcpServer() {
     const server = new McpServer({
         name: "MQTT UNS Viewer Controller",
-        version: "1.8.0",
+        version: "1.6.0",
         description: "Control the MQTT UNS Viewer via tools defined in ai_tools_manifest.json.",
     });
 

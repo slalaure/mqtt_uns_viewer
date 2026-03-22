@@ -176,7 +176,7 @@ LLM_API_KEY=...                 # Key for the internal Chat Assistant
 LLM_TOOL_ENABLE_READ=true       # Inspect DB, topics list, history, and search
 LLM_TOOL_ENABLE_SEMANTIC=true   # Infer Schema, Model Definitions
 LLM_TOOL_ENABLE_PUBLISH=true    # Publish MQTT messages
-LLM_TOOL_ENABLE_FILES=true      # Read/Write files (SVGs, Simulators)
+LLM_TOOL_ENABLE_FILES=true      # Read/Write files (SVGs, 3D Models, Simulators)
 LLM_TOOL_ENABLE_SIMULATOR=true  # Start/Stop built-in sims
 LLM_TOOL_ENABLE_MAPPER=true     # Modify ETL rules
 LLM_TOOL_ENABLE_ADMIN=true      # Prune History, Restart Server
@@ -195,8 +195,8 @@ ANALYTICS_ENABLED=false         # Enable Microsoft Clarity tracking
 The viewer supports **Local** (Username/Password) and **Google OAuth** authentication, enabling secure multi-tenant usage.
 * **Air-Gapped Ready:** Local accounts use dynamically generated embedded SVG avatars, requiring zero internet access to external APIs, perfect for isolated OT networks.
 * **Role-Based Access Control (RBAC):**
-  * **Standard User:** Can view data, and create *Private* Charts, Mappers, and SVG views (stored in their own session workspace: `/data/sessions/<id>`).
-  * **Administrator:** Has full control. Can edit *Global* configurations (`/data`), access the **Admin Dashboard** (`/admin`), manage users, execute history imports/pruning, and deploy live ETL logic.
+  * **Standard User:** Can view data, and create *Private* Charts, Mappers, and HMI views (stored in their own session workspace: `/data/sessions/<id>`).
+  * **Administrator:** Has full control. Can edit *Global* configurations (`/data`), access the **Admin Dashboard** (`/admin`), manage users, execute history imports/pruning, upload 3D models and deploy live ETL logic.
 
 ### 2. Dynamic Topic Tree
 The left panel displays the discovered UNS hierarchy.
@@ -204,11 +204,13 @@ The left panel displays the discovered UNS hierarchy.
 * **Multi-Broker:** The root nodes represent your different broker connections.
 * **Filtering & Animations:** You can filter topics on the fly, disable traversal animations for high-frequency branches, and toggle live updates to freeze the payload viewer for copy-pasting.
 
-### 3. SVG Synoptics (SCADA View)
-Create professional HMIs using standard vector graphics.
-* **Dynamic Loading:** Upload `.svg` files directly via the UI or ask the AI to generate one.
-* **Instant Refresh:** SVG views instantly fetch their latest known state from DuckDB using the "AS OF" SQL logic upon activation.
-* **Layered Storage:** Users can see global SVGs and their own private SVGs. Admins can delete global SVGs directly from the UI.
+### 3. HMI Dashboards & 3D Digital Twins
+Create professional HMIs using HTML, standard vector graphics, and 3D scenes.
+* **Composite Dashboards:** Load `.html` files that act as grid layouts combining multiple embedded SVGs (`.embedded-svg`), live charts (`.embedded-chart`), and data bindings into a single, cohesive view.
+* **3D Integration (A-Frame):** Automatically detects and loads A-Frame to render live 3D Digital Twins directly in the browser using `.glb`/`.gltf` assets.
+* **Dynamic Loading:** Upload `.html`, `.svg`, or 3D models directly via the UI or ask the AI to generate one.
+* **Instant Refresh:** Views instantly fetch their latest known state from DuckDB using the "AS OF" SQL logic upon activation.
+* **Layered Storage:** Users can see global views and their own private views. Admins can delete global views directly from the UI.
 
 ### 4. Historical Analysis & Data Management
 Navigate through time using the embedded **DuckDB** engine.
@@ -236,7 +238,7 @@ Visualize correlations instantly with high performance.
 A floating assistant powered by LLMs (OpenAI, Gemini, Local models) running a recursive 16-turn agentic loop.
 * **Multimodal Inputs:** * **Voice (STT/TTS):** Speak to the assistant (continuous listening mode) and hear responses natively.
   * **Vision:** Use your device's camera or upload images/logs to give the AI context on physical equipment.
-* **Capabilities:** Can search data, infer schemas, generate SQL, configure mapping rules, create SVG dashboards (`create_dynamic_view`), and control built-in simulators.
+* **Capabilities:** Can search data, infer schemas, generate SQL, configure mapping rules, create HMI dashboards (`create_hmi_view`), and control built-in simulators.
 * **Proxy-Resilient Streaming:** Uses NDJSON HTTP streaming with WebSocket fallbacks so the "Thinking..." and "Executing tool..." statuses work flawlessly behind strict reverse proxies.
 * **Session Management:** Slide out the left menu to switch between historical chats, start new ones, or delete them.
 
@@ -253,6 +255,7 @@ Accessible via the Cog icon (`/config.html`) or the Admin Tab.
 * **Certificates:** Upload SSL/TLS certificates for secure MQTT MTLS connections.
 * **UNS Model:** Edit the semantic model (`uns_model.json`) used by the AI for structured concept searching.
 * **Database Maintenance:** Execute Full Reset (Truncate/Vacuum), Import data, and manage Users.
+* **HMI Assets Management:** Upload, list, and delete 3D models (`.glb`), HTML views, JS scripts, and images required for your Digital Twins.
 
 ---
 
@@ -263,7 +266,7 @@ Accessible via the Cog icon (`/config.html`) or the Admin Tab.
 📦 root
  ┣ 📂 data/                # Persistent Volume (Global Configs & DB)
  ┃ ┣ 📂 certs/             # MQTT Certificates
- ┃ ┣ 📂 sessions/          # User Data (Private Charts/SVGs/Chats/Mappers)
+ ┃ ┣ 📂 sessions/          # User Data (Private Charts/HMIs/Chats/Mappers)
  ┃ ┣ 📄 ai_tools_manifest.json # SSOT for AI Tools Definitions
  ┃ ┣ 📄 charts.json        # Global Saved Charts
  ┃ ┣ 📄 mappings.json      # Global ETL Rules
@@ -281,22 +284,22 @@ Accessible via the Cog icon (`/config.html`) or the Admin Tab.
 ### AI Tools Manifest (`ai_tools_manifest.json`)
 The application uses a Single Source of Truth (SSOT) for all LLM tools. Found in `public/ai_tools_manifest.json`, this file dictates the JSON Schemas, descriptions, and categories for tools used by both the internal Chat API and the external MCP server. Edit this file to expose new capabilities to the AI.
 
-### SVG Scripting API
-To add logic (animations, color changes) to an SVG, the AI (or you) can create a file named `[filename].svg.js` alongside your `.svg` file.
+### HMI Scripting API
+To add logic (animations, color changes) to an HTML Dashboard or SVG, create a file named `[filename].js` alongside your `.html` or `.svg` file.
 
 ```javascript
-// data/factory.svg.js
-window.registerSvgBindings({
+// data/factory_dashboard.js
+window.registerHmiBindings({
     // Called on load
-    initialize: (svgRoot) => { console.log("SVG Loaded"); },
+    initialize: (hmiRoot) => { console.log("View Loaded"); },
     
     // Called on EVERY incoming MQTT message
-    update: (brokerId, topic, payload, svgRoot) => {
+    update: (brokerId, topic, payload, hmiRoot) => {
         // Safe Parse
         const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;
         
         if (topic.includes('fan_speed')) {
-            const fan = svgRoot.querySelector('#fan_blade');
+            const fan = hmiRoot.querySelector('#fan_blade');
             const speed = msg.value || 0;
             fan.style.transform = `rotate(${Date.now() % 360}deg)`;
             fan.style.animationDuration = `${1000/speed}ms`;
@@ -307,7 +310,7 @@ window.registerSvgBindings({
         }
     },
     // Called when resetting view
-    reset: (svgRoot) => { }
+    reset: (hmiRoot) => { }
 });
 ```
 
@@ -394,6 +397,7 @@ The **MCP Server** allows you to connect external AI Agents (like **Claude Deskt
 * `list_active_alerts`: See current issues.
 * `create_alert_rule`: Define new detection logic.
 * `update_alert_status`: Acknowledge or resolve alerts.
+* `create_hmi_view`: Generate full HTML/3D/SVG dashboards dynamically.
 
 **Client Config (Claude Desktop `config.json`):**
 ```json
@@ -432,10 +436,14 @@ The application exposes a comprehensive REST API.
 | `GET` | `/api/alerts/active` | List triggered alerts. | ✅ (Session/Basic) |
 | `POST` | `/api/alerts/rules` | Create a new alert rule. | ✅ (Session/Basic) |
 | `POST` | `/api/alerts/:id/status` | Acknowledge/Resolve an alert. | ✅ (Session/Basic) |
-| `GET` | `/api/svg/bindings.js` | Fetches custom logic scripts for SVGs. | ✅ (Session/Basic) |
+| `GET` | `/api/hmi/list` | List available HMI dashboards (HTML/SVG). | ✅ (Session/Basic) |
+| `GET` | `/api/hmi/file` | Serve an HMI asset (HTML, SVG, GLB, JS, etc.). | ✅ (Session/Basic) |
+| `GET` | `/api/hmi/bindings.js` | Fetches custom logic scripts for HMI views. | ✅ (Session/Basic) |
 | `GET` | `/api/admin/users` | List registered users. | ✅ (Admin) |
 | `POST` | `/api/admin/import-db` | Import JSON history data to DuckDB/Timescale. | ✅ (Admin) |
 | `POST` | `/api/admin/reset-db` | Truncates the database completely. | ✅ (Admin) |
+| `GET` | `/api/admin/hmi-assets` | List all HMI assets stored globally. | ✅ (Admin) |
+| `POST` | `/api/admin/hmi-assets` | Upload new HMI assets (.glb, .svg, .html...). | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
 
 ---

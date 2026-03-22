@@ -2,6 +2,7 @@
     <button class="sub-tab-button active" data-target="admin-users-panel">👤 Users</button>
     <button class="sub-tab-button" data-target="admin-db-panel">💾 Database</button>
     <button class="sub-tab-button" data-target="admin-alerts-panel">🔔 Alerts History</button>
+    <button class="sub-tab-button" data-target="admin-assets-panel">🖼️ HMI Assets</button>
 </div>
 
 <div id="admin-users-panel" class="alerts-content-container active">
@@ -66,6 +67,7 @@
         <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
             Manage the archive of triggered alerts.
         </p>
+        
         <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
@@ -76,5 +78,41 @@
             <button id="btn-purge-alerts" class="danger-button" style="width: 100%; padding: 10px;">Purge All Resolved Alerts</button>
             <div id="purge-alerts-status" style="margin-top: 10px; text-align: center;"></div>
         </div>
+    </div>
+</div>
+
+<div id="admin-assets-panel" class="alerts-content-container">
+    <div class="payload-header" style="margin-bottom: 15px;">
+        <div>
+            <h2 style="margin-bottom: 5px;">HMI Assets Management</h2>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Manage Global 3D Models, Scripts, SVGs, and HTML views.</p>
+        </div>
+        <button id="btn-hmi-refresh" class="mapper-button">Refresh List</button>
+    </div>
+
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin-top:0;">Upload New Assets</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" id="hmi-upload-input" accept=".html,.htm,.svg,.js,.glb,.gltf,.bin,.png,.jpg,.jpeg" multiple style="flex:1;">
+            <button id="btn-upload-hmi" class="mapper-button button-primary">Upload Files</button>
+        </div>
+        <div id="hmi-upload-status" style="margin-top: 10px; font-size: 0.9em; font-weight: 500;"></div>
+    </div>
+
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                <tr>
+                    <th style="padding: 10px; font-weight: 500;">Filename</th>
+                    <th style="padding: 10px; font-weight: 500;">Type</th>
+                    <th style="padding: 10px; font-weight: 500;">Size</th>
+                    <th style="padding: 10px; font-weight: 500;">Last Modified</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="admin-hmi-table-body">
+                <tr><td colspan="5" style="text-align:center; padding:20px;">Loading interface...</td></tr>
+            </tbody>
+        </table>
     </div>
 </div>

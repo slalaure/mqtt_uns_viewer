@@ -9,11 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
- * [UPDATED] Exposes internal Agent Runner for Alert Manager.
- * [UPDATED] Supports 10 iterations for autonomous analysis.
- * [UPDATED] Added Alert Management Tools implementation.
- * [UPDATED] Added backend logging for upstream LLM API errors.
- * [NEW] Added aggregate_time_series tool implementation.
+ * [UPDATED] Refactored Tool handlers to support HMI assets (HTML/SVG/GLB) instead of just SVGs.
  */
 const express = require('express');
 const axios = require('axios');
@@ -196,7 +192,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
-        // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
         fs.writeFile(filePath, JSON.stringify(history, null, 2), (err) => {
             if (err) {
@@ -232,7 +227,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             res.json({ success: false, message: "No active generation found." });
         }
     });
-    // --- Legacy /history Route (Redirects to a 'default' session) ---
+
+    // --- Legacy /history Route ---
     router.get('/history', (req, res) => {
         req.params.id = 'default';
         const chatsDir = getUserChatsDir(req);
@@ -339,24 +335,21 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             });
         },
         
-        // [NEW] Aggregate Time Series Tool (Leveraging DuckDB time_bucket)
+        // Aggregate Time Series Tool (Leveraging DuckDB time_bucket)
         aggregate_time_series: async ({ topic, variables, time_expression, aggregation = 'MEAN', broker_id }) => {
             return new Promise((resolve, reject) => {
                 const timeWindow = parseTimeWindow(time_expression);
                 if (!timeWindow) return resolve({ error: "Could not parse time_expression into a valid date range." });
                 if (!variables || variables.length === 0) return resolve({ error: "Variables array is required." });
-
                 const startMs = timeWindow.start.getTime();
                 const endMs = timeWindow.end.getTime();
                 const spanMs = endMs - startMs;
                 // Target exactly 500 buckets to keep response size optimal for the LLM
                 const bucketMs = Math.max(1000, Math.floor(spanMs / 500));
-
                 const aggFuncMap = { 'MEAN': 'AVG', 'MAX': 'MAX', 'MIN': 'MIN', 'MEDIAN': 'MEDIAN', 'SD': 'STDDEV', 'RANGE': 'RANGE', 'SUM': 'SUM' };
                 const aggType = aggFuncMap[aggregation] || 'AVG';
-
+                
                 let selectCols = `extract('epoch' FROM time_bucket(INTERVAL '${bucketMs} MILLISECONDS', timestamp)) * 1000 AS ts_ms`;
-
                 variables.forEach((v, idx) => {
                     let valExpr;
                     if (v === '(value)') {
@@ -369,7 +362,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         }
                         valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
                     }
-
                     const alias = `var_${idx}`;
                     if (aggType === 'RANGE') {
                         selectCols += `, (MAX(${valExpr}) - MIN(${valExpr})) AS "${alias}"`;
@@ -377,7 +369,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         selectCols += `, ${aggType}(${valExpr}) AS "${alias}"`;
                     }
                 });
-
+                
                 const safeTopic = escapeSQL(topic);
                 let whereClauses = [
                     `topic = '${safeTopic}'`, 
@@ -385,9 +377,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     `timestamp <= CAST('${timeWindow.end.toISOString()}' AS TIMESTAMPTZ)`
                 ];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-
+                
                 const sql = `SELECT ${selectCols} FROM mqtt_events WHERE ${whereClauses.join(' AND ')} GROUP BY 1 ORDER BY 1 ASC`;
-
                 db.serialize(() => {
                     db.all(sql, (err, rows) => {
                         if (err) return reject(err);
@@ -401,7 +392,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         get_latest_message: async ({ topic, broker_id }) => {
             return new Promise((resolve, reject) => {
                 let sql = `SELECT * FROM mqtt_events WHERE topic = ?`;
@@ -502,10 +492,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         },
         list_project_files: async ({}, user) => {
             const rootFiles = fs.readdirSync(path.join(__dirname, '..')).filter(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.md'));
-            const globalFiles = fs.existsSync(DATA_PATH) ? fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg') || f.endsWith('.json') || f.endsWith('.js')) : [];
+            const globalFiles = fs.existsSync(DATA_PATH) ? fs.readdirSync(DATA_PATH).filter(f => f.match(/\.(svg|html|htm|js|json|gltf|glb|bin)$/i)) : [];
             let privateFiles = [];
             if (user && user.id) {
-                const userDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                const userDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
                 if (fs.existsSync(userDir)) {
                     privateFiles = fs.readdirSync(userDir).map(f => `${f} (Private)`);
                 }
@@ -515,8 +505,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         get_file_content: async ({ filename }, user) => {
             let resolvedPath = null;
             if (user && user.id) {
-                const userSvgDir = path.join(SESSIONS_DIR, user.id, 'svgs');
-                const userFile = path.join(userSvgDir, filename); 
+                const userHmiDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
+                const userFile = path.join(userHmiDir, filename); 
                 if (fs.existsSync(userFile)) resolvedPath = userFile;
             }
             if (!resolvedPath) {
@@ -530,13 +520,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (!resolvedPath) return { error: "File not found." };
             const relative = path.relative(path.join(__dirname, '..'), resolvedPath);
             if (relative.startsWith('..') && !path.isAbsolute(resolvedPath)) return { error: "Path traversal blocked." };
+            
+            // Prevent reading binary files for LLM
+            if (resolvedPath.match(/\.(glb|bin|png|jpg|jpeg|ico)$/i)) {
+                 return { error: "Cannot read binary file contents." };
+            }
             return { filename, content: fs.readFileSync(resolvedPath, 'utf8') };
         },
         save_file_to_data_directory: async ({ filename, content }, user) => {
             let targetDir = DATA_PATH;
             let accessLevel = "Global";
             if (user && user.role !== 'admin') {
-                targetDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                targetDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
                 if (!fs.existsSync(targetDir)) {
                     try { fs.mkdirSync(targetDir, { recursive: true }); } catch (e) {}
                 }
@@ -549,44 +544,53 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             fs.writeFileSync(resolvedPath, content, 'utf8');
             return { success: true, path: `${accessLevel}/data/${filename}`, note: accessLevel === "Private" ? "File saved to your private workspace." : "File saved globally." };
         },
-        create_dynamic_view: async ({ view_name, svg_content, js_content }, user) => {
+        create_hmi_view: async ({ view_name, hmi_content, js_content }, user) => {
             try {
-                const baseName = view_name.replace(/[^a-zA-Z0-9_-]/g, '_');
-                const svgFilename = `${baseName}.svg`;
-                const jsFilename = `${baseName}.svg.js`;
+                // Ensure extension is provided, fallback to .html if not
+                let ext = path.extname(view_name).toLowerCase();
+                let baseName = path.basename(view_name, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+                if (ext !== '.svg' && ext !== '.html' && ext !== '.htm') {
+                    ext = '.html'; // Default to HTML
+                }
+                
+                const hmiFilename = `${baseName}${ext}`;
+                const jsFilename = `${baseName}${ext}.js`;
                 let targetDir = DATA_PATH;
                 let contextMessage = "Global";
+                
                 if (user && user.id) {
-                    targetDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                    targetDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
                     contextMessage = "Private (User)";
                     if (!fs.existsSync(targetDir)) {
                         fs.mkdirSync(targetDir, { recursive: true });
                     }
                 }
-                const svgPath = path.join(targetDir, svgFilename);
+                
+                const hmiPath = path.join(targetDir, hmiFilename);
                 const jsPath = path.join(targetDir, jsFilename);
-                fs.writeFileSync(svgPath, svg_content, 'utf8');
+                fs.writeFileSync(hmiPath, hmi_content, 'utf8');
                 fs.writeFileSync(jsPath, js_content, 'utf8');
+                
                 return { 
                     success: true, 
-                    message: `View '${baseName}' created successfully in ${contextMessage} storage. Go to the SVG View tab to select it.` 
+                    message: `HMI View '${hmiFilename}' created successfully in ${contextMessage} storage. Go to the HMI Dashboard tab to select it.` 
                 };
             } catch (err) {
-                logger.error({ err }, "[ChatAPI] create_dynamic_view error");
+                logger.error({ err }, "[ChatAPI] create_hmi_view error");
                 return { error: err.message };
             }
         },
-        get_available_svg_views: async ({}, user) => {
-            const globalFiles = fs.readdirSync(DATA_PATH).filter(f => f.endsWith('.svg'));
+        get_available_hmi_views: async ({}, user) => {
+            const globalFiles = fs.readdirSync(DATA_PATH).filter(f => f.match(/\.(svg|html|htm)$/i));
             let allFiles = new Set(globalFiles);
             if (user && user.id) {
-                const userDir = path.join(SESSIONS_DIR, user.id, 'svgs');
+                const userDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
                 if (fs.existsSync(userDir)) {
-                    const privateFiles = fs.readdirSync(userDir).filter(f => f.endsWith('.svg'));
+                    const privateFiles = fs.readdirSync(userDir).filter(f => f.match(/\.(svg|html|htm)$/i));
                     privateFiles.forEach(f => allFiles.add(f)); 
                 }
             }
-            return { svg_files: Array.from(allFiles).sort() };
+            return { hmi_files: Array.from(allFiles).sort() };
         },
         get_mapper_config: async () => {
             if (!mapperEngine) return { error: "Mapper Engine not available." };
@@ -602,16 +606,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
             }
-            // SANITIZATION: Handle non-breaking spaces from LLMs
             const sanitizedCode = targetCode.replace(/\u00A0/g, " ").trim();
-            const newTarget = {
+            rule.targets.push({
                 id: `tgt_${Date.now()}`,
                 enabled: true,
                 outputTopic: targetTopic.trim(),
                 mode: "js",
                 code: sanitizedCode
-            };
-            rule.targets.push(newTarget);
+            });
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -646,7 +648,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             setTimeout(() => process.exit(0), 1000);
             return { message: "Server restarting..." };
         },
-        // ALERTS [NEW]
         list_alert_rules: async ({}, user) => {
             const userId = user ? user.id : null;
             const rules = await alertManager.getRules(userId);
@@ -703,7 +704,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             }
         }
     };
-    // --- [NEW] INTERNAL AGENT RUNNER ---
+    //  INTERNAL AGENT RUNNER 
     // Executes the agent loop autonomously (no HTTP res needed)
     // Returns Promise<String> with the final response
     const runInternalAgent = async (systemPrompt, userPrompt) => {
@@ -716,15 +717,18 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
         }).join('\n');
+        
         const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
         let systemPromptText = toolsManifest.system_prompt_template || "You are an expert UNS Architect. CONTEXT:\n{{BROKER_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
         systemPromptText = systemPromptText.replace('{{BROKER_CONTEXT}}', brokerContext);
         systemPromptText = systemPromptText.replace('{{TOOLS_CONTEXT}}', toolsContext);
         systemPromptText += `\n\nSYSTEM INSTRUCTION: ${systemPrompt}`;
+        
         let conversation = [
             { role: "system", content: systemPromptText },
             { role: "user", content: userPrompt }
         ];
+        
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -780,11 +784,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
         return finalResponse || "No response generated.";
     };
-    // --- [NEW] Inject the Runner into Alert Manager ---
+    // --- Inject the Runner into Alert Manager ---
     if (alertManager && alertManager.registerAgentRunner) {
         alertManager.registerAgentRunner(runInternalAgent);
         logger.info("✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.");
     }
+
     // --- HTTP POST Endpoint (Standard Chat) ---
     router.post('/completion', async (req, res) => {
         const { messages, clientId } = req.body; 
@@ -795,6 +800,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         if (clientId) {
             activeStreams.set(clientId, { abortController, res });
         }
+        
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
@@ -829,6 +835,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const systemMessage = { role: "system", content: systemPromptText };
         const safeUserMessages = messages.filter(m => m.role !== 'system');
         let conversation = [systemMessage, ...safeUserMessages];
+        
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -900,7 +907,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
             }
         } catch (error) {
-            // [NEW] Added logger.error to track upstream LLM API errors on backend
+            // Added logger.error to track upstream LLM API errors on backend
             if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
                 logger.error({ 
                     err: error.message, 

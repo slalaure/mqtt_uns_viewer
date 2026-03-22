@@ -1,12 +1,6 @@
 /**
- * @license Apache License, Version 2.0 (the "License")
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * @license Apache License, Version 2.0
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette * @author Sebastien Lalaurette
  * HMI View Module (Formerly SVG View)
  * Handles HTML pages, dynamic A-Frame, generic HTML data binding, 
  * embedded live charts, AND Embedded SVGs with their own JS logic.
@@ -15,22 +9,22 @@ import { formatTimestampForLabel, trackEvent, confirmModal } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
-const hmiContent = document.getElementById('svg-content'); 
-const svgHistoryToggle = document.getElementById('svg-history-toggle');
-const svgTimelineSlider = document.getElementById('svg-timeline-slider-container');
-const svgHandle = document.getElementById('svg-handle');
-const svgLabel = document.getElementById('svg-label');
-const btnSvgFullscreen = document.getElementById('btn-svg-fullscreen');
-const mapView = document.getElementById('map-view');
-const svgSelectDropdown = document.getElementById('svg-select-dropdown');
+const hmiContent = document.getElementById('hmi-content'); 
+const hmiHistoryToggle = document.getElementById('hmi-history-toggle');
+const hmiTimelineSlider = document.getElementById('hmi-timeline-slider-container');
+const hmiHandle = document.getElementById('hmi-handle');
+const hmiLabel = document.getElementById('hmi-label');
+const btnHmiFullscreen = document.getElementById('btn-hmi-fullscreen');
+const hmiView = document.getElementById('hmi-view');
+const hmiSelectDropdown = document.getElementById('hmi-select-dropdown');
 
 // --- Module-level State ---
 let hmiInitialStates = new Map();
 let allHistoryEntries = [];
-let isSvgHistoryMode = false;
+let isHmiHistoryMode = false;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
-let svgSlider = null;
+let hmiSlider = null;
 let appBasePath = '/'; 
 let isMultiBroker = false;
 
@@ -41,8 +35,9 @@ let animationFrameRequested = false;
 let highlightTimers = new Map(); 
 let embeddedChartInstances = new Map(); 
 
-// --- [NOUVEAU] Tableau des bindings actifs ---
+// --- Tableau des bindings actifs ---
 let activeBindings = [];
+const BINDINGS_SCRIPT_ID = 'custom-hmi-bindings-script';
 
 /**
  * Universal bindings register (Accumule les scripts au lieu d'en avoir un seul)
@@ -50,71 +45,64 @@ let activeBindings = [];
 window.registerHmiBindings = window.registerSvgBindings = function(bindings) {
     if (!bindings) return;
     activeBindings.push(bindings);
-    console.log(`Custom HMI/SVG bindings registered. Total active scripts: ${activeBindings.length}`);
+    console.log(`Custom HMI bindings registered. Total active scripts: ${activeBindings.length}`);
 }
-/**
- * Initializes the SVG View functionality.
- */export function initSvgView(appConfig) {
+
+export function initHmiView(appConfig) {
     appBasePath = appConfig.basePath; 
     isMultiBroker = appConfig.isMultiBroker; 
     
-    if (btnSvgFullscreen) {
-        btnSvgFullscreen.innerHTML = '⛶ Maximize';
-        btnSvgFullscreen.style.fontSize = '0.85em';
-        btnSvgFullscreen.style.padding = '4px 10px';
+    if (btnHmiFullscreen) {
+        btnHmiFullscreen.innerHTML = '⛶ Maximize';
+        btnHmiFullscreen.style.fontSize = '0.85em';
+        btnHmiFullscreen.style.padding = '4px 10px';
     }
 
-    // Initial load
-    refreshSvgList(appConfig.svgFilePath);
+    refreshHmiList(appConfig.hmiFilePath || appConfig.svgFilePath);
     
-    btnSvgFullscreen?.addEventListener('click', toggleFullscreen);
-
-    // Track native fullscreen changes (e.g. user presses ESC)
+    btnHmiFullscreen?.addEventListener('click', toggleFullscreen);
     document.addEventListener('fullscreenchange', () => {
-        if (btnSvgFullscreen) {
-            if (document.fullscreenElement === mapView) {
-                btnSvgFullscreen.innerHTML = '✖ Minimize';
+        if (btnHmiFullscreen) {
+            if (document.fullscreenElement === hmiView) {
+                btnHmiFullscreen.innerHTML = '✖ Minimize';
             } else {
-                btnSvgFullscreen.innerHTML = '⛶ Maximize';
+                btnHmiFullscreen.innerHTML = '⛶ Maximize';
             }
         }
     });
 
-    svgSelectDropdown?.addEventListener('change', onHmiFileChange);
-    svgHistoryToggle?.addEventListener('change', (e) => {
-        isSvgHistoryMode = e.target.checked;
-        if (svgTimelineSlider) svgTimelineSlider.style.display = isSvgHistoryMode ? 'flex' : 'none';
-        trackEvent(isSvgHistoryMode ? 'hmi_history_on' : 'hmi_history_off');
-        if (isSvgHistoryMode) {
-            // When turning on, fetch state for the current slider position
-            const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
+    hmiSelectDropdown?.addEventListener('change', onHmiFileChange);
+    hmiHistoryToggle?.addEventListener('change', (e) => {
+        isHmiHistoryMode = e.target.checked;
+        if (hmiTimelineSlider) hmiTimelineSlider.style.display = isHmiHistoryMode ? 'flex' : 'none';
+        trackEvent(isHmiHistoryMode ? 'hmi_history_on' : 'hmi_history_off');
+        if (isHmiHistoryMode) {
+            const replayTime = parseFloat(hmiHandle.dataset.timestamp || currentMaxTimestamp);
             fetchLastKnownState(replayTime);
         } else {
-            // When returning to live mode, fetch latest state immediately
             fetchLastKnownState(Date.now());
         }
-        if (svgSlider) {
-            svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
+        if (hmiSlider) {
+            hmiSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
         }
     });
 
-    if (svgHandle) {
-        svgSlider = createSingleTimeSlider({
-            containerEl: svgTimelineSlider,
-            handleEl: svgHandle,
-            labelEl: svgLabel,
+    if (hmiHandle) {
+        hmiSlider = createSingleTimeSlider({
+            containerEl: hmiTimelineSlider,
+            handleEl: hmiHandle,
+            labelEl: hmiLabel,
             onDrag: (newTime) => {},
             onDragEnd: (newTime) => {
                 trackEvent('hmi_slider_drag_end');
-                if (isSvgHistoryMode) {
+                if (isHmiHistoryMode) {
                     fetchLastKnownState(newTime);
                 }
             }
         });
     }
 
-    // Add Delete Button to Controls
-    const controlsContainer = document.querySelector('.map-view-controls');
+    const controlsContainer = document.querySelector('.hmi-view-controls') || document.querySelector('.map-view-controls');
     if (controlsContainer && !document.getElementById('btn-delete-hmi')) {
         const btnDelete = document.createElement('button');
         btnDelete.id = 'btn-delete-hmi';
@@ -123,30 +111,24 @@ window.registerHmiBindings = window.registerSvgBindings = function(bindings) {
         btnDelete.title = "Delete current view";
         btnDelete.style.marginLeft = "10px";
         btnDelete.onclick = deleteCurrentHmi;
-        controlsContainer.insertBefore(btnDelete, btnSvgFullscreen);
+        controlsContainer.insertBefore(btnDelete, btnHmiFullscreen);
     }
 }
 
-/**
- * Receives the full history log from the main app.
- */
-export function setSvgHistoryData(entries) {
+export function setHmiHistoryData(entries) {
     allHistoryEntries = entries; 
 }
 
-/**
- * Publicly exported function to refresh the dropdown.
- */
-export async function refreshSvgList(targetFilenameToSelect = null) {
-    if (!svgSelectDropdown) return;
-    const currentSelection = targetFilenameToSelect || svgSelectDropdown.value;
+export async function refreshHmiList(targetFilenameToSelect = null) {
+    if (!hmiSelectDropdown) return;
+    const currentSelection = targetFilenameToSelect || hmiSelectDropdown.value;
     try {
-        const response = await fetch('api/svg/list');
+        const response = await fetch('api/hmi/list');
         if (!response.ok) throw new Error('Failed to fetch HMI list');
         const hmiFiles = await response.json();
-        svgSelectDropdown.innerHTML = '';
+        hmiSelectDropdown.innerHTML = '';
         if (hmiFiles.length === 0) {
-            svgSelectDropdown.innerHTML = '<option value="">No Views found</option>';
+            hmiSelectDropdown.innerHTML = '<option value="">No Views found</option>';
             return;
         }
         let matchFound = false;
@@ -158,17 +140,17 @@ export async function refreshSvgList(targetFilenameToSelect = null) {
                 option.selected = true;
                 matchFound = true;
             }
-            svgSelectDropdown.appendChild(option);
+            hmiSelectDropdown.appendChild(option);
         });
         if (!matchFound && hmiFiles.length > 0) {
-            svgSelectDropdown.value = hmiFiles[0];
-            await loadSvgPlan(hmiFiles[0]);
+            hmiSelectDropdown.value = hmiFiles[0];
+            await loadHmiPlan(hmiFiles[0]);
         } else if (matchFound) {
-            await loadSvgPlan(currentSelection);
+            await loadHmiPlan(currentSelection);
         }
     } catch (error) {
         console.error("Could not populate HMI list:", error);
-        svgSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
+        hmiSelectDropdown.innerHTML = `<option value="">Error loading list</option>`;
     }
 }
 
@@ -176,18 +158,18 @@ async function onHmiFileChange(event) {
     const filename = event.target.value;
     if (!filename) return;
     trackEvent('hmi_file_change');
-    await loadSvgPlan(filename);
+    await loadHmiPlan(filename);
 }
 
 async function deleteCurrentHmi() {
-    const filename = svgSelectDropdown.value;
+    const filename = hmiSelectDropdown.value;
     if(!filename) return;
     const isConfirmed = await confirmModal('Delete View', `Are you sure you want to delete '${filename}'?\nThis action cannot be undone.`, 'Delete', true);
     if(!isConfirmed) return;
     try {
-        const res = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const res = await fetch(`api/hmi/file?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
         if(res.ok) {
-            refreshSvgList();
+            refreshHmiList();
         } else {
             const data = await res.json();
             alert("Error: " + data.error);
@@ -197,16 +179,13 @@ async function deleteCurrentHmi() {
     }
 }
 
-/**
- * Dynamically loads the custom svg-bindings.js script *by name*.
- */
 async function loadCustomBindingsScript(bindingFilename) {
     return new Promise((resolve) => {
         const script = document.createElement('script');
-        script.className = 'custom-hmi-script'; // Tag to remove them later
+        script.className = 'custom-hmi-script'; 
         script.type = 'module';
         const apiBasePath = (appBasePath === '/') ? '' : appBasePath;
-        script.src = `${apiBasePath}/api/svg/bindings.js?name=${encodeURIComponent(bindingFilename)}&v=${Date.now()}`;
+        script.src = `${apiBasePath}/api/hmi/bindings.js?name=${encodeURIComponent(bindingFilename)}&v=${Date.now()}`;
         
         script.onload = () => {
             console.log(`Custom script loaded: ${bindingFilename}`);
@@ -220,9 +199,6 @@ async function loadCustomBindingsScript(bindingFilename) {
     });
 }
 
-/**
- * Scans the SVG for [data-key] elements to use with default logic.
- */
 function scanForDataKeys() {
     elementCache.clear(); 
     const dataElements = hmiContent.querySelectorAll('[data-key]');
@@ -328,7 +304,7 @@ async function initEmbeddedCharts() {
 }
 
 /**
- * --- [NOUVEAU] Charge les SVGs imbriqués ---
+ * --- Charge les SVGs imbriqués ---
  */
 async function initEmbeddedSvgs() {
     const svgContainers = hmiContent.querySelectorAll('.embedded-svg');
@@ -336,28 +312,25 @@ async function initEmbeddedSvgs() {
         const svgName = container.dataset.svgName;
         if (!svgName) continue;
         try {
-            // Fetch SVG file content
-            const res = await fetch(`api/svg/file?name=${encodeURIComponent(svgName)}`);
+            const res = await fetch(`api/hmi/file?name=${encodeURIComponent(svgName)}`);
             if (res.ok) {
                 container.innerHTML = await res.text();
             } else {
                 container.innerHTML = `<span style="color:red">Failed to load ${svgName}</span>`;
             }
-            // Fetch associated JS script (it will push to activeBindings automatically)
             await loadCustomBindingsScript(svgName + '.js');
         } catch (err) {
-            console.error(`Failed to embed SVG ${svgName}:`, err);
+            console.error(`Failed to embed HMI asset ${svgName}:`, err);
         }
     }
 }
 
-async function loadSvgPlan(filename) {
+async function loadHmiPlan(filename) {
     if (!filename) {
         hmiContent.innerHTML = `<p style="color: red; padding: 20px;">Error: No file selected.</p>`;
         return;
     }
     
-    // Clear performance state
     updateQueue.clear();
     elementCache.clear();
     highlightTimers.forEach(t => clearTimeout(t));
@@ -365,15 +338,12 @@ async function loadSvgPlan(filename) {
     embeddedChartInstances.forEach(c => c.destroy());
     embeddedChartInstances.clear();
     
-    // Suppression des anciens scripts injectés
     document.querySelectorAll('.custom-hmi-script').forEach(s => s.remove());
-    activeBindings = []; // Réinitialise les bindings
-
-    // Appel à reset sur les anciens bindings avant de les vider (si nécessaire)
     activeBindings.forEach(b => { try { b.reset(hmiContent); } catch(e){} });
+    activeBindings = []; 
 
     try {
-        const response = await fetch(`api/svg/file?name=${encodeURIComponent(filename)}&t=${Date.now()}`); 
+        const response = await fetch(`api/hmi/file?name=${encodeURIComponent(filename)}&t=${Date.now()}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const text = await response.text();
         
@@ -384,23 +354,19 @@ async function loadSvgPlan(filename) {
             
             executeEmbeddedScripts();
             await initEmbeddedCharts();
-            
-            // --- [NOUVEAU] Charge les vues imbriquées ---
             await initEmbeddedSvgs();
             
-            // --- Charge le script de la vue principale ---
             const bindingFilename = filename + '.js'; 
             await loadCustomBindingsScript(bindingFilename);
 
-            // Initialise tous les scripts chargés
             activeBindings.forEach(binding => {
                 try { binding.initialize(hmiContent); } catch(e) { console.error(e); }
             });
             
             scanForDataKeys();
             
-            if (isSvgHistoryMode) {
-                const replayTime = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
+            if (isHmiHistoryMode) {
+                const replayTime = parseFloat(hmiHandle.dataset.timestamp || currentMaxTimestamp);
                 fetchLastKnownState(replayTime);
             } else {
                 fetchLastKnownState(Date.now());
@@ -412,41 +378,24 @@ async function loadSvgPlan(filename) {
     }
 }
 
-/**
- * Toggles fullscreen mode for the SVG map view.
- */
 function toggleFullscreen() {
     trackEvent('hmi_fullscreen_toggle');
-    if (!mapView) return;
+    if (!hmiView) return;
     if (!document.fullscreenElement) {
-        mapView.requestFullscreen().catch(err => {
-            console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-        });
+        hmiView.requestFullscreen().catch(err => console.error(err));
     } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-        }
+        if (document.exitFullscreen) document.exitFullscreen();
     }
 }
 
-/**
- * [HELPER] Safely gets a nested value from an object.
- */
 function getNestedValue(obj, path) {
     if (typeof path !== 'string' || !obj) return null;
     return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), obj);
 }
 
-/**
- * Checks if a value triggers an alarm.
- */
 function checkAlarm(currentValue, alarmType, alarmThreshold) {
-    if (alarmType === 'EQ') {
-        return String(currentValue) === String(alarmThreshold);
-    }
-    if (alarmType === 'NEQ') {
-        return String(currentValue) !== String(alarmThreshold);
-    }
+    if (alarmType === 'EQ') return String(currentValue) === String(alarmThreshold);
+    if (alarmType === 'NEQ') return String(currentValue) !== String(alarmThreshold);
     const value = parseFloat(currentValue);
     const threshold = parseFloat(alarmThreshold);
     if (isNaN(value) || isNaN(threshold)) return false;
@@ -457,9 +406,6 @@ function checkAlarm(currentValue, alarmType, alarmThreshold) {
     }
 }
 
-/**
- * Updates a single SVG element.
- */
 function updateHmiElement(el, keyPath, value) {
     const numericValue = parseFloat(value);
     const tagName = el.tagName.toUpperCase();
@@ -510,7 +456,6 @@ function updateHmiElement(el, keyPath, value) {
         return;
     }
     
-    // Legacy SVG
     if (el.id === 'shield-visual-effect' && keyPath === 'power' && !isNaN(numericValue)) {
         const opacity = Math.max(0, Math.min(1, (numericValue / 100.0) * 0.7 + 0.1));
         const width = 2 + (numericValue / 100.0) * 8;
@@ -525,10 +470,6 @@ function updateHmiElement(el, keyPath, value) {
     }
 }
 
-/**
- * Process the update queue via RequestAnimationFrame to prevent UI freezing.
- * Wrapped in try/finally to guarantee animationFrameRequested resets.
- */
 function flushUpdateQueue() {
     try {
         const root = hmiContent;
@@ -537,7 +478,6 @@ function flushUpdateQueue() {
         updateQueue.forEach((data, key) => {
             const { brokerId, topic, payloadObject, isJson } = data;
             
-            // --- Exécute TOUS les scripts de bindings actifs ---
             activeBindings.forEach(binding => {
                 try { binding.update(brokerId, topic, payloadObject, root); } 
                 catch (err) { console.error(`[HMI Script Error] Topic ${topic}:`, err); }
@@ -595,11 +535,8 @@ function flushUpdateQueue() {
     }
 }
 
-/**
- * Main update router function. Throttled via Queue.
- */
 export function updateMap(brokerId, topic, payload) {
-    if (svgHistoryToggle?.checked || !hmiContent) return;
+    if (hmiHistoryToggle?.checked || !hmiContent) return;
     let payloadObject;
     let isJson = false;
     try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
@@ -611,32 +548,21 @@ export function updateMap(brokerId, topic, payload) {
     }
 }
 
-/**
- * Updates the UI of the SVG timeline slider
- */
-export function updateSvgTimelineUI(min, max) {
-    if (!svgSlider) return;
+export function updateHmiTimelineUI(min, max) {
+    if (!hmiSlider) return;
     currentMinTimestamp = min;
     currentMaxTimestamp = max;
-    if (!isSvgHistoryMode) return; 
-    const currentTimestamp = parseFloat(svgHandle.dataset.timestamp || currentMaxTimestamp);
-    svgSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentTimestamp);
+    if (!isHmiHistoryMode) return; 
+    const currentTimestamp = parseFloat(hmiHandle.dataset.timestamp || currentMaxTimestamp);
+    hmiSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentTimestamp);
 }
 
-/**
- * Force an explicit fetch of the latest real-time data from the DB.
- * Used when switching tabs so the user doesn't wait for the next ping.
- */
-export function refreshSvgLiveState() {
-    if (!isSvgHistoryMode && hmiContent && hmiContent.children.length > 0) {
+export function refreshHmiLiveState() {
+    if (!isHmiHistoryMode && hmiContent && hmiContent.children.length > 0) {
         fetchLastKnownState(Date.now());
     }
 }
 
-/**
- * Fetches the system state from DuckDB for a specific timestamp
- * and applies it to the SVG. Replaces local replaySvgHistory.
- */
 async function fetchLastKnownState(timestamp) {
     if (!hmiContent || hmiContent.children.length === 0) return;
     hmiContent.style.opacity = '0.5';
@@ -659,7 +585,6 @@ async function fetchLastKnownState(timestamp) {
     highlightTimers.forEach(t => clearTimeout(t));
     highlightTimers.clear();
 
-    // Reset sur TOUS les bindings actifs
     activeBindings.forEach(binding => {
         try { binding.reset(hmiContent); } catch (err) {}
     });
@@ -676,7 +601,6 @@ async function fetchLastKnownState(timestamp) {
             let isJson = false;
             try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
             
-            // Mise à jour via TOUS les bindings
             activeBindings.forEach(binding => {
                 try { binding.update(brokerId, topic, payloadObject, hmiContent); } catch (err) {}
             });

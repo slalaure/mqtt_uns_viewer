@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
-    <link rel="stylesheet" href="css/view.svg.css">
+    <link rel="stylesheet" href="css/view.hmi.css"> <link rel="stylesheet" href="css/view.history.css">
     <link rel="stylesheet" href="css/view.history.css">
     <link rel="stylesheet" href="css/view.mapper.css">
     <link rel="stylesheet" href="css/view.chart.css">
@@ -43,7 +43,7 @@
     </header>
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
-        <button id="btn-map-view" class="tab-button">SVG View</button>
+        <button id="btn-hmi-view" class="tab-button">HMI Dashboard</button> <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
@@ -90,27 +90,27 @@
             </div>
         </main>
         
-        <main id="map-view" class="view">
-            <div class="map-view-container">
-                <div class="map-view-controls">
+        <main id="hmi-view" class="view">
+            <div class="hmi-view-container">
+                <div class="hmi-view-controls map-view-controls">
                     <div class="form-group" style="margin: 0;">
-                        <label for="svg-select-dropdown" style="font-size: 0.9em; margin-bottom: 2px;">Select View:</label>
-                        <select id="svg-select-dropdown" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
+                        <label for="hmi-select-dropdown" style="font-size: 0.9em; margin-bottom: 2px;">Select View:</label>
+                        <select id="hmi-select-dropdown" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
                         </select>
                     </div>
                     <div class="history-toggle-container">
-                        <input type="checkbox" id="svg-history-toggle" name="svg-history-toggle">
-                        <label for="svg-history-toggle">History Mode</label>
+                        <input type="checkbox" id="hmi-history-toggle" name="hmi-history-toggle">
+                        <label for="hmi-history-toggle">History Mode</label>
                     </div>
-                    <div id="svg-timeline-slider-container" class="time-slider-container">
+                    <div id="hmi-timeline-slider-container" class="time-slider-container">
                         <div class="slider-track"></div>
-                        <div class="slider-handle" id="svg-handle">
-                            <div class="slider-label" id="svg-label"></div>
+                        <div class="slider-handle" id="hmi-handle">
+                            <div class="slider-label" id="hmi-label"></div>
                         </div>
                     </div>
-                    <button id="btn-svg-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
+                    <button id="btn-hmi-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
                 </div>
-                <div id="svg-content" class="svg-content"></div>
+                <div id="hmi-content" class="svg-content"></div>
             </div>
         </main>
 
@@ -186,7 +186,6 @@
                         <div id="mapper-targets-placeholder" class="history-placeholder" style="display: none;">
                             <p>No targets defined for this rule. Click "Add Target" to create one.</p>
                         </div>
-
                         <template id="mapper-target-template">
                             <div class="mapper-target-editor collapsed">
                                 <div class="target-editor-header">
@@ -283,7 +282,6 @@
                         <button id="btn-chart-save-current" class="tool-button button-primary" title="Save">Save</button>
                         <button id="btn-chart-save-as" class="tool-button" title="Save As New...">Save As...</button>
                         <button id="btn-chart-delete-config" class="tool-button button-danger" title="Delete Selected Chart">Delete</button>
-                        
                         <div class="form-group">
                             <label for="chart-type-select">Type:</label>
                             <select id="chart-type-select">
@@ -315,7 +313,6 @@
                         <button id="btn-chart-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
                         <span id="chart-save-status"></span>
                     </div>
-                    
                     <div id="chart-time-range-slider-container" class="time-slider-container">
                         <div class="slider-track"></div>
                         <div class="slider-range" id="chart-slider-range"></div>
@@ -326,7 +323,6 @@
                             <div class="slider-label" id="chart-label-max"></div>
                         </div>
                     </div>
-
                     <div id="chart-canvas-container">
                         <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
                         <canvas id="chart-canvas" style="display: none;"></canvas>
@@ -336,7 +332,7 @@
         </main>
 
         <main id="alerts-view" class="view">
-            </main>
+        </main>
 
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
@@ -379,7 +375,6 @@
                 </form>
             </div>
             <div class="resizer" id="drag-handle-vertical-publish"></div>
-            
             <div class="simulator-panel-wrapper">
                 <h2>Simulator</h2>
                 <div class="simulator-controls-container">
@@ -397,9 +392,9 @@
                 </div>
             </div>
         </main>
-        
+
         <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;">
-            </main>
+        </main>
     </div>
 
     <div id="chat-widget-container" class="chat-widget-container">
@@ -419,7 +414,6 @@
             </div>
         </div>
     </div>
-    
     <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
         💬
     </button>
@@ -436,15 +430,13 @@
             <div class="modal-actions">
                 <button id="modal-btn-cancel" class="tool-button">Cancel</button>
                 <button id="modal-btn-delete-rule" class="tool-button button-primary">Delete Rule Only</button>
-                <button id="modal-btn-delete-prune" class="tool-button button-danger">Delete Rule &amp; Prune
-                    History</button>
+                <button id="modal-btn-delete-prune" class="tool-button button-danger">Delete Rule &amp; Prune History</button>
             </div>
         </div>
     </div>
 
     <footer class="app-footer">
-        <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
-                rel="noopener noreferrer">github</a></p>
+        <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank" rel="noopener noreferrer">github</a></p>
     </footer>
 
     <script src="view.login.js" type="module"></script>
@@ -454,5 +446,6 @@
     <script src="view.chat.js" type="module"></script>
     <script src="view.alerts.js" type="module"></script> 
     <script src="view.admin.js" type="module"></script>
+    <script src="view.hmi.js" type="module"></script> 
 </body>
 </html>
