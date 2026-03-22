@@ -4,7 +4,6 @@
     <button class="sub-tab-button" data-target="admin-alerts-panel">🔔 Alerts History</button>
     <button class="sub-tab-button" data-target="admin-assets-panel">🖼️ HMI Assets</button>
 </div>
-
 <div id="admin-users-panel" class="alerts-content-container active">
     <div class="payload-header" style="margin-bottom: 15px;">
         <h2>User Management</h2>
@@ -28,14 +27,12 @@
         </table>
     </div>
 </div>
-
 <div id="admin-db-panel" class="alerts-content-container">
     <div style="max-width: 800px; margin: 0 auto;">
         <h2>Database Maintenance</h2>
         <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
             Manage the embedded DuckDB database containing the MQTT history.
         </p>
-        
         <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
             <h3 style="margin-top:0;">Import History (JSON)</h3>
             <p style="font-size: 0.9em; margin-bottom: 15px;">
@@ -47,7 +44,6 @@
             </div>
             <div id="db-import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
         </div>
-
         <div style="background-color: rgba(220, 53, 69, 0.05); border: 1px solid var(--color-danger); border-radius: 8px; padding: 20px;">
             <h3 style="margin-top:0; color: var(--color-danger);">⚠️ Danger Zone</h3>
             <p style="font-size: 0.9em; margin-bottom: 15px;">
@@ -60,14 +56,12 @@
         </div>
     </div>
 </div>
-
 <div id="admin-alerts-panel" class="alerts-content-container">
     <div style="max-width: 800px; margin: 0 auto;">
         <h2>Alerts History Maintenance</h2>
         <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
             Manage the archive of triggered alerts.
         </p>
-        
         <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
@@ -80,7 +74,6 @@
         </div>
     </div>
 </div>
-
 <div id="admin-assets-panel" class="alerts-content-container">
     <div class="payload-header" style="margin-bottom: 15px;">
         <div>
@@ -89,7 +82,6 @@
         </div>
         <button id="btn-hmi-refresh" class="mapper-button">Refresh List</button>
     </div>
-
     <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
         <h3 style="margin-top:0;">Upload New Assets</h3>
         <div style="display: flex; gap: 10px; align-items: center;">
@@ -98,7 +90,6 @@
         </div>
         <div id="hmi-upload-status" style="margin-top: 10px; font-size: 0.9em; font-weight: 500;"></div>
     </div>
-
     <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
@@ -114,5 +105,25 @@
                 <tr><td colspan="5" style="text-align:center; padding:20px;">Loading interface...</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<div id="admin-hmi-editor-modal" class="mapper-target-editor maximized" style="display: none; z-index: 10002;">
+    <div class="target-editor-header">
+        <div style="display:flex; align-items:center; gap:10px; flex-grow:1;">
+            <h3 id="admin-hmi-editor-title" style="margin: 0;">Editing: </h3>
+        </div>
+        <div class="target-editor-controls">
+            <button type="button" id="btn-admin-editor-cancel" class="tool-button" style="margin-right:15px;">✖ Cancel</button>
+            <button type="button" id="btn-admin-editor-save" class="tool-button button-primary" style="margin-right:15px;">💾 Save</button>
+            <button type="button" id="btn-admin-editor-delete" class="tool-button button-danger">Delete</button>
+        </div>
+    </div>
+    <div class="target-editor-body" style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+        <div class="target-workspace" style="flex-direction: row; flex-grow: 1; min-height: 0; display: flex;">
+            <div class="target-code-group" style="display: flex; flex-direction: column; flex-grow: 1;">
+                <div id="admin-hmi-code-editor" class="target-code-editor" spellcheck="false" style="flex-grow: 1; width: 100%; border: 1px solid var(--color-border); border-radius: 4px;"></div>
+            </div>
+        </div>
     </div>
 </div>
