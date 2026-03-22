@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
-    <link rel="stylesheet" href="css/view.hmi.css"> <link rel="stylesheet" href="css/view.history.css">
+    <link rel="stylesheet" href="css/view.hmi.css">
     <link rel="stylesheet" href="css/view.history.css">
     <link rel="stylesheet" href="css/view.mapper.css">
     <link rel="stylesheet" href="css/view.chart.css">
@@ -35,7 +35,7 @@
         <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">&#9881;</a>
         <div class="theme-switch-wrapper">
             <label class="theme-switch" for="dark-mode-toggle">
-                <input type="checkbox" id="dark-mode-toggle" />
+                <input type="checkbox" id="dark-mode-toggle" /&gt;
                 <span class="slider round"></span>
             </label>
             <span class="theme-label">Dark Mode</span>
@@ -43,7 +43,7 @@
     </header>
     <nav class="tab-nav">
         <button id="btn-tree-view" class="tab-button active">Tree View</button>
-        <button id="btn-hmi-view" class="tab-button">HMI Dashboard</button> <button id="btn-history-view" class="tab-button">History</button>
+        <button id="btn-hmi-view" class="tab-button">HMI Dashboard</button>
         <button id="btn-history-view" class="tab-button">History</button>
         <button id="btn-mapper-view" class="tab-button">Mapper</button>
         <button id="btn-chart-view" class="tab-button">Chart</button>
@@ -89,7 +89,6 @@
                 </div>
             </div>
         </main>
-        
         <main id="hmi-view" class="view">
             <div class="hmi-view-container">
                 <div class="hmi-view-controls map-view-controls">
@@ -113,7 +112,6 @@
                 <div id="hmi-content" class="svg-content"></div>
             </div>
         </main>
-
         <main id="history-view" class="view">
             <div class="history-status-bar">
                 <div>Total Messages: <span id="history-total-messages">--</span></div>
@@ -138,7 +136,6 @@
                 <p>Cleaning database, please wait...</p>
             </div>
         </main>
-
         <main id="mapper-view" class="view">
             <div class="mapper-tree-wrapper">
                 <div class="tree-controls">
@@ -247,7 +244,6 @@
                 </div>
             </div>
         </main>
-
         <main id="chart-view" class="view">
             <div class="chart-tree-wrapper">
                 <div class="tree-controls">
@@ -287,7 +283,6 @@
                             <select id="chart-type-select">
                                 <option value="line">Line</option>
                                 <option value="bar">Bar</option>
-                                <option value="pie">Pie</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -330,10 +325,8 @@
                 </div>
             </div>
         </main>
-
         <main id="alerts-view" class="view">
         </main>
-
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
                 <h2>Manual Publish</h2>
@@ -392,11 +385,9 @@
                 </div>
             </div>
         </main>
-
         <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;">
         </main>
     </div>
-
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
             <span>AI Assistant</span>
@@ -417,7 +408,6 @@
     <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
         💬
     </button>
-
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>
@@ -434,11 +424,9 @@
             </div>
         </div>
     </div>
-
     <footer class="app-footer">
         <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank" rel="noopener noreferrer">github</a></p>
     </footer>
-
     <script src="view.login.js" type="module"></script>
     <script src="app.js" type="module"></script>
     <script src="view.chart.js" type="module"></script>
