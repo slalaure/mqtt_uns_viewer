@@ -9,31 +9,44 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin View Module
- * Handles User Management, Database Maintenance, Alerts Maintenance, and HMI Assets.
+ * Handles User Management, Database Maintenance, Alerts Maintenance, HMI Assets, and Simulators.
  */
 import { confirmModal } from './utils.js';
+
 let usersTableBody = null;
 // --- Elements for Tabs ---
 let subNavButtons = null;
+
 // --- Elements for DB Maintenance ---
 let btnImportDb = null;
 let importInput = null;
 let importStatus = null;
 let btnResetDb = null;
 let resetDbStatus = null;
+
 // --- Elements for Alerts Maintenance ---
 let resolvedCountEl = null;
 let resolvedSizeEl = null;
 let btnPurgeAlerts = null;
 let purgeStatus = null;
-// --- [NEW] Elements for HMI Assets Maintenance ---
+
+// --- Elements for HMI Assets Maintenance ---
 let hmiAssetsTableBody = null;
 let btnUploadHmi = null;
 let hmiUploadInput = null;
 let hmiUploadStatus = null;
 let btnHmiRefresh = null;
+
+// --- [NEW] Elements for Simulators Maintenance ---
+let simTableBody = null;
+let btnUploadSim = null;
+let simUploadInput = null;
+let simUploadStatus = null;
+let btnSimRefresh = null;
+
 let isViewInitialized = false;
-// --- Elements for HMI Code Editor ---
+
+// --- Elements for HMI/Simulator Code Editor ---
 let adminAceEditor = null;
 let currentEditingFilename = null;
 
@@ -44,12 +57,14 @@ export async function initAdminView() {
     const container = document.getElementById('admin-view');
     if (!container) return;
     if (isViewInitialized) return;
+
     try {
         // 1. Fetch HTML Fragment
         const response = await fetch('html/view.admin.html');
         if (!response.ok) throw new Error(`Failed to load admin template: ${response.statusText}`);
         const htmlContent = await response.text();
         container.innerHTML = htmlContent;
+
         // 2. Initialize DOM References & Listeners AFTER injection
         initializeElements(container);
         isViewInitialized = true;
@@ -59,6 +74,7 @@ export async function initAdminView() {
         container.innerHTML = `<div style="padding:20px; color:red;">Error loading Admin Interface. Check console.</div>`;
     }
 }
+
 /**
  * Helper to attach listeners once HTML is in DOM.
  */
@@ -70,6 +86,7 @@ function initializeElements(container) {
         refreshBtn.className = 'tool-button';
         refreshBtn.addEventListener('click', loadUsers);
     }
+
     // 2. Tab Navigation Logic
     subNavButtons = container.querySelectorAll('.sub-tab-button');
     const panelClass = 'alerts-content-container'; 
@@ -79,23 +96,28 @@ function initializeElements(container) {
             subNavButtons.forEach(b => b.classList.remove('active'));
             // Hide all panels
             container.querySelectorAll(`.${panelClass}`).forEach(p => p.classList.remove('active'));
+
             // Activate clicked
             btn.classList.add('active');
             const targetId = btn.dataset.target;
             const targetPanel = document.getElementById(targetId);
             if (targetPanel) targetPanel.classList.add('active');
+
             // Load data based on tab
             if (targetId === 'admin-users-panel') loadUsers();
             if (targetId === 'admin-alerts-panel') loadResolvedStats();
-            if (targetId === 'admin-assets-panel') loadHmiAssets(); // [NEW] Trigger HMI Assets load
+            if (targetId === 'admin-assets-panel') loadHmiAssets();
+            if (targetId === 'admin-simulators-panel') loadSimulators(); // [NEW] Trigger Simulators load
         });
     });
+
     // 3. Database Maintenance Logic
     btnImportDb = document.getElementById('btn-import-db');
     importInput = document.getElementById('db-import-input');
     importStatus = document.getElementById('db-import-status');
     btnResetDb = document.getElementById('btn-reset-db');
     resetDbStatus = document.getElementById('reset-db-status');
+
     if (btnImportDb && importInput) {
         btnImportDb.className = 'tool-button button-primary';
         btnImportDb.addEventListener('click', onImportDB);
@@ -104,21 +126,25 @@ function initializeElements(container) {
         btnResetDb.className = 'tool-button button-danger';
         btnResetDb.addEventListener('click', onResetDB);
     }
+
     // 4. Alerts Maintenance Logic
     resolvedCountEl = document.getElementById('stats-resolved-count');
     resolvedSizeEl = document.getElementById('stats-resolved-size');
     btnPurgeAlerts = document.getElementById('btn-purge-alerts');
     purgeStatus = document.getElementById('purge-alerts-status');
+
     if (btnPurgeAlerts) {
         btnPurgeAlerts.className = 'tool-button button-danger';
         btnPurgeAlerts.addEventListener('click', onPurgeAlerts);
     }
+
     // 5. HMI Assets Maintenance Logic
     hmiAssetsTableBody = document.getElementById('admin-hmi-table-body');
     btnUploadHmi = document.getElementById('btn-upload-hmi');
     hmiUploadInput = document.getElementById('hmi-upload-input');
     hmiUploadStatus = document.getElementById('hmi-upload-status');
     btnHmiRefresh = document.getElementById('btn-hmi-refresh');
+
     if (btnUploadHmi && hmiUploadInput) {
         btnUploadHmi.addEventListener('click', onUploadHmiAssets);
     }
@@ -126,7 +152,21 @@ function initializeElements(container) {
         btnHmiRefresh.addEventListener('click', loadHmiAssets);
     }
 
-    // 6. Ace Editor Initialization for HMI files
+    // 6. Simulators Maintenance Logic
+    simTableBody = document.getElementById('admin-sim-table-body');
+    btnUploadSim = document.getElementById('btn-upload-sim');
+    simUploadInput = document.getElementById('sim-upload-input');
+    simUploadStatus = document.getElementById('sim-upload-status');
+    btnSimRefresh = document.getElementById('btn-sim-refresh');
+
+    if (btnUploadSim && simUploadInput) {
+        btnUploadSim.addEventListener('click', onUploadSimulators);
+    }
+    if (btnSimRefresh) {
+        btnSimRefresh.addEventListener('click', loadSimulators);
+    }
+
+    // 7. Ace Editor Initialization for HMI & Simulator files
     if (window.ace && !adminAceEditor) {
         adminAceEditor = ace.edit("admin-hmi-code-editor");
         adminAceEditor.setTheme(document.body.classList.contains('dark-mode') ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
@@ -143,11 +183,16 @@ function initializeElements(container) {
     document.getElementById('btn-admin-editor-save')?.addEventListener('click', saveAssetEditor);
     document.getElementById('btn-admin-editor-delete')?.addEventListener('click', async () => {
         if (currentEditingFilename) {
-            const deleted = await deleteHmiAsset(currentEditingFilename);
+            const isSimulator = currentEditingFilename.toLowerCase().startsWith('simulator-');
+            const deleted = isSimulator 
+                ? await deleteSimulator(currentEditingFilename) 
+                : await deleteHmiAsset(currentEditingFilename);
+                
             if (deleted) closeAssetEditor();
         }
     });
 }
+
 /**
  * Called when the Admin tab is activated.
  */
@@ -159,14 +204,18 @@ export function onAdminViewShow() {
         return;
     }
     const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
+    
     if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') {
         loadResolvedStats();
     } else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') {
         loadHmiAssets();
+    } else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') {
+        loadSimulators();
     } else {
         loadUsers();
     }
 }
+
 /**
  * Fetches users from the API and renders them.
  */
@@ -186,6 +235,7 @@ async function loadUsers() {
         usersTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
     }
 }
+
 /**
  * Renders the user table rows.
  * @param {Array} users 
@@ -196,16 +246,20 @@ function renderUsers(users) {
         usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No users found.</td></tr>';
         return;
     }
+
     users.forEach(user => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--color-border)';
+        
         const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : 'Never';
         const roleBadge = user.role === 'admin' 
             ? '<span style="background:var(--color-danger); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">ADMIN</span>' 
             : '<span style="background:var(--color-success); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">USER</span>';
+        
         const isSelf = window.currentUser && window.currentUser.id === user.id;
         const deleteDisabled = isSelf ? 'disabled title="You cannot delete yourself"' : '';
         const deleteStyle = isSelf ? 'opacity: 0.5; cursor: not-allowed;' : '';
+
         tr.innerHTML = `
             <td style="padding: 10px;">${user.username || '<span style="font-style:italic; color:gray;">(Google)</span>'}</td>
             <td style="padding: 10px;">${user.display_name || '-'}</td>
@@ -218,6 +272,7 @@ function renderUsers(users) {
         `;
         usersTableBody.appendChild(tr);
     });
+
     // Attach event listeners
     document.querySelectorAll('.btn-delete-user').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -227,12 +282,14 @@ function renderUsers(users) {
         });
     });
 }
+
 /**
  * Handles user deletion.
  */
 async function deleteUser(id, username) {
     const isConfirmed = await confirmModal('Delete User', `⚠️ WARNING: Are you sure you want to delete user "${username}"?\n\nThis will permanently delete their account AND all their saved data (charts, mapper configs, history).`, 'Delete', true);
     if (!isConfirmed) return;
+
     try {
         const res = await fetch(`api/admin/users/${id}`, { method: 'DELETE' });
         const data = await res.json();
@@ -245,6 +302,7 @@ async function deleteUser(id, username) {
         alert("Request failed: " + e.message);
     }
 }
+
 // --- Database Maintenance Functions ---
 async function onImportDB() {
     const file = importInput.files[0];
@@ -252,23 +310,29 @@ async function onImportDB() {
         alert("Please select a JSON export file first.");
         return;
     }
+
     const isConfirmed = await confirmModal('Import Database', `Import data from '${file.name}'?\nThis will be queued and processed in the background.`, 'Import', false);
     if (!isConfirmed) return;
+
     const formData = new FormData();
     formData.append('db_import', file);
+
     btnImportDb.disabled = true;
     btnImportDb.textContent = "Importing...";
     importStatus.textContent = "Uploading & Processing...";
     importStatus.style.color = "var(--color-text)";
+
     try {
         const response = await fetch('api/admin/import-db', {
             method: 'POST',
             body: formData
         });
         const result = await response.json();
+        
         if (!response.ok) {
             throw new Error(result.error || "Import failed.");
         }
+        
         importStatus.textContent = result.message; 
         importStatus.style.color = 'var(--color-success)';
         importInput.value = ''; 
@@ -285,20 +349,25 @@ async function onImportDB() {
         }, 5000);
     }
 }
+
 async function onResetDB() {
     const isConfirmed = await confirmModal('Reset Database', '⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?', 'Reset DB', true);
     if (!isConfirmed) return;
+
     btnResetDb.disabled = true;
     btnResetDb.textContent = "Resetting...";
     resetDbStatus.textContent = "";
+
     try {
         const response = await fetch('api/admin/reset-db', {
             method: 'POST'
         });
         const result = await response.json();
+        
         if (!response.ok) {
             throw new Error(result.error || "Reset failed.");
         }
+        
         resetDbStatus.textContent = "✅ Database reset successfully!";
         resetDbStatus.style.color = 'var(--color-success)';
     } catch (e) {
@@ -310,6 +379,7 @@ async function onResetDB() {
         setTimeout(() => { resetDbStatus.textContent = ''; }, 5000);
     }
 }
+
 // --- Alerts Maintenance Functions ---
 async function loadResolvedStats() {
     if (!resolvedCountEl) return;
@@ -324,12 +394,15 @@ async function loadResolvedStats() {
         console.error("Failed to load alert stats", e);
     }
 }
+
 async function onPurgeAlerts() {
     const isConfirmed = await confirmModal('Purge Alerts', 'Are you sure you want to delete ALL resolved alerts?', 'Purge', true);
     if (!isConfirmed) return;
+
     btnPurgeAlerts.disabled = true;
     btnPurgeAlerts.textContent = "Purging...";
     purgeStatus.textContent = "";
+
     try {
         const res = await fetch('api/alerts/admin/purge', { method: 'POST' });
         const data = await res.json();
@@ -349,7 +422,8 @@ async function onPurgeAlerts() {
         setTimeout(() => { purgeStatus.textContent = ''; }, 3000);
     }
 }
-// --- HMI Assets Maintenance Functions ---
+
+// --- HMI Assets & Simulators Shared Functions ---
 function formatBytes(bytes, decimals = 2) {
     if (!+bytes) return '0 Bytes';
     const k = 1024;
@@ -358,6 +432,7 @@ function formatBytes(bytes, decimals = 2) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
+
 function getFileTypeBadge(filename) {
     const ext = filename.split('.').pop().toLowerCase();
     let color = '#6c757d'; // Default gray
@@ -366,8 +441,11 @@ function getFileTypeBadge(filename) {
     else if (ext === 'js') color = '#f1e05a'; // JS Yellow
     else if (['glb', 'gltf', 'bin'].includes(ext)) color = '#8e44ad'; // 3D Purple
     else if (['png', 'jpg', 'jpeg'].includes(ext)) color = '#17a2b8'; // Image Teal
+    
     return `<span style="background-color: ${color}; color: ${color === '#f1e05a' || color === '#ffb13b' ? '#333' : '#fff'}; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; text-transform: uppercase;">${ext}</span>`;
 }
+
+// --- HMI Assets Maintenance Functions ---
 async function loadHmiAssets() {
     if (!hmiAssetsTableBody) return;
     hmiAssetsTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading assets...</td></tr>';
@@ -381,12 +459,14 @@ async function loadHmiAssets() {
         hmiAssetsTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
     }
 }
+
 function renderHmiAssets(assets) {
     hmiAssetsTableBody.innerHTML = '';
     if (assets.length === 0) {
         hmiAssetsTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No HMI assets found.</td></tr>';
         return;
     }
+
     assets.forEach(asset => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--color-border)';
@@ -409,42 +489,50 @@ function renderHmiAssets(assets) {
         `;
         hmiAssetsTableBody.appendChild(tr);
     });
-    document.querySelectorAll('.btn-delete-asset').forEach(btn => {
+
+    document.querySelectorAll('#admin-hmi-table-body .btn-delete-asset').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const filename = e.target.dataset.filename;
             deleteHmiAsset(filename);
         });
     });
-    document.querySelectorAll('.btn-edit-asset').forEach(btn => {
+    
+    document.querySelectorAll('#admin-hmi-table-body .btn-edit-asset').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const filename = e.target.dataset.filename;
             openAssetEditor(filename);
         });
     });
 }
+
 async function onUploadHmiAssets() {
     const files = hmiUploadInput.files;
     if (!files || files.length === 0) {
         alert("Please select at least one file to upload.");
         return;
     }
+
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
         formData.append('assets', files[i]);
     }
+
     btnUploadHmi.disabled = true;
     btnUploadHmi.textContent = "Uploading...";
     hmiUploadStatus.textContent = "Processing upload...";
     hmiUploadStatus.style.color = "var(--color-text)";
+
     try {
         const response = await fetch('api/admin/hmi-assets', {
             method: 'POST',
             body: formData
         });
         const result = await response.json();
+        
         if (!response.ok) {
             throw new Error(result.error || "Upload failed.");
         }
+        
         hmiUploadStatus.textContent = `✅ ${result.message}`; 
         hmiUploadStatus.style.color = 'var(--color-success)';
         hmiUploadInput.value = ''; // Clear input
@@ -462,9 +550,11 @@ async function onUploadHmiAssets() {
         }, 5000);
     }
 }
+
 async function deleteHmiAsset(filename) {
     const isConfirmed = await confirmModal('Delete HMI Asset', `⚠️ Are you sure you want to permanently delete "${filename}"?\n\nDashboards depending on this asset will break.`, 'Delete', true);
     if (!isConfirmed) return false;
+
     try {
         const res = await fetch(`api/admin/hmi-assets/${encodeURIComponent(filename)}`, { method: 'DELETE' });
         const data = await res.json();
@@ -480,7 +570,126 @@ async function deleteHmiAsset(filename) {
     return false;
 }
 
-// --- HMI Code Editor Logic ---
+// --- Simulators Maintenance Functions ---
+async function loadSimulators() {
+    if (!simTableBody) return;
+    simTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">Loading simulators...</td></tr>';
+    try {
+        const res = await fetch('api/admin/simulators');
+        if (!res.ok) throw new Error("Failed to fetch simulators list.");
+        const assets = await res.json();
+        renderSimulators(assets);
+    } catch (e) {
+        console.error("Simulators Load Error:", e);
+        simTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function renderSimulators(assets) {
+    simTableBody.innerHTML = '';
+    if (assets.length === 0) {
+        simTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No Simulators found.</td></tr>';
+        return;
+    }
+
+    assets.forEach(asset => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--color-border)';
+        const lastModified = new Date(asset.mtime).toLocaleString();
+
+        tr.innerHTML = `
+            <td style="padding: 10px; font-family: monospace;"><strong>${asset.name}</strong></td>
+            <td style="padding: 10px; font-size: 0.9em;">${formatBytes(asset.size)}</td>
+            <td style="padding: 10px; font-size: 0.9em;">${lastModified}</td>
+            <td style="padding: 10px; text-align: right;">
+                <button class="tool-button btn-edit-sim" data-filename="${asset.name}" style="margin-right: 5px;">Edit</button>
+                <button class="tool-button button-danger btn-delete-sim" data-filename="${asset.name}">Delete</button>
+            </td>
+        `;
+        simTableBody.appendChild(tr);
+    });
+
+    document.querySelectorAll('#admin-sim-table-body .btn-delete-sim').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const filename = e.target.dataset.filename;
+            deleteSimulator(filename);
+        });
+    });
+    
+    document.querySelectorAll('#admin-sim-table-body .btn-edit-sim').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const filename = e.target.dataset.filename;
+            openAssetEditor(filename);
+        });
+    });
+}
+
+async function onUploadSimulators() {
+    const files = simUploadInput.files;
+    if (!files || files.length === 0) {
+        alert("Please select at least one file to upload.");
+        return;
+    }
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('assets', files[i]);
+    }
+
+    btnUploadSim.disabled = true;
+    btnUploadSim.textContent = "Uploading...";
+    simUploadStatus.textContent = "Processing upload...";
+    simUploadStatus.style.color = "var(--color-text)";
+
+    try {
+        const response = await fetch('api/admin/simulators', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || "Upload failed.");
+        }
+        
+        simUploadStatus.textContent = `✅ ${result.message}`; 
+        simUploadStatus.style.color = 'var(--color-success)';
+        simUploadInput.value = ''; // Clear input
+        loadSimulators(); // Refresh list automatically
+    } catch (e) {
+        simUploadStatus.textContent = `❌ Error: ${e.message}`;
+        simUploadStatus.style.color = 'var(--color-danger)';
+    } finally {
+        btnUploadSim.disabled = false;
+        btnUploadSim.textContent = "Upload Files";
+        setTimeout(() => {
+            if (simUploadStatus.textContent.includes('✅')) {
+                simUploadStatus.textContent = '';
+            }
+        }, 5000);
+    }
+}
+
+async function deleteSimulator(filename) {
+    const isConfirmed = await confirmModal('Delete Simulator', `⚠️ Are you sure you want to permanently delete "${filename}"?`, 'Delete', true);
+    if (!isConfirmed) return false;
+
+    try {
+        const res = await fetch(`api/admin/simulators/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            loadSimulators(); // Refresh list
+            return true;
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (e) {
+        alert("Request failed: " + e.message);
+    }
+    return false;
+}
+
+// --- HMI & Simulator Shared Code Editor Logic ---
 async function openAssetEditor(filename) {
     try {
         const res = await fetch(`api/hmi/file?name=${encodeURIComponent(filename)}`);
@@ -490,7 +699,7 @@ async function openAssetEditor(filename) {
         currentEditingFilename = filename;
         document.getElementById('admin-hmi-editor-title').textContent = `Editing: ${filename}`;
         
-        // Define Ace mode correctly
+        // Define Ace mode
         const ext = filename.split('.').pop().toLowerCase();
         let mode = 'ace/mode/text'; // Fallback
         if (ext === 'js') mode = 'ace/mode/javascript';
@@ -531,7 +740,11 @@ async function saveAssetEditor() {
         const formData = new FormData();
         formData.append('assets', file);
 
-        const response = await fetch('api/admin/hmi-assets', {
+        // Determine correct endpoint based on filename prefix
+        const isSimulator = currentEditingFilename.toLowerCase().startsWith('simulator-');
+        const endpoint = isSimulator ? 'api/admin/simulators' : 'api/admin/hmi-assets';
+
+        const response = await fetch(endpoint, {
             method: 'POST',
             body: formData
         });
@@ -539,7 +752,13 @@ async function saveAssetEditor() {
         
         if (!response.ok) throw new Error(result.error || "Save failed.");
         
-        loadHmiAssets();
+        // Refresh the correct list
+        if (isSimulator) {
+            loadSimulators();
+        } else {
+            loadHmiAssets();
+        }
+        
         closeAssetEditor();
     } catch (e) {
         alert("Error saving file: " + e.message);

@@ -3,6 +3,7 @@
     <button class="sub-tab-button" data-target="admin-db-panel">💾 Database</button>
     <button class="sub-tab-button" data-target="admin-alerts-panel">🔔 Alerts History</button>
     <button class="sub-tab-button" data-target="admin-assets-panel">🖼️ HMI Assets</button>
+    <button class="sub-tab-button" data-target="admin-simulators-panel">🕹️ Simulators</button>
 </div>
 <div id="admin-users-panel" class="alerts-content-container active">
     <div class="payload-header" style="margin-bottom: 15px;">
@@ -103,6 +104,38 @@
             </thead>
             <tbody id="admin-hmi-table-body">
                 <tr><td colspan="5" style="text-align:center; padding:20px;">Loading interface...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div id="admin-simulators-panel" class="alerts-content-container">
+    <div class="payload-header" style="margin-bottom: 15px;">
+        <div>
+            <h2 style="margin-bottom: 5px;">Simulators Management</h2>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Manage JavaScript simulator scenarios. Note: You must restart the server to detect new simulators.</p>
+        </div>
+        <button id="btn-sim-refresh" class="mapper-button">Refresh List</button>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin-top:0;">Upload New Simulator</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" id="sim-upload-input" accept=".js" multiple style="flex:1;">
+            <button id="btn-upload-sim" class="mapper-button button-primary">Upload Files</button>
+        </div>
+        <div id="sim-upload-status" style="margin-top: 10px; font-size: 0.9em; font-weight: 500;"></div>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                <tr>
+                    <th style="padding: 10px; font-weight: 500;">Filename</th>
+                    <th style="padding: 10px; font-weight: 500;">Size</th>
+                    <th style="padding: 10px; font-weight: 500;">Last Modified</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="admin-sim-table-body">
+                <tr><td colspan="4" style="text-align:center; padding:20px;">Loading interface...</td></tr>
             </tbody>
         </table>
     </div>

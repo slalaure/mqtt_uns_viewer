@@ -9,17 +9,15 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin API
- * Protected routes for User Management, System Maintenance, and HMI Asset Management.
+ * Protected routes for User Management, System Maintenance, HMI Asset Management, and Simulators.
  */
 const express = require('express');
 const userManager = require('../database/userManager');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
-
     // --- Multer Configuration for Imports (JSON) ---
     const storageJson = multer.diskStorage({
         destination: function (req, file, cb) {
@@ -29,7 +27,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
             cb(null, `import_${Date.now()}_${path.basename(file.originalname)}`);
         }
     });
-
     const uploadJson = multer({ 
         storage: storageJson, 
         fileFilter: (req, file, cb) => {
@@ -40,8 +37,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
             }
         }
     });
-
-    // --- [NEW] Multer Configuration for HMI Assets ---
+    // --- Multer Configuration for HMI Assets ---
     const storageHmi = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, dataPath); // We store global HMI assets in the root data folder
@@ -50,14 +46,29 @@ module.exports = (logger, db, dataManager, dataPath) => {
             cb(null, path.basename(file.originalname)); // Keep original filename for linking
         }
     });
-
     const uploadHmi = multer({ 
         storage: storageHmi, 
         fileFilter: (req, file, cb) => {
             if (file.originalname.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) {
-                cb(null, true);
+                // Prevent simulator files from being uploaded as HMI assets
+                if (file.originalname.toLowerCase().startsWith('simulator-')) {
+                    cb(new Error('Simulator files must be uploaded in the Simulators tab.'), false);
+                } else {
+                    cb(null, true);
+                }
             } else {
                 cb(new Error('Invalid HMI asset file type! Only svg, html, js, and 3d formats allowed.'), false);
+            }
+        }
+    });
+    // --- [NEW] Multer Configuration for Simulators ---
+    const uploadSimulator = multer({ 
+        storage: storageHmi, // Reusing the same storage strategy
+        fileFilter: (req, file, cb) => {
+            if (file.originalname.match(/^simulator-.*\.js$/i)) {
+                cb(null, true);
+            } else {
+                cb(new Error('Simulator files must be javascript files named simulator-*.js'), false);
             }
         }
     });
@@ -70,7 +81,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
         logger.warn(`[AdminAPI] Unauthorized access attempt by user: ${req.user ? req.user.username : 'Guest'} IP: ${req.ip}`);
         return res.status(403).json({ error: "Forbidden: Admin privileges required." });
     };
-
     router.use(requireAdmin);
 
     // --- List All Users ---
@@ -91,7 +101,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
         if (userIdToDelete === req.user.id) {
             return res.status(400).json({ error: "You cannot delete your own account while logged in." });
         }
-
         try {
             await userManager.deleteUser(userIdToDelete);
             logger.info(`[AdminAPI] User ${userIdToDelete} deleted by admin ${req.user.username}`);
@@ -103,7 +112,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
     });
 
     // --- Database Maintenance ---
-
     // POST /api/admin/import-db
     router.post('/import-db', uploadJson.single('db_import'), async (req, res) => {
         if (!req.file) {
@@ -111,19 +119,15 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
         const filePath = req.file.path;
         logger.info(`[AdminAPI] Starting DB import from ${req.file.originalname}...`);
-
         try {
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const entries = JSON.parse(fileContent);
-
             if (!Array.isArray(entries)) {
                 throw new Error("Invalid JSON structure. Expected an array.");
             }
-
             if (!dataManager) {
                 throw new Error("DataManager is not available.");
             }
-
             let count = 0;
             for (const entry of entries) {
                 const message = {
@@ -134,17 +138,14 @@ module.exports = (logger, db, dataManager, dataPath) => {
                     isSparkplugOrigin: false,
                     needsDb: true
                 };
-
                 if (message.topic) {
                     dataManager.insertMessage(message);
                     count++;
                 }
             }
-
             logger.info(`[AdminAPI] Queued ${count} messages for import.`);
             fs.unlinkSync(filePath); // Cleanup temp file
             res.json({ success: true, message: `Successfully queued ${count} entries for import.` });
-
         } catch (err) {
             logger.error({ err }, "[AdminAPI] Import failed.");
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
@@ -155,9 +156,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
     // POST /api/admin/reset-db
     router.post('/reset-db', (req, res) => {
         if (!db) return res.status(503).json({ error: "Database not available." });
-        
         logger.warn(`⚠️ [AdminAPI] Admin ${req.user.username} initiated full DB RESET.`);
-
         db.serialize(() => {
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
@@ -173,15 +172,13 @@ module.exports = (logger, db, dataManager, dataPath) => {
         });
     });
 
-    // --- [NEW] HMI Assets Management ---
-
+    // --- HMI Assets Management ---
     // GET /api/admin/hmi-assets
     router.get('/hmi-assets', (req, res) => {
         try {
             if (!fs.existsSync(dataPath)) return res.json([]);
-            
-            const files = fs.readdirSync(dataPath).filter(f => f.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i));
-            
+            // Filter out simulator files
+            const files = fs.readdirSync(dataPath).filter(f => f.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i) && !f.toLowerCase().startsWith('simulator-'));
             const fileStats = files.map(f => {
                 const stat = fs.statSync(path.join(dataPath, f));
                 return {
@@ -190,10 +187,8 @@ module.exports = (logger, db, dataManager, dataPath) => {
                     mtime: stat.mtime
                 };
             });
-            
             // Sort newest first
             fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
-            
             res.json(fileStats);
         } catch (err) {
             logger.error({ err }, "Failed to list HMI assets");
@@ -206,10 +201,8 @@ module.exports = (logger, db, dataManager, dataPath) => {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'No valid files uploaded. Check allowed extensions.' });
         }
-        
         const fileNames = req.files.map(f => f.filename);
         logger.info(`[AdminAPI] HMI Assets uploaded: ${fileNames.join(', ')}`);
-        
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} assets.`, files: fileNames });
     });
 
@@ -217,9 +210,8 @@ module.exports = (logger, db, dataManager, dataPath) => {
     router.delete('/hmi-assets/:filename', (req, res) => {
         const filename = path.basename(req.params.filename); // Prevent path traversal
         const filepath = path.join(dataPath, filename);
-
         try {
-            if (fs.existsSync(filepath)) {
+            if (fs.existsSync(filepath) && !filename.toLowerCase().startsWith('simulator-')) {
                 fs.unlinkSync(filepath);
                 logger.info(`[AdminAPI] HMI Asset deleted: ${filename}`);
                 res.json({ success: true, message: `Asset '${filename}' deleted.` });
@@ -228,6 +220,58 @@ module.exports = (logger, db, dataManager, dataPath) => {
             }
         } catch (err) {
             logger.error({ err }, `Failed to delete HMI Asset: ${filename}`);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- [NEW] Simulators Management ---
+    // GET /api/admin/simulators
+    router.get('/simulators', (req, res) => {
+        try {
+            if (!fs.existsSync(dataPath)) return res.json([]);
+            // Only return simulator-*.js files
+            const files = fs.readdirSync(dataPath).filter(f => f.match(/^simulator-.*\.js$/i));
+            const fileStats = files.map(f => {
+                const stat = fs.statSync(path.join(dataPath, f));
+                return {
+                    name: f,
+                    size: stat.size,
+                    mtime: stat.mtime
+                };
+            });
+            // Sort newest first
+            fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
+            res.json(fileStats);
+        } catch (err) {
+            logger.error({ err }, "Failed to list simulators");
+            res.status(500).json({ error: "Failed to list simulators." });
+        }
+    });
+
+    // POST /api/admin/simulators
+    router.post('/simulators', uploadSimulator.array('assets', 20), (req, res) => {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No valid simulator files uploaded.' });
+        }
+        const fileNames = req.files.map(f => f.filename);
+        logger.info(`[AdminAPI] Simulators uploaded: ${fileNames.join(', ')}`);
+        res.json({ success: true, message: `Successfully uploaded ${req.files.length} simulators. Restart server to activate.`, files: fileNames });
+    });
+
+    // DELETE /api/admin/simulators/:filename
+    router.delete('/simulators/:filename', (req, res) => {
+        const filename = path.basename(req.params.filename); // Prevent path traversal
+        const filepath = path.join(dataPath, filename);
+        try {
+            if (fs.existsSync(filepath) && filename.toLowerCase().startsWith('simulator-')) {
+                fs.unlinkSync(filepath);
+                logger.info(`[AdminAPI] Simulator deleted: ${filename}`);
+                res.json({ success: true, message: `Simulator '${filename}' deleted.` });
+            } else {
+                res.status(404).json({ error: "Simulator not found." });
+            }
+        } catch (err) {
+            logger.error({ err }, `Failed to delete Simulator: ${filename}`);
             res.status(500).json({ error: err.message });
         }
     });
