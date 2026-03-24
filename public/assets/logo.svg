@@ -1,5 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 180" width="100%" height="100%">
   <defs>
+    <style>
+      .logo-text {
+        font-family: 'Montserrat', 'Lato', 'Segoe UI', sans-serif;
+        font-size: 110px;
+        font-weight: 600;
+        fill: #2C3E50; /* Couleur sombre pour contraster sur le fond clair */
+        letter-spacing: -2px;
+      }
+    </style>
+
     <path id="k-shape" d="M 20 15 L 70 15 L 70 65 L 120 15 L 160 15 L 85 90 L 160 165 L 120 165 L 70 115 L 70 165 L 20 165 Z" />
 
     <mask id="cutout">
@@ -13,8 +23,10 @@
   </defs>
 
   <use href="#k-shape" fill="#007bff" stroke="#FFFFFF" stroke-width="1" stroke-linejoin="round" mask="url(#cutout)" />
-
+  
   <circle cx="70" cy="90" r="32" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1" clip-path="url(#k-clip)" />
-
+  
   <circle cx="70" cy="90" r="24" fill="#E67E22" />
+
+  <text x="180" y="128" class="logo-text">korelate</text>
 </svg>

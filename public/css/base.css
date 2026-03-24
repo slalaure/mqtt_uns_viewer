@@ -120,28 +120,44 @@ body {
     50% { opacity: 1; transform: scale(1.1); }
     100% { opacity: 0.7; transform: scale(0.9); }
 }
+
 /* --- Header  --- */
 header {
-    background-color: var(--color-header-bg);
-    color: var(--color-header-text);
-    padding: 8px 20px;
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text);
+    padding: 10px 20px;
     flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid var(--color-border);
 }
-header h1 { margin: 0; font-size: 1.25em; text-align: left; }
+
+header h1 { margin: 0; font-size: 1.25em; text-align: left; display: none; }
+
+.app-logo {
+    height: 32px;
+    width: auto;
+    display: block;
+}
+
+body.dark-mode .app-logo {
+    /* Magically inverts dark text to light while preserving blue/orange hues */
+    filter: invert(1) hue-rotate(180deg) brightness(1.2);
+}
+
 /* Header Sub-row for Version and Status */
 .header-sub-row {
     display: flex;
     align-items: center;
     gap: 15px;
-    margin-left: 10px;
+    margin-left: 15px;
 }
 .header-sub-row p { 
     margin: 0; 
-    font-size: 0.8em; 
-    opacity: 0.9; 
+    font-size: 0.85em; 
+    color: var(--color-text-secondary);
+    font-weight: 500; 
 }
 /* Broker Status Container */
 .broker-status-container {
@@ -178,7 +194,9 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; }
     font-family: 'Courier New', Courier, monospace;
     font-size: 1em;
     font-weight: bold;
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: var(--color-bg-accent);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     padding: 4px 8px;
     border-radius: 4px;
 }
@@ -190,8 +208,9 @@ header h1 { margin: 0; font-size: 1.25em; text-align: left; }
 }
 .theme-label {
     font-size: 0.9em;
-    color: var(--color-header-text);
+    color: var(--color-text);
     user-select: none;
+    font-weight: 500;
 }
 .theme-switch {
     position: relative;
@@ -266,12 +285,16 @@ input:checked + .slider:before { transform: translateX(20px); }
 }
 /* --- Header Buttons --- */
 .nav-button {
-    color: var(--color-header-text); text-decoration: none;
-    background-color: rgba(255, 255, 255, 0.2);
-    padding: 5px 10px; border-radius: 4px; transition: background-color 0.2s;
+    color: var(--color-text); 
+    text-decoration: none;
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    padding: 5px 10px; 
+    border-radius: 4px; 
+    transition: all 0.2s;
 }
-body.dark-mode .nav-button { background-color: rgba(255, 255, 255, 0.1); }
-.nav-button:hover { background-color: rgba(255, 255, 255, 0.3); }
+body.dark-mode .nav-button { background-color: var(--color-bg-tertiary); }
+.nav-button:hover { background-color: var(--color-bg-accent); }
 .icon-button { font-size: 1.25em; padding: 0 10px; }
 /* --- Tab Navigation --- */
 .tab-nav {
@@ -395,7 +418,6 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
 .slider-handle:hover .slider-label, .slider-handle:active .slider-label { opacity: 1; }
 /* --- Shared: Placeholders --- */
 .history-placeholder { padding: 15px; color: var(--color-text-secondary); font-style: italic; margin: 0; }
-
 /* --- Shared: Unified Tool Buttons --- */
 .tool-button, .mapper-button, .chart-button, .map-button, .modal-button {
     padding: 6px 12px;
@@ -425,7 +447,7 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
 }
 .tool-button.button-primary, .mapper-button.button-primary, .chart-button.button-primary, .map-button.button-primary, .modal-button.button-primary {
     background-color: var(--color-primary);
-    color: var(--color-header-text);
+    color: #fff;
     border-color: var(--color-primary);
 }
 .tool-button.button-primary:hover, .mapper-button.button-primary:hover, .chart-button.button-primary:hover, .map-button.button-primary:hover, .modal-button.button-primary:hover {
@@ -441,7 +463,6 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
     background-color: var(--color-danger-hover);
     border-color: var(--color-danger-hover);
 }
-
 /* --- Unsaved State Indicator --- */
 .btn-unsaved {
     background-color: #ff9800 !important; /* Orange */
@@ -454,7 +475,6 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
     70% { box-shadow: 0 0 0 6px rgba(255, 152, 0, 0); }
     100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0); }
 }
-
 /* --- Generic Confirmation Modal --- */
 .generic-modal-backdrop {
     position: fixed;
@@ -490,7 +510,6 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
 .generic-modal-actions {
     display: flex; justify-content: flex-end; gap: 10px;
 }
-
 /* --- Shared: Form Styles --- */
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; font-weight: 500; margin-bottom: 5px; }
@@ -501,7 +520,6 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
 }
 .form-group select { padding: 8px 10px; }
 .checkbox-label { font-weight: 500; cursor: pointer; user-select: none; }
-
 /* ---  Mobile Responsive Styles --- */
 @media (max-width: 768px) {
     body { height: auto; min-height: 100vh; }

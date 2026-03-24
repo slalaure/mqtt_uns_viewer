@@ -53,7 +53,7 @@ export async function showLoginOverlay() {
     toggleLink.addEventListener('click', () => {
         const isLogin = loginForm.style.display !== 'none';
         errorDiv.style.display = 'none';
-        
+
         if (isLogin) {
             // Switch to Register
             loginForm.style.display = 'none';
@@ -64,7 +64,7 @@ export async function showLoginOverlay() {
             // Switch to Login
             registerForm.style.display = 'none';
             loginForm.style.display = 'block';
-            title.textContent = 'Korelate';
+            title.textContent = 'Sign In'; // Use "Sign In" instead of repeating brand name
             toggleLink.textContent = 'Need an account? Register';
         }
     });
@@ -91,6 +91,7 @@ export async function showLoginOverlay() {
             errorDiv.style.display = 'block';
             return;
         }
+
         handleAuth('auth/register', { username, password }, btn, 'Create Account');
     });
 
@@ -115,6 +116,7 @@ export async function showLoginOverlay() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
+
             const data = await res.json();
 
             if (data.success) {
