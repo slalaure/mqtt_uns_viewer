@@ -34,7 +34,7 @@ services:
   app:
     build:
       context: .
-    container_name: mqtt_uns_viewer_app
+    container_name: korelate_app
     restart: always
     ports:
       - "8080:8080" # Expose web app on port 8080 of the host
@@ -60,7 +60,7 @@ services:
   mcp:
     build:
       context: . # Uses the same image as 'app'
-    container_name: mqtt_uns_viewer_mcp
+    container_name: korelate_mcp
     restart: always
     ports:
       - "3000:3000" # Expose MCP server on port 3000 of the host

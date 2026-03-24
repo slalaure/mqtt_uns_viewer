@@ -41,8 +41,8 @@ jobs:
           push: true
           # [IMPORTANT] Remplacez par VOTRE nom d'utilisateur Docker Hub via les secrets
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/mqtt_uns_viewer:${{ steps.package_version.outputs.version }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/mqtt_uns_viewer:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/korelate:${{ steps.package_version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/korelate:latest
           # Ajoute du cache pour accélérer les builds futurs
           cache-from: type=gha
           cache-to: type=gha,mode=max

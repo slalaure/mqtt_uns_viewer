@@ -1,4 +1,4 @@
-# MQTT UNS Viewer
+# Korelate
 
 <div align="center">
 
@@ -17,7 +17,7 @@
 
 ### 📺 Watch the Demo
 
-[![MQTT UNS Viewer Demo](https://img.youtube.com/vi/aOudy4su9F0/0.jpg)](https://youtu.be/aOudy4su9F0)
+[![Korelate Demo](https://img.youtube.com/vi/aOudy4su9F0/0.jpg)](https://youtu.be/aOudy4su9F0)
 
 ---
 
@@ -37,7 +37,7 @@ The **Unified Namespace** is the single source of truth for your industrial data
 ### The AI Revolution & Gradual Adoption
 In the age of **Generative AI** and **Large Language Models (LLMs)**, context is king. An AI cannot optimize a factory if the data is locked in silos with obscure names like `PLC_1_Tag_404`.
 
-**MQTT UNS Viewer** facilitates **Gradual Adoption**:
+**Korelate** facilitates **Gradual Adoption**:
 1.  **Connect** to your existing messy brokers.
 2.  **Visualize** the chaos.
 3.  **Structure** it using the built-in **Mapper (ETL)** to normalize data into a clean UNS structure without changing the PLC code.
@@ -58,7 +58,7 @@ graph TD
         Cloud["AWS IoT / Azure"] -->|MQTTS| Broker2["Cloud Broker"]
     end
 
-    subgraph UNSViewer ["MQTT UNS Viewer (Docker)"]
+    subgraph UNSViewer ["Korelate (Docker)"]
         Backend["Node.js Server"]
         DuckDB[("DuckDB Hot Storage")]
         Mapper["ETL Engine V8"]
@@ -144,7 +144,7 @@ DB_BATCH_INTERVAL_MS=2000    # Flush interval for DB writes.
 # Perennial Storage (Optional)
 PERENNIAL_DRIVER=timescale   # Enable long-term storage (Options: 'none', 'timescale')
 PG_HOST=192.168.1.50         # Postgres connection details
-PG_DATABASE=mqtt_uns_viewer
+PG_DATABASE=korelate
 PG_TABLE_NAME=mqtt_events
 ```
 
@@ -385,7 +385,7 @@ module.exports = (logger, publish, isSparkplug) => {
 
 ## 🧠 AI Integration (Model Context Protocol)
 
-The **MCP Server** allows you to connect external AI Agents (like **Claude Desktop**) directly to your factory floor data context, mirroring the capabilities of the internal Chat API.
+The **Korelate MCP Server** allows you to connect external AI Agents (like **Claude Desktop**) directly to your factory floor data context, mirroring the capabilities of the internal Chat API.
 
 **Capabilities Exposed to AI:**
 * `get_topics_list`: Discover what machines are online.

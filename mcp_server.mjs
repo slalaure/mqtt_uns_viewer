@@ -9,7 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * MCP Server
- * Controls the MQTT UNS Viewer via Model Context Protocol.
+ * Controls the Korelate via Model Context Protocol.
  * [UPDATED] Refactored Tool handlers to support HMI assets (HTML/SVG/GLB) instead of just SVGs.
  */
 // --- Imports (ESM) ---
@@ -381,9 +381,9 @@ const implementations = {
  */
 async function createMcpServer() {
     const server = new McpServer({
-        name: "MQTT UNS Viewer Controller",
+        name: "Korelate Controller",
         version: "1.6.0",
-        description: "Control the MQTT UNS Viewer via tools defined in ai_tools_manifest.json.",
+        description: "Control the Korelate via tools defined in ai_tools_manifest.json.",
     });
 
     // Dynamically register tools from manifest

@@ -48,7 +48,7 @@ PG_HOST=localhost
 PG_PORT=5432
 PG_USER=postgres
 PG_PASSWORD=password
-PG_DATABASE=mqtt_uns_viewer
+PG_DATABASE=korelate
 # [Optional] The table name to use in TimescaleDB
 PG_TABLE_NAME=mqtt_events
 # [Optional] How many messages to batch insert into TimescaleDB at once

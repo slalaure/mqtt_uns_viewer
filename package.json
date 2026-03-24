@@ -1,7 +1,7 @@
 {
-  "name": "mqtt_uns_viewer",
-  "version": "1.5.0",
-  "description": "A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages.",
+  "name": "korelate",
+  "version": "1.5.1",
+  "description": "A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages, with advanced semantic correlation and AI assistance.",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -16,7 +16,8 @@
     "iiot",
     "duckdb",
     "sparkplugb",
-    "mcp"
+    "mcp",
+    "correlation"
   ],
   "author": "Sebastien Lalaurette",
   "license": "MIT",

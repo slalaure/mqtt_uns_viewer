@@ -118,7 +118,7 @@ const config = {
     PG_PORT: process.env.PG_PORT ? parseInt(process.env.PG_PORT, 10) : 5432,
     PG_USER: process.env.PG_USER?.trim() || 'postgres',
     PG_PASSWORD: process.env.PG_PASSWORD?.trim() || 'password',
-    PG_DATABASE: process.env.PG_DATABASE?.trim() || 'mqtt_uns_viewer',
+    PG_DATABASE: process.env.PG_DATABASE?.trim() || 'korelate',
     PG_TABLE_NAME: process.env.PG_TABLE_NAME?.trim() || 'mqtt_events',
     PG_INSERT_BATCH_SIZE: process.env.PG_INSERT_BATCH_SIZE ? parseInt(process.env.PG_INSERT_BATCH_SIZE, 10) : 1000,
     PG_BATCH_INTERVAL_MS: process.env.PG_BATCH_INTERVAL_MS ? parseInt(process.env.PG_BATCH_INTERVAL_MS, 10) : 5000,
@@ -431,7 +431,7 @@ const authMiddleware = (req, res, next) => {
         if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
             return next();
         }
-        res.setHeader('WWW-Authenticate', 'Basic realm="MQTT UNS Viewer"');
+        res.setHeader('WWW-Authenticate', 'Basic realm="Korelate"');
         return res.status(401).send('Authentication required.');
     }
     // 4. If no Basic Auth configured, we redirect to login page (index.html handles this)

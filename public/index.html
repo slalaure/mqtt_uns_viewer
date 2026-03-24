@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT UNS Viewer</title>
-    <meta name="description" content="Explore your MQTT data in real-time. A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B.">
+    <title>Korelate</title>
+    <meta name="description" content="korelate: Explore and correlate your MQTT data in real-time. A lightweight web viewer for Unified Namespace (UNS), IIoT, and Sparkplug B.">
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/view.tree.css">
@@ -25,9 +25,9 @@
 <body>
     <header>
         <div class="header-content">
-            <h1>MQTT UNS Viewer</h1>
+            <h1>Korelate</h1>
             <div class="header-sub-row">
-                <p>v 1.5.0</p>
+                <p>v 1.5.1</p>
                 <div id="broker-status-container" class="broker-status-container"></div>
             </div>
         </div>
@@ -35,7 +35,7 @@
         <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">&#9881;</a>
         <div class="theme-switch-wrapper">
             <label class="theme-switch" for="dark-mode-toggle">
-                <input type="checkbox" id="dark-mode-toggle" /&gt;
+                <input type="checkbox" id="dark-mode-toggle" />
                 <span class="slider round"></span>
             </label>
             <span class="theme-label">Dark Mode</span>
@@ -326,7 +326,7 @@
             </div>
         </main>
         <main id="alerts-view" class="view">
-        </main>
+            </main>
         <main id="publish-view" class="view">
             <div class="publish-panel-wrapper">
                 <h2>Manual Publish</h2>
@@ -386,7 +386,7 @@
             </div>
         </main>
         <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;">
-        </main>
+            </main>
     </div>
     <div id="chat-widget-container" class="chat-widget-container">
         <div class="chat-header">
@@ -425,7 +425,8 @@
         </div>
     </div>
     <footer class="app-footer">
-        <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank" rel="noopener noreferrer">github</a></p>
+        <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/mqtt_uns_viewer" target="_blank"
+                rel="noopener noreferrer">github</a></p>
     </footer>
     <script src="view.login.js" type="module"></script>
     <script src="app.js" type="module"></script>

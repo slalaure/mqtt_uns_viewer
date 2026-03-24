@@ -64,7 +64,7 @@ export async function showLoginOverlay() {
             // Switch to Login
             registerForm.style.display = 'none';
             loginForm.style.display = 'block';
-            title.textContent = 'MQTT UNS Viewer';
+            title.textContent = 'Korelate';
             toggleLink.textContent = 'Need an account? Register';
         }
     });

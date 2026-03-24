@@ -21,8 +21,8 @@ const chrono = require('chrono-node');
 // [NEW] Import Alert Manager from ROOT to inject agent capability
 const alertManager = require('../alert_manager');
 // --- Constants ---
-const MAX_AGENT_TURNS = 16; // Limit recursion to 16 turns
-const LLM_TIMEOUT_MS = 120000; // 120s timeout
+const MAX_AGENT_TURNS = 30; // Limit recursion to 30 turns
+const LLM_TIMEOUT_MS = 180000; // 180s timeout
 // --- State for Abort Control ---
 // Map<clientId, { abortController: AbortController, res: Response }>
 const activeStreams = new Map();

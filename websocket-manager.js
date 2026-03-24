@@ -79,7 +79,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
             ws.send(JSON.stringify({ 
                 type: 'welcome', 
                 clientId: clientId,
-                message: 'Connected to MQTT UNS Viewer Realtime Socket'
+                message: 'Connected to Korelate Realtime Socket'
             }));
         }
 
