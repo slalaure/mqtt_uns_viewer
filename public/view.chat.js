@@ -50,20 +50,25 @@ let currentSessionId = 'default';
 
 // --- Storage & Path State ---
 let appBasePath = ''; // Store base path for API calls
+
 // --- Voice State ---
 let recognition = null;
 let isListening = false;
 let wasLastInputVoice = false; 
 let finalTranscript = ''; 
 let userWantMicActive = false;
+
 // Global reference for TTS to prevent Garbage Collection
 let currentUtterance = null; 
 // Cache for voices
 let availableVoices = [];
+
 let onFileCreatedCallback = null;
+
 // --- Streaming UI ---
 let currentLogDiv = null; 
 let hasToolActivity = false; 
+
 // --- Deduplication Set ---
 let processedChunkIds = new Set();
 
@@ -87,6 +92,8 @@ export function initChatView(basePath, onFileCreated) {
     injectCameraUI(); 
     injectSessionUI(); // Add Sidebar and Menu button
     injectStopButton(); // Add Stop button
+    makeWidgetDraggableAndResizable(); // Add drag/resize capabilities
+
     // Load Sessions List first, then load latest
     loadSessionsList().then(sessions => {
         if (sessions && sessions.length > 0) {
@@ -95,7 +102,8 @@ export function initChatView(basePath, onFileCreated) {
             createNewSession();
         }
     });
-    // [FIX] Pre-load voices aggressively for Chrome/Safari
+
+    // Pre-load voices aggressively for Chrome/Safari
     if ('speechSynthesis' in window) {
         const loadVoices = () => {
             availableVoices = window.speechSynthesis.getVoices();
@@ -122,7 +130,13 @@ export function initChatView(basePath, onFileCreated) {
     btnClear?.addEventListener('click', async () => {
         const isConfirmed = await confirmModal('Delete Session', 'Are you sure you want to delete this chat session?', 'Delete', true);
         if (isConfirmed) {
-            deleteSession(currentSessionId);
+            await deleteSession(currentSessionId);
+            const remaining = await loadSessionsList();
+            if (remaining.length > 0) {
+                switchSession(remaining[0].id);
+            } else {
+                createNewSession();
+            }
         }
     });
 
@@ -141,21 +155,25 @@ export function initChatView(basePath, onFileCreated) {
         }
     });
 }
+
 /**
  * Handles incoming stream chunks from WebSocket (via app.js).
  * Uses processedChunkIds to prevent duplication with HTTP stream.
  */
 export function onChatStreamMessage(message) {
     if (!message || !message.id) return;
+
     // Deduplication check
     if (processedChunkIds.has(message.id)) {
         return; 
     }
     processedChunkIds.add(message.id);
+
     // Create log div if missing
     if (!currentLogDiv && isProcessing) {
         currentLogDiv = createLogDiv();
     }
+
     // Reuse the same logic as HTTP streaming
     processStreamChunk(message.chunkType, message.content);
 }
@@ -164,18 +182,22 @@ function autoResizeInput() {
     chatInput.style.height = 'auto';
     chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
 }
+
 // --- Session Management UI Injection ---
 function injectSessionUI() {
     const header = document.querySelector('.chat-header');
     if (!header) return;
+
     // 1. Menu Button
     sessionMenuBtn = document.createElement('button');
     sessionMenuBtn.innerHTML = '☰';
     sessionMenuBtn.title = "Chat History";
     sessionMenuBtn.style.marginRight = '10px';
     sessionMenuBtn.onclick = toggleSessionOverlay;
+
     // Insert before title
     header.insertBefore(sessionMenuBtn, header.firstChild);
+
     // 2. Session Overlay (Drawer)
     sessionOverlay = document.createElement('div');
     sessionOverlay.className = 'chat-session-overlay';
@@ -203,8 +225,10 @@ function injectSessionUI() {
     sessionOverlay.appendChild(overlayHeader);
     sessionOverlay.appendChild(btnNewChat);
     sessionOverlay.appendChild(sessionListContainer);
+
     // Append to widget
     document.querySelector('.chat-widget-container').appendChild(sessionOverlay);
+
     sessionOverlay.querySelector('#btn-close-sessions').onclick = toggleSessionOverlay;
 }
 
@@ -245,17 +269,44 @@ function renderSessionList(sessions) {
         sessionListContainer.innerHTML = '<div style="color:var(--color-text-secondary); font-style:italic; padding:10px;">No history</div>';
         return;
     }
+
     sessions.forEach(session => {
         const div = document.createElement('div');
         div.className = 'session-item';
         div.style.cssText = `
+            display: flex; justify-content: space-between; align-items: center;
             padding: 8px; cursor: pointer; border-radius: 4px;
             background: ${session.id === currentSessionId ? 'var(--color-bg-accent)' : 'transparent'};
             border: 1px solid ${session.id === currentSessionId ? 'var(--color-primary)' : 'transparent'};
-            font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 0.9em;
         `;
-        div.textContent = session.title || "Untitled Chat";
-        div.onclick = () => switchSession(session.id);
+        
+        const titleSpan = document.createElement('span');
+        titleSpan.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1;";
+        titleSpan.textContent = session.title || "Untitled Chat";
+        titleSpan.onclick = () => switchSession(session.id);
+        
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '🗑️';
+        delBtn.title = "Delete Chat";
+        delBtn.style.cssText = "background: none; border: none; cursor: pointer; font-size: 1.1em; opacity: 0.6; padding: 0 4px; flex-shrink: 0;";
+        delBtn.onmouseover = () => delBtn.style.opacity = '1';
+        delBtn.onmouseout = () => delBtn.style.opacity = '0.6';
+        delBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const isConfirmed = await confirmModal('Delete Session', 'Are you sure you want to delete this chat session?', 'Delete', true);
+            if (isConfirmed) {
+                await deleteSession(session.id);
+                const remaining = await loadSessionsList();
+                if (currentSessionId === session.id) {
+                    if (remaining.length > 0) switchSession(remaining[0].id);
+                    else createNewSession();
+                }
+            }
+        };
+        
+        div.appendChild(titleSpan);
+        div.appendChild(delBtn);
         sessionListContainer.appendChild(div);
     });
 }
@@ -282,7 +333,6 @@ async function createNewSession() {
 async function deleteSession(id) {
     try {
         await fetch(`${appBasePath}/api/chat/session/${id}`, { method: 'DELETE' });
-        createNewSession();
     } catch (e) {
         alert("Failed to delete session");
     }
@@ -333,6 +383,7 @@ function injectCameraUI() {
     cameraVideo = document.getElementById('chat-camera-feed');
     document.getElementById('btn-camera-cancel').addEventListener('click', closeCamera);
     document.getElementById('btn-camera-capture').addEventListener('click', takePicture);
+
     btnCam.addEventListener('click', openCamera);
 }
 
@@ -347,6 +398,7 @@ async function openCamera() {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         cameraVideo.srcObject = cameraStream;
         cameraModal.style.display = 'flex';
+
         if (userWantMicActive) {
             userWantMicActive = false;
             recognition?.stop();
@@ -383,6 +435,7 @@ function injectVoiceUI() {
     btnMic.innerHTML = '🎤'; 
     btnMic.title = 'Voice Input (Click to Start/Stop)';
     btnMic.className = 'chat-icon-btn';
+
     inputArea.insertBefore(btnMic, btnSend);
 
     recognition = new SpeechRecognition();
@@ -455,6 +508,7 @@ function injectVoiceUI() {
 
 function speakText(text) {
     if (!('speechSynthesis' in window)) return;
+
     window.speechSynthesis.cancel();
 
     let cleanText = text
@@ -466,6 +520,7 @@ function speakText(text) {
         .replace(/<[^>]*>/g, '');
 
     currentUtterance = new SpeechSynthesisUtterance(cleanText);
+    
     const targetLang = navigator.language || 'en-US';
     currentUtterance.lang = targetLang;
     currentUtterance.rate = 1.0; 
@@ -486,7 +541,6 @@ function speakText(text) {
     }
 
     if (voice) {
-        // console.log(`[TTS] Speaking with voice: ${voice.name} (${voice.lang})`);
         currentUtterance.voice = voice;
     } else {
         console.warn(`[TTS] No matching voice found for ${targetLang}. Using default.`);
@@ -510,6 +564,7 @@ function injectUploadUI() {
     const btnAttach = document.createElement('button');
     btnAttach.id = 'btn-chat-attach'; btnAttach.innerHTML = '📎'; btnAttach.className = 'chat-icon-btn';
     btnAttach.addEventListener('click', () => fileInput.click());
+
     // Insert logic
     if(btnCam) inputArea.insertBefore(btnAttach, btnCam);
     else if (btnMic) inputArea.insertBefore(btnAttach, btnMic);
@@ -523,10 +578,12 @@ function injectUploadUI() {
 function handleFileSelect(e) {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
+
     reader.onload = (evt) => {
         pendingAttachment = { type: file.type.startsWith('image/')?'image':'text', content: evt.target.result, name: file.name };
         renderPreview(); chatInput.focus();
     };
+
     if (file.type.startsWith('image/')) reader.readAsDataURL(file); else reader.readAsText(file);
 }
 
@@ -559,6 +616,7 @@ async function loadHistory() {
         console.error("Error loading chat history:", e);
         conversationHistory = [];
     }
+
     if (conversationHistory.length === 0) {
         addMessageToState('assistant', 'Hello! I am your UNS Assistant. How can I help?');
     }
@@ -589,6 +647,7 @@ function scrollToBottom() { chatHistory.scrollTop = chatHistory.scrollHeight; }
 
 function appendMessageToUI(msg) {
     if (!chatHistory) return;
+    
     const div = document.createElement('div');
     div.className = `chat-message ${msg.role}`;
 
@@ -601,9 +660,11 @@ function appendMessageToUI(msg) {
         div.innerHTML = htmlParts;
     } else {
         let htmlContent = formatMessageContent(msg.content || '');
+
         if (msg.tool_calls) {
             msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${t.function.name}</div>`);
         }
+
         if (msg.role === 'tool') {
             div.classList.add('system');
             div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
@@ -640,6 +701,7 @@ function formatMessageContent(text) {
                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
                .replace(/\n/g, '<br>');
 }
+
 // --- PERSISTENT LOG UI ---
 function createLogDiv() {
     const div = document.createElement('div');
@@ -654,10 +716,11 @@ function createLogDiv() {
 
 function appendToLog(container, text, type = 'info') {
     if (!container) return;
+
     const line = document.createElement('div');
+
     // Legacy Deduplication (Keep it for safety)
     if (container.lastChild && container.lastChild.textContent.includes(text)) {
-        // Just flash it or ignore it
         return;
     }
 
@@ -672,13 +735,12 @@ function appendToLog(container, text, type = 'info') {
     } else {
         line.innerHTML = `<small style="opacity:0.8">${text}</small>`;
     }
-    
+
     container.appendChild(line);
     scrollToBottom();
 }
+
 // --- SHARED CHUNK PROCESSOR (HTTP & WS) ---
-// This handles logic for updating the UI based on stream events
-// It manages state variables like hasToolActivity and assistantMsg
 let assistantMsgFromStream = null;
 
 function processStreamChunk(type, content) {
@@ -686,6 +748,7 @@ function processStreamChunk(type, content) {
         // If we missed the start, create log div now
         currentLogDiv = createLogDiv();
     }
+
     if (type === 'status') {
         appendToLog(currentLogDiv, content);
     } else if (type === 'tool_start') {
@@ -709,26 +772,28 @@ function updateUIState(processing) {
     btnSend.style.display = processing ? 'none' : 'flex'; 
     if (btnMic) btnMic.disabled = processing;
     if (btnCam) btnCam.disabled = processing;
+
     if (!processing) chatInput.focus();
 }
+
 // --- STREAMING SEND MESSAGE ---
 async function sendMessage(fromVoice = false) {
     if (isProcessing) return;
-    
+
     window.speechSynthesis.cancel();
-    
     if (userWantMicActive || isListening) {
         userWantMicActive = false;
         if(recognition) recognition.stop();
     }
-    
+
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
-    
+
     const text = chatInput.value.trim();
     if (!text && !pendingAttachment) return;
-    
+
     let messageContent = text;
+
     if (pendingAttachment) {
         if (pendingAttachment.type === 'image') {
             messageContent = [{ type: "text", text: text }, { type: "image_url", image_url: { url: pendingAttachment.content } }];
@@ -736,20 +801,20 @@ async function sendMessage(fromVoice = false) {
             messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
         }
     }
-    
+
     chatInput.value = ''; autoResizeInput();
     pendingAttachment = null; renderPreview(); fileInput.value = '';
-    
+
     addMessageToState('user', messageContent);
-    
+
     isProcessing = true;
     hasToolActivity = false; 
     assistantMsgFromStream = null; 
     processedChunkIds.clear(); 
-    
+
     updateUIState(true); 
     currentLogDiv = createLogDiv();
-    
+
     const validHistory = conversationHistory.filter(m => m.role !== 'error');
     const messagesPayload = validHistory.map(m => {
         const apiMsg = { role: m.role, content: m.content };
@@ -766,26 +831,27 @@ async function sendMessage(fromVoice = false) {
             userLanguage: navigator.language,
             clientId: window.wsClientId || null 
         };
-        
+
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
-        
+
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+
         // Read the HTTP stream (NDJSON)
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
-        
+
         while (true) {
             const { done, value } = await reader.read();
             if (value) {
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
                 buffer = lines.pop(); 
-                
+
                 for (const line of lines) {
                     if (line.trim()) {
                         try {
@@ -801,30 +867,31 @@ async function sendMessage(fromVoice = false) {
             }
             if (done) break;
         }
-        
+
         currentLogDiv = null; 
+
         // Handle final state
         if (!assistantMsgFromStream && hasToolActivity) {
             assistantMsgFromStream = { role: 'assistant', content: "✅ Operation completed (No text summary provided)." };
         }
-        
+
         if (assistantMsgFromStream) {
             if (assistantMsgFromStream.tool_calls && onFileCreatedCallback) {
                 const hasCreatedFile = assistantMsgFromStream.tool_calls.some(tool => tool.function.name === 'create_dynamic_view' || tool.function.name === 'save_file_to_data_directory');
                 if (hasCreatedFile) setTimeout(() => onFileCreatedCallback(), 1000);
             }
-            
             if (assistantMsgFromStream.content === null) {
                  assistantMsgFromStream.content = "✅ Operation completed.";
             }
-            
+
             addMessageToState('assistant', assistantMsgFromStream.content, assistantMsgFromStream.tool_calls);
             trackEvent('chat_message_sent');
-            
+
             if (isVoice && assistantMsgFromStream.content) {
                 speakText(assistantMsgFromStream.content);
             }
         } 
+
     } catch (error) {
         console.error(error);
         if (currentLogDiv) {
@@ -838,4 +905,132 @@ async function sendMessage(fromVoice = false) {
         isProcessing = false;
         updateUIState(false);
     }
+}
+
+/**
+ * Make the Chat Widget Draggable and Resizable from all 4 corners
+ */
+function makeWidgetDraggableAndResizable() {
+    const header = document.querySelector('.chat-header');
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+
+    const switchToAbsolute = () => {
+        if (chatContainer.style.bottom || !chatContainer.style.top) {
+            const rect = chatContainer.getBoundingClientRect();
+            chatContainer.style.bottom = 'auto';
+            chatContainer.style.right = 'auto';
+            chatContainer.style.left = rect.left + 'px';
+            chatContainer.style.top = rect.top + 'px';
+        }
+    };
+
+    // Dragging
+    header.addEventListener('mousedown', (e) => {
+        if (e.target.closest && e.target.closest('button')) return; // Do not drag if clicking buttons
+        isDragging = true;
+        switchToAbsolute();
+        
+        // keep opacity transition, disable transform to avoid conflicts
+        chatContainer.style.transition = 'opacity 0.3s ease'; 
+        
+        startX = e.clientX;
+        startY = e.clientY;
+        initialLeft = chatContainer.offsetLeft;
+        initialTop = chatContainer.offsetTop;
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', stopDrag);
+    });
+
+    function onDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault(); // Prevent text selection
+        
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        
+        let newLeft = initialLeft + dx;
+        let newTop = initialTop + dy;
+        
+        // Boundaries to keep it on screen
+        const maxX = window.innerWidth - chatContainer.offsetWidth;
+        const maxY = window.innerHeight - chatContainer.offsetHeight;
+        
+        newLeft = Math.max(0, Math.min(newLeft, maxX));
+        newTop = Math.max(0, Math.min(newTop, maxY));
+        
+        chatContainer.style.left = newLeft + 'px';
+        chatContainer.style.top = newTop + 'px';
+    }
+
+    function stopDrag() {
+        isDragging = false;
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        // Restore transitions (transform uses scale now)
+        chatContainer.style.transition = 'transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.3s ease';
+    }
+
+    // Resizing
+    const positions = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+    positions.forEach(pos => {
+        const handle = document.createElement('div');
+        handle.className = `chat-resize-handle chat-resize-${pos}`;
+        chatContainer.appendChild(handle);
+
+        handle.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            switchToAbsolute();
+            chatContainer.style.transition = 'opacity 0.3s ease';
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startWidth = chatContainer.offsetWidth;
+            const startHeight = chatContainer.offsetHeight;
+            const startLeft = chatContainer.offsetLeft;
+            const startTop = chatContainer.offsetTop;
+
+            function doResize(moveEvent) {
+                moveEvent.preventDefault();
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+
+                let newWidth = startWidth;
+                let newHeight = startHeight;
+                let newLeft = startLeft;
+                let newTop = startTop;
+
+                if (pos.includes('e')) newWidth = startWidth + dx;
+                if (pos.includes('w')) {
+                    newWidth = startWidth - dx;
+                    newLeft = startLeft + dx;
+                }
+                if (pos.includes('s')) newHeight = startHeight + dy;
+                if (pos.includes('n')) {
+                    newHeight = startHeight - dy;
+                    newTop = startTop + dy;
+                }
+
+                // Apply constraints (min 300x400)
+                if (newWidth >= 300) {
+                    chatContainer.style.width = newWidth + 'px';
+                    if (pos.includes('w')) chatContainer.style.left = newLeft + 'px';
+                }
+                if (newHeight >= 400) {
+                    chatContainer.style.height = newHeight + 'px';
+                    if (pos.includes('n')) chatContainer.style.top = newTop + 'px';
+                }
+            }
+
+            function stopResize() {
+                document.removeEventListener('mousemove', doResize);
+                document.removeEventListener('mouseup', stopResize);
+                chatContainer.style.transition = 'transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.3s ease';
+            }
+
+            document.addEventListener('mousemove', doResize);
+            document.addEventListener('mouseup', stopResize);
+        });
+    });
 }
