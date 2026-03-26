@@ -9,15 +9,18 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin API
- * Protected routes for User Management, System Maintenance, HMI Asset Management, and Simulators.
+ * Protected routes for User Management, System Maintenance, HMI Asset Management, Simulators and Parsers.
  */
 const express = require('express');
 const userManager = require('../database/userManager');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const providerManager = require('../data-providers/provider-manager'); // [NEW] Import Provider Manager
+
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
+
     // --- Multer Configuration for Imports (JSON) ---
     const storageJson = multer.diskStorage({
         destination: function (req, file, cb) {
@@ -27,6 +30,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
             cb(null, `import_${Date.now()}_${path.basename(file.originalname)}`);
         }
     });
+
     const uploadJson = multer({ 
         storage: storageJson, 
         fileFilter: (req, file, cb) => {
@@ -37,20 +41,21 @@ module.exports = (logger, db, dataManager, dataPath) => {
             }
         }
     });
+
     // --- Multer Configuration for HMI Assets ---
     const storageHmi = multer.diskStorage({
         destination: function (req, file, cb) {
-            cb(null, dataPath); // We store global HMI assets in the root data folder
+            cb(null, dataPath); 
         },
         filename: function (req, file, cb) {
-            cb(null, path.basename(file.originalname)); // Keep original filename for linking
+            cb(null, path.basename(file.originalname)); 
         }
     });
+
     const uploadHmi = multer({ 
         storage: storageHmi, 
         fileFilter: (req, file, cb) => {
             if (file.originalname.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) {
-                // Prevent simulator files from being uploaded as HMI assets
                 if (file.originalname.toLowerCase().startsWith('simulator-')) {
                     cb(new Error('Simulator files must be uploaded in the Simulators tab.'), false);
                 } else {
@@ -61,14 +66,36 @@ module.exports = (logger, db, dataManager, dataPath) => {
             }
         }
     });
-    // --- [NEW] Multer Configuration for Simulators ---
+
+    // --- Multer Configuration for Simulators ---
     const uploadSimulator = multer({ 
-        storage: storageHmi, // Reusing the same storage strategy
+        storage: storageHmi, 
         fileFilter: (req, file, cb) => {
             if (file.originalname.match(/^simulator-.*\.js$/i)) {
                 cb(null, true);
             } else {
                 cb(new Error('Simulator files must be javascript files named simulator-*.js'), false);
+            }
+        }
+    });
+
+    // --- [NEW] Multer Configuration for Data Parsers (CSV) ---
+    const storageCsv = multer.diskStorage({
+        destination: function (req, file, cb) {
+            cb(null, dataPath);
+        },
+        filename: function (req, file, cb) {
+            cb(null, `parser_${Date.now()}_${path.basename(file.originalname)}`);
+        }
+    });
+
+    const uploadCsv = multer({ 
+        storage: storageCsv, 
+        fileFilter: (req, file, cb) => {
+            if (file.originalname.match(/\.csv$/i)) {
+                cb(null, true);
+            } else {
+                cb(new Error('Only CSV files are allowed!'), false);
             }
         }
     });
@@ -81,6 +108,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         logger.warn(`[AdminAPI] Unauthorized access attempt by user: ${req.user ? req.user.username : 'Guest'} IP: ${req.ip}`);
         return res.status(403).json({ error: "Forbidden: Admin privileges required." });
     };
+
     router.use(requireAdmin);
 
     // --- List All Users ---
@@ -153,7 +181,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // POST /api/admin/reset-db
     router.post('/reset-db', (req, res) => {
         if (!db) return res.status(503).json({ error: "Database not available." });
         logger.warn(`⚠️ [AdminAPI] Admin ${req.user.username} initiated full DB RESET.`);
@@ -273,6 +300,43 @@ module.exports = (logger, db, dataManager, dataPath) => {
         } catch (err) {
             logger.error({ err }, `Failed to delete Simulator: ${filename}`);
             res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- [NEW] Data Parsers Management (CSV) ---
+    router.post('/data-parsers/csv', uploadCsv.single('csv_file'), async (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No CSV file uploaded.' });
+        }
+        
+        const { defaultTopic, streamRateMs, loop } = req.body;
+        const filePath = req.file.path;
+        const providerId = `csv_parser_${Date.now()}`;
+
+        logger.info(`[AdminAPI] Starting CSV parser: ${providerId} for file ${req.file.originalname}`);
+
+        try {
+            const providerConfig = {
+                id: providerId,
+                type: 'file',
+                filePath: filePath,
+                defaultTopic: defaultTopic || 'factory/csv/data',
+                streamRateMs: parseInt(streamRateMs, 10) || 1000,
+                loop: loop === 'true'
+            };
+
+            // Dynamically load and start the provider using the abstraction layer
+            providerManager.loadProvider(providerConfig);
+
+            res.json({ 
+                success: true, 
+                message: "CSV Parser started successfully.",
+                providerId: providerId
+            });
+        } catch (err) {
+            logger.error({ err }, "[AdminAPI] Failed to start CSV Parser.");
+            try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
+            res.status(500).json({ error: `Failed to start parser: ${err.message}` });
         }
     });
 

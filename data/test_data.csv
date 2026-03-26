@@ -1,0 +1,7 @@
+topic,machine_id,temperature,pressure,vibration,status
+factory/line1/extruder/telemetry,EXT-01,150.5,2.4,0.05,running
+factory/line1/extruder/telemetry,EXT-01,152.1,2.5,0.06,running
+factory/line1/packaging/telemetry,PKG-02,45.2,1.1,0.02,running
+factory/line1/extruder/telemetry,EXT-01,165.8,2.8,0.15,warning
+factory/line1/extruder/telemetry,EXT-01,180.2,3.1,0.45,critical
+factory/line1/packaging/telemetry,PKG-02,46.0,1.1,0.02,running
