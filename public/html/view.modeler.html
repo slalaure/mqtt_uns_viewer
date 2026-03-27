@@ -1,6 +1,5 @@
 <div class="modeler-container" style="display: flex; height: 100%; width: 100%; overflow: hidden; background-color: var(--color-bg);">
-    
-    <div class="modeler-sidebar" style="flex: 0 0 320px; border-right: 1px solid var(--color-border); background-color: var(--color-bg-secondary); display: flex; flex-direction: column;">
+    <div class="modeler-sidebar" style="flex: 0 0 320px; min-width: 200px; background-color: var(--color-bg-secondary); display: flex; flex-direction: column;">
         <div style="padding: 15px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-tertiary);">
             <h2 style="margin: 0 0 10px 0; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center;">
                 Semantic Explorer
@@ -16,27 +15,27 @@
             </div>
             <div id="modeler-status" style="margin-top: 8px; font-size: 0.8em; font-weight: bold; text-align: center;"></div>
         </div>
-        
         <div class="tree-container" id="modeler-tree-container" style="flex: 1; padding: 10px; overflow-y: auto;">
-            </div>
+        </div>
     </div>
+    
+    <div class="resizer" id="drag-handle-vertical-modeler"></div>
 
-    <div class="modeler-main-area" style="flex: 1; display: flex; flex-direction: column; overflow-y: auto;">
-        
+    <div class="modeler-main-area" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;">
         <div id="modeler-welcome" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-text-secondary);">
             <div style="font-size: 4em; margin-bottom: 20px; filter: grayscale(1) opacity(0.5);">🕸️</div>
             <h2 style="margin-bottom: 10px;">I3X Semantic Modeler</h2>
             <p>Select a node in the tree to visualize its relationships and edit its properties.</p>
         </div>
-
         <div id="modeler-content" style="display: none; flex-direction: column; height: 100%;">
-            
-            <div id="modeler-graph-wrapper" style="flex: 0 0 350px; background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border); position: relative; display: block; overflow: hidden;">
+            <div id="modeler-graph-wrapper" style="flex: 0 0 350px; min-height: 150px; background-color: var(--color-bg-tertiary); position: relative; display: block; overflow: hidden;">
                 <div style="position: absolute; top: 10px; left: 15px; z-index: 10; font-size: 0.85em; font-weight: bold; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 1px;">Relationship Graph</div>
                 <div id="relationship-graph" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
             </div>
+            
+            <div class="resizer-horizontal" id="drag-handle-horizontal-modeler"></div>
 
-            <div style="flex: 1; padding: 25px; background-color: var(--color-bg);">
+            <div id="modeler-form-wrapper" style="flex: 1; padding: 25px; background-color: var(--color-bg); overflow-y: auto; min-height: 150px;">
                 <form id="modeler-form" style="max-width: 800px; margin: 0 auto; background: var(--color-bg-secondary); padding: 25px; border-radius: 8px; border: 1px solid var(--color-border); box-shadow: 0 4px 12px var(--color-shadow);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--color-border-secondary);">
                         <div>
@@ -45,10 +44,8 @@
                         </div>
                         <button type="button" id="btn-modeler-delete" class="tool-button button-danger">🗑️ Delete</button>
                     </div>
-                    
                     <div id="modeler-dynamic-fields" style="display: flex; flex-direction: column; gap: 15px;">
-                        </div>
-
+                    </div>
                     <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--color-border-secondary); display: flex; justify-content: flex-end; gap: 10px;">
                         <button type="submit" class="tool-button button-primary" style="padding: 8px 20px;">Apply Changes</button>
                     </div>
@@ -57,7 +54,6 @@
         </div>
     </div>
 </div>
-
 <style>
     /* Modeler Tree Specific Styles */
     .modeler-tree ul {
@@ -112,12 +108,10 @@
     .modeler-tree li > ul.collapsed {
         display: none;
     }
-    
     /* Vis-Network custom styles */
     .vis-network {
         outline: none; /* Remove focus ring */
     }
-
     /* Form Enhancements */
     .modern-input {
         width: 100%;

@@ -5,18 +5,45 @@
       "displayName": "I3X Core"
     },
     {
-      "uri": "https://korelate.io/models/custom",
-      "displayName": "Custom Models"
+      "uri": "https://factory.local/models",
+      "displayName": "Factory Models"
     }
   ],
   "objectTypes": [
     {
-      "elementId": "LegacyConceptType",
-      "displayName": "Legacy Concept",
-      "namespaceUri": "https://korelate.io/models/custom",
+      "elementId": "SiteType",
+      "displayName": "Production Site",
+      "namespaceUri": "https://factory.local/models",
       "schema": {
         "type": "object",
-        "description": "old version of uns_model.json concept enveloppe"
+        "description": "A physical manufacturing site."
+      }
+    },
+    {
+      "elementId": "LineType",
+      "displayName": "Production Line",
+      "namespaceUri": "https://factory.local/models",
+      "schema": {
+        "type": "object",
+        "description": "A continuous production line."
+      }
+    },
+    {
+      "elementId": "MachineType",
+      "displayName": "Machine Asset",
+      "namespaceUri": "https://factory.local/models",
+      "schema": {
+        "type": "object",
+        "description": "A specific piece of equipment."
+      }
+    },
+    {
+      "elementId": "SensorType",
+      "displayName": "Telemetry Sensor",
+      "namespaceUri": "https://factory.local/models",
+      "schema": {
+        "type": "number",
+        "description": "A raw sensor data point."
       }
     }
   ],
@@ -28,27 +55,64 @@
       "reverseOf": "HasChildren"
     },
     {
-      "elementId": "HasChildren",
-      "displayName": "HasChildren",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasParent"
-    },
-    {
       "elementId": "HasComponent",
       "displayName": "HasComponent",
       "namespaceUri": "https://cesmii.org/i3x",
       "reverseOf": "ComponentOf"
-    },
-    {
-      "elementId": "ComponentOf",
-      "displayName": "ComponentOf",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasComponent"
     }
   ],
-  "instances": [],
-  "legacy_concepts": [
-    
-    
-  ]
+  "instances": [
+    {
+      "elementId": "Site_Paris",
+      "displayName": "Usine Paris",
+      "typeId": "SiteType",
+      "parentId": "/",
+      "isComposition": true,
+      "namespaceUri": "https://factory.local/models"
+    },
+    {
+      "elementId": "Line_1",
+      "displayName": "Ligne Assemblage 1",
+      "typeId": "LineType",
+      "parentId": "Site_Paris",
+      "isComposition": true,
+      "namespaceUri": "https://factory.local/models"
+    },
+    {
+      "elementId": "Robot_Soudure",
+      "displayName": "Robot de Soudure A",
+      "typeId": "MachineType",
+      "parentId": "Line_1",
+      "isComposition": true,
+      "namespaceUri": "https://factory.local/models"
+    },
+    {
+      "elementId": "Robot_Temp",
+      "displayName": "Capteur Température",
+      "typeId": "SensorType",
+      "parentId": "Robot_Soudure",
+      "isComposition": false,
+      "namespaceUri": "https://factory.local/models",
+      "topic_mapping": "factory/paris/line1/robot/temp"
+    },
+    {
+      "elementId": "Robot_Vib",
+      "displayName": "Capteur Vibration",
+      "typeId": "SensorType",
+      "parentId": "Robot_Soudure",
+      "isComposition": false,
+      "namespaceUri": "https://factory.local/models",
+      "topic_mapping": "factory/paris/line1/robot/vibration"
+    },
+    {
+      "elementId": "Convoyeur_1",
+      "displayName": "Convoyeur Principal",
+      "typeId": "MachineType",
+      "parentId": "Line_1",
+      "isComposition": false,
+      "namespaceUri": "https://factory.local/models",
+      "topic_mapping": "factory/paris/line1/conveyor/speed"
+    }
+  ],
+  "legacy_concepts": []
 }

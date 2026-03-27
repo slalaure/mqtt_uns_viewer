@@ -13,8 +13,7 @@
  * according to I3X specifications. 
  * Integrates vis-network for interactive Relationship Graphs.
  */
-
-import { confirmModal, trackEvent } from './utils.js';
+import { confirmModal, trackEvent, makeResizable } from './utils.js';
 
 // --- State ---
 let currentModel = null;
@@ -28,26 +27,47 @@ let treeContainer, graphContainer, btnRefresh, btnSave, statusMsg;
 let formContainer, welcomeScreen, mainContent, formTitle, formSubtitle, dynamicFields, btnDelete;
 
 /**
- * Robust loader for vis-network.
+ * Robust loader for vis-network with CDN fallback.
  * Returns a Promise that resolves when the library is ready.
  */
 function loadVisNetwork() {
     return new Promise((resolve) => {
         if (window.vis) return resolve();
-        const script = document.createElement('script');
-        script.type = 'text/javascript';
+        
+        const loadScript = (src) => {
+            return new Promise((res) => {
+                const script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.src = src;
+                script.onload = () => res(true);
+                script.onerror = () => res(false);
+                document.head.appendChild(script);
+            });
+        };
+
         // Base path strategy: guarantees finding the file in public/libs/
         const basePath = document.querySelector('base')?.getAttribute('href') || '/';
-        script.src = basePath + 'libs/vis-network.min.js';
-        script.onload = () => {
-            console.log("✅ vis-network library loaded from local libs.");
-            resolve();
-        };
-        script.onerror = () => {
-            console.error("❌ Failed to load vis-network.min.js. Ensure the file is in public/libs/");
-            resolve(); 
-        };
-        document.head.appendChild(script);
+        const localPath = basePath + 'libs/vis-network.min.js';
+        const cdnPath = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
+
+        // Try local first (for air-gapped OT environments)
+        loadScript(localPath).then(success => {
+            if (success) {
+                console.log("✅ vis-network library loaded from local libs.");
+                resolve();
+            } else {
+                console.warn("⚠️ Failed to load local vis-network.min.js. Trying CDN fallback...");
+                // Fallback to CDN
+                loadScript(cdnPath).then(cdnSuccess => {
+                    if (cdnSuccess) {
+                        console.log("✅ vis-network library loaded from CDN.");
+                    } else {
+                        console.error("❌ Failed to load vis-network from both local and CDN.");
+                    }
+                    resolve();
+                });
+            }
+        });
     });
 }
 
@@ -63,11 +83,9 @@ export async function initModelerView() {
         // Bind DOM elements
         treeContainer = document.getElementById('modeler-tree-container');
         graphContainer = document.getElementById('relationship-graph');
-        
         btnRefresh = document.getElementById('btn-modeler-refresh');
         btnSave = document.getElementById('btn-modeler-save');
         statusMsg = document.getElementById('modeler-status');
-        
         welcomeScreen = document.getElementById('modeler-welcome');
         mainContent = document.getElementById('modeler-content');
         formContainer = document.getElementById('modeler-form');
@@ -76,17 +94,29 @@ export async function initModelerView() {
         dynamicFields = document.getElementById('modeler-dynamic-fields');
         btnDelete = document.getElementById('btn-modeler-delete');
 
+        // Initialize Resizers
+        makeResizable({
+            resizerEl: document.getElementById('drag-handle-vertical-modeler'),
+            direction: 'vertical',
+            panelA: document.querySelector('.modeler-sidebar')
+        });
+        
+        makeResizable({
+            resizerEl: document.getElementById('drag-handle-horizontal-modeler'),
+            direction: 'horizontal',
+            panelA: document.getElementById('modeler-graph-wrapper'),
+            containerEl: document.getElementById('modeler-content')
+        });
+
         // Wait for vis-network to load
         await loadVisNetwork();
 
         // Event Listeners
         btnRefresh.addEventListener('click', loadModel);
         btnSave.addEventListener('click', saveModelToServer);
-        
         document.getElementById('btn-add-namespace').addEventListener('click', () => createNewItem('namespace'));
         document.getElementById('btn-add-type').addEventListener('click', () => createNewItem('objectType'));
         document.getElementById('btn-add-instance').addEventListener('click', () => createNewItem('instance'));
-
         formContainer.addEventListener('submit', handleFormSubmit);
         btnDelete.addEventListener('click', handleDeleteItem);
 
@@ -117,17 +147,16 @@ function showStatus(message, isError = false) {
 }
 
 // --- 1. Model Loading & Tree Building ---
-
 async function loadModel() {
     try {
         const res = await fetch('api/env/model');
         if (!res.ok) throw new Error("Failed to load model from server");
         currentModel = await res.json();
-
+        
         currentModel.namespaces = currentModel.namespaces || [];
         currentModel.objectTypes = currentModel.objectTypes || [];
         currentModel.instances = currentModel.instances || [];
-
+        
         renderTree();
         
         if (currentSelection.id) {
@@ -159,7 +188,7 @@ function renderTree() {
     currentModel.instances.forEach(inst => {
         if (!instancesByType.has(inst.typeId)) instancesByType.set(inst.typeId, []);
         instancesByType.get(inst.typeId).push(inst);
-        
+
         const pid = (inst.parentId === '/' || !inst.parentId) ? 'root' : inst.parentId;
         if (!instancesByParent.has(pid)) instancesByParent.set(pid, []);
         instancesByParent.get(pid).push(inst);
@@ -181,7 +210,7 @@ function renderTree() {
             <span class="node-icon" style="color: #64748b;">📦</span>
             <span class="node-label">${inst.displayName || inst.elementId}</span>
         `;
-        
+
         nodeDiv.onclick = (e) => {
             if (e.target.classList.contains('node-toggle') && hasChildren) {
                 const ul = li.querySelector(':scope > ul');
@@ -195,6 +224,7 @@ function renderTree() {
             }
             selectItem('instance', inst.elementId);
         };
+
         li.appendChild(nodeDiv);
 
         if (hasChildren) {
@@ -218,7 +248,7 @@ function renderTree() {
             <span class="node-icon" style="color: #3b82f6;">🌐</span>
             <span class="node-label">${ns.displayName}</span>
         `;
-        
+
         nodeDiv.onclick = (e) => {
             if (e.target.classList.contains('node-toggle') && types.length > 0) {
                 const ul = nsLi.querySelector(':scope > ul');
@@ -237,12 +267,11 @@ function renderTree() {
         if (types.length > 0) {
             const typeUl = document.createElement('ul');
             typeUl.className = isExp ? '' : 'collapsed';
-            
             types.forEach(t => {
                 const tLi = document.createElement('li');
                 const rootInstancesOfType = (instancesByType.get(t.elementId) || []).filter(i => i.parentId === '/' || !i.parentId);
                 const isTExp = expandedNodes.has(t.elementId);
-                
+
                 const tDiv = document.createElement('div');
                 tDiv.className = `modeler-node ${currentSelection.id === t.elementId ? 'selected' : ''}`;
                 tDiv.innerHTML = `
@@ -250,7 +279,7 @@ function renderTree() {
                     <span class="node-icon" style="color: #22c55e;">📃</span>
                     <span class="node-label">${t.displayName}</span>
                 `;
-                
+
                 tDiv.onclick = (e) => {
                     if (e.target.classList.contains('node-toggle') && rootInstancesOfType.length > 0) {
                         const ul = tLi.querySelector(':scope > ul');
@@ -283,7 +312,6 @@ function renderTree() {
 }
 
 // --- 2. Selection & Graph Drawing ---
-
 function selectItem(type, id) {
     let ref = null;
     if (type === 'namespace') ref = currentModel.namespaces.find(n => n.uri === id);
@@ -296,13 +324,12 @@ function selectItem(type, id) {
     }
 
     currentSelection = { type, id, ref };
-    
     document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
     renderTree(); 
-
+    
     welcomeScreen.style.display = 'none';
     mainContent.style.display = 'flex';
-    
+
     // [FIX] On laisse 100ms au DOM Flexbox pour calculer sa vraie hauteur avant de dessiner
     setTimeout(() => {
         drawRelationshipGraph();
@@ -321,6 +348,7 @@ function drawRelationshipGraph() {
     if (!item) return;
 
     const isDark = document.body.classList.contains('dark-mode');
+    
     const colors = {
         center:   { background: '#007bff', border: '#0056b3', font: '#ffffff' },
         instance: { background: isDark ? '#333333' : '#ffffff', border: '#6c757d', font: isDark ? '#ffffff' : '#333333' },
@@ -330,7 +358,7 @@ function drawRelationshipGraph() {
 
     let nodesData = [];
     let edgesData = [];
-    
+
     const addNode = (id, label, group, nodeType) => {
         if (!nodesData.find(n => n.id === id)) {
             let icon = '📦';
@@ -338,7 +366,7 @@ function drawRelationshipGraph() {
             if (nodeType === 'objectType') icon = '📃';
 
             const style = (group === 'center') ? colors.center : (colors[group] || colors.instance);
-
+            
             nodesData.push({
                 id: id,
                 label: `${icon} ${label.length > 20 ? label.substring(0, 18) + '...' : label}`,
@@ -413,20 +441,26 @@ function drawRelationshipGraph() {
         nodes: new vis.DataSet(nodesData), 
         edges: new vis.DataSet(edgesData) 
     };
-    
-    // [FIX] On utilise le moteur "repulsion" beaucoup plus stable visuellement que forceAtlas
+
+    // [UPDATED] Physics and interaction options tuned for active dragging and dynamic behavior
     const options = {
         physics: {
-            solver: 'repulsion',
-            repulsion: {
-                nodeDistance: 150,
-                springLength: 150
+            enabled: true,
+            solver: 'forceAtlas2Based',
+            forceAtlas2Based: {
+                gravitationalConstant: -50,
+                centralGravity: 0.01,
+                springLength: 100,
+                springConstant: 0.08,
+                damping: 0.4,
+                avoidOverlap: 0.5
             }
         },
         interaction: {
             dragNodes: true,
             dragView: true,
-            zoomView: true
+            zoomView: true,
+            hover: true
         }
     };
 
@@ -439,6 +473,7 @@ function drawRelationshipGraph() {
         if (params.nodes.length > 0) {
             const clickedNodeId = params.nodes[0];
             const clickedNode = data.nodes.get(clickedNodeId);
+            
             if (clickedNode && clickedNode.nodeType && clickedNodeId !== currentSelection.id) {
                 selectItem(clickedNode.nodeType, clickedNodeId);
             }
@@ -447,7 +482,6 @@ function drawRelationshipGraph() {
 }
 
 // --- 3. Form Editor ---
-
 function renderForm() {
     const { type, id, ref: itemData } = currentSelection;
     if (!itemData) return;
@@ -532,7 +566,7 @@ function handleFormSubmit(e) {
             try { value = JSON.parse(value); } catch(err) { alert("Invalid JSON in Schema"); return; }
         }
         if (key === 'isComposition') value = true;
-        
+
         if (value === "") delete ref[key];
         else ref[key] = value;
     }
@@ -540,6 +574,7 @@ function handleFormSubmit(e) {
     if (type === 'instance' && !formData.has('isComposition')) {
         ref.isComposition = false;
     }
+    
     if (type === 'instance' && ref.parentId === '/') {
         delete ref.parentId;
     }
@@ -551,7 +586,6 @@ function handleFormSubmit(e) {
 }
 
 // --- 4. Creation, Deletion & Persistence ---
-
 function createNewItem(type) {
     const newItem = {};
     if (type === 'namespace') {
@@ -573,16 +607,13 @@ function createNewItem(type) {
         newItem.displayName = "New Instance";
         newItem.typeId = currentModel.objectTypes[0]?.elementId || "";
         newItem.isComposition = false;
-        
         if (currentSelection.type === 'instance') {
             newItem.parentId = currentSelection.id;
             expandedNodes.add(currentSelection.id);
         }
-        
         currentModel.instances.push(newItem);
         selectItem(type, newItem.elementId);
     }
-    
     btnSave.classList.add('btn-unsaved');
 }
 
@@ -608,7 +639,6 @@ function clearEditor() {
     currentSelection = { type: null, id: null, ref: null };
     welcomeScreen.style.display = 'flex';
     mainContent.style.display = 'none';
-    
     document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
     
     if (networkGraph) {
@@ -621,7 +651,7 @@ async function saveModelToServer() {
     trackEvent('modeler_save_model');
     btnSave.disabled = true;
     btnSave.textContent = "Saving...";
-
+    
     try {
         const response = await fetch('api/env/model', {
             method: 'POST',

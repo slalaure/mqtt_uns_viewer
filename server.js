@@ -11,6 +11,7 @@
  * Server Entry Point
  * [UPDATED] Refactored to use Hexagonal Architecture paths (connectors, storage, core, interfaces).
  * [UPDATED] Implemented I3X internal event bus and Northbound API.
+ * [UPDATED] Added VIEW_MODELER_ENABLED configuration flag.
  */
 // --- Imports ---
 const pino = require('pino');
@@ -140,6 +141,7 @@ const config = {
     VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false',
     VIEW_HMI_ENABLED: process.env.VIEW_HMI_ENABLED !== 'false', 
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false',
+    VIEW_MODELER_ENABLED: process.env.VIEW_MODELER_ENABLED !== 'false', // [NEW] Control Modeler visibility
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false',
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
     VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
@@ -263,6 +265,7 @@ function getPrimaryConnection() {
     if (activeConnections.size === 0) return null;
     return activeConnections.values().next().value || null;
 }
+
 function getBrokerConnection(brokerId) {
     if (!brokerId) return getPrimaryConnection();
     return activeConnections.get(brokerId) || null;
@@ -300,10 +303,12 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+
 // Passport Serialization
 passport.serializeUser((user, done) => {
     done(null, user.id);
 });
+
 passport.deserializeUser(async (id, done) => {
     try {
         const user = await userManager.findById(id);
@@ -312,16 +317,20 @@ passport.deserializeUser(async (id, done) => {
         done(err);
     }
 });
+
 // Local Strategy
 passport.use(new LocalStrategy(async (username, password, done) => {
     try {
         const user = await userManager.findByUsername(username);
         if (!user) { return done(null, false, { message: 'Incorrect username.' }); }
+
         const isValid = await userManager.verifyPassword(password, user.password_hash);
         if (!isValid) { return done(null, false, { message: 'Incorrect password.' }); }
+
         return done(null, user);
     } catch (err) { return done(err); }
 }));
+
 // Google Strategy
 if (config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
     logger.info("✅ Google OAuth Strategy Enabled.");
@@ -359,14 +368,17 @@ const mapperEngine = require('./core/engine/mapperEngine')(
 const dbFile = DB_PATH;
 const dbWalFile = dbFile + '.wal';
 let db; 
+
 db = new duckdb.Database(dbFile, (err) => {
     if (err) {
         logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
         process.exit(1);
     }
     logger.info("✅ 🦆 DuckDB database connected.");
+
     // 1. Initialize User Manager Table
     userManager.init(db, logger, SESSIONS_PATH);
+
     // 2. Initialize Alert Manager
     alertManager.init(db, logger, config, wsManager.broadcast);
 
@@ -377,6 +389,7 @@ db = new duckdb.Database(dbFile, (err) => {
     if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
         userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
     }
+
     // 4. Ensure table exists
     db.exec(`
         CREATE TABLE IF NOT EXISTS mqtt_events (
@@ -389,6 +402,7 @@ db = new duckdb.Database(dbFile, (err) => {
             logger.error({ err: createErr }, "❌ FATAL: Failed to ensure table 'mqtt_events' exists.");
             return; 
         }
+
         // 5. Schema Migration Check
         db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
             if (columns) {
@@ -404,9 +418,10 @@ db = new duckdb.Database(dbFile, (err) => {
     });
 
     mapperEngine.setDb(db);
+
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
-    
+
     // --- [NEW] Intercept wsManager.broadcast to feed I3X Event Bus ---
     // This allows us to power SSE streaming without touching the dispatcher again
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
@@ -444,9 +459,11 @@ db = new duckdb.Database(dbFile, (err) => {
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
     if (req.isAuthenticated()) return next();
+
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.gltf', '.glb', '.bin'];
     if (allowedExts.includes(ext)) return next();
+
     if (config.HTTP_USER && config.HTTP_PASSWORD) {
         const credentials = basicAuth(req);
         if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
@@ -455,9 +472,11 @@ const authMiddleware = (req, res, next) => {
         res.setHeader('WWW-Authenticate', 'Basic realm="Korelate"');
         return res.status(401).send('Authentication required.');
     }
+
     if (req.path.startsWith('/auth') || req.path === '/login') {
         return next();
     }
+
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
     return res.status(401).send('Unauthorized. Please log in.');
 };
@@ -484,6 +503,7 @@ const ipFilterMiddleware = (req, res, next) => {
 
 const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
+
 app.set('trust proxy', true);
 
 simulatorManager.init(logger, (topic, payload) => {
@@ -521,6 +541,7 @@ function resolveHmiPath(filename, req) {
 mainRouter.get('/api/hmi/file', (req, res) => {
     const filename = path.basename(req.query.name || '');
     if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).send('Invalid file type');
+
     const filePath = resolveHmiPath(filename, req);
     if (fs.existsSync(filePath)) {
         if (filename.endsWith('.glb')) res.setHeader('Content-Type', 'model/gltf-binary');
@@ -569,26 +590,32 @@ mainRouter.delete('/api/hmi/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
     if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).json({ error: "Invalid file type" });
+
     const globalPath = path.join(DATA_PATH, filename);
     let targetPath = null;
     let isPrivate = false;
+
     if (req.user && req.user.id) {
         const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
         const userPath = path.join(userHmiDir, filename);
         if (fs.existsSync(userPath)) { targetPath = userPath; isPrivate = true; }
     }
+
     if (!targetPath && fs.existsSync(globalPath)) {
         targetPath = globalPath;
         isPrivate = false;
     }
+
     if (!targetPath) {
         return res.status(404).json({ error: "File not found" });
     }
+
     if (!isPrivate) {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
         }
     }
+
     try {
         fs.unlinkSync(targetPath);
         logger.info(`Deleted View: ${targetPath}`);
@@ -616,6 +643,7 @@ mainRouter.get('/api/config', (req, res) => {
         viewTreeEnabled: config.VIEW_TREE_ENABLED,
         viewHmiEnabled: config.VIEW_HMI_ENABLED,
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
+        viewModelerEnabled: config.VIEW_MODELER_ENABLED, // [NEW] Read from env
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
         viewPublishEnabled: config.VIEW_PUBLISH_ENABLED,
@@ -668,12 +696,14 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
     const conn = getBrokerConnection(brokerId);
     if (!conn || !conn.connected) return res.status(503).json({ error: "Broker not connected" });
+
     let finalPayload = payload;
     if (format === 'json' || typeof payload === 'object') {
         try { finalPayload = JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload); } catch(e) {}
     } else if (format === 'sparkplugb') {
         try { finalPayload = spBv10Codec.encodePayload(JSON.parse(payload)); } catch(e) { return res.status(400).json({ error: e.message }); }
     }
+
     conn.publish(topic, finalPayload, { qos: parseInt(qos)||0, retain: !!retain }, (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -701,9 +731,11 @@ const serveSPA = (req, res) => {
             logger.error({ err }, "Failed to read index.html");
             return res.status(500).send("Server Error");
         }
+
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
         let modifiedHtml = data;
         modifiedHtml = modifiedHtml.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
+        
         let userState = 'null';
         if (req.isAuthenticated && req.isAuthenticated()) {
             userState = JSON.stringify({
@@ -715,12 +747,14 @@ const serveSPA = (req, res) => {
             });
         }
         modifiedHtml = modifiedHtml.replace('</head>', `<script>window.currentUser = ${userState};</script>\n</head>`);
+
         const analyticsPlaceholder = '';
         if (config.ANALYTICS_ENABLED) {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ANALYTICS_SCRIPT);
         } else {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); 
         }
+
         res.send(modifiedHtml);
     });
 };
@@ -752,6 +786,7 @@ app.get('/', (req, res) => {
 server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
 });
+
 server.timeout = 600000;
 server.keepAliveTimeout = 600000;
 server.headersTimeout = 600005;
@@ -761,24 +796,31 @@ async function gracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     logger.info("\n✅ Gracefully shutting down...");
+
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
+
     try {
         dataManager.stop();
         simulatorManager.getStatuses();
+
         await new Promise(resolve => wsManager.close(resolve));
+
         await new Promise((resolve) => {
             server.close(() => {
                 logger.info("✅ HTTP Server closed.");
                 resolve();
             });
         });
+
         connectorManager.closeAll(); 
         logger.info("✅ Data Connectors closed.");
+
         await dataManager.close();
         logger.info("✅ Database closed.");
+
         logger.info("✅ Shutdown complete.");
         process.exit(0);
     } catch (err) {

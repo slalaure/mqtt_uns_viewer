@@ -10,14 +10,12 @@
  *
  * [UPDATED] Added dynamic UI injection for the I3X Semantic switch.
  * [UPDATED] Intercepts clicks on I3X nodes to fetch Semantic data via REST.
- * [UPDATED] Integrated Semantic Modeler View for Admins.
+ * [UPDATED] Integrated Semantic Modeler View for Admins (with ENV flag).
  */
-
 // ---  Module Imports ---
 import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js';
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
-
 import { initHmiView, updateMap, updateHmiTimelineUI, setHmiHistoryData, refreshHmiList, refreshHmiLiveState } from './view.hmi.js';
 import { 
     initHistoryView, 
@@ -52,15 +50,16 @@ import { initAdminView, onAdminViewShow } from './view.admin.js';
 import { initAlertsView, onAlertsViewShow, onAlertsViewHide, openCreateRuleModal, refreshAlerts } from './view.alerts.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-
     // Variables must be initialized before being used
     const datetimeContainer = document.getElementById('current-datetime');
     const darkModeToggle = document.getElementById('dark-mode-toggle');
     const btnConfigView = document.getElementById('btn-config-view'); 
     const brokerStatusContainer = document.getElementById('broker-status-container');
+    
     const treeViewWrapper = document.querySelector('.tree-view-wrapper');
     const payloadContainer = document.getElementById('payload-display');
     const payloadMainArea = document.getElementById('payload-main-area');
+    
     const livePayloadToggle = document.getElementById('live-payload-toggle');
     const topicHistoryContainer = document.getElementById('topic-history-container');
     const treeFilterInput = document.getElementById('tree-filter-input');
@@ -96,11 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyDbLimit = document.getElementById('history-db-limit');
     const pruningIndicator = document.getElementById('pruning-indicator');
     const simulatorControls = document.getElementById('simulator-list-container'); 
-    
     const mapperFilterInput = document.getElementById('mapper-filter-input');
     const btnMapperExpandAll = document.getElementById('btn-mapper-expand-all');
     const btnMapperCollapseAll = document.getElementById('btn-mapper-collapse-all');
-
     const chartFilterInput = document.getElementById('chart-filter-input');
     const btnChartExpandAll = document.getElementById('btn-chart-expand-all');
     const btnChartCollapseAll = document.getElementById('btn-chart-collapse-all');
@@ -150,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const avatarUrl = user.avatar || generateLocalAvatar(user.displayName || user.username);
         const isAdminLabel = (user.role === 'admin') ? '<span style="background:var(--color-danger); font-size:0.7em; padding:2px 4px; border-radius:3px; margin-left:5px;">ADMIN</span>' : '';
-
+        
         userDiv.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
                 <img src="${avatarUrl}" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);">
@@ -187,7 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoginOverlay();
         return; 
     }
-
     console.log("✅ Logged in as:", currentUser.username || currentUser.displayName);
     injectUserMenu(currentUser);
 
@@ -200,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Variables and State ---
     let recentlyPrunedPatterns = new Set();
     const PRUNE_IGNORE_DURATION_MS = 10000;
+
     let isMultiBroker = false;
     let brokerConfigs = [];
     let appBasePath = '/';
@@ -210,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let allHistoryEntries = [];
     let globalDbMin = 0;
     let globalDbMax = Date.now();
-
     let mainTree, mapperTree, chartTree;
     let mainPayloadViewer;
     let selectedMainTreeNode = null; 
@@ -252,7 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localStorage.getItem('theme') === 'dark') {
         enableDarkMode();
     }
-
     darkModeToggle?.addEventListener('change', () => {
         darkModeToggle.checked ? enableDarkMode() : disableDarkMode();
     });
@@ -261,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function switchView(viewToShow, updateHistory = true) {
         const views = [treeView, hmiView, historyView, modelerView, mapperView, chartView, publishView, adminView, alertsView];
         const buttons = [btnTreeView, btnHmiView, btnHistoryView, btnModelerView, btnMapperView, btnChartView, btnPublishView, btnAdminView, btnAlertsView];
+
         let targetView, targetButton;
         let slug = 'tree'; 
 
@@ -280,18 +276,18 @@ document.addEventListener('DOMContentLoaded', () => {
             switchView('tree');
             return;
         }
-        if (viewToShow === 'modeler' && currentUser.role !== 'admin') {
-            console.warn("Unauthorized access to modeler view.");
+
+        // --- UPDATED SAFETY CHECK FOR MODELER ---
+        if (viewToShow === 'modeler' && (!window.viewModelerEnabled || currentUser.role !== 'admin')) {
+            console.warn("Unauthorized access to modeler view or view is disabled via .env.");
             switchView('tree');
             return;
         }
 
         views.forEach(v => v?.classList.remove('active'));
         buttons.forEach(b => b?.classList.remove('active'));
-
         targetView?.classList.add('active');
         targetButton?.classList.add('active');
-
         trackEvent(`view_switch_${viewToShow || 'tree'}`);
 
         // View Specific Callbacks
@@ -332,13 +328,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const path = window.location.pathname;
         let viewToLoad = 'tree'; 
         const normalizedBase = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
-        
         let relativePath = path;
+        
         if (path.startsWith(normalizedBase)) {
             relativePath = path.substring(normalizedBase.length);
         }
-        
         const cleanPath = relativePath.replace(/^\/|\/$/g, '');
+
         if (cleanPath === 'hmi' || cleanPath === 'map' || cleanPath === 'svg') viewToLoad = 'hmi';
         else if (cleanPath === 'history') viewToLoad = 'history';
         else if (cleanPath === 'modeler') viewToLoad = 'modeler';
@@ -348,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (cleanPath === 'admin') viewToLoad = 'admin';
         else if (cleanPath === 'alerts') viewToLoad = 'alerts';
         else viewToLoad = 'tree';
-
+        
         switchView(viewToLoad, false); 
     }
 
@@ -405,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ elementIds: [elementId], maxDepth: 1 })
                 });
-                
+
                 if (res.ok) {
                     const data = await res.json();
                     mainPayloadViewer.display('I3X', elementId, JSON.stringify(data[elementId], null, 2));
@@ -443,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkbox = event.target;
         const isChecked = checkbox.checked;
         const li = checkbox.closest('li');
+
         if (li) {
             li.querySelectorAll('.node-filter-checkbox').forEach(cb => cb.checked = isChecked);
         }
@@ -450,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function colorAllMapperTrees() {
         if (!mainTree || !mapperTree) return; 
+
         const colorFn = (brokerId, topic, li) => {
             const status = getTopicMappingStatus(brokerId, topic); 
             li.classList.remove('mapped-source', 'mapped-target');
@@ -459,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.classList.add('mapped-target');
             }
         };
+
         mainTree.colorTree(colorFn);
         mapperTree.colorTree(colorFn);
     }
@@ -466,9 +465,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function colorChartTree() {
         if (!chartTree) return; 
         const chartedVars = getChartedTopics(); 
+        
         const colorFn = (brokerId, topic, li) => {
             let isOrHasChartedChild = false;
             const folderPathPrefix = `${brokerId}|${topic}/`;
+
             for (const [varId, varInfo] of chartedVars.entries()) {
                 if (varInfo.brokerId === brokerId && varInfo.topic === topic) {
                     isOrHasChartedChild = true;
@@ -497,19 +498,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const configResponse = await fetch('api/config');
             if (!configResponse.ok) throw new Error('Failed to fetch config');
             const appConfig = await configResponse.json();
-
+            
             appBasePath = appConfig.basePath || '/';
             isMultiBroker = appConfig.isMultiBroker || false;
             brokerConfigs = appConfig.brokerConfigs || [];
             alertsEnabled = appConfig.viewAlertsEnabled; 
+            
+            // Store globally for routing logic
+            window.viewModelerEnabled = appConfig.viewModelerEnabled;
 
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            
             let cleanBasePath = appBasePath;
             if (!cleanBasePath.endsWith('/')) {
                 cleanBasePath += '/';
             }
-            
             const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
             console.log("Connecting WebSocket to:", wsUrl); 
             ws = new WebSocket(wsUrl);
@@ -524,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             ws.onerror = (err) => console.error("WebSocket Error:", err);
+            
             ws.onclose = (event) => { 
                 console.warn(`WebSocket closed (code: ${event.code}). Reconnecting in 3s...`);
                 isAppInitialized = false; 
@@ -552,7 +555,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reverse batch to make it Newest -> Oldest for History unshift
         for (let i = batch.length - 1; i >= 0; i--) {
             const msg = batch[i];
-            
             // Keep latest payload for tree dedup
             uniqueTopics.set(`${msg.brokerId}|${msg.topic}`, msg); 
 
@@ -564,7 +566,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             historyEntries.push({ ...msg, timestampMs });
         }
-        
         globalDbMax = localMax;
 
         // Push bulk to history
@@ -610,6 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Route chat stream chunks to the chat view module
                     onChatStreamMessage(message);
                     break;
+
                 // --- Global Alert Trigger ---
                 case 'alert-triggered':
                     if (alertsEnabled) {
@@ -617,6 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         refreshAlerts(); // Update table if visible
                     }
                     break;
+
                 // ---  Alert Updated (e.g. Analysis Complete) ---
                 case 'alert-updated':
                     if (alertsEnabled) {
@@ -624,6 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         refreshAlerts();
                     }
                     break;
+
                 case 'mqtt-message':
                     // Backpressure & Batching for Frontend Rendering
                     if (realtimeMessageQueue.length > REALTIME_QUEUE_LIMIT) {
@@ -631,18 +635,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         realtimeMessageQueue.splice(0, realtimeMessageQueue.length - (REALTIME_QUEUE_LIMIT / 2));
                     }
                     realtimeMessageQueue.push(message);
+
                     if (!isFlushingRealtimeQueue) {
                         isFlushingRealtimeQueue = true;
                         requestAnimationFrame(flushRealtimeMessageQueue);
                     }
                     break;
+                
                 case 'simulator-status': updateSimulatorStatuses(message.statuses); break;
+                
                 case 'db-bounds':
                     globalDbMin = message.min; globalDbMax = message.max;
                     setDbBounds(globalDbMin, globalDbMax); 
                     updateChartSliderUI(globalDbMin, globalDbMax, true);
                     updateHmiTimelineUI(globalDbMin, globalDbMax);
                     break;
+                
                 case 'history-initial-data':
                     allHistoryEntries = message.data.map(entry => ({ ...entry, brokerId: entry.broker_id || entry.brokerId || 'default_broker', timestampMs: new Date(entry.timestamp).getTime() }));
                     console.log(`[App Debug] Initial history loaded: ${allHistoryEntries.length} items.`);
@@ -650,9 +658,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     setHistoryData(allHistoryEntries, true, false);
                     populateTreesFromHistory();
                     break;
+                
                 case 'history-range-data':
                     console.log(`[App Debug] Received history-range-data: ${message.data.length} entries.`);
                     const rangeEntries = message.data.map(entry => ({ ...entry, brokerId: entry.broker_id || entry.brokerId || 'default_broker', timestampMs: new Date(entry.timestamp).getTime() }));
+                    
                     allHistoryEntries = rangeEntries;
                     setHmiHistoryData(allHistoryEntries);
                     setHistoryData(allHistoryEntries, false, false, message.requestStart, message.requestEnd);
@@ -660,18 +670,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     refreshChart();
                     populateTreesFromHistory(); 
                     break;
+                
                 case 'tree-initial-state':
                     if (mainTree) mainTree.rebuild(message.data);
                     if (mapperTree) mapperTree.rebuild(message.data);
                     if (chartTree) chartTree.rebuild(message.data);
                     colorAllMapperTrees(); colorChartTree();
                     break;
+                
                 case 'topic-history-data': mainPayloadViewer.updateHistory(message.brokerId, message.topic, message.data); break;
+                
                 case 'db-status-update':
                     if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
                     if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
                     if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
                     break;
+                
                 case 'pruning-status': if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started'); break;
                 case 'mapper-config-update': updateMapperConfig(message.config); colorAllMapperTrees(); break;
                 case 'mapped-topic-generated': addMappedTargetTopic(message.brokerId, message.topic); colorAllMapperTrees(); break;
@@ -692,6 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         globalAlertBanner.style.backgroundColor = alertData.severity === 'critical' ? 'var(--color-danger)' : '#ff9800';
         globalAlertBanner.classList.add('visible');
+        
         // Hide after 5 seconds
         setTimeout(() => {
             globalAlertBanner.classList.remove('visible');
@@ -718,6 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSingleBrokerStatus(brokerId, status, error) {
         let item = document.getElementById(`broker-status-${brokerId}`);
         if (!item) { createBrokerStatusElement(brokerId, status, error); return; }
+
         item.classList.remove('status-connected', 'status-connecting', 'status-error', 'status-offline', 'status-disconnected');
         item.classList.add(`status-${status}`);
         if (error) item.title = `Error: ${error}`; else item.title = `${brokerId}: ${status}`;
@@ -736,12 +752,12 @@ document.addEventListener('DOMContentLoaded', () => {
         btnTreeView?.classList.remove('active');
         treeView?.classList.remove('active');
 
-        // Allow modeler only for admins
+        // Allow modeler only for admins AND if enabled in env
         const views = [
             { enabled: appConfig.viewTreeEnabled, btn: btnTreeView, view: 'tree' },
             { enabled: appConfig.viewHmiEnabled, btn: btnHmiView, view: 'hmi' },
             { enabled: appConfig.viewHistoryEnabled, btn: btnHistoryView, view: 'history' },
-            { enabled: currentUser.role === 'admin', btn: btnModelerView, view: 'modeler' }, // [NEW]
+            { enabled: appConfig.viewModelerEnabled && currentUser.role === 'admin', btn: btnModelerView, view: 'modeler' }, // [UPDATED]
             { enabled: appConfig.viewMapperEnabled, btn: btnMapperView, view: 'mapper' },
             { enabled: appConfig.viewChartEnabled, btn: btnChartView, view: 'chart' },
             { enabled: appConfig.viewPublishEnabled, btn: btnPublishView, view: 'publish' },
@@ -785,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             allowFolderCollapse: true,
             isMultiBroker: isMultiBroker 
         });
-
+        
         mapperTree = createTreeManager(document.getElementById('mapper-tree'), {
             treeId: 'mapper',
             onNodeClick: (e, node, brokerId, topic) => { 
@@ -839,7 +855,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         initHmiView(appConfig);
-
         initHistoryView({ 
             isMultiBroker: isMultiBroker,
             brokerConfigs: brokerConfigs,
@@ -906,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-mapper'), direction: 'vertical', panelA: document.querySelector('.mapper-tree-wrapper') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal-mapper'), direction: 'horizontal', panelA: document.getElementById('mapper-payload-area'), containerEl: document.getElementById('mapper-payload-container') });
-        
+
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-chart'), direction: 'vertical', panelA: document.querySelector('.chart-tree-wrapper') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal-chart'), direction: 'horizontal', panelA: document.getElementById('chart-payload-area'), containerEl: document.getElementById('chart-payload-container') });
 
@@ -955,7 +970,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const entries = Array.from(uniqueTopicsMap.values());
-        
         if (mainTree) mainTree.rebuild(entries);
         if (mapperTree) mapperTree.rebuild(entries);
         if (chartTree) chartTree.rebuild(entries);
@@ -968,11 +982,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const regex = mqttPatternToRegex(topicPattern);
         
         allHistoryEntries = allHistoryEntries.filter(entry => !regex.test(entry.topic));
-        
         setHmiHistoryData(allHistoryEntries);
         const newState = setHistoryData(allHistoryEntries, false, false); 
-        
         updateChartSliderUI(globalDbMin, globalDbMax, true); 
+
         pruneChartedVariables(regex); 
 
         const targetMap = getMappedTargetTopics();
