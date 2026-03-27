@@ -14,11 +14,12 @@
  * It acts as a single entry point for the mqtt-handler and abstracts
  * away the underlying storage, fanning out messages to one or more
  * repositories (e.g., DuckDB, TimescaleDB).
+ * [UPDATED] Uses camelCase repository filenames.
+ * [UPDATED] stop() is now async to properly await TimescaleDB flush.
  */
-
 // Import repository modules
-const duckDbRepo = require('./duckdb_repository');
-const timescaleRepo = require('./timescale_repository');
+const duckDbRepo = require('./duckdbRepository');
+const timescaleRepo = require('./timescaleRepository');
 
 // --- Module-level State ---
 let logger = null;
@@ -36,11 +37,11 @@ let isTimescaleEnabled = false;
 function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastDbStatus) {
     logger = appLogger.child({ component: 'DataManager' });
     config = appConfig;
-    
+
     // 1. Initialize the DuckDB repository (always enabled for the UI)
     // We pass the active DB connection to it.
     duckDbRepo.init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine);
-    
+
     // 2. Check and initialize the perennial repository (e.g., Timescale)
     isTimescaleEnabled = config.PERENNIAL_DRIVER === 'timescale';
     if (isTimescaleEnabled) {
@@ -49,7 +50,7 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
     } else {
         logger.info("Perennial storage driver is set to 'none'. Only writing to DuckDB.");
     }
-    
+
     logger.info("✅ Data Manager initialized.");
 }
 
@@ -61,7 +62,7 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
 function insertMessage(message) {
     // 1. Always push to DuckDB for the UI
     duckDbRepo.push(message);
-    
+
     // 2. Push to perennial storage if enabled
     if (isTimescaleEnabled) {
         timescaleRepo.push(message);
@@ -71,11 +72,11 @@ function insertMessage(message) {
 /**
  * Signals all repositories to stop their batch timers and process remaining queues.
  */
-function stop() {
+async function stop() {
     logger.info("Stopping all repository batch processors...");
-    duckDbRepo.stop();
+    duckDbRepo.stop(); // DuckDB processDbQueue is synchronous
     if (isTimescaleEnabled) {
-        timescaleRepo.stop();
+        await timescaleRepo.stop(); // TimescaleDB process is async, must be awaited
     }
 }
 
@@ -85,12 +86,12 @@ function stop() {
  */
 async function close() {
     logger.info("Closing all database connections...");
-    
+
     // Create promises for each closing operation
     const duckDbClosePromise = new Promise((resolve) => {
         duckDbRepo.close(resolve);
     });
-    
+
     const timescaleClosePromise = new Promise((resolve) => {
         if (isTimescaleEnabled) {
             timescaleRepo.close(resolve);

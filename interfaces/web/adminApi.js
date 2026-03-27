@@ -10,17 +10,23 @@
  *
  * Admin API
  * Protected routes for User Management, System Maintenance, HMI Asset Management, Simulators and Parsers.
- * [UPDATED] Paths adjusted for new Hexagonal structure (storage & connectors).
+ * [UPDATED] Corrected simulator paths to /data/simulators subfolder.
  */
 const express = require('express');
-const userManager = require('../../storage/userManager'); // [UPDATED]
+const userManager = require('../../storage/userManager');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const connectorManager = require('../../connectors/connectorManager'); // [UPDATED]
+const connectorManager = require('../../connectors/connectorManager');
 
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
+    const simulatorsPath = path.join(dataPath, 'simulators');
+
+    // Ensure simulators directory exists
+    if (!fs.existsSync(simulatorsPath)) {
+        try { fs.mkdirSync(simulatorsPath, { recursive: true }); } catch (e) {}
+    }
 
     // --- Multer Configuration for Imports (JSON) ---
     const storageJson = multer.diskStorage({
@@ -68,9 +74,18 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // --- Multer Configuration for Simulators ---
+    // --- [UPDATED] Multer Configuration for Simulators ---
+    const storageSim = multer.diskStorage({
+        destination: function (req, file, cb) {
+            cb(null, simulatorsPath); 
+        },
+        filename: function (req, file, cb) {
+            cb(null, path.basename(file.originalname));
+        }
+    });
+
     const uploadSimulator = multer({ 
-        storage: storageHmi, 
+        storage: storageSim, 
         fileFilter: (req, file, cb) => {
             if (file.originalname.match(/^simulator-.*\.js$/i)) {
                 cb(null, true);
@@ -143,7 +158,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
     });
 
     // --- Database Maintenance ---
-    // POST /api/admin/import-db
+
     router.post('/import-db', uploadJson.single('db_import'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No JSON file uploaded.' });
@@ -182,7 +197,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
             }
 
             logger.info(`[AdminAPI] Queued ${count} messages for import.`);
-            fs.unlinkSync(filePath); // Cleanup temp file
+            fs.unlinkSync(filePath); 
             res.json({ success: true, message: `Successfully queued ${count} entries for import.` });
 
         } catch (err) {
@@ -202,10 +217,10 @@ module.exports = (logger, db, dataManager, dataPath) => {
                     logger.error({ err }, "Failed to truncate mqtt_events");
                     return res.status(500).json({ error: "Failed to clear database." });
                 }
+
                 db.run("VACUUM;", (vacErr) => {
                     if (vacErr) logger.error({ err: vacErr }, "Failed to vacuum DB");
                     else logger.info("✅ Database truncated and vacuumed.");
-                    
                     res.json({ message: 'Database has been reset successfully.' });
                 });
             });
@@ -213,7 +228,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
     });
 
     // --- HMI Assets Management ---
-    // GET /api/admin/hmi-assets
+
     router.get('/hmi-assets', (req, res) => {
         try {
             if (!fs.existsSync(dataPath)) return res.json([]);
@@ -221,11 +236,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
             const files = fs.readdirSync(dataPath).filter(f => f.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i) && !f.toLowerCase().startsWith('simulator-'));
             const fileStats = files.map(f => {
                 const stat = fs.statSync(path.join(dataPath, f));
-                return {
-                    name: f,
-                    size: stat.size,
-                    mtime: stat.mtime
-                };
+                return { name: f, size: stat.size, mtime: stat.mtime };
             });
             // Sort newest first
             fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
@@ -236,21 +247,19 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // POST /api/admin/hmi-assets
     router.post('/hmi-assets', uploadHmi.array('assets', 20), (req, res) => {
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ error: 'No valid files uploaded. Check allowed extensions.' });
+            return res.status(400).json({ error: 'No valid files uploaded.' });
         }
         const fileNames = req.files.map(f => f.filename);
         logger.info(`[AdminAPI] HMI Assets uploaded: ${fileNames.join(', ')}`);
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} assets.`, files: fileNames });
     });
 
-    // DELETE /api/admin/hmi-assets/:filename
     router.delete('/hmi-assets/:filename', (req, res) => {
-        const filename = path.basename(req.params.filename); // Prevent path traversal
+        const filename = path.basename(req.params.filename);
         const filepath = path.join(dataPath, filename);
-        
+
         try {
             if (fs.existsSync(filepath) && !filename.toLowerCase().startsWith('simulator-')) {
                 fs.unlinkSync(filepath);
@@ -260,27 +269,21 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 res.status(404).json({ error: "Asset not found." });
             }
         } catch (err) {
-            logger.error({ err }, `Failed to delete HMI Asset: ${filename}`);
             res.status(500).json({ error: err.message });
         }
     });
 
-    // --- [NEW] Simulators Management ---
-    // GET /api/admin/simulators
+    // --- [UPDATED] Simulators Management ---
+
     router.get('/simulators', (req, res) => {
         try {
-            if (!fs.existsSync(dataPath)) return res.json([]);
-            // Only return simulator-*.js files
-            const files = fs.readdirSync(dataPath).filter(f => f.match(/^simulator-.*\.js$/i));
+            if (!fs.existsSync(simulatorsPath)) return res.json([]);
+            // Scans the simulators subfolder
+            const files = fs.readdirSync(simulatorsPath).filter(f => f.match(/^simulator-.*\.js$/i));
             const fileStats = files.map(f => {
-                const stat = fs.statSync(path.join(dataPath, f));
-                return {
-                    name: f,
-                    size: stat.size,
-                    mtime: stat.mtime
-                };
+                const stat = fs.statSync(path.join(simulatorsPath, f));
+                return { name: f, size: stat.size, mtime: stat.mtime };
             });
-            // Sort newest first
             fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
             res.json(fileStats);
         } catch (err) {
@@ -289,7 +292,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // POST /api/admin/simulators
     router.post('/simulators', uploadSimulator.array('assets', 20), (req, res) => {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'No valid simulator files uploaded.' });
@@ -299,11 +301,10 @@ module.exports = (logger, db, dataManager, dataPath) => {
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} simulators. Restart server to activate.`, files: fileNames });
     });
 
-    // DELETE /api/admin/simulators/:filename
     router.delete('/simulators/:filename', (req, res) => {
-        const filename = path.basename(req.params.filename); // Prevent path traversal
-        const filepath = path.join(dataPath, filename);
-        
+        const filename = path.basename(req.params.filename);
+        const filepath = path.join(simulatorsPath, filename); // Correctly points to simulators folder
+
         try {
             if (fs.existsSync(filepath) && filename.toLowerCase().startsWith('simulator-')) {
                 fs.unlinkSync(filepath);
@@ -340,7 +341,6 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 loop: loop === 'true'
             };
 
-            // [UPDATED] Dynamically load and start the provider using the abstraction layer
             connectorManager.loadProvider(providerConfig);
 
             res.json({ 

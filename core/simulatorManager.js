@@ -11,23 +11,21 @@
  * Simulator Manager
  *
  * This module manages multiple, parallel simulation scenarios.
- * It dynamically loads all scenarios from the /data directory.
+ * It dynamically loads all scenarios from the /data/simulators directory.
+ * [UPDATED] Moved to core/ folder, renamed to camelCase.
+ * [UPDATED] Adjusted SIMULATORS_PATH for the new folder depth.
  */
-
 // ---  Node.js Core Imports ---
 const fs = require('fs');
 const path = require('path');
-
-// --- [REMOVED] Built-in scenario imports ---
-// const starkIndustriesScenario = require('./simulator-stark');
-// const deathStarScenario = require('./simulator-deathstar');
-// const parisMetroScenario = require('./simulator-paris-metro');
 
 // --- Module-level State ---
 let mainLogger = null;
 let mainPublish = null;
 let mainSparkplugEnabled = false;
-const DATA_PATH = path.join(__dirname, 'data'); //  Define data path
+
+// Because this file is now in core/, we must go up one level ('..') to reach the root data folder
+const SIMULATORS_PATH = path.join(__dirname, '..', 'data', 'simulators'); 
 
 // Map of all available scenario "factories"
 const availableScenarios = new Map();
@@ -47,33 +45,37 @@ function init(logger, publishCallback, isSparkplugEnabled) {
     mainLogger = logger.child({ component: 'SimulatorManager' });
     mainPublish = publishCallback;
     mainSparkplugEnabled = isSparkplugEnabled;
-
     mainLogger.info("Simulator Manager initialized.");
 
-    // --- 1. [REMOVED] Register all DEFAULT (built-in) scenarios ---
-    
-    // --- 2.  Scan /data for ALL scenarios ---
-    mainLogger.info(`Scanning ${DATA_PATH} for all simulators (simulator-*.js)...`);
-    try {
-        if (fs.existsSync(DATA_PATH)) {
-            const files = fs.readdirSync(DATA_PATH);
-            const simFiles = files.filter(f => f.startsWith('simulator-') && f.endsWith('.js'));
+    // Ensure the simulators directory exists
+    if (!fs.existsSync(SIMULATORS_PATH)) {
+        try { fs.mkdirSync(SIMULATORS_PATH, { recursive: true }); } catch (e) {}
+    }
 
+    // --- Scan /data/simulators for ALL scenarios ---
+    mainLogger.info(`Scanning ${SIMULATORS_PATH} for all simulators (simulator-*.js)...`);
+
+    try {
+        if (fs.existsSync(SIMULATORS_PATH)) {
+            const files = fs.readdirSync(SIMULATORS_PATH);
+            const simFiles = files.filter(f => f.startsWith('simulator-') && f.endsWith('.js'));
+            
             if (simFiles.length > 0) {
                 mainLogger.info(`Found ${simFiles.length} simulator file(s).`);
+
                 simFiles.forEach(filename => {
                     // Extract name: "simulator-my-sim.js" -> "my_sim"
                     const scenarioName = filename.replace(/^simulator-/, '').replace(/\.js$/, '').replace(/-/g, '_');
-                    
+
                     if (availableScenarios.has(scenarioName)) {
                         mainLogger.warn(`Simulator ${filename} is skipped: a scenario named '${scenarioName}' is already registered.`);
                         return;
                     }
 
                     try {
-                        const customScenarioPath = path.join(DATA_PATH, filename);
+                        const customScenarioPath = path.join(SIMULATORS_PATH, filename);
                         const customScenarioModule = require(customScenarioPath);
-                        
+
                         if (typeof customScenarioModule === 'function') {
                             registerScenario(scenarioName, customScenarioModule);
                         } else {
@@ -84,13 +86,11 @@ function init(logger, publishCallback, isSparkplugEnabled) {
                     }
                 });
             } else {
-                 mainLogger.info("No simulators found in /data. The 'Publish' tab simulator list will be empty.");
+                 mainLogger.info("No simulators found in /data/simulators. The 'Publish' tab simulator list will be empty.");
             }
-        } else {
-            mainLogger.warn("The /data directory does not exist. Skipping simulator scan.");
         }
     } catch (err) {
-        mainLogger.error({ err }, "❌ Error scanning /data directory for simulators.");
+        mainLogger.error({ err }, "❌ Error scanning /data/simulators directory for simulators.");
     }
 }
 
@@ -128,16 +128,16 @@ function startSimulator(name) {
     try {
         // Create a new logger instance for this specific simulation
         const scenarioLogger = mainLogger.child({ scenario: name });
+
         // Create the scenario instance by calling the factory
         const simulationInstance = factory(scenarioLogger, mainPublish, mainSparkplugEnabled);
-        
+
         // Store the instance and start it
         activeSimulations.set(name, simulationInstance);
         simulationInstance.start();
-        
+
         mainLogger.info(`🚀 Simulator [${name}] started.`);
         return { status: 'running' };
-
     } catch (err) {
         mainLogger.error({ err, scenario: name }, "❌ Failed to start simulation scenario.");
         return { status: 'error', message: err.message };
@@ -151,9 +151,7 @@ function startSimulator(name) {
  */
 function stopSimulator(name) {
     const simulationInstance = activeSimulations.get(name);
-    
     if (!simulationInstance) {
-        // mainLogger.warn(`Simulator [${name}] is not running (or not found).`);
         return { status: 'already stopped' };
     }
 
