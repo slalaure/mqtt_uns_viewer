@@ -377,7 +377,7 @@ const implementations = {
 async function createMcpServer() {
     const server = new McpServer({
         name: "Korelate Controller",
-        version: "1.6.0",
+        version: "1.6.0-beta1",
         description: "Control the Korelate via tools defined in ai_tools_manifest.json.",
     });
 
