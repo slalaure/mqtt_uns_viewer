@@ -17,7 +17,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // --- Configuration ---
-const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', '.env');
+// [UPDATED] Added '..' to point to the root data folder from the tests folder
+const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', '.env');
 
 // --- Helper: Read .env manually ---
 function getEnvConfig() {

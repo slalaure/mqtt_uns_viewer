@@ -11,6 +11,7 @@
  * Full API Test Suite (Enhanced & Secured)
  * Covers: Auth, Admin, Context, Search, SVG, Chart, Mapper, Config, Simulators, Publishing, Tools, Chat.
  * [UPDATED] Respects BASE_PATH from .env
+ * [UPDATED] Path adjusted to run from the new 'tests' directory.
  */
 import axios from 'axios';
 import fs from 'fs';
@@ -18,7 +19,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // --- Configuration Helpers ---
-const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', '.env');
+// [UPDATED] Go up one directory level to access 'data'
+const ENV_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', '.env');
 
 // Read .env manually
 function getEnvConfig() {

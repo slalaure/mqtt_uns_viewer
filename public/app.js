@@ -736,6 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
 
                 case 'broker-status': 
+                    import('./view.mapper.js').then(m => {
+                        if (m.addAvailableMapperProvider) m.addAvailableMapperProvider(brokerId, guessedType);
+                    }).catch(err => { /* ignore */ });
                     updateSingleBrokerStatus(message.brokerId, message.status, message.error); 
                     break;
             }
