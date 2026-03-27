@@ -12,7 +12,9 @@
  * Provides an advanced, dynamic GUI to explore and edit the uns_model.json
  * according to I3X specifications. 
  * Integrates vis-network for interactive Relationship Graphs.
+ * [UPDATED] Graph engine now renders custom relationships (SuppliesTo, etc.) with specific styling.
  */
+
 import { confirmModal, trackEvent, makeResizable } from './utils.js';
 
 // --- State ---
@@ -28,12 +30,10 @@ let formContainer, welcomeScreen, mainContent, formTitle, formSubtitle, dynamicF
 
 /**
  * Robust loader for vis-network with CDN fallback.
- * Returns a Promise that resolves when the library is ready.
  */
 function loadVisNetwork() {
     return new Promise((resolve) => {
         if (window.vis) return resolve();
-        
         const loadScript = (src) => {
             return new Promise((res) => {
                 const script = document.createElement('script');
@@ -44,20 +44,16 @@ function loadVisNetwork() {
                 document.head.appendChild(script);
             });
         };
-
-        // Base path strategy: guarantees finding the file in public/libs/
         const basePath = document.querySelector('base')?.getAttribute('href') || '/';
         const localPath = basePath + 'libs/vis-network.min.js';
         const cdnPath = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
 
-        // Try local first (for air-gapped OT environments)
         loadScript(localPath).then(success => {
             if (success) {
                 console.log("✅ vis-network library loaded from local libs.");
                 resolve();
             } else {
                 console.warn("⚠️ Failed to load local vis-network.min.js. Trying CDN fallback...");
-                // Fallback to CDN
                 loadScript(cdnPath).then(cdnSuccess => {
                     if (cdnSuccess) {
                         console.log("✅ vis-network library loaded from CDN.");
@@ -100,7 +96,7 @@ export async function initModelerView() {
             direction: 'vertical',
             panelA: document.querySelector('.modeler-sidebar')
         });
-        
+
         makeResizable({
             resizerEl: document.getElementById('drag-handle-horizontal-modeler'),
             direction: 'horizontal',
@@ -108,7 +104,6 @@ export async function initModelerView() {
             containerEl: document.getElementById('modeler-content')
         });
 
-        // Wait for vis-network to load
         await loadVisNetwork();
 
         // Event Listeners
@@ -120,16 +115,14 @@ export async function initModelerView() {
         formContainer.addEventListener('submit', handleFormSubmit);
         btnDelete.addEventListener('click', handleDeleteItem);
 
-        // Window resize observer for Graph
         window.addEventListener('resize', () => {
             if (networkGraph) networkGraph.fit();
         });
 
         isModelerInitialized = true;
         console.log("✅ Semantic Modeler V3 (Vis-Network) Initialized");
-
     } catch (err) {
-        console.error("Error initializing Modeler View:", err);
+        console.error("Error initializing Admin View:", err);
         container.innerHTML = `<div style="padding:20px; color:var(--color-danger);">Error loading Modeler Interface. Check console.</div>`;
     }
 }
@@ -152,13 +145,10 @@ async function loadModel() {
         const res = await fetch('api/env/model');
         if (!res.ok) throw new Error("Failed to load model from server");
         currentModel = await res.json();
-        
         currentModel.namespaces = currentModel.namespaces || [];
         currentModel.objectTypes = currentModel.objectTypes || [];
         currentModel.instances = currentModel.instances || [];
-        
         renderTree();
-        
         if (currentSelection.id) {
             selectItem(currentSelection.type, currentSelection.id);
         } else {
@@ -172,7 +162,6 @@ async function loadModel() {
 function renderTree() {
     if (!treeContainer) return;
     treeContainer.innerHTML = '';
-    
     const rootUl = document.createElement('ul');
     rootUl.className = 'modeler-tree';
 
@@ -188,7 +177,6 @@ function renderTree() {
     currentModel.instances.forEach(inst => {
         if (!instancesByType.has(inst.typeId)) instancesByType.set(inst.typeId, []);
         instancesByType.get(inst.typeId).push(inst);
-
         const pid = (inst.parentId === '/' || !inst.parentId) ? 'root' : inst.parentId;
         if (!instancesByParent.has(pid)) instancesByParent.set(pid, []);
         instancesByParent.get(pid).push(inst);
@@ -198,7 +186,6 @@ function renderTree() {
         const li = document.createElement('li');
         const children = instancesByParent.get(inst.elementId) || [];
         const hasChildren = children.length > 0 || inst.isComposition;
-        
         const isExp = expandedNodes.has(inst.elementId);
         const toggleClass = isExp ? '' : 'collapsed';
         const toggleIcon = hasChildren ? '▼' : '&nbsp;';
@@ -226,7 +213,6 @@ function renderTree() {
         };
 
         li.appendChild(nodeDiv);
-
         if (hasChildren) {
             const ul = document.createElement('ul');
             ul.className = toggleClass;
@@ -240,7 +226,6 @@ function renderTree() {
         const nsLi = document.createElement('li');
         const types = typesByNamespace.get(ns.uri) || [];
         const isExp = expandedNodes.has(ns.uri);
-        
         const nodeDiv = document.createElement('div');
         nodeDiv.className = `modeler-node ${currentSelection.id === ns.uri ? 'selected' : ''}`;
         nodeDiv.innerHTML = `
@@ -271,7 +256,6 @@ function renderTree() {
                 const tLi = document.createElement('li');
                 const rootInstancesOfType = (instancesByType.get(t.elementId) || []).filter(i => i.parentId === '/' || !i.parentId);
                 const isTExp = expandedNodes.has(t.elementId);
-
                 const tDiv = document.createElement('div');
                 tDiv.className = `modeler-node ${currentSelection.id === t.elementId ? 'selected' : ''}`;
                 tDiv.innerHTML = `
@@ -279,7 +263,6 @@ function renderTree() {
                     <span class="node-icon" style="color: #22c55e;">📃</span>
                     <span class="node-label">${t.displayName}</span>
                 `;
-
                 tDiv.onclick = (e) => {
                     if (e.target.classList.contains('node-toggle') && rootInstancesOfType.length > 0) {
                         const ul = tLi.querySelector(':scope > ul');
@@ -294,7 +277,6 @@ function renderTree() {
                     selectItem('objectType', t.elementId);
                 };
                 tLi.appendChild(tDiv);
-
                 if (rootInstancesOfType.length > 0) {
                     const instUl = document.createElement('ul');
                     instUl.className = isTExp ? '' : 'collapsed';
@@ -307,7 +289,6 @@ function renderTree() {
         }
         rootUl.appendChild(nsLi);
     });
-
     treeContainer.appendChild(rootUl);
 }
 
@@ -317,43 +298,38 @@ function selectItem(type, id) {
     if (type === 'namespace') ref = currentModel.namespaces.find(n => n.uri === id);
     if (type === 'objectType') ref = currentModel.objectTypes.find(t => t.elementId === id);
     if (type === 'instance') ref = currentModel.instances.find(i => i.elementId === id);
-
     if (!ref) {
         clearEditor();
         return;
     }
-
     currentSelection = { type, id, ref };
     document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
     renderTree(); 
-    
     welcomeScreen.style.display = 'none';
     mainContent.style.display = 'flex';
-
-    // [FIX] On laisse 100ms au DOM Flexbox pour calculer sa vraie hauteur avant de dessiner
+    
     setTimeout(() => {
         drawRelationshipGraph();
     }, 100);
-    
     renderForm();
 }
 
 /**
  * Draws an interactive Relationship Graph using vis-network.
+ * [UPDATED] Added support for custom graph relationships (SuppliesTo, etc.)
  */
 function drawRelationshipGraph() {
     if (!window.vis || !graphContainer) return;
-
     const item = currentSelection.ref;
     if (!item) return;
 
     const isDark = document.body.classList.contains('dark-mode');
-    
     const colors = {
         center:   { background: '#007bff', border: '#0056b3', font: '#ffffff' },
         instance: { background: isDark ? '#333333' : '#ffffff', border: '#6c757d', font: isDark ? '#ffffff' : '#333333' },
         type:     { background: isDark ? '#1a3b2b' : '#e6f4ea', border: '#28a745', font: isDark ? '#ffffff' : '#333333' },
-        namespace:{ background: isDark ? '#1a2b4b' : '#e0f0ff', border: '#007bff', font: isDark ? '#ffffff' : '#333333' }
+        namespace:{ background: isDark ? '#1a2b4b' : '#e0f0ff', border: '#007bff', font: isDark ? '#ffffff' : '#333333' },
+        flow:     { background: isDark ? '#3d2b1a' : '#fff3e0', border: '#e67e22', font: isDark ? '#ffffff' : '#333333' }
     };
 
     let nodesData = [];
@@ -364,9 +340,7 @@ function drawRelationshipGraph() {
             let icon = '📦';
             if (nodeType === 'namespace') icon = '🌐';
             if (nodeType === 'objectType') icon = '📃';
-
             const style = (group === 'center') ? colors.center : (colors[group] || colors.instance);
-            
             nodesData.push({
                 id: id,
                 label: `${icon} ${label.length > 20 ? label.substring(0, 18) + '...' : label}`,
@@ -379,15 +353,22 @@ function drawRelationshipGraph() {
         }
     };
 
-    const addEdge = (from, to, label, dashes = false) => {
+    const addEdge = (from, to, label, type = 'hierarchy') => {
+        const isFlow = label.toLowerCase().includes('suppl');
         edgesData.push({
             from: from,
             to: to,
             label: label,
             arrows: 'to',
-            font: { size: 10, align: 'horizontal', color: isDark ? '#aaaaaa' : '#666666' },
-            color: { color: isDark ? '#555555' : '#cccccc' },
-            dashes: dashes
+            font: { 
+                size: 10, 
+                align: 'horizontal', 
+                color: isFlow ? '#e67e22' : (isDark ? '#aaaaaa' : '#666666'),
+                background: isDark ? '#1a1a1a' : '#f4f7f9'
+            },
+            color: { color: isFlow ? '#e67e22' : (isDark ? '#555555' : '#cccccc') },
+            dashes: type === 'reference',
+            width: isFlow ? 2 : 1
         });
     };
 
@@ -395,24 +376,56 @@ function drawRelationshipGraph() {
     addNode(centerId, item.displayName || item.elementId || item.uri, 'center', currentSelection.type);
 
     if (currentSelection.type === 'instance') {
+        // 1. Hierarchy: Parent
         if (item.parentId && item.parentId !== '/') {
             const parent = currentModel.instances.find(i => i.elementId === item.parentId);
             if (parent) {
                 addNode(parent.elementId, parent.displayName || parent.elementId, 'instance', 'instance');
-                addEdge(parent.elementId, centerId, 'HasComponent');
+                addEdge(parent.elementId, centerId, 'HasParent');
             }
         }
+        // 2. Type Definition
         if (item.typeId) {
             const typeRef = currentModel.objectTypes.find(t => t.elementId === item.typeId);
             if (typeRef) {
                 addNode(typeRef.elementId, typeRef.displayName || typeRef.elementId, 'type', 'objectType');
-                addEdge(centerId, typeRef.elementId, 'InstanceOf', true);
+                addEdge(centerId, typeRef.elementId, 'InstanceOf', 'reference');
             }
         }
+        // 3. Hierarchy: Children
         const children = currentModel.instances.filter(i => i.parentId === item.elementId);
         children.forEach(c => {
             addNode(c.elementId, c.displayName || c.elementId, 'instance', 'instance');
-            addEdge(centerId, c.elementId, 'HasComponent');
+            addEdge(centerId, c.elementId, 'HasChildren');
+        });
+
+        // 4. [NEW] Graph Relationships
+        if (item.relationships) {
+            for (const [relType, targets] of Object.entries(item.relationships)) {
+                // Skip hierarchical keys already handled
+                if (['HasParent', 'HasChildren', 'HasComponent', 'ComponentOf'].includes(relType)) continue;
+                
+                const targetList = Array.isArray(targets) ? targets : [targets];
+                targetList.forEach(targetId => {
+                    const targetObj = currentModel.instances.find(inst => inst.elementId === targetId);
+                    if (targetObj) {
+                        addNode(targetObj.elementId, targetObj.displayName || targetObj.elementId, 'instance', 'instance');
+                        addEdge(centerId, targetObj.elementId, relType);
+                    }
+                });
+            }
+        }
+        
+        // 5. [NEW] Find incoming relationships (Reverse Lookup)
+        currentModel.instances.forEach(other => {
+            if (other.elementId === item.elementId || !other.relationships) return;
+            for (const [relType, targets] of Object.entries(other.relationships)) {
+                const targetList = Array.isArray(targets) ? targets : [targets];
+                if (targetList.includes(item.elementId)) {
+                    addNode(other.elementId, other.displayName || other.elementId, 'instance', 'instance');
+                    addEdge(other.elementId, centerId, relType);
+                }
+            }
         });
     } 
     else if (currentSelection.type === 'objectType') {
@@ -420,20 +433,20 @@ function drawRelationshipGraph() {
             const ns = currentModel.namespaces.find(n => n.uri === item.namespaceUri);
             if (ns) {
                 addNode(ns.uri, ns.displayName || ns.uri, 'namespace', 'namespace');
-                addEdge(centerId, ns.uri, 'InNamespace', true);
+                addEdge(centerId, ns.uri, 'InNamespace', 'reference');
             }
         }
         const instances = currentModel.instances.filter(i => i.typeId === item.elementId).slice(0, 15);
         instances.forEach(c => {
             addNode(c.elementId, c.displayName || c.elementId, 'instance', 'instance');
-            addEdge(c.elementId, centerId, 'InstanceOf', true);
+            addEdge(c.elementId, centerId, 'InstanceOf', 'reference');
         });
     }
     else if (currentSelection.type === 'namespace') {
         const types = currentModel.objectTypes.filter(t => t.namespaceUri === item.uri).slice(0, 15);
         types.forEach(t => {
             addNode(t.elementId, t.displayName || t.elementId, 'type', 'objectType');
-            addEdge(t.elementId, centerId, 'InNamespace', true);
+            addEdge(t.elementId, centerId, 'InNamespace', 'reference');
         });
     }
 
@@ -442,7 +455,6 @@ function drawRelationshipGraph() {
         edges: new vis.DataSet(edgesData) 
     };
 
-    // [UPDATED] Physics and interaction options tuned for active dragging and dynamic behavior
     const options = {
         physics: {
             enabled: true,
@@ -468,12 +480,10 @@ function drawRelationshipGraph() {
         networkGraph.destroy();
     }
     networkGraph = new vis.Network(graphContainer, data, options);
-
     networkGraph.on("click", function (params) {
         if (params.nodes.length > 0) {
             const clickedNodeId = params.nodes[0];
             const clickedNode = data.nodes.get(clickedNodeId);
-            
             if (clickedNode && clickedNode.nodeType && clickedNodeId !== currentSelection.id) {
                 selectItem(clickedNode.nodeType, clickedNodeId);
             }
@@ -523,7 +533,7 @@ function renderForm() {
         const typeOptions = currentModel.objectTypes.map(t => 
             `<option value="${t.elementId}" ${itemData.typeId === t.elementId ? 'selected' : ''}>${t.displayName} (${t.elementId})</option>`
         ).join('');
-        
+
         const parentOptions = `<option value="/">-- Root Level --</option>` + currentModel.instances
             .filter(i => i.elementId !== itemData.elementId) 
             .map(i => `<option value="${i.elementId}" ${itemData.parentId === i.elementId ? 'selected' : ''}>${i.displayName}</option>`).join('');
@@ -550,6 +560,11 @@ function renderForm() {
                 <div style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:8px;">Link this object to a raw MQTT topic stream to receive live data.</div>
                 <input type="text" name="topic_mapping" class="modern-input" value="${itemData.topic_mapping || ''}" placeholder="e.g. factory/line1/machineA/#">
             </div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--color-border);">
+                <label class="modern-label">Custom Graph Relationships (JSON Object)</label>
+                <div style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:8px;">Define non-hierarchical links like 'SuppliesTo'. Format: {"RelType": "TargetId" or ["T1", "T2"]}</div>
+                <textarea name="relationships" class="modern-input" rows="4" style="font-family:monospace; resize:vertical;">${itemData.relationships ? JSON.stringify(itemData.relationships, null, 2) : '{}'}</textarea>
+            </div>
         `;
     }
 }
@@ -557,24 +572,21 @@ function renderForm() {
 function handleFormSubmit(e) {
     e.preventDefault();
     if (!currentSelection.type) return;
-
     const formData = new FormData(e.target);
     const { type, ref } = currentSelection;
 
     for (let [key, value] of formData.entries()) {
-        if (key === 'schema') {
-            try { value = JSON.parse(value); } catch(err) { alert("Invalid JSON in Schema"); return; }
+        if (key === 'schema' || key === 'relationships') {
+            try { value = JSON.parse(value); } catch(err) { alert(`Invalid JSON in ${key}`); return; }
         }
         if (key === 'isComposition') value = true;
-
-        if (value === "") delete ref[key];
+        if (value === "" || (typeof value === 'object' && Object.keys(value).length === 0)) delete ref[key];
         else ref[key] = value;
     }
 
     if (type === 'instance' && !formData.has('isComposition')) {
         ref.isComposition = false;
     }
-    
     if (type === 'instance' && ref.parentId === '/') {
         delete ref.parentId;
     }
@@ -640,7 +652,6 @@ function clearEditor() {
     welcomeScreen.style.display = 'flex';
     mainContent.style.display = 'none';
     document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
-    
     if (networkGraph) {
         networkGraph.destroy();
         networkGraph = null;
@@ -651,7 +662,7 @@ async function saveModelToServer() {
     trackEvent('modeler_save_model');
     btnSave.disabled = true;
     btnSave.textContent = "Saving...";
-    
+
     try {
         const response = await fetch('api/env/model', {
             method: 'POST',
@@ -666,11 +677,9 @@ async function saveModelToServer() {
 
         btnSave.classList.remove('btn-unsaved');
         showStatus("✅ Model deployed to server.");
-        
         if (window.appCallbacks && window.appCallbacks.refreshSemanticTrees) {
             window.appCallbacks.refreshSemanticTrees();
         }
-
     } catch (e) {
         showStatus(`❌ ${e.message}`, true);
     } finally {

@@ -38,6 +38,24 @@
       }
     },
     {
+      "elementId": "SiloType",
+      "displayName": "Storage Silo",
+      "namespaceUri": "https://factory.local/models",
+      "schema": {
+        "type": "object",
+        "description": "A container for raw material storage."
+      }
+    },
+    {
+      "elementId": "MixerType",
+      "displayName": "Industrial Mixer",
+      "namespaceUri": "https://factory.local/models",
+      "schema": {
+        "type": "object",
+        "description": "Equipment for blending materials."
+      }
+    },
+    {
       "elementId": "SensorType",
       "displayName": "Telemetry Sensor",
       "namespaceUri": "https://factory.local/models",
@@ -55,10 +73,34 @@
       "reverseOf": "HasChildren"
     },
     {
+      "elementId": "HasChildren",
+      "displayName": "HasChildren",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "HasParent"
+    },
+    {
       "elementId": "HasComponent",
       "displayName": "HasComponent",
       "namespaceUri": "https://cesmii.org/i3x",
       "reverseOf": "ComponentOf"
+    },
+    {
+      "elementId": "ComponentOf",
+      "displayName": "ComponentOf",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "HasComponent"
+    },
+    {
+      "elementId": "SuppliesTo",
+      "displayName": "Supplies Material To",
+      "namespaceUri": "https://factory.local/models",
+      "reverseOf": "SuppliedBy"
+    },
+    {
+      "elementId": "SuppliedBy",
+      "displayName": "Is Supplied By",
+      "namespaceUri": "https://factory.local/models",
+      "reverseOf": "SuppliesTo"
     }
   ],
   "instances": [
@@ -79,6 +121,38 @@
       "namespaceUri": "https://factory.local/models"
     },
     {
+      "elementId": "Silo_Farine_01",
+      "displayName": "Silo à Farine A",
+      "typeId": "SiloType",
+      "parentId": "Line_1",
+      "isComposition": false,
+      "namespaceUri": "https://factory.local/models",
+      "topic_mapping": "factory/paris/line1/silo1/level",
+      "relationships": {
+        "SuppliesTo": "Mixer_Central_01"
+      }
+    },
+    {
+      "elementId": "Mixer_Central_01",
+      "displayName": "Mélangeur Principal",
+      "typeId": "MixerType",
+      "parentId": "Line_1",
+      "isComposition": true,
+      "namespaceUri": "https://factory.local/models",
+      "relationships": {
+        "SuppliedBy": "Silo_Farine_01"
+      }
+    },
+    {
+      "elementId": "Mixer_Temp",
+      "displayName": "Température Mélangeur",
+      "typeId": "SensorType",
+      "parentId": "Mixer_Central_01",
+      "isComposition": false,
+      "namespaceUri": "https://factory.local/models",
+      "topic_mapping": "factory/paris/line1/mixer1/temp"
+    },
+    {
       "elementId": "Robot_Soudure",
       "displayName": "Robot de Soudure A",
       "typeId": "MachineType",
@@ -88,30 +162,12 @@
     },
     {
       "elementId": "Robot_Temp",
-      "displayName": "Capteur Température",
+      "displayName": "Capteur Température Robot",
       "typeId": "SensorType",
       "parentId": "Robot_Soudure",
       "isComposition": false,
       "namespaceUri": "https://factory.local/models",
       "topic_mapping": "factory/paris/line1/robot/temp"
-    },
-    {
-      "elementId": "Robot_Vib",
-      "displayName": "Capteur Vibration",
-      "typeId": "SensorType",
-      "parentId": "Robot_Soudure",
-      "isComposition": false,
-      "namespaceUri": "https://factory.local/models",
-      "topic_mapping": "factory/paris/line1/robot/vibration"
-    },
-    {
-      "elementId": "Convoyeur_1",
-      "displayName": "Convoyeur Principal",
-      "typeId": "MachineType",
-      "parentId": "Line_1",
-      "isComposition": false,
-      "namespaceUri": "https://factory.local/models",
-      "topic_mapping": "factory/paris/line1/conveyor/speed"
     }
   ],
   "legacy_concepts": []

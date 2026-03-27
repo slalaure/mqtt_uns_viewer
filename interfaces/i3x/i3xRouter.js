@@ -3,8 +3,10 @@
  * @author Sebastien Lalaurette
  *
  * I3X Router (RFC 001 Compliant)
- * [UPDATED] Enhanced formatVQT with EngUnit support and recursive history depth.
+ * [UPDATED] Refactored POST /objects/related to dynamically use the Graph Relationship Index.
+ * [UPDATED] Supports bi-directional navigation for any custom relationship type (e.g. SuppliesTo).
  */
+
 const express = require('express');
 
 /**
@@ -23,15 +25,12 @@ function formatVQT(row, instanceMetadata = {}) {
     
     // Logic: EngUnit priority is Payload (dynamic) > Instance (static)
     const engUnit = payload?.unit || payload?.engUnit || instanceMetadata?.engUnit || null;
-
     const vqt = {
         value: payload,
         quality: row.quality || "Good",
         timestamp: new Date(row.timestamp).toISOString()
     };
-
     if (engUnit) vqt.engUnit = engUnit;
-    
     return vqt;
 }
 
@@ -56,15 +55,12 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             const sqlPattern = mapping.pattern.replace(/\+/g, '%').replace(/#/g, '%');
             let query = `SELECT payload, timestamp FROM mqtt_events WHERE topic LIKE ?`;
             let params = [sqlPattern];
-
             if (startTime) { query += ` AND timestamp >= CAST(? AS TIMESTAMPTZ)`; params.push(startTime); }
             if (endTime) { query += ` AND timestamp <= CAST(? AS TIMESTAMPTZ)`; params.push(endTime); }
-            
             query += ` ORDER BY timestamp DESC`;
             
             // Limit: 1 for current value, 1000 for history safety
             query += isHistory ? ` LIMIT 1000` : ` LIMIT 1`;
-
             try {
                 const rows = await new Promise((resolve, reject) => {
                     db.all(query, ...params, (err, rows) => err ? reject(err) : resolve(rows));
@@ -80,33 +76,17 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         // 2. Handle Recursion (RFC 4.2.1.1 / 4.2.1.2)
         // maxDepth == 0 is infinite recursion
         const shouldRecurse = (maxDepth === 0 || currentDepth < maxDepth);
-        
-        if (shouldRecurse && instance.isComposition) {
-            // Find children defined in the semantic model
-            const children = semanticManager.getModel().instances.filter(i => i.parentId === elementId);
-            
-            for (const child of children) {
-                const childResult = await fetchValuesRecursive(
-                    child.elementId, 
-                    maxDepth, 
-                    currentDepth + 1, 
-                    startTime, 
-                    endTime, 
-                    isHistory
-                );
-                
-                if (childResult) {
-                    // Child values are keyed by their elementId
-                    result[child.elementId] = childResult;
-                }
+        if (shouldRecurse) {
+            const componentIds = semanticManager.getRelatedIds(elementId, "HasComponent");
+            for (const childId of componentIds) {
+                const childResult = await fetchValuesRecursive(childId, maxDepth, currentDepth + 1, startTime, endTime, isHistory);
+                if (childResult) result[childId] = childResult;
             }
         }
-
         return result;
     };
 
     // --- EXPLORATORY METHODS (RFC 4.1) ---
-
     router.get('/namespaces', (req, res) => {
         res.json(semanticManager.getModel().namespaces || []);
     });
@@ -144,7 +124,6 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         const { typeId } = req.query;
         let instances = semanticManager.getModel().instances || [];
         if (typeId) instances = instances.filter(i => i.typeId === typeId);
-        
         res.json(instances.map(i => ({
             elementId: i.elementId,
             displayName: i.displayName,
@@ -169,49 +148,38 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         })));
     });
 
+    // RFC 4.1.6 - Dynamic Graph Navigation
     router.post('/objects/related', (req, res) => {
         const { elementIds, relationshiptype } = req.body;
         if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds required" });
-        const instances = semanticManager.getModel().instances || [];
-        let related = [];
-
+        
+        let relatedResults = [];
         elementIds.forEach(eid => {
-            const relLower = relationshiptype?.toLowerCase();
-            if (!relationshiptype || relLower === 'haschildren') {
-                related.push(...instances.filter(i => i.parentId === eid));
-            }
-            if (!relationshiptype || relLower === 'hasparent') {
-                const obj = instances.find(i => i.elementId === eid);
-                if (obj && obj.parentId) {
-                    const parent = instances.find(i => i.elementId === obj.parentId);
-                    if (parent) related.push(parent);
+            const targetIds = semanticManager.getRelatedIds(eid, relationshiptype);
+            targetIds.forEach(tid => {
+                const targetObj = semanticManager.resolveElement(tid);
+                if (targetObj) {
+                    relatedResults.push({
+                        elementId: targetObj.elementId,
+                        displayName: targetObj.displayName,
+                        typeId: targetObj.typeId,
+                        namespaceUri: targetObj.namespaceUri,
+                        parentId: targetObj.parentId,
+                        isComposition: !!targetObj.isComposition
+                    });
                 }
-            }
-            if (!relationshiptype || relLower === 'hascomponent') {
-                related.push(...instances.filter(i => i.parentId === eid && i.isComposition === false));
-            }
+            });
         });
 
-        // Deduplicate and format
-        const unique = Array.from(new Set(related.map(a => a.elementId)))
-            .map(id => related.find(a => a.elementId === id));
-
-        res.json(unique.map(i => ({
-            elementId: i.elementId,
-            displayName: i.displayName,
-            typeId: i.typeId,
-            namespaceUri: i.namespaceUri,
-            parentId: i.parentId,
-            isComposition: !!i.isComposition
-        })));
+        // Deduplicate and respond
+        const unique = Array.from(new Map(relatedResults.map(r => [r.elementId, r])).values());
+        res.json(unique);
     });
 
     // --- VALUE METHODS (RFC 4.2.1) ---
-
     router.post('/objects/value', async (req, res) => {
         const { elementIds, maxDepth = 1 } = req.body;
         if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds array required" });
-        
         let responseObj = {};
         for (const eid of elementIds) {
             const val = await fetchValuesRecursive(eid, maxDepth, 1, null, null, false);
@@ -223,7 +191,6 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
     router.post('/objects/history', async (req, res) => {
         const { elementIds, maxDepth = 1, startTime, endTime } = req.body;
         if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds array required" });
-        
         let responseObj = {};
         for (const eid of elementIds) {
             const val = await fetchValuesRecursive(eid, maxDepth, 1, startTime, endTime, true);
@@ -240,32 +207,27 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
     router.put('/objects/:elementId/value', async (req, res) => {
         const { elementId } = req.params;
         const payload = req.body;
-        
         const instance = semanticManager.resolveElement(elementId);
         if (!instance) return res.status(404).json({ error: "Element not found" });
-
+        
         const mapping = semanticManager.topicMappings.find(m => m.elementId === elementId);
         if (!mapping || mapping.pattern.includes('+') || mapping.pattern.includes('#')) {
             return res.status(400).json({ error: "Element is not mapped to a unique writable topic." });
         }
-
+        
         const topic = mapping.pattern;
         const brokerId = instance.brokerId || 'default_broker';
-
         const connection = connectorManager.providers.get(brokerId);
-        if (!connection || !connection.connected) {
-            return res.status(503).json({ error: "Data provider not connected" });
-        }
-
+        
+        if (!connection || !connection.connected) return res.status(503).json({ error: "Data provider not connected" });
+        
         const payloadStr = typeof payload === 'object' ? JSON.stringify(payload) : String(payload);
-
         connection.publish(topic, payloadStr, { qos: 1, retain: false }, (err) => {
             if (err) return res.status(500).json({ elementId, success: false, message: err.message });
             res.json({ elementId, success: true, message: "Update published successfully" });
         });
     });
 
-    // RFC 4.2.2.2 - Object Element HistoricalValue (Not implemented)
     router.put('/objects/:elementId/history', (req, res) => {
         res.status(501).json({ error: "Historical update not implemented" });
     });
@@ -338,20 +300,9 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             
             // Format VQT
             let val = payloadObject;
-            if (val && val._i3x) {
-                val = { ...val };
-                delete val._i3x;
-            }
-
-            // [NEW] Use shared formatter for consistent units/metadata in streams
-            const vqt = formatVQT({ 
-                payload: val, 
-                timestamp: new Date(), 
-                quality: "Good" 
-            }, instance);
-
+            if (val && val._i3x) { val = { ...val }; delete val._i3x; }
+            const vqt = formatVQT({ payload: val, timestamp: new Date(), quality: "Good" }, instance);
             const updateObj = { [elementId]: { data: [vqt] } };
-
             for (const [subId, sub] of subscriptions.entries()) {
                 if (sub.items.includes(elementId)) {
                     if (sub.res) {
@@ -365,6 +316,5 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             }
         });
     }
-
     return router;
 };
