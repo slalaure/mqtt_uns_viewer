@@ -10,13 +10,14 @@
  *
  * Admin API
  * Protected routes for User Management, System Maintenance, HMI Asset Management, Simulators and Parsers.
+ * [UPDATED] Paths adjusted for new Hexagonal structure (storage & connectors).
  */
 const express = require('express');
-const userManager = require('../database/userManager');
+const userManager = require('../../storage/userManager'); // [UPDATED]
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const providerManager = require('../data-providers/provider-manager'); // [NEW] Import Provider Manager
+const connectorManager = require('../../connectors/connectorManager'); // [UPDATED]
 
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
@@ -125,10 +126,12 @@ module.exports = (logger, db, dataManager, dataPath) => {
     // --- Delete User ---
     router.delete('/users/:id', async (req, res) => {
         const userIdToDelete = req.params.id;
+
         // Prevent self-deletion
         if (userIdToDelete === req.user.id) {
             return res.status(400).json({ error: "You cannot delete your own account while logged in." });
         }
+
         try {
             await userManager.deleteUser(userIdToDelete);
             logger.info(`[AdminAPI] User ${userIdToDelete} deleted by admin ${req.user.username}`);
@@ -145,17 +148,22 @@ module.exports = (logger, db, dataManager, dataPath) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No JSON file uploaded.' });
         }
+
         const filePath = req.file.path;
         logger.info(`[AdminAPI] Starting DB import from ${req.file.originalname}...`);
+
         try {
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const entries = JSON.parse(fileContent);
+
             if (!Array.isArray(entries)) {
                 throw new Error("Invalid JSON structure. Expected an array.");
             }
+
             if (!dataManager) {
                 throw new Error("DataManager is not available.");
             }
+
             let count = 0;
             for (const entry of entries) {
                 const message = {
@@ -166,14 +174,17 @@ module.exports = (logger, db, dataManager, dataPath) => {
                     isSparkplugOrigin: false,
                     needsDb: true
                 };
+
                 if (message.topic) {
                     dataManager.insertMessage(message);
                     count++;
                 }
             }
+
             logger.info(`[AdminAPI] Queued ${count} messages for import.`);
             fs.unlinkSync(filePath); // Cleanup temp file
             res.json({ success: true, message: `Successfully queued ${count} entries for import.` });
+
         } catch (err) {
             logger.error({ err }, "[AdminAPI] Import failed.");
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
@@ -184,6 +195,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
     router.post('/reset-db', (req, res) => {
         if (!db) return res.status(503).json({ error: "Database not available." });
         logger.warn(`⚠️ [AdminAPI] Admin ${req.user.username} initiated full DB RESET.`);
+
         db.serialize(() => {
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
@@ -193,6 +205,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 db.run("VACUUM;", (vacErr) => {
                     if (vacErr) logger.error({ err: vacErr }, "Failed to vacuum DB");
                     else logger.info("✅ Database truncated and vacuumed.");
+                    
                     res.json({ message: 'Database has been reset successfully.' });
                 });
             });
@@ -237,6 +250,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
     router.delete('/hmi-assets/:filename', (req, res) => {
         const filename = path.basename(req.params.filename); // Prevent path traversal
         const filepath = path.join(dataPath, filename);
+        
         try {
             if (fs.existsSync(filepath) && !filename.toLowerCase().startsWith('simulator-')) {
                 fs.unlinkSync(filepath);
@@ -289,6 +303,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
     router.delete('/simulators/:filename', (req, res) => {
         const filename = path.basename(req.params.filename); // Prevent path traversal
         const filepath = path.join(dataPath, filename);
+        
         try {
             if (fs.existsSync(filepath) && filename.toLowerCase().startsWith('simulator-')) {
                 fs.unlinkSync(filepath);
@@ -308,7 +323,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No CSV file uploaded.' });
         }
-        
+
         const { defaultTopic, streamRateMs, loop } = req.body;
         const filePath = req.file.path;
         const providerId = `csv_parser_${Date.now()}`;
@@ -325,14 +340,15 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 loop: loop === 'true'
             };
 
-            // Dynamically load and start the provider using the abstraction layer
-            providerManager.loadProvider(providerConfig);
+            // [UPDATED] Dynamically load and start the provider using the abstraction layer
+            connectorManager.loadProvider(providerConfig);
 
             res.json({ 
                 success: true, 
                 message: "CSV Parser started successfully.",
                 providerId: providerId
             });
+
         } catch (err) {
             logger.error({ err }, "[AdminAPI] Failed to start CSV Parser.");
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}

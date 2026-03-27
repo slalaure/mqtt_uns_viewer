@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.5.1-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.6.0-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)
@@ -106,13 +106,13 @@ To handle environments ranging from a few updates a minute to thousands of messa
 
 ### Prerequisites
 * Docker & Docker Compose
-* Access to MQTT Broker(s)
+* Access to MQTT Broker(s) or OPC UA server(s)
 
 ### 1. Quick Start
 ```bash
 # Clone the repository
-git clone https://github.com/slalaure/mqtt_uns_viewer.git
-cd mqtt_uns_viewer
+git clone https://github.com/slalaure/korelate.git
+cd korelate
 
 # Setup configuration
 cp .env.example .env
@@ -272,13 +272,17 @@ Accessible via the Cog icon (`/config.html`) or the Admin Tab.
  ┃ ┣ 📄 mappings.json      # Global ETL Rules
  ┃ ┣ 📄 uns_model.json     # Semantic Model Definition
  ┃ ┗ 📄 mqtt_events.duckdb # Hot DB
- ┣ 📂 database/            # DB Adapters (DuckDB, Timescale, UserManager)
+ ┣ 📂 connectors/          # Southbound DB Adapters (MQTT, OPC UA, File)
+ ┣ 📂 storage/             # Database Repositories (DuckDB, Timescale, User)
+ ┣ 📂 core/                # Agnostic Processing Core
+ ┃ ┣ 📂 engine/            # Alert Manager & Mapper Engine
+ ┃ ┗ 📄 messageDispatcher.js # Central Message Hub
+ ┣ 📂 interfaces/          # Northbound API Layers
+ ┃ ┣ 📂 web/               # Express REST Routes for Frontend UI
+ ┃ ┣ 📂 i3x/               # I3X API standard (RFC 001) implementation
+ ┃ ┗ 📂 mcp/               # Model Context Protocol Server for external AI
  ┣ 📂 public/              # Frontend (Vanilla JS SPA)
- ┣ 📂 routes/              # Express API (Auth, Admin, Config, Chat, etc.)
- ┣ 📄 server.js            # Main Entry Point
- ┣ 📄 alert_manager.js     # AI-Powered Alert Engine
- ┣ 📄 mcp_server.mjs       # External AI Interface (Model Context Protocol)
- ┗ 📄 mapper_engine.js     # ETL Sandbox
+ ┗ 📄 server.js            # Main Entry Point
 ```
 
 ### AI Tools Manifest (`ai_tools_manifest.json`)

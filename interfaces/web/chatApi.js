@@ -19,7 +19,7 @@ const path = require('path');
 const crypto = require('crypto'); // For UUIDs
 const chrono = require('chrono-node');
 // [NEW] Import Alert Manager from ROOT to inject agent capability
-const alertManager = require('../alert_manager');
+const alertManager = require('../../core/engine/alertManager');
 // --- Constants ---
 const MAX_AGENT_TURNS = 30; // Limit recursion to 30 turns
 const LLM_TIMEOUT_MS = 180000; // 180s timeout

@@ -14,7 +14,7 @@
  */
 const express = require('express');
 // [UPDATED] Import from root
-const alertManager = require('../alert_manager');
+const alertManager = require('../../core/engine/alertManager');
 
 module.exports = (logger) => {
     const router = express.Router();

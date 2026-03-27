@@ -1,15 +1,14 @@
 /**
  * @license Apache License, Version 2.0
  * @author Sebastien Lalaurette
- * * Provider Manager
- * Abstraction layer to manage different data providers dynamically.
+ * * Connector Manager (formerly ConnectorManager)
+ * Abstraction layer to manage different data providers dynamically (Southbound).
  */
 const fs = require('fs');
 const path = require('path');
+const messageDispatcher = require('../core/messageDispatcher'); // [UPDATED] Points to core
 
-const messageHandler = require('../message-handler');
-
-class ProviderManager {
+class ConnectorManager {
     constructor() {
         this.providers = new Map();
         this.context = null;
@@ -17,16 +16,16 @@ class ProviderManager {
     }
 
     /**
-     * Initializes the Provider Manager and loads configured data providers.
+     * Initializes the Connector Manager and loads configured data providers.
      * @param {Object} context - Global application context
      */
     init(context) {
         this.context = context;
-        this.logger = context.logger.child({ component: 'ProviderManager' });
-        this.logger.info("Initializing Data Providers Abstraction Layer...");
+        this.logger = context.logger.child({ component: 'ConnectorManager' });
+        this.logger.info("Initializing Data Connectors Abstraction Layer...");
 
-        // Initialize the central message handler
-        this.context.handleMessage = messageHandler.init(
+        // Initialize the central message dispatcher
+        this.context.handleMessage = messageDispatcher.init(
             context.logger,
             context.config,
             context.wsManager,
@@ -59,15 +58,14 @@ class ProviderManager {
     loadProvider(providerConfig) {
         const type = providerConfig.type || 'unknown';
         const providerId = providerConfig.id;
-
-        this.logger.info(`Loading data provider plugin [${type}] for ID: ${providerId}`);
+        this.logger.info(`Loading data connector plugin [${type}] for ID: ${providerId}`);
 
         let ProviderClass;
         try {
             // Dynamically load the plugin from its specific folder
             ProviderClass = require(`./${type}/index.js`);
         } catch (err) {
-            this.logger.warn(`Unsupported or missing provider plugin: ${type}. Expected at data-providers/${type}/index.js`);
+            this.logger.warn(`Unsupported or missing connector plugin: ${type}. Expected at connectors/${type}/index.js`);
             return;
         }
 
@@ -85,7 +83,7 @@ class ProviderManager {
             });
 
             this.providers.set(providerId, providerInstance);
-            
+
             // Connect the provider
             providerInstance.connect().catch(err => {
                 this.logger.error({ err }, `Failed to connect provider ${providerId}`);
@@ -100,7 +98,7 @@ class ProviderManager {
      * Gracefully closes all loaded data providers.
      */
     closeAll() {
-        this.logger.info("Closing all data providers...");
+        this.logger.info("Closing all data connectors...");
         this.providers.forEach((provider, id) => {
             try {
                 provider.disconnect();
@@ -112,4 +110,4 @@ class ProviderManager {
     }
 }
 
-module.exports = new ProviderManager();
+module.exports = new ConnectorManager();

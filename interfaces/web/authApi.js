@@ -14,7 +14,7 @@
 const express = require('express');
 const passport = require('passport');
 // [NEW] Import User Manager to handle registration
-const userManager = require('../database/userManager');
+const userManager = require('../../storage/userManager');
 
 module.exports = (logger) => {
     const router = express.Router();

@@ -1,7 +1,7 @@
 {
   "name": "korelate",
-  "version": "1.5.1",
-  "description": "A lightweight, real-time web application to visualize MQTT topic trees and dynamic SVG graphics based on Unified Namespace (UNS) messages, with advanced semantic correlation and AI assistance.",
+  "version": "1.6.0",
+  "description": "The Open-Source Unified Namespace Explorer for the AI Era",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

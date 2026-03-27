@@ -10,8 +10,8 @@
  *
  * Mapper Engine for real-time topic and payload transformation.
  * Supports versioning, multi-target rules, JS/Mustache modes, and metrics.
+ * [UPDATED] File path adjusted for new location in core/engine/
  */
-
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -19,13 +19,13 @@ const mustache = require('mustache');
 const mqttMatch = require('mqtt-match');
 const spBv10Codec = require('sparkplug-payload').get("spBv10"); 
 
-const MAPPINGS_FILE_PATH = path.join(__dirname, 'data', 'mappings.json');
+// [UPDATED] Adjust path to point to root data folder from core/engine
+const MAPPINGS_FILE_PATH = path.join(__dirname, '..', '..', 'data', 'mappings.json');
 
 let config = {
     versions: [],
     activeVersionId: null
 };
-
 let metrics = new Map(); 
 let metricsUpdateTimer = null;
 let activeConnections = new Map();
@@ -33,17 +33,14 @@ let broadcastCallback = (message) => {};
 let engineLogger = null;
 let payloadReplacer = null; 
 let internalDb = null; 
-
 //  Store server configuration for permission checks
 let serverConfig = null;
 
 const DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
-
 // CASE 1: Single Output (Fan-out)
 // Return 'msg' to automatically publish it to all Target Topic(s) defined above.
 // return msg;
-
 // CASE 2: Multiple Specific Outputs
 // Return an array of messages to explicitly route different payloads to different topics.
 /*
@@ -51,7 +48,6 @@ const msg1 = { topic: "uns/factory/temp", payload: { value: msg.payload.T1 } };
 const msg2 = { topic: "uns/factory/press", payload: { value: msg.payload.P1 } };
 return [msg1, msg2];
 */
-
 return msg;
 `;
 
@@ -164,22 +160,17 @@ const broadcastMetrics = () => {
 
 const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg = null, debugMsg = null) => {
     const ruleId = `${rule.sourceTopic}::${target.id}`;
-    
     if (!metrics.has(ruleId)) {
         metrics.set(ruleId, { count: 0, logs: [] });
     }
-    
     const ruleMetrics = metrics.get(ruleId);
-    
     if (!errorMsg && !debugMsg) {
         ruleMetrics.count++;
     }
-
     const logEntry = {
         ts: new Date().toISOString(),
         inTopic: inTopic,
     };
-
     if (errorMsg) {
         logEntry.error = errorMsg.substring(0, 200); 
     } else if (debugMsg) {
@@ -188,12 +179,10 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
         logEntry.outTopic = outTopic;
         logEntry.outPayload = outPayloadStr.substring(0, 150) + (outPayloadStr.length > 150 ? '...' : '');
     }
-
     ruleMetrics.logs.unshift(logEntry);
     if (ruleMetrics.logs.length > 20) {
         ruleMetrics.logs.pop();
     }
-
     if (errorMsg) {
         clearTimeout(metricsUpdateTimer); 
         metricsUpdateTimer = null;
@@ -209,7 +198,6 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
 const rulesForTopicRequireDb = (topic) => {
     const activeRules = getActiveRules();
     if (activeRules.length === 0) return false;
-
     for (const rule of activeRules) {
         if (mqttMatch(rule.sourceTopic.trim(), topic)) {
             for (const target of rule.targets) {
@@ -230,28 +218,22 @@ const isPublishAllowed = (brokerId, topic) => {
     if (!brokerConfig) return false; // Broker unknown
     const publishPatterns = brokerConfig.publish || [];
     if (publishPatterns.length === 0) return false; // Read-Only
-    
     return publishPatterns.some(pattern => mqttMatch(pattern, topic));
 };
 
 const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin = false) => {
     const activeRules = getActiveRules();
     if (activeRules.length === 0) return;
-
     const originalMsg = {
         topic: topic,
         payload: payloadObject,
         brokerId: brokerId 
     };
-
     for (const rule of activeRules) {
         if (mqttMatch(rule.sourceTopic.trim(), topic)) {
-            
             const targetPromises = rule.targets.map(async (target) => {
                 if (!target.enabled) return;
-                
                 updateMetrics(rule, target, topic, null, null, null, "Rule matched. Attempting execution...");
-
                 try {
                     let msgForSandbox;
                     try {
@@ -260,27 +242,19 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                         engineLogger.error({ err: copyErr, topic: topic }, "Mapper Engine: Failed to deep copy message for sandbox.");
                         return; 
                     }
-
                     let resultMsg = null;
                     const context = vm.createContext(createSandbox(msgForSandbox));
-                    
                     const cleanCode = target.code.replace(/\u00A0/g, " ");
                     const script = new vm.Script(`(async () => { ${cleanCode} })();`); 
-                    
                     resultMsg = await script.runInContext(context, { timeout: 2000 }); 
-
                     if (resultMsg !== null && resultMsg !== undefined) {
                         // Support returning an array of messages
                         const results = Array.isArray(resultMsg) ? resultMsg : [resultMsg];
-                        
                         // Parse UI declared topics for fan-out
                         const declaredTopics = target.outputTopic ? target.outputTopic.split(',').map(t => t.trim()).filter(t => t) : [];
-
                         for (const res of results) {
                             if (!res || res.payload === undefined) continue;
-
                             let outputTopicsToPublish = [];
-                            
                             if (Array.isArray(resultMsg)) {
                                 // Array return: The script explicitly defines the routing
                                 if (res.topic) {
@@ -307,14 +281,11 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                     }
                                 }
                             }
-
                             // Now publish to all resolved output topics
                             for (const outputTopic of outputTopicsToPublish) {
                                 let outputPayload; 
                                 let outputPayloadForMetrics; 
-                                
                                 const shouldOutputSparkplug = isSparkplugOrigin && outputTopic.startsWith('spBv1.0/');
-                                
                                 if (shouldOutputSparkplug) {
                                     try {
                                         outputPayload = spBv10Codec.encodePayload(res.payload);
@@ -327,10 +298,8 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                     outputPayload = JSON.stringify(res.payload, payloadReplacer);
                                     outputPayloadForMetrics = outputPayload;
                                 }
-
                                 const targetBrokerId = target.targetBrokerId || brokerId; 
                                 const connection = activeConnections.get(targetBrokerId);
-
                                 if (connection && connection.connected) {
                                     if (isPublishAllowed(targetBrokerId, outputTopic)) {
                                         connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
@@ -379,15 +348,12 @@ module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerCo
     if (!connectionsMap || !broadcaster || !logger || !longReplacer) {
         throw new Error("Mapper Engine V2 requires a connections map, broadcaster, logger, and longReplacer function.");
     }
-    
     activeConnections = connectionsMap; 
     broadcastCallback = broadcaster;
     engineLogger = logger.child({ component: 'MapperEngineV2' });
     payloadReplacer = longReplacer;
     serverConfig = appServerConfig; 
-
     loadMappings();
-
     return {
         setDb: (dbConnection) => {
             internalDb = dbConnection;
