@@ -10,6 +10,7 @@
  *
  * Server Entry Point
  * [UPDATED] Refactored to use ProviderManager for data-provider abstraction.
+ * [UPDATED] Paths for toolsApi and chatApi point to interfaces/mcp/
  */
 // --- Imports ---
 const pino = require('pino');
@@ -102,7 +103,7 @@ let isShuttingDown = false; // Global shutdown flag
 // --- Configuration from Environment ---
 const config = {
     BROKER_CONFIGS: [],
-    DATA_PROVIDERS: [], // [NEW] Extended generic data providers configuration
+    DATA_PROVIDERS: [], // Extended generic data providers configuration
     MQTT_BROKER_HOST: process.env.MQTT_BROKER_HOST?.trim() || null,
     MQTT_TOPIC: process.env.MQTT_TOPIC?.trim() || null,
     CLIENT_ID: process.env.CLIENT_ID?.trim() || null,
@@ -161,6 +162,7 @@ const config = {
     ADMIN_USERNAME: process.env.ADMIN_USERNAME,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 };
+
 // ---  Broker Configuration Parsing ---
 try {
     // 1. Load legacy MQTT_BROKERS list
@@ -199,7 +201,7 @@ try {
         config.BROKER_CONFIGS = [];
     }
     
-    // 2. [NEW] Load DATA_PROVIDERS configuration
+    // 2. Load DATA_PROVIDERS configuration
     if (process.env.DATA_PROVIDERS) {
         try {
             config.DATA_PROVIDERS = JSON.parse(process.env.DATA_PROVIDERS);
@@ -398,6 +400,7 @@ db = new duckdb.Database(dbFile, (err) => {
         isShuttingDown: () => isShuttingDown
     });
 });
+
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
     if (req.isAuthenticated()) return next();
@@ -418,6 +421,7 @@ const authMiddleware = (req, res, next) => {
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
     return res.status(401).send('Unauthorized. Please log in.');
 };
+
 // --- Admin Middleware ---
 const requireAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
@@ -432,14 +436,17 @@ const requireAdmin = (req, res, next) => {
     logger.warn(`[Security] Admin access denied for ${req.user ? req.user.username : req.ip} on ${req.originalUrl}`);
     return res.status(403).send("Forbidden: Admin privileges required.");
 };
+
 let ALLOWED_IPS = config.API_ALLOWED_IPS ? config.API_ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const ipFilterMiddleware = (req, res, next) => {
     if (ALLOWED_IPS.length === 0 || ALLOWED_IPS.includes(req.ip)) return next();
     res.status(403).json({ error: `Access denied for IP ${req.ip}` });
 };
+
 const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
 app.set('trust proxy', true);
+
 // Simulator
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
@@ -447,12 +454,16 @@ simulatorManager.init(logger, (topic, payload) => {
         conn.publish(topic, payload, { qos: 1 });
     }
 }, config.IS_SPARKPLUG_ENABLED);
+
 // --- Auth Routes ---
 mainRouter.use('/auth', require('./routes/authApi')(logger));
+
 // --- Admin Routes ---
 mainRouter.use('/api/admin', require('./routes/adminApi')(logger, db, dataManager, DATA_PATH));
+
 // --- Alert API Routes ---
 mainRouter.use('/api/alerts', ipFilterMiddleware, require('./routes/alertApi')(logger));
+
 /// --- Layered File System Helper for SVGs/HMI ---
 function resolveHmiPath(filename, req) {
     const globalPath = path.join(DATA_PATH, filename);
@@ -465,6 +476,7 @@ function resolveHmiPath(filename, req) {
     }
     return globalPath;
 }
+
 // --- API Routes for HMI ---
 mainRouter.get('/api/hmi/file', (req, res) => {
     const filename = path.basename(req.query.name || '');
@@ -479,6 +491,7 @@ mainRouter.get('/api/hmi/file', (req, res) => {
         res.status(404).send('Not found');
     }
 });
+
 mainRouter.get('/api/hmi/list', (req, res) => {
     try {
         let files = new Set();
@@ -500,6 +513,7 @@ mainRouter.get('/api/hmi/list', (req, res) => {
         res.status(500).json([]); 
     }
 });
+
 mainRouter.get('/api/hmi/bindings.js', (req, res) => {
     const filename = path.basename(req.query.name || '');
     const filePath = resolveHmiPath(filename, req);
@@ -510,6 +524,7 @@ mainRouter.get('/api/hmi/bindings.js', (req, res) => {
         res.send('// No bindings'); 
     }
 });
+
 mainRouter.delete('/api/hmi/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
@@ -517,6 +532,7 @@ mainRouter.delete('/api/hmi/file', (req, res) => {
     const globalPath = path.join(DATA_PATH, filename);
     let targetPath = null;
     let isPrivate = false;
+    
     if (req.user && req.user.id) {
         const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
         const userPath = path.join(userHmiDir, filename);
@@ -526,14 +542,16 @@ mainRouter.delete('/api/hmi/file', (req, res) => {
         targetPath = globalPath;
         isPrivate = false;
     }
+    
     if (!targetPath) {
         return res.status(404).json({ error: "File not found" });
     }
     if (!isPrivate) {
         if (req.user.role !== 'admin') {
-        return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
+            return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
         }
     }
+    
     try {
         fs.unlinkSync(targetPath);
         logger.info(`Deleted View: ${targetPath}`);
@@ -548,9 +566,11 @@ mainRouter.delete('/api/hmi/file', (req, res) => {
         res.status(500).json({ error: "Failed to delete file" });
     }
 });
+
 mainRouter.get('/api/svg/file', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
 mainRouter.get('/api/svg/list', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
 mainRouter.get('/api/svg/bindings.js', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
+
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
@@ -571,6 +591,7 @@ mainRouter.get('/api/config', (req, res) => {
         hmiFilePath: config.HMI_FILE_PATH 
     });
 });
+
 if (config.IS_SIMULATOR_ENABLED) {
     mainRouter.get('/api/simulator/status', (req, res) => {
         res.json({ statuses: simulatorManager.getStatuses() });
@@ -586,12 +607,16 @@ if (config.IS_SIMULATOR_ENABLED) {
         res.json(r);
     });
 }
+
 mainRouter.use('/api/context', (req, res, next) => {
     if (!db) return res.status(503).json({ error: "DB not ready" });
     const dbManager = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     require('./routes/mcpApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next);
 });
-mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
+
+// [UPDATED] Paths to isolated MCP interfaces
+mainRouter.use('/api/tools', ipFilterMiddleware, require('./interfaces/mcp/toolsApi')(logger));
+
 if (config.VIEW_CHAT_ENABLED) {
     mainRouter.use('/api/chat', ipFilterMiddleware, require('./interfaces/mcp/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
@@ -599,26 +624,32 @@ if (config.VIEW_CHAT_ENABLED) {
 if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager));
 }
+
 mainRouter.use('/api/mapper', ipFilterMiddleware, require('./routes/mapperApi')(mapperEngine));
 mainRouter.use('/api/chart', ipFilterMiddleware, require('./routes/chartApi')(CHART_CONFIG_PATH, logger));
+
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
     const conn = getBrokerConnection(brokerId);
     if (!conn || !conn.connected) return res.status(503).json({ error: "Broker not connected" });
+    
     let finalPayload = payload;
     if (format === 'json' || typeof payload === 'object') {
         try { finalPayload = JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload); } catch(e) {}
     } else if (format === 'sparkplugb') {
         try { finalPayload = spBv10Codec.encodePayload(JSON.parse(payload)); } catch(e) { return res.status(400).json({ error: e.message }); }
     }
+    
     conn.publish(topic, finalPayload, { qos: parseInt(qos)||0, retain: !!retain }, (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
     });
 });
+
 if (config.EXTERNAL_API_ENABLED) {
     mainRouter.use('/api/external', ipFilterMiddleware, require('./routes/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer));
 }
+
 if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', requireAdmin);
     mainRouter.get('/config.js', requireAdmin);
@@ -626,7 +657,9 @@ if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', (req, res) => res.status(403).send('Disabled'));
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
+
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false, index: false }));
+
 const serveSPA = (req, res) => {
     const indexPath = path.join(__dirname, 'public', 'index.html');
     fs.readFile(indexPath, 'utf8', (err, data) => {
@@ -636,7 +669,9 @@ const serveSPA = (req, res) => {
         }
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
         let modifiedHtml = data;
+        
         modifiedHtml = modifiedHtml.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
+        
         let userState = 'null';
         if (req.isAuthenticated && req.isAuthenticated()) {
             userState = JSON.stringify({
@@ -648,6 +683,7 @@ const serveSPA = (req, res) => {
             });
         }
         modifiedHtml = modifiedHtml.replace('</head>', `<script>window.currentUser = ${userState};</script>\n</head>`);
+        
         const analyticsPlaceholder = '';
         if (config.ANALYTICS_ENABLED) {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ANALYTICS_SCRIPT);
@@ -657,17 +693,20 @@ const serveSPA = (req, res) => {
         res.send(modifiedHtml);
     });
 };
+
 const clientRoutes = ['tree', 'chart', 'hmi', 'mapper', 'history', 'publish', 'login', 'admin', 'alerts'];
 clientRoutes.forEach(route => {
     mainRouter.get('/' + route, serveSPA);
     mainRouter.get('/' + route + '/', serveSPA);
 });
+
 app.use(authMiddleware);
 app.use(basePath, mainRouter);
 if (basePath !== '/') {
     logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/' to support path-stripping proxies.`);
     app.use('/', mainRouter);
 }
+
 app.get('/', (req, res) => {
     if (req.isAuthenticated()) {
         const target = basePath === '/' ? '/tree/' : basePath + '/tree/';
@@ -676,22 +715,27 @@ app.get('/', (req, res) => {
         serveSPA(req, res);
     }
 });
+
 // --- Server Start ---
 server.listen(config.PORT, () => {
     logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
 });
+
 server.timeout = 600000;
 server.keepAliveTimeout = 600000;
 server.headersTimeout = 600005;
+
 // --- Graceful Shutdown Logic ---
 async function gracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     logger.info("\n✅ Gracefully shutting down...");
+    
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
+
     try {
         dataManager.stop();
         simulatorManager.getStatuses();
@@ -706,6 +750,7 @@ async function gracefulShutdown() {
         logger.info("✅ Data Providers closed.");
         await dataManager.close();
         logger.info("✅ Database closed.");
+        
         logger.info("✅ Shutdown complete.");
         process.exit(0);
     } catch (err) {
@@ -713,6 +758,7 @@ async function gracefulShutdown() {
         process.exit(1);
     }
 }
+
 // --- Process Signal Handling ---
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
