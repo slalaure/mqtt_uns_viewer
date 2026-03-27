@@ -9,26 +9,51 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Semantic Modeler View Module
- * Provides a GUI to edit the uns_model.json according to I3X specification.
+ * Provides an advanced, dynamic GUI to explore and edit the uns_model.json
+ * according to I3X specifications. 
+ * Integrates vis-network for interactive Relationship Graphs.
  */
 
 import { confirmModal, trackEvent } from './utils.js';
 
 // --- State ---
 let currentModel = null;
-let currentSelection = { type: null, id: null }; // type: 'namespace' | 'type' | 'instance'
+let currentSelection = { type: null, id: null, ref: null }; 
 let isModelerInitialized = false;
+let expandedNodes = new Set(); 
+let networkGraph = null; 
 
 // --- DOM Elements ---
-let listNamespaces, listTypes, listInstances;
-let btnRefresh, btnSave, statusMsg;
-let formContainer, welcomeScreen, formTitle, dynamicFields, btnDelete;
-let btnAddNamespace, btnAddType, btnAddInstance;
+let treeContainer, graphContainer, btnRefresh, btnSave, statusMsg;
+let formContainer, welcomeScreen, mainContent, formTitle, formSubtitle, dynamicFields, btnDelete;
+
+/**
+ * Robust loader for vis-network.
+ * Returns a Promise that resolves when the library is ready.
+ */
+function loadVisNetwork() {
+    return new Promise((resolve) => {
+        if (window.vis) return resolve();
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        // Base path strategy: guarantees finding the file in public/libs/
+        const basePath = document.querySelector('base')?.getAttribute('href') || '/';
+        script.src = basePath + 'libs/vis-network.min.js';
+        script.onload = () => {
+            console.log("✅ vis-network library loaded from local libs.");
+            resolve();
+        };
+        script.onerror = () => {
+            console.error("❌ Failed to load vis-network.min.js. Ensure the file is in public/libs/");
+            resolve(); 
+        };
+        document.head.appendChild(script);
+    });
+}
 
 export async function initModelerView() {
     const container = document.getElementById('modeler-view');
-    if (!container) return;
-    if (isModelerInitialized) return;
+    if (!container || isModelerInitialized) return;
 
     try {
         const response = await fetch('html/view.modeler.html');
@@ -36,37 +61,42 @@ export async function initModelerView() {
         container.innerHTML = await response.text();
 
         // Bind DOM elements
-        listNamespaces = document.getElementById('modeler-list-namespaces');
-        listTypes = document.getElementById('modeler-list-types');
-        listInstances = document.getElementById('modeler-list-instances');
+        treeContainer = document.getElementById('modeler-tree-container');
+        graphContainer = document.getElementById('relationship-graph');
         
         btnRefresh = document.getElementById('btn-modeler-refresh');
         btnSave = document.getElementById('btn-modeler-save');
         statusMsg = document.getElementById('modeler-status');
         
-        formContainer = document.getElementById('modeler-form');
         welcomeScreen = document.getElementById('modeler-welcome');
+        mainContent = document.getElementById('modeler-content');
+        formContainer = document.getElementById('modeler-form');
         formTitle = document.getElementById('modeler-form-title');
+        formSubtitle = document.getElementById('modeler-form-subtitle');
         dynamicFields = document.getElementById('modeler-dynamic-fields');
         btnDelete = document.getElementById('btn-modeler-delete');
 
-        btnAddNamespace = document.getElementById('btn-modeler-add-namespace');
-        btnAddType = document.getElementById('btn-modeler-add-type');
-        btnAddInstance = document.getElementById('btn-modeler-add-instance');
+        // Wait for vis-network to load
+        await loadVisNetwork();
 
         // Event Listeners
         btnRefresh.addEventListener('click', loadModel);
         btnSave.addEventListener('click', saveModelToServer);
         
-        btnAddNamespace.addEventListener('click', () => createNewItem('namespace'));
-        btnAddType.addEventListener('click', () => createNewItem('type'));
-        btnAddInstance.addEventListener('click', () => createNewItem('instance'));
+        document.getElementById('btn-add-namespace').addEventListener('click', () => createNewItem('namespace'));
+        document.getElementById('btn-add-type').addEventListener('click', () => createNewItem('objectType'));
+        document.getElementById('btn-add-instance').addEventListener('click', () => createNewItem('instance'));
 
         formContainer.addEventListener('submit', handleFormSubmit);
         btnDelete.addEventListener('click', handleDeleteItem);
 
+        // Window resize observer for Graph
+        window.addEventListener('resize', () => {
+            if (networkGraph) networkGraph.fit();
+        });
+
         isModelerInitialized = true;
-        console.log("✅ Semantic Modeler View Initialized");
+        console.log("✅ Semantic Modeler V3 (Vis-Network) Initialized");
 
     } catch (err) {
         console.error("Error initializing Modeler View:", err);
@@ -80,219 +110,513 @@ export function onModelerViewShow() {
     }
 }
 
-/**
- * Shows a temporary status message in the sidebar
- */
 function showStatus(message, isError = false) {
     statusMsg.textContent = message;
     statusMsg.style.color = isError ? 'var(--color-danger)' : 'var(--color-success)';
     setTimeout(() => statusMsg.textContent = '', 4000);
 }
 
-/**
- * Loads the current semantic model from the server.
- */
+// --- 1. Model Loading & Tree Building ---
+
 async function loadModel() {
     try {
         const res = await fetch('api/env/model');
         if (!res.ok) throw new Error("Failed to load model from server");
         currentModel = await res.json();
 
-        // Ensure baseline I3X structure exists
         currentModel.namespaces = currentModel.namespaces || [];
         currentModel.objectTypes = currentModel.objectTypes || [];
         currentModel.instances = currentModel.instances || [];
 
-        renderLists();
-        clearEditor();
+        renderTree();
+        
+        if (currentSelection.id) {
+            selectItem(currentSelection.type, currentSelection.id);
+        } else {
+            clearEditor();
+        }
     } catch (e) {
-        console.error(e);
         showStatus(e.message, true);
     }
 }
 
-/**
- * Renders the lists in the left sidebar.
- */
-function renderLists() {
-    const renderItems = (items, ulElement, typeStr, idField, displayField) => {
-        ulElement.innerHTML = '';
-        if (!items || items.length === 0) {
-            ulElement.innerHTML = `<li style="cursor:default; opacity:0.6; background:transparent; border:none;">No items</li>`;
-            return;
-        }
-        items.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.textContent = item[displayField] || item[idField] || `Unnamed ${typeStr}`;
-            li.title = item[idField];
-            if (currentSelection.type === typeStr && currentSelection.id === item[idField]) {
-                li.classList.add('selected');
+function renderTree() {
+    if (!treeContainer) return;
+    treeContainer.innerHTML = '';
+    
+    const rootUl = document.createElement('ul');
+    rootUl.className = 'modeler-tree';
+
+    const typesByNamespace = new Map();
+    const instancesByType = new Map();
+    const instancesByParent = new Map();
+
+    currentModel.objectTypes.forEach(t => {
+        if (!typesByNamespace.has(t.namespaceUri)) typesByNamespace.set(t.namespaceUri, []);
+        typesByNamespace.get(t.namespaceUri).push(t);
+    });
+
+    currentModel.instances.forEach(inst => {
+        if (!instancesByType.has(inst.typeId)) instancesByType.set(inst.typeId, []);
+        instancesByType.get(inst.typeId).push(inst);
+        
+        const pid = (inst.parentId === '/' || !inst.parentId) ? 'root' : inst.parentId;
+        if (!instancesByParent.has(pid)) instancesByParent.set(pid, []);
+        instancesByParent.get(pid).push(inst);
+    });
+
+    const buildInstanceNode = (inst) => {
+        const li = document.createElement('li');
+        const children = instancesByParent.get(inst.elementId) || [];
+        const hasChildren = children.length > 0 || inst.isComposition;
+        
+        const isExp = expandedNodes.has(inst.elementId);
+        const toggleClass = isExp ? '' : 'collapsed';
+        const toggleIcon = hasChildren ? '▼' : '&nbsp;';
+
+        const nodeDiv = document.createElement('div');
+        nodeDiv.className = `modeler-node ${currentSelection.id === inst.elementId ? 'selected' : ''}`;
+        nodeDiv.innerHTML = `
+            <span class="node-toggle ${toggleClass}">${toggleIcon}</span>
+            <span class="node-icon" style="color: #64748b;">📦</span>
+            <span class="node-label">${inst.displayName || inst.elementId}</span>
+        `;
+        
+        nodeDiv.onclick = (e) => {
+            if (e.target.classList.contains('node-toggle') && hasChildren) {
+                const ul = li.querySelector(':scope > ul');
+                if (ul) {
+                    ul.classList.toggle('collapsed');
+                    e.target.classList.toggle('collapsed');
+                    if (ul.classList.contains('collapsed')) expandedNodes.delete(inst.elementId);
+                    else expandedNodes.add(inst.elementId);
+                }
+                return;
             }
-            li.onclick = () => selectItem(typeStr, item[idField], index);
-            ulElement.appendChild(li);
+            selectItem('instance', inst.elementId);
+        };
+        li.appendChild(nodeDiv);
+
+        if (hasChildren) {
+            const ul = document.createElement('ul');
+            ul.className = toggleClass;
+            children.forEach(child => ul.appendChild(buildInstanceNode(child)));
+            li.appendChild(ul);
+        }
+        return li;
+    };
+
+    currentModel.namespaces.forEach(ns => {
+        const nsLi = document.createElement('li');
+        const types = typesByNamespace.get(ns.uri) || [];
+        const isExp = expandedNodes.has(ns.uri);
+        
+        const nodeDiv = document.createElement('div');
+        nodeDiv.className = `modeler-node ${currentSelection.id === ns.uri ? 'selected' : ''}`;
+        nodeDiv.innerHTML = `
+            <span class="node-toggle ${isExp ? '' : 'collapsed'}">${types.length > 0 ? '▼' : '&nbsp;'}</span>
+            <span class="node-icon" style="color: #3b82f6;">🌐</span>
+            <span class="node-label">${ns.displayName}</span>
+        `;
+        
+        nodeDiv.onclick = (e) => {
+            if (e.target.classList.contains('node-toggle') && types.length > 0) {
+                const ul = nsLi.querySelector(':scope > ul');
+                if (ul) {
+                    ul.classList.toggle('collapsed');
+                    e.target.classList.toggle('collapsed');
+                    if (ul.classList.contains('collapsed')) expandedNodes.delete(ns.uri);
+                    else expandedNodes.add(ns.uri);
+                }
+                return;
+            }
+            selectItem('namespace', ns.uri);
+        };
+        nsLi.appendChild(nodeDiv);
+
+        if (types.length > 0) {
+            const typeUl = document.createElement('ul');
+            typeUl.className = isExp ? '' : 'collapsed';
+            
+            types.forEach(t => {
+                const tLi = document.createElement('li');
+                const rootInstancesOfType = (instancesByType.get(t.elementId) || []).filter(i => i.parentId === '/' || !i.parentId);
+                const isTExp = expandedNodes.has(t.elementId);
+                
+                const tDiv = document.createElement('div');
+                tDiv.className = `modeler-node ${currentSelection.id === t.elementId ? 'selected' : ''}`;
+                tDiv.innerHTML = `
+                    <span class="node-toggle ${isTExp ? '' : 'collapsed'}">${rootInstancesOfType.length > 0 ? '▼' : '&nbsp;'}</span>
+                    <span class="node-icon" style="color: #22c55e;">📃</span>
+                    <span class="node-label">${t.displayName}</span>
+                `;
+                
+                tDiv.onclick = (e) => {
+                    if (e.target.classList.contains('node-toggle') && rootInstancesOfType.length > 0) {
+                        const ul = tLi.querySelector(':scope > ul');
+                        if (ul) {
+                            ul.classList.toggle('collapsed');
+                            e.target.classList.toggle('collapsed');
+                            if (ul.classList.contains('collapsed')) expandedNodes.delete(t.elementId);
+                            else expandedNodes.add(t.elementId);
+                        }
+                        return;
+                    }
+                    selectItem('objectType', t.elementId);
+                };
+                tLi.appendChild(tDiv);
+
+                if (rootInstancesOfType.length > 0) {
+                    const instUl = document.createElement('ul');
+                    instUl.className = isTExp ? '' : 'collapsed';
+                    rootInstancesOfType.forEach(inst => instUl.appendChild(buildInstanceNode(inst)));
+                    tLi.appendChild(instUl);
+                }
+                typeUl.appendChild(tLi);
+            });
+            nsLi.appendChild(typeUl);
+        }
+        rootUl.appendChild(nsLi);
+    });
+
+    treeContainer.appendChild(rootUl);
+}
+
+// --- 2. Selection & Graph Drawing ---
+
+function selectItem(type, id) {
+    let ref = null;
+    if (type === 'namespace') ref = currentModel.namespaces.find(n => n.uri === id);
+    if (type === 'objectType') ref = currentModel.objectTypes.find(t => t.elementId === id);
+    if (type === 'instance') ref = currentModel.instances.find(i => i.elementId === id);
+
+    if (!ref) {
+        clearEditor();
+        return;
+    }
+
+    currentSelection = { type, id, ref };
+    
+    document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
+    renderTree(); 
+
+    welcomeScreen.style.display = 'none';
+    mainContent.style.display = 'flex';
+    
+    // [FIX] On laisse 100ms au DOM Flexbox pour calculer sa vraie hauteur avant de dessiner
+    setTimeout(() => {
+        drawRelationshipGraph();
+    }, 100);
+    
+    renderForm();
+}
+
+/**
+ * Draws an interactive Relationship Graph using vis-network.
+ */
+function drawRelationshipGraph() {
+    if (!window.vis || !graphContainer) return;
+
+    const item = currentSelection.ref;
+    if (!item) return;
+
+    const isDark = document.body.classList.contains('dark-mode');
+    const colors = {
+        center:   { background: '#007bff', border: '#0056b3', font: '#ffffff' },
+        instance: { background: isDark ? '#333333' : '#ffffff', border: '#6c757d', font: isDark ? '#ffffff' : '#333333' },
+        type:     { background: isDark ? '#1a3b2b' : '#e6f4ea', border: '#28a745', font: isDark ? '#ffffff' : '#333333' },
+        namespace:{ background: isDark ? '#1a2b4b' : '#e0f0ff', border: '#007bff', font: isDark ? '#ffffff' : '#333333' }
+    };
+
+    let nodesData = [];
+    let edgesData = [];
+    
+    const addNode = (id, label, group, nodeType) => {
+        if (!nodesData.find(n => n.id === id)) {
+            let icon = '📦';
+            if (nodeType === 'namespace') icon = '🌐';
+            if (nodeType === 'objectType') icon = '📃';
+
+            const style = (group === 'center') ? colors.center : (colors[group] || colors.instance);
+
+            nodesData.push({
+                id: id,
+                label: `${icon} ${label.length > 20 ? label.substring(0, 18) + '...' : label}`,
+                title: label, 
+                color: style,
+                shape: 'box',
+                font: { color: style.font, face: 'system-ui, -apple-system, sans-serif' },
+                nodeType: nodeType 
+            });
+        }
+    };
+
+    const addEdge = (from, to, label, dashes = false) => {
+        edgesData.push({
+            from: from,
+            to: to,
+            label: label,
+            arrows: 'to',
+            font: { size: 10, align: 'horizontal', color: isDark ? '#aaaaaa' : '#666666' },
+            color: { color: isDark ? '#555555' : '#cccccc' },
+            dashes: dashes
         });
     };
 
-    renderItems(currentModel.namespaces, listNamespaces, 'namespace', 'uri', 'displayName');
-    renderItems(currentModel.objectTypes, listTypes, 'type', 'elementId', 'displayName');
-    renderItems(currentModel.instances, listInstances, 'instance', 'elementId', 'displayName');
+    const centerId = currentSelection.id;
+    addNode(centerId, item.displayName || item.elementId || item.uri, 'center', currentSelection.type);
+
+    if (currentSelection.type === 'instance') {
+        if (item.parentId && item.parentId !== '/') {
+            const parent = currentModel.instances.find(i => i.elementId === item.parentId);
+            if (parent) {
+                addNode(parent.elementId, parent.displayName || parent.elementId, 'instance', 'instance');
+                addEdge(parent.elementId, centerId, 'HasComponent');
+            }
+        }
+        if (item.typeId) {
+            const typeRef = currentModel.objectTypes.find(t => t.elementId === item.typeId);
+            if (typeRef) {
+                addNode(typeRef.elementId, typeRef.displayName || typeRef.elementId, 'type', 'objectType');
+                addEdge(centerId, typeRef.elementId, 'InstanceOf', true);
+            }
+        }
+        const children = currentModel.instances.filter(i => i.parentId === item.elementId);
+        children.forEach(c => {
+            addNode(c.elementId, c.displayName || c.elementId, 'instance', 'instance');
+            addEdge(centerId, c.elementId, 'HasComponent');
+        });
+    } 
+    else if (currentSelection.type === 'objectType') {
+        if (item.namespaceUri) {
+            const ns = currentModel.namespaces.find(n => n.uri === item.namespaceUri);
+            if (ns) {
+                addNode(ns.uri, ns.displayName || ns.uri, 'namespace', 'namespace');
+                addEdge(centerId, ns.uri, 'InNamespace', true);
+            }
+        }
+        const instances = currentModel.instances.filter(i => i.typeId === item.elementId).slice(0, 15);
+        instances.forEach(c => {
+            addNode(c.elementId, c.displayName || c.elementId, 'instance', 'instance');
+            addEdge(c.elementId, centerId, 'InstanceOf', true);
+        });
+    }
+    else if (currentSelection.type === 'namespace') {
+        const types = currentModel.objectTypes.filter(t => t.namespaceUri === item.uri).slice(0, 15);
+        types.forEach(t => {
+            addNode(t.elementId, t.displayName || t.elementId, 'type', 'objectType');
+            addEdge(t.elementId, centerId, 'InNamespace', true);
+        });
+    }
+
+    const data = { 
+        nodes: new vis.DataSet(nodesData), 
+        edges: new vis.DataSet(edgesData) 
+    };
+    
+    // [FIX] On utilise le moteur "repulsion" beaucoup plus stable visuellement que forceAtlas
+    const options = {
+        physics: {
+            solver: 'repulsion',
+            repulsion: {
+                nodeDistance: 150,
+                springLength: 150
+            }
+        },
+        interaction: {
+            dragNodes: true,
+            dragView: true,
+            zoomView: true
+        }
+    };
+
+    if (networkGraph) {
+        networkGraph.destroy();
+    }
+    networkGraph = new vis.Network(graphContainer, data, options);
+
+    networkGraph.on("click", function (params) {
+        if (params.nodes.length > 0) {
+            const clickedNodeId = params.nodes[0];
+            const clickedNode = data.nodes.get(clickedNodeId);
+            if (clickedNode && clickedNode.nodeType && clickedNodeId !== currentSelection.id) {
+                selectItem(clickedNode.nodeType, clickedNodeId);
+            }
+        }
+    });
 }
 
-/**
- * Selects an item and populates the editor form.
- */
-function selectItem(type, id, index) {
-    currentSelection = { type, id, index };
-    renderLists(); // Update highlights
-    
-    let itemData = null;
-    if (type === 'namespace') itemData = currentModel.namespaces[index];
-    if (type === 'type') itemData = currentModel.objectTypes[index];
-    if (type === 'instance') itemData = currentModel.instances[index];
+// --- 3. Form Editor ---
 
+function renderForm() {
+    const { type, id, ref: itemData } = currentSelection;
     if (!itemData) return;
 
-    welcomeScreen.style.display = 'none';
-    formContainer.style.display = 'block';
-    btnDelete.style.display = 'block';
     formTitle.textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-
+    formSubtitle.textContent = id;
     dynamicFields.innerHTML = '';
 
-    // Generate fields based on type
+    const createInput = (label, name, value, required = false, typeInput = 'text') => `
+        <div>
+            <label class="modern-label">${label} ${required ? '<span style="color:var(--color-danger)">*</span>' : ''}</label>
+            <input type="${typeInput}" name="${name}" value="${value || ''}" class="modern-input" ${required ? 'required' : ''}>
+        </div>
+    `;
+
     if (type === 'namespace') {
         dynamicFields.innerHTML = `
-            <div class="form-group"><label>URI</label><input type="text" name="uri" value="${itemData.uri || ''}" required></div>
-            <div class="form-group"><label>Display Name</label><input type="text" name="displayName" value="${itemData.displayName || ''}" required></div>
+            ${createInput('Namespace URI', 'uri', itemData.uri, true)}
+            ${createInput('Display Name', 'displayName', itemData.displayName, true)}
         `;
-    } else if (type === 'type') {
+    } else if (type === 'objectType') {
+        const nsOptions = currentModel.namespaces.map(ns => 
+            `<option value="${ns.uri}" ${itemData.namespaceUri === ns.uri ? 'selected' : ''}>${ns.displayName}</option>`
+        ).join('');
+
         dynamicFields.innerHTML = `
-            <div class="form-group"><label>Element ID</label><input type="text" name="elementId" value="${itemData.elementId || ''}" required></div>
-            <div class="form-group"><label>Display Name</label><input type="text" name="displayName" value="${itemData.displayName || ''}" required></div>
-            <div class="form-group"><label>Namespace URI</label><input type="text" name="namespaceUri" value="${itemData.namespaceUri || ''}" required></div>
-            <div class="form-group"><label>Schema (JSON)</label><textarea name="schema" rows="6" style="font-family:monospace; width:100%;">${itemData.schema ? JSON.stringify(itemData.schema, null, 2) : '{}'}</textarea></div>
+            ${createInput('Element ID', 'elementId', itemData.elementId, true)}
+            ${createInput('Display Name', 'displayName', itemData.displayName, true)}
+            <div>
+                <label class="modern-label">Namespace URI *</label>
+                <select name="namespaceUri" class="modern-input" required>${nsOptions}</select>
+            </div>
+            <div>
+                <label class="modern-label">JSON Schema</label>
+                <textarea name="schema" class="modern-input" rows="6" style="font-family:monospace; resize:vertical;">${itemData.schema ? JSON.stringify(itemData.schema, null, 2) : '{}'}</textarea>
+            </div>
         `;
     } else if (type === 'instance') {
-        const typeOptions = (currentModel.objectTypes || []).map(t => `<option value="${t.elementId}" ${itemData.typeId === t.elementId ? 'selected' : ''}>${t.displayName} (${t.elementId})</option>`).join('');
-        const parentOptions = `<option value="">-- None (Root) --</option>` + (currentModel.instances || [])
-            .filter(i => i.elementId !== itemData.elementId) // Can't be own parent
+        const typeOptions = currentModel.objectTypes.map(t => 
+            `<option value="${t.elementId}" ${itemData.typeId === t.elementId ? 'selected' : ''}>${t.displayName} (${t.elementId})</option>`
+        ).join('');
+        
+        const parentOptions = `<option value="/">-- Root Level --</option>` + currentModel.instances
+            .filter(i => i.elementId !== itemData.elementId) 
             .map(i => `<option value="${i.elementId}" ${itemData.parentId === i.elementId ? 'selected' : ''}>${i.displayName}</option>`).join('');
 
         dynamicFields.innerHTML = `
-            <div class="form-group"><label>Element ID</label><input type="text" name="elementId" value="${itemData.elementId || ''}" required></div>
-            <div class="form-group"><label>Display Name</label><input type="text" name="displayName" value="${itemData.displayName || ''}" required></div>
-            <div class="form-group"><label>Type</label><select name="typeId" required>${typeOptions}</select></div>
-            <div class="form-group"><label>Parent Instance</label><select name="parentId">${parentOptions}</select></div>
-            <div class="form-group" style="display:flex; align-items:center; gap:10px;">
-                <input type="checkbox" name="isComposition" id="chk-comp" ${itemData.isComposition ? 'checked' : ''}>
-                <label for="chk-comp" style="margin:0; cursor:pointer;">Is Composition (Contains inner components)</label>
+            ${createInput('Element ID', 'elementId', itemData.elementId, true)}
+            ${createInput('Display Name', 'displayName', itemData.displayName, true)}
+            <div style="display:flex; gap: 15px;">
+                <div style="flex:1;">
+                    <label class="modern-label">Type Definition *</label>
+                    <select name="typeId" class="modern-input" required>${typeOptions}</select>
+                </div>
+                <div style="flex:1;">
+                    <label class="modern-label">Parent Instance</label>
+                    <select name="parentId" class="modern-input">${parentOptions}</select>
+                </div>
             </div>
-            <div class="form-group" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--color-border);">
-                <label style="color:var(--color-primary);">MQTT Topic Mapping Pattern (Optional)</label>
-                <div style="font-size:0.8em; color:var(--color-text-secondary); margin-bottom:5px;">Link this I3X object to a real MQTT topic (supports + and # wildcards)</div>
-                <input type="text" name="topic_mapping" value="${itemData.topic_mapping || ''}" placeholder="e.g. factory/line1/machineA/#">
+            <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px; background: var(--color-bg); padding: 10px; border-radius: 4px; border: 1px solid var(--color-border);">
+                <input type="checkbox" name="isComposition" id="chk-comp" ${itemData.isComposition ? 'checked' : ''} style="width: 18px; height: 18px;">
+                <label for="chk-comp" style="margin:0; cursor:pointer; font-weight: 500;">Is Composition (Contains nested components)</label>
+            </div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--color-border);">
+                <label class="modern-label" style="color: var(--color-primary);">MQTT Topic Mapping Pattern</label>
+                <div style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:8px;">Link this object to a raw MQTT topic stream to receive live data.</div>
+                <input type="text" name="topic_mapping" class="modern-input" value="${itemData.topic_mapping || ''}" placeholder="e.g. factory/line1/machineA/#">
             </div>
         `;
     }
 }
 
-/**
- * Handles creation of a new item (adds to array and opens editor)
- */
-function createNewItem(type) {
-    const newItem = {};
-    if (type === 'namespace') {
-        newItem.uri = `https://my-company.com/${Date.now()}`;
-        newItem.displayName = "New Namespace";
-        currentModel.namespaces.push(newItem);
-        selectItem(type, newItem.uri, currentModel.namespaces.length - 1);
-    } else if (type === 'type') {
-        newItem.elementId = `NewType_${Date.now()}`;
-        newItem.displayName = "New Object Type";
-        newItem.namespaceUri = currentModel.namespaces[0]?.uri || "";
-        newItem.schema = { type: "object" };
-        currentModel.objectTypes.push(newItem);
-        selectItem(type, newItem.elementId, currentModel.objectTypes.length - 1);
-    } else if (type === 'instance') {
-        newItem.elementId = `instance_${Date.now()}`;
-        newItem.displayName = "New Instance";
-        newItem.typeId = currentModel.objectTypes[0]?.elementId || "";
-        newItem.isComposition = false;
-        currentModel.instances.push(newItem);
-        selectItem(type, newItem.elementId, currentModel.instances.length - 1);
-    }
-    
-    // Auto-save is NOT triggered here, user must click Apply
-    btnSave.classList.add('btn-unsaved');
-}
-
-/**
- * Handles Apply Changes button inside the form
- */
 function handleFormSubmit(e) {
     e.preventDefault();
     if (!currentSelection.type) return;
 
     const formData = new FormData(e.target);
-    const { type, index } = currentSelection;
-    let targetArray = null;
+    const { type, ref } = currentSelection;
 
-    if (type === 'namespace') targetArray = currentModel.namespaces;
-    if (type === 'type') targetArray = currentModel.objectTypes;
-    if (type === 'instance') targetArray = currentModel.instances;
-
-    if (!targetArray || !targetArray[index]) return;
-
-    // Apply values
     for (let [key, value] of formData.entries()) {
         if (key === 'schema') {
             try { value = JSON.parse(value); } catch(err) { alert("Invalid JSON in Schema"); return; }
         }
-        if (key === 'isComposition') value = true; // Checkbox presence means true
+        if (key === 'isComposition') value = true;
         
-        if (value === "") delete targetArray[index][key]; // Clean up empty optional fields
-        else targetArray[index][key] = value;
+        if (value === "") delete ref[key];
+        else ref[key] = value;
     }
 
-    // Fix unchecked checkbox edge case for FormData
     if (type === 'instance' && !formData.has('isComposition')) {
-        targetArray[index].isComposition = false;
+        ref.isComposition = false;
+    }
+    if (type === 'instance' && ref.parentId === '/') {
+        delete ref.parentId;
     }
 
-    renderLists();
+    renderTree();
+    drawRelationshipGraph(); 
     showStatus("Changes applied locally. Remember to Save to Server.", false);
+    btnSave.classList.add('btn-unsaved'); 
+}
+
+// --- 4. Creation, Deletion & Persistence ---
+
+function createNewItem(type) {
+    const newItem = {};
+    if (type === 'namespace') {
+        newItem.uri = `https://namespace.local/${Date.now()}`;
+        newItem.displayName = "New Namespace";
+        currentModel.namespaces.push(newItem);
+        expandedNodes.add(newItem.uri);
+        selectItem(type, newItem.uri);
+    } else if (type === 'objectType') {
+        newItem.elementId = `NewType_${Date.now()}`;
+        newItem.displayName = "New Object Type";
+        newItem.namespaceUri = currentModel.namespaces[0]?.uri || "";
+        newItem.schema = { type: "object" };
+        currentModel.objectTypes.push(newItem);
+        expandedNodes.add(newItem.elementId);
+        selectItem(type, newItem.elementId);
+    } else if (type === 'instance') {
+        newItem.elementId = `instance_${Date.now()}`;
+        newItem.displayName = "New Instance";
+        newItem.typeId = currentModel.objectTypes[0]?.elementId || "";
+        newItem.isComposition = false;
+        
+        if (currentSelection.type === 'instance') {
+            newItem.parentId = currentSelection.id;
+            expandedNodes.add(currentSelection.id);
+        }
+        
+        currentModel.instances.push(newItem);
+        selectItem(type, newItem.elementId);
+    }
+    
     btnSave.classList.add('btn-unsaved');
 }
 
-/**
- * Deletes the currently selected item
- */
 async function handleDeleteItem() {
     const isConfirmed = await confirmModal('Delete Item', 'Are you sure you want to remove this item from the model?', 'Delete', true);
     if (!isConfirmed) return;
 
-    const { type, index } = currentSelection;
-    if (type === 'namespace') currentModel.namespaces.splice(index, 1);
-    if (type === 'type') currentModel.objectTypes.splice(index, 1);
-    if (type === 'instance') currentModel.instances.splice(index, 1);
+    const { type, id } = currentSelection;
+    if (type === 'namespace') {
+        currentModel.namespaces = currentModel.namespaces.filter(n => n.uri !== id);
+    } else if (type === 'objectType') {
+        currentModel.objectTypes = currentModel.objectTypes.filter(t => t.elementId !== id);
+    } else if (type === 'instance') {
+        currentModel.instances = currentModel.instances.filter(i => i.elementId !== id);
+    }
 
     btnSave.classList.add('btn-unsaved');
     clearEditor();
-    renderLists();
+    renderTree();
 }
 
-/**
- * Clears the editor panel
- */
 function clearEditor() {
-    currentSelection = { type: null, id: null };
+    currentSelection = { type: null, id: null, ref: null };
     welcomeScreen.style.display = 'flex';
-    formContainer.style.display = 'none';
+    mainContent.style.display = 'none';
+    
+    document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
+    
+    if (networkGraph) {
+        networkGraph.destroy();
+        networkGraph = null;
+    }
 }
 
-/**
- * Pushes the modified model back to the server
- */
 async function saveModelToServer() {
     trackEvent('modeler_save_model');
     btnSave.disabled = true;
@@ -311,9 +635,8 @@ async function saveModelToServer() {
         }
 
         btnSave.classList.remove('btn-unsaved');
-        showStatus("✅ Model successfully deployed to server.");
+        showStatus("✅ Model deployed to server.");
         
-        // Notify the application to reconstruct trees
         if (window.appCallbacks && window.appCallbacks.refreshSemanticTrees) {
             window.appCallbacks.refreshSemanticTrees();
         }
@@ -322,6 +645,6 @@ async function saveModelToServer() {
         showStatus(`❌ ${e.message}`, true);
     } finally {
         btnSave.disabled = false;
-        btnSave.textContent = "💾 Save";
+        btnSave.innerHTML = "💾 Save";
     }
 }

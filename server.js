@@ -725,7 +725,7 @@ const serveSPA = (req, res) => {
     });
 };
 
-const clientRoutes = ['tree', 'chart', 'hmi', 'mapper', 'history', 'publish', 'login', 'admin', 'alerts'];
+const clientRoutes = ['tree', 'chart', 'hmi', 'mapper', 'history', 'publish', 'login', 'admin', 'alerts', 'modeler'];
 clientRoutes.forEach(route => {
     mainRouter.get('/' + route, serveSPA);
     mainRouter.get('/' + route + '/', serveSPA);

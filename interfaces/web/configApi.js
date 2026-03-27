@@ -121,8 +121,8 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             const newModel = req.body;
             
             // Basic Validation: Must be an array
-            if (!Array.isArray(newModel)) {
-                return res.status(400).json({ error: "Invalid format. UNS Model must be a JSON Array." });
+            if (typeof newModel !== "object" || Array.isArray(newModel)) {
+                return res.status(400).json({ error: "Invalid format. UNS Model must be a JSON Object." });
             }
 
             // Write to file (pretty print)
