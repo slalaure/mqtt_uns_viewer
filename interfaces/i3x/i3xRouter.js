@@ -19,7 +19,7 @@ function formatVQT(row, isHistory = false) {
     if (val && val._i3x) {
         delete val._i3x;
     }
-
+    
     return {
         value: val,
         quality: "Good",
@@ -27,7 +27,7 @@ function formatVQT(row, isHistory = false) {
     };
 }
 
-module.exports = (db, semanticManager, logger, i3xEvents) => {
+module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
     const router = express.Router();
     const i3xLogger = logger.child({ component: 'I3X_API' });
 
@@ -60,12 +60,19 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
         res.json(rels);
     });
 
+    // RFC 4.1.4 - Query Relationship Types by ElementId
+    router.post('/relationshiptypes/query', (req, res) => {
+        const { elementIds } = req.body;
+        if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds array required" });
+        const rels = semanticManager.getModel().relationshipTypes || [];
+        res.json(rels.filter(r => elementIds.includes(r.elementId)));
+    });
+
     router.get('/objects', (req, res) => {
         const { typeId } = req.query;
         let instances = semanticManager.getModel().instances || [];
         if (typeId) instances = instances.filter(i => i.typeId === typeId);
         
-        // Return metadata only (no values in exploratory endpoints)
         res.json(instances.map(i => ({
             elementId: i.elementId,
             displayName: i.displayName,
@@ -108,7 +115,7 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
                 }
             }
             if (!relationshiptype || relationshiptype.toLowerCase() === 'hascomponent') {
-                related.push(...instances.filter(i => i.parentId === eid && i.relationships?.ComponentOf === eid));
+                related.push(...instances.filter(i => i.parentId === eid && i.isComposition === false));
             }
         });
 
@@ -138,6 +145,7 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
 
         // Find mapping to MQTT topic
         const mapping = semanticManager.topicMappings.find(m => m.elementId === elementId);
+
         if (mapping) {
             // Fetch from DuckDB
             const sqlPattern = mapping.pattern.replace(/\+/g, '%').replace(/#/g, '%');
@@ -146,7 +154,7 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
 
             if (startTime) { query += ` AND timestamp >= CAST(? AS TIMESTAMPTZ)`; params.push(startTime); }
             if (endTime) { query += ` AND timestamp <= CAST(? AS TIMESTAMPTZ)`; params.push(endTime); }
-
+            
             query += ` ORDER BY timestamp DESC`;
             if (!isHistory) query += ` LIMIT 1`;
             else query += ` LIMIT 1000`; // Safety limit for history
@@ -155,7 +163,6 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
                 const rows = await new Promise((resolve, reject) => {
                     db.all(query, ...params, (err, rows) => err ? reject(err) : resolve(rows));
                 });
-
                 if (rows && rows.length > 0) {
                     result.data = rows.map(r => formatVQT(r, isHistory)).filter(Boolean);
                 }
@@ -175,14 +182,12 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
                 }
             }
         }
-
         return result;
     };
 
     router.post('/objects/value', async (req, res) => {
         const { elementIds, maxDepth = 1 } = req.body;
         if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds array required" });
-
         let responseObj = {};
         for (const eid of elementIds) {
             const val = await fetchValuesRecursive(eid, maxDepth, 1, null, null, false);
@@ -194,7 +199,6 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
     router.post('/objects/history', async (req, res) => {
         const { elementIds, maxDepth = 1, startTime, endTime } = req.body;
         if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds array required" });
-
         let responseObj = {};
         for (const eid of elementIds) {
             const val = await fetchValuesRecursive(eid, maxDepth, 1, startTime, endTime, true);
@@ -204,9 +208,48 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
     });
 
     // ==========================================
+    // UPDATE METHODS (RFC 4.2.2)
+    // ==========================================
+
+    // RFC 4.2.2.1 - Object Element LastKnownValue (Write-back)
+    router.put('/objects/:elementId/value', async (req, res) => {
+        const { elementId } = req.params;
+        const payload = req.body;
+        
+        const instance = semanticManager.resolveElement(elementId);
+        if (!instance) return res.status(404).json({ error: "Element not found" });
+
+        const mapping = semanticManager.topicMappings.find(m => m.elementId === elementId);
+        if (!mapping || mapping.pattern.includes('+') || mapping.pattern.includes('#')) {
+            return res.status(400).json({ error: "Element is not mapped to a unique writable topic." });
+        }
+
+        const topic = mapping.pattern;
+        const brokerId = instance.brokerId || 'default_broker';
+
+        const connection = connectorManager.providers.get(brokerId);
+        if (!connection || !connection.connected) {
+            return res.status(503).json({ error: "Data provider not connected" });
+        }
+
+        const payloadStr = typeof payload === 'object' ? JSON.stringify(payload) : String(payload);
+
+        connection.publish(topic, payloadStr, { qos: 1, retain: false }, (err) => {
+            if (err) return res.status(500).json({ elementId, success: false, message: err.message });
+            res.json({ elementId, success: true, message: "Update published successfully" });
+        });
+    });
+
+    // RFC 4.2.2.2 - Object Element HistoricalValue (Not implemented)
+    router.put('/objects/:elementId/history', (req, res) => {
+        res.status(501).json({ error: "Historical update not implemented" });
+    });
+
+    // ==========================================
     // SUBSCRIPTIONS (RFC 4.2.3)
     // ==========================================
-    const subscriptions = new Map(); // Map of subId -> { items: [], queue: [], res: null, maxDepth: 1 }
+
+    const subscriptions = new Map();
 
     router.post('/subscriptions', (req, res) => {
         const subId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -219,7 +262,6 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
         if (!sub) return res.status(404).json({ error: "Subscription not found" });
         const { elementIds, maxDepth = 1 } = req.body;
         if (!elementIds) return res.status(400).json({ error: "elementIds required" });
-        
         sub.maxDepth = maxDepth;
         elementIds.forEach(eid => { if (!sub.items.includes(eid)) sub.items.push(eid); });
         res.json({ message: `Registered ${elementIds.length} objects.`, totalObjects: sub.items.length });
@@ -236,12 +278,10 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
     router.get('/subscriptions/:id/stream', (req, res) => {
         const sub = subscriptions.get(req.params.id);
         if (!sub) return res.status(404).json({ error: "Subscription not found" });
-
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
-
         sub.res = res;
         sub.queue = []; // Clear queue when streaming starts
 
@@ -270,7 +310,7 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
             const semanticMatch = semanticManager.resolveTopic(topic);
             if (!semanticMatch) return;
             const elementId = semanticMatch.elementId;
-
+            
             // Format VQT
             let val = payloadObject;
             if (val && val._i3x) {
@@ -282,7 +322,6 @@ module.exports = (db, semanticManager, logger, i3xEvents) => {
                 quality: "Good",
                 timestamp: new Date().toISOString()
             };
-
             const updateObj = { [elementId]: { data: [vqt] } };
 
             // Dispatch to active subscriptions

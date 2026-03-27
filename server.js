@@ -9,12 +9,9 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Server Entry Point
- * [UPDATED] Refactored to properly expose unified DATA_PROVIDERS to the frontend API.
- * [UPDATED] Corrected paths for web APIs previously miscategorized in /interfaces/mcp/.
- * [UPDATED] Uses camelCase storage file naming and awaits dataManager.stop().
- * [UPDATED] Points to relocated root managers in the core/ directory.
- * [FIXED] Path resolution for simulator files in HMI/Asset API.
+ * [UPDATED] Injects connectorManager into I3X Router to enable write operations (RFC 4.2.2.1).
  */
+
 // --- Imports ---
 const pino = require('pino');
 const express = require('express');
@@ -27,12 +24,14 @@ const basicAuth = require('basic-auth');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const mqttMatch = require('mqtt-match');
 const { EventEmitter } = require('events'); 
+
 // --- Auth Imports ---
 const session = require('express-session');
 const FileStore = require('session-file-store')(session); 
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
 // --- Module Imports  ---
 const wsManager = require('./core/websocketManager');
 const connectorManager = require('./connectors/connectorManager'); 
@@ -41,6 +40,7 @@ const dataManager = require('./storage/dataManager');
 const userManager = require('./storage/userManager'); 
 const alertManager = require('./core/engine/alertManager'); 
 const semanticManager = require('./core/semantic/semanticManager'); 
+
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
@@ -50,10 +50,12 @@ const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const API_KEYS_FILE_PATH = path.join(DATA_PATH, process.env.EXTERNAL_API_KEYS_FILE || 'api_keys.json');
 const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
+
 // Ensure sessions directory exists
 if (!fs.existsSync(SESSIONS_PATH)) {
     try { fs.mkdirSync(SESSIONS_PATH, { recursive: true }); } catch (e) {}
 }
+
 // --- Analytics Script ---
 const ANALYTICS_SCRIPT = `
     <script type="text/javascript">
@@ -64,6 +66,7 @@ const ANALYTICS_SCRIPT = `
         })(window, document, "clarity", "script", "u3mhr7cn0n");
     </script>
 `;
+
 // --- Logger Setup ---
 const logger = pino({
     transport: {
@@ -71,6 +74,7 @@ const logger = pino({
         options: { colorize: true }
     }
 });
+
 // --- Initial .env File Setup ---
 if (!fs.existsSync(ENV_PATH)) {
     logger.info("✅ No .env file found in 'data' directory. Creating one from project root .env.example...");
@@ -83,12 +87,14 @@ if (!fs.existsSync(ENV_PATH)) {
     }
 }
 require('dotenv').config({ path: ENV_PATH });
+
 // --- Initial charts.json File Setup ---
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
     try {
         fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2));
     } catch (err) { /* ignore */ }
 }
+
 // --- Helper Function for Sparkplug (handles BigInt) ---
 function longReplacer(key, value) {
     if (typeof value === 'bigint') {
@@ -96,6 +102,7 @@ function longReplacer(key, value) {
     }
     return value;
 }
+
 // --- Global Variables ---
 let activeConnections = new Map(); 
 let brokerStatuses = new Map(); 
@@ -166,6 +173,7 @@ const config = {
     ADMIN_USERNAME: process.env.ADMIN_USERNAME,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 };
+
 // ---  Broker Configuration Parsing ---
 try {
     if (process.env.MQTT_BROKERS) {
@@ -245,6 +253,7 @@ function getPrimaryConnection() {
     if (activeConnections.size === 0) return null;
     return activeConnections.values().next().value || null;
 }
+
 function getBrokerConnection(brokerId) {
     if (!brokerId) return getPrimaryConnection();
     return activeConnections.get(brokerId) || null;
@@ -255,6 +264,7 @@ function updateBrokerStatus(brokerId, status, error = null) {
     brokerStatuses.set(brokerId, info);
     wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
 }
+
 // --- Express App & Server Setup ---
 const app = express();
 const server = http.createServer(app);
@@ -276,12 +286,14 @@ app.use(session({
         sameSite: 'lax' 
     }
 }));
+
 app.use(passport.initialize());
 app.use(passport.session());
 // Passport Serialization
 passport.serializeUser((user, done) => {
     done(null, user.id);
 });
+
 passport.deserializeUser(async (id, done) => {
     try {
         const user = await userManager.findById(id);
@@ -330,6 +342,7 @@ const mapperEngine = require('./core/engine/mapperEngine')(
     longReplacer,
     config 
 );
+
 // ---  DuckDB Setup ---
 const dbFile = DB_PATH;
 const dbWalFile = dbFile + '.wal';
@@ -375,6 +388,7 @@ db = new duckdb.Database(dbFile, (err) => {
             }
         });
     });
+    
     mapperEngine.setDb(db);
     // [UPDATED] Uses camelCase storage file naming
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./storage/dbManager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
@@ -394,6 +408,7 @@ db = new duckdb.Database(dbFile, (err) => {
             }
         } catch (e) {}
     };
+    
     setInterval(performMaintenance, 15000);
     connectorManager.init({ 
         config,
@@ -410,6 +425,7 @@ db = new duckdb.Database(dbFile, (err) => {
         isShuttingDown: () => isShuttingDown
     });
 });
+
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
     if (req.isAuthenticated()) return next();
@@ -430,6 +446,7 @@ const authMiddleware = (req, res, next) => {
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
     return res.status(401).send('Unauthorized. Please log in.');
 };
+
 const requireAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
         return next();
@@ -443,20 +460,24 @@ const requireAdmin = (req, res, next) => {
     logger.warn(`[Security] Admin access denied for ${req.user ? req.user.username : req.ip} on ${req.originalUrl}`);
     return res.status(403).send("Forbidden: Admin privileges required.");
 };
+
 let ALLOWED_IPS = config.API_ALLOWED_IPS ? config.API_ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
 const ipFilterMiddleware = (req, res, next) => {
     if (ALLOWED_IPS.length === 0 || ALLOWED_IPS.includes(req.ip)) return next();
     res.status(403).json({ error: `Access denied for IP ${req.ip}` });
 };
+
 const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
 app.set('trust proxy', true);
+
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
     if (conn && conn.connected) {
         conn.publish(topic, payload, { qos: 1 });
     }
 }, config.IS_SPARKPLUG_ENABLED);
+
 // --- Auth Routes ---
 mainRouter.use('/auth', require('./interfaces/web/authApi')(logger)); 
 // --- Admin Routes ---
@@ -472,11 +493,9 @@ mainRouter.use('/api/i3x', ipFilterMiddleware, require('./interfaces/i3x/i3xRout
  */
 function resolveHmiPath(filename, req) {
     const isSimulator = filename.toLowerCase().startsWith('simulator-');
-    
     if (isSimulator) {
         return path.join(DATA_PATH, 'simulators', filename);
     }
-
     const globalPath = path.join(DATA_PATH, filename);
     if (req.user && req.user.id) {
         const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
@@ -501,6 +520,7 @@ mainRouter.get('/api/hmi/file', (req, res) => {
         res.status(404).send('Not found');
     }
 });
+
 mainRouter.get('/api/hmi/list', (req, res) => {
     try {
         let files = new Set();
@@ -522,6 +542,7 @@ mainRouter.get('/api/hmi/list', (req, res) => {
         res.status(500).json([]); 
     }
 });
+
 mainRouter.get('/api/hmi/bindings.js', (req, res) => {
     const filename = path.basename(req.query.name || '');
     const filePath = resolveHmiPath(filename, req);
@@ -532,16 +553,15 @@ mainRouter.get('/api/hmi/bindings.js', (req, res) => {
         res.send('// No bindings'); 
     }
 });
+
 mainRouter.delete('/api/hmi/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
-    if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).json({ error: "Invalid file type" });
-    
+    if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).send('Invalid file type');
     const isSimulator = filename.toLowerCase().startsWith('simulator-');
     const globalPath = path.join(DATA_PATH, isSimulator ? 'simulators' : '', filename);
     let targetPath = null;
     let isPrivate = false;
-    
     if (req.user && req.user.id && !isSimulator) {
         const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
         const userPath = path.join(userHmiDir, filename);
@@ -569,6 +589,7 @@ mainRouter.delete('/api/hmi/file', (req, res) => {
         res.status(500).json({ error: "Failed to delete file" });
     }
 });
+
 mainRouter.get('/api/svg/file', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
 mainRouter.get('/api/svg/list', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
 mainRouter.get('/api/svg/bindings.js', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
@@ -595,6 +616,7 @@ mainRouter.get('/api/config', (req, res) => {
         hmiFilePath: config.HMI_FILE_PATH 
     });
 });
+
 if (config.IS_SIMULATOR_ENABLED) {
     mainRouter.get('/api/simulator/status', (req, res) => {
         res.json({ statuses: simulatorManager.getStatuses() });
@@ -610,6 +632,7 @@ if (config.IS_SIMULATOR_ENABLED) {
         res.json(r);
     });
 }
+
 mainRouter.use('/api/context', (req, res, next) => {
     if (!db) return res.status(503).json({ error: "DB not ready" });
     const dbManager = require('./storage/dbManager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
@@ -641,6 +664,7 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
         res.json({ success: true });
     });
 });
+
 if (config.EXTERNAL_API_ENABLED) {
     mainRouter.use('/api/external', ipFilterMiddleware, require('./interfaces/web/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer)); 
 }
@@ -651,6 +675,7 @@ if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.get('/config.html', (req, res) => res.status(403).send('Disabled'));
     mainRouter.get('/config.js', (req, res) => res.status(403).send('Disabled'));
 }
+
 mainRouter.use(express.static(path.join(__dirname, 'public'), { redirect: false, index: false }));
 const serveSPA = (req, res) => {
     const indexPath = path.join(__dirname, 'public', 'index.html');
@@ -673,11 +698,10 @@ const serveSPA = (req, res) => {
             });
         }
         modifiedHtml = modifiedHtml.replace('</head>', `<script>window.currentUser = ${userState};</script>\n</head>`);
-        const analyticsPlaceholder = '';
         if (config.ANALYTICS_ENABLED) {
-            modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ANALYTICS_SCRIPT);
+            modifiedHtml = modifiedHtml.replace('', ANALYTICS_SCRIPT);
         } else {
-            modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); 
+            modifiedHtml = modifiedHtml.replace('', ''); 
         }
         res.send(modifiedHtml);
     });
