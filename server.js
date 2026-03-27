@@ -10,6 +10,7 @@
  *
  * Server Entry Point
  * [UPDATED] Refactored to use Hexagonal Architecture paths (connectors, storage, core, interfaces).
+ * [UPDATED] Implemented I3X internal event bus and Northbound API.
  */
 // --- Imports ---
 const pino = require('pino');
@@ -23,6 +24,8 @@ const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const mqttMatch = require('mqtt-match');
+const { EventEmitter } = require('events'); // [NEW] Event bus for I3X
+
 // --- Auth Imports ---
 const session = require('express-session');
 const FileStore = require('session-file-store')(session); 
@@ -32,12 +35,12 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
 // --- Module Imports  ---
 const wsManager = require('./websocket-manager');
-const connectorManager = require('./connectors/connectorManager'); // [UPDATED] Data Provider Abstraction Layer
+const connectorManager = require('./connectors/connectorManager'); 
 const simulatorManager = require('./simulator');
-const dataManager = require('./storage/dataManager'); // [UPDATED]
-const userManager = require('./storage/userManager'); // [UPDATED]
-const alertManager = require('./core/engine/alertManager'); // [UPDATED]
-const semanticManager = require('./core/semantic/semanticManager'); // [NEW] I3X Semantic Engine
+const dataManager = require('./storage/dataManager'); 
+const userManager = require('./storage/userManager'); 
+const alertManager = require('./core/engine/alertManager'); 
+const semanticManager = require('./core/semantic/semanticManager'); 
 
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
@@ -107,6 +110,7 @@ let brokerStatuses = new Map();
 let isPruning = false;
 let apiKeysConfig = { keys: [] };
 let isShuttingDown = false; // Global shutdown flag
+const i3xEvents = new EventEmitter(); // [NEW] Global Event Bus for I3X SSE
 
 // --- Configuration from Environment ---
 const config = {
@@ -350,7 +354,8 @@ const mapperEngine = require('./core/engine/mapperEngine')(
     longReplacer,
     config 
 );
-// ---  DuckDB Setup (Centralized Initialization) ---
+
+// ---  DuckDB Setup ---
 const dbFile = DB_PATH;
 const dbWalFile = dbFile + '.wal';
 let db; 
@@ -401,7 +406,23 @@ db = new duckdb.Database(dbFile, (err) => {
     mapperEngine.setDb(db);
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
+    
+    // --- [NEW] Intercept wsManager.broadcast to feed I3X Event Bus ---
+    // This allows us to power SSE streaming without touching the dispatcher again
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
+    const originalBroadcast = wsManager.broadcast;
+    wsManager.broadcast = (msgStr) => {
+        originalBroadcast(msgStr);
+        try {
+            const msg = JSON.parse(msgStr);
+            if (msg.type === 'mqtt-message') {
+                let payloadObj = msg.payload;
+                try { payloadObj = JSON.parse(msg.payload); } catch(e){}
+                i3xEvents.emit('data', { topic: msg.topic, payloadObject: payloadObj });
+            }
+        } catch (e) {}
+    };
+
     setInterval(performMaintenance, 15000);
 
     connectorManager.init({ 
@@ -441,7 +462,6 @@ const authMiddleware = (req, res, next) => {
     return res.status(401).send('Unauthorized. Please log in.');
 };
 
-// --- Admin Middleware ---
 const requireAdmin = (req, res, next) => {
     if (req.isAuthenticated() && req.user.role === 'admin') {
         return next();
@@ -466,7 +486,6 @@ const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
 app.set('trust proxy', true);
 
-// Simulator
 simulatorManager.init(logger, (topic, payload) => {
     const conn = getPrimaryConnection();
     if (conn && conn.connected) {
@@ -483,7 +502,9 @@ mainRouter.use('/api/admin', require('./interfaces/web/adminApi')(logger, db, da
 // --- Alert API Routes ---
 mainRouter.use('/api/alerts', ipFilterMiddleware, require('./interfaces/web/alertApi')(logger)); 
 
-/// --- Layered File System Helper for SVGs/HMI ---
+// --- [NEW] I3X API Standard Routes ---
+mainRouter.use('/api/i3x', ipFilterMiddleware, require('./interfaces/i3x/i3xRouter')(db, semanticManager, logger, i3xEvents));
+
 function resolveHmiPath(filename, req) {
     const globalPath = path.join(DATA_PATH, filename);
     if (req.user && req.user.id) {
