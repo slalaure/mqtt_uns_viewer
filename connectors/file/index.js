@@ -4,8 +4,8 @@
  * * Local File Provider Plugin
  * Implements the BaseProvider interface to stream data from a local CSV or JSONL file.
  * Features automatic CSV parsing, numeric conversion, and dynamic topic routing.
+ * Supports publishing (loopback) to act as a unified data stream bus.
  */
-
 const fs = require('fs');
 const readline = require('readline');
 const path = require('path');
@@ -20,7 +20,6 @@ class FileProvider extends BaseProvider {
         this.defaultTopic = config.defaultTopic || `file/${this.id}/data`;
         this.loop = config.loop !== false; // Loop by default
         this.isCsv = this.filePath ? this.filePath.toLowerCase().endsWith('.csv') : false;
-        
         this.readStream = null;
         this.rl = null;
         this.timer = null;
@@ -41,6 +40,7 @@ class FileProvider extends BaseProvider {
 
             // Setup and start reading stream
             this.startReading();
+
             resolve(true);
         });
     }
@@ -105,11 +105,12 @@ class FileProvider extends BaseProvider {
                             dynamicTopic = val.replace(/^"|"$/g, '');
                             continue;
                         }
-                        
+
                         // Attempt to parse as number if applicable
                         if (!isNaN(val) && val.trim() !== "") {
                             val = Number(val);
                         }
+                        
                         payloadObj[headerName] = val;
                     }
                 } else {
@@ -148,14 +149,30 @@ class FileProvider extends BaseProvider {
         if (this.timer) clearTimeout(this.timer);
         if (this.rl) this.rl.close();
         if (this.readStream) this.readStream.destroy();
+        
         this.updateStatus('disconnected');
         this.logger.info(`File stream ${this.id} closed.`);
     }
 
     publish(topic, payload, options, callback) {
-        // A file provider is typically read-only.
-        this.logger.warn(`Publish called on File Provider '${this.id}'. Action ignored (Read-Only).`);
-        if (callback) callback(new Error("File Provider is Read-Only"));
+        // Loopback the message into the central engine to act as a local message bus
+        this.logger.info(`File Provider '${this.id}' routing publish back to stream: '${topic}'`);
+        
+        let parsedPayload = payload;
+        
+        // Attempt to parse string payloads to JSON for consistency in the engine
+        if (typeof payload === 'string') {
+            try {
+                parsedPayload = JSON.parse(payload);
+            } catch(e) {
+                parsedPayload = { raw: payload };
+            }
+        }
+        
+        // Loopback the message to the central engine
+        this.handleIncomingMessage(topic, parsedPayload);
+        
+        if (callback) callback(null);
     }
 }
 
