@@ -102,6 +102,7 @@ let isShuttingDown = false; // Global shutdown flag
 // --- Configuration from Environment ---
 const config = {
     BROKER_CONFIGS: [],
+    DATA_PROVIDERS: [], // [NEW] Extended generic data providers configuration
     MQTT_BROKER_HOST: process.env.MQTT_BROKER_HOST?.trim() || null,
     MQTT_TOPIC: process.env.MQTT_TOPIC?.trim() || null,
     CLIENT_ID: process.env.CLIENT_ID?.trim() || null,
@@ -160,8 +161,10 @@ const config = {
     ADMIN_USERNAME: process.env.ADMIN_USERNAME,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 };
+
 // ---  Broker Configuration Parsing ---
 try {
+    // 1. Load legacy MQTT_BROKERS list
     if (process.env.MQTT_BROKERS) {
         try {
             config.BROKER_CONFIGS = JSON.parse(process.env.MQTT_BROKERS);
@@ -193,17 +196,35 @@ try {
             rejectUnauthorized: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false'
         }];
     } else {
-        logger.warn("⚠️ No MQTT broker configuration found (MQTT_BROKERS or MQTT_BROKER_HOST). Starting in OFFLINE/SIMULATOR mode.");
+        logger.warn("⚠️ No MQTT broker configuration found (MQTT_BROKERS or MQTT_BROKER_HOST).");
         config.BROKER_CONFIGS = [];
     }
-    // Initialize status for configured brokers
+    
+    // 2. [NEW] Load DATA_PROVIDERS configuration
+    if (process.env.DATA_PROVIDERS) {
+        try {
+            config.DATA_PROVIDERS = JSON.parse(process.env.DATA_PROVIDERS);
+            logger.info(`✅ Loaded ${config.DATA_PROVIDERS.length} custom data provider(s).`);
+        } catch (jsonErr) {
+            logger.warn({ err: jsonErr }, "⚠️ Invalid JSON in DATA_PROVIDERS.");
+            config.DATA_PROVIDERS = [];
+        }
+    }
+
+    // Initialize status for configured brokers & providers
     for (const broker of config.BROKER_CONFIGS) {
         brokerStatuses.set(broker.id, { status: 'connecting', error: null });
     }
+    for (const provider of config.DATA_PROVIDERS) {
+        brokerStatuses.set(provider.id, { status: 'connecting', error: null });
+    }
+
 } catch (err) {
-    logger.error({ err }, "❌ Unexpected error during broker configuration parsing. Proceeding without brokers.");
+    logger.error({ err }, "❌ Unexpected error during configuration parsing. Proceeding without brokers.");
     config.BROKER_CONFIGS = [];
+    config.DATA_PROVIDERS = [];
 }
+
 // --- Configuration Validation ---
 if (config.IS_SPARKPLUG_ENABLED) logger.info("✅ 🚀 Sparkplug B decoding is ENABLED.");
 if (config.ANALYTICS_ENABLED) logger.info("✅ 📈 Analytics (Clarity) tracking is ENABLED.");
@@ -357,13 +378,11 @@ db = new duckdb.Database(dbFile, (err) => {
             }
         });
     });
-
     mapperEngine.setDb(db);
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; });
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
     setInterval(performMaintenance, 15000);
-
     // Initialize Provider Manager (Abstraction layer for MQTT, OPC UA, etc.)
     providerManager.init({
         config,
