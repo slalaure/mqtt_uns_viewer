@@ -10,6 +10,7 @@
  *
  * Chat API (LLM Agent Endpoint)
  * [UPDATED] Relocated to interfaces/mcp/ and updated relative paths.
+ * [UPDATED] Publish Tool and Context now explicitly support DATA_PROVIDERS (files/CSV streams).
  */
 const express = require('express');
 const axios = require('axios');
@@ -18,6 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto'); // For UUIDs
 const chrono = require('chrono-node');
+
 // [UPDATED] Import Alert Manager from ROOT (two levels up) to inject agent capability
 const alertManager = require('../../core/engine/alertManager');
 
@@ -66,7 +68,7 @@ function _inferSchema(messages) {
 
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
     const router = express.Router();
-    
+
     // [UPDATED] Adjusted relative paths for new location in interfaces/mcp/
     const ROOT_PATH = path.join(__dirname, '..', '..');
     const DATA_PATH = path.join(ROOT_PATH, 'data');
@@ -96,6 +98,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     const sendChunk = (res, type, content, clientId) => {
         // Check if stream was aborted before sending
         if (clientId && !activeStreams.has(clientId)) return;
+
         // Generate a unique ID for this chunk to allow frontend deduplication
         const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         const chunkData = { type, content, id: chunkId };
@@ -106,7 +109,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             res.write(jsonStr + '\n');
             if (res.flush) res.flush();
         }
-
+        
         // 2. WebSocket Unicast
         if (clientId) {
             wsManager.sendToClient(clientId, {
@@ -142,6 +145,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         } else {
             basePath = path.join(DATA_PATH, 'sessions', 'global', 'chats');
         }
+        
         if (!fs.existsSync(basePath)) {
             try { fs.mkdirSync(basePath, { recursive: true }); } catch (e) {}
         }
@@ -158,6 +162,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const sessions = files.map(file => {
                 const filePath = path.join(chatsDir, file);
                 const stats = fs.statSync(filePath);
+                
                 let title = "New Chat";
                 try {
                     const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -169,13 +174,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         if (txt) title = txt.substring(0, 30) + (txt.length > 30 ? "..." : "");
                     }
                 } catch(e) {}
-                
+
                 return {
                     id: file.replace('.json', ''),
                     title: title,
                     updatedAt: stats.mtime
                 };
             });
+            
             // Sort by newest first
             sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
             res.json(sessions);
@@ -305,7 +311,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         list_topics: async () => {
             return new Promise((resolve, reject) => {
                 db.serialize(() => {
@@ -316,7 +321,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         get_topics_list: async () => {
             return new Promise((resolve, reject) => {
                 db.serialize(() => {
@@ -327,13 +331,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         search_data: async ({ query, time_expression, limit }) => {
              return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 10;
                 const words = query.split(/\s+/).filter(w => w.length > 0);
                 if (words.length === 0) return resolve([]);
-
+                
                 let whereClauses = words.map(word => {
                     const safeWord = `%${escapeSQL(word)}%`;
                     return `(topic ILIKE '${safeWord}' OR CAST(payload AS VARCHAR) ILIKE '${safeWord}')`;
@@ -346,7 +349,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
 
                 const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
                 db.serialize(() => {
                     db.all(sql, (err, rows) => {
                         if (err) return reject(err);
@@ -355,7 +357,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         get_topic_history: async ({ topic, time_expression, limit }) => {
             return new Promise((resolve, reject) => {
                 const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
@@ -369,7 +370,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
 
                 sql += ` ORDER BY timestamp DESC LIMIT ${safeLimit}`;
-                
                 db.serialize(() => {
                     db.all(sql, ...params, (err, rows) => {
                         if (err) return reject(err);
@@ -389,14 +389,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const startMs = timeWindow.start.getTime();
                 const endMs = timeWindow.end.getTime();
                 const spanMs = endMs - startMs;
+                
                 // Target exactly 500 buckets to keep response size optimal for the LLM
                 const bucketMs = Math.max(1000, Math.floor(spanMs / 500));
-
+                
                 const aggFuncMap = { 'MEAN': 'AVG', 'MAX': 'MAX', 'MIN': 'MIN', 'MEDIAN': 'MEDIAN', 'SD': 'STDDEV', 'RANGE': 'RANGE', 'SUM': 'SUM' };
                 const aggType = aggFuncMap[aggregation] || 'AVG';
 
                 let selectCols = `extract('epoch' FROM time_bucket(INTERVAL '${bucketMs} MILLISECONDS', timestamp)) * 1000 AS ts_ms`;
-
+                
                 variables.forEach((v, idx) => {
                     let valExpr;
                     if (v === '(value)') {
@@ -409,8 +410,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         }
                         valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
                     }
-                    
+
                     const alias = `var_${idx}`;
+                    
                     if (aggType === 'RANGE') {
                         selectCols += `, (MAX(${valExpr}) - MIN(${valExpr})) AS "${alias}"`;
                     } else {
@@ -424,7 +426,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     `timestamp >= CAST('${timeWindow.start.toISOString()}' AS TIMESTAMPTZ)`, 
                     `timestamp <= CAST('${timeWindow.end.toISOString()}' AS TIMESTAMPTZ)`
                 ];
-                
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
 
                 const sql = `SELECT ${selectCols} FROM mqtt_events WHERE ${whereClauses.join(' AND ')} GROUP BY 1 ORDER BY 1 ASC`;
@@ -447,10 +448,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             return new Promise((resolve, reject) => {
                 let sql = `SELECT * FROM mqtt_events WHERE topic = ?`;
                 let params = [topic];
-                
                 if (broker_id) { sql += " AND broker_id = ?"; params.push(broker_id); }
                 sql += " ORDER BY timestamp DESC LIMIT 1";
-
                 db.serialize(() => {
                     db.all(sql, ...params, (err, rows) => {
                         if (err) return reject(err);
@@ -459,7 +458,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         get_model_definition: async ({ concept }) => {
             loadUnsModel();
             const lowerConcept = concept.toLowerCase();
@@ -469,7 +467,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             );
             return { definitions: results };
         },
-
         update_uns_model: async ({ model_json }, user) => {
             return new Promise((resolve) => {
                 if (user && user.role !== 'admin') {
@@ -478,7 +475,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 try {
                     const newModel = JSON.parse(model_json);
                     if (!Array.isArray(newModel)) return resolve({ error: "Model must be a JSON Array." });
-
+                    
                     fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
                     resolve({ success: true, message: "UNS Model Manifest updated successfully." });
                 } catch (error) {
@@ -486,7 +483,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 }
             });
         },
-
         search_uns_concept: async ({ concept, filters, broker_id }) => {
             loadUnsModel();
             const lowerConcept = concept.toLowerCase();
@@ -495,7 +491,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
             const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
             let whereClauses = [`topic LIKE '${safeTopic}'`];
-
+            
             if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
 
             if (filters) {
@@ -514,12 +510,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         infer_schema: async ({ topic_pattern }) => {
             const safePattern = escapeSQL(topic_pattern).replace(/%/g, '\\%').replace(/#/g, '%').replace(/\+/g, '%');
             return new Promise((resolve, reject) => {
                 const sql = `SELECT payload FROM mqtt_events WHERE topic LIKE '${safePattern}' ORDER BY timestamp DESC LIMIT 20`;
-                
                 db.serialize(() => {
                     db.all(sql, (err, rows) => {
                         if (err) return reject(err);
@@ -529,22 +523,31 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
-                let targetBrokerConfig = config.BROKER_CONFIGS[0]; 
                 
+                const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
+                let targetBrokerConfig = allProviders[0]; 
+
                 if (broker_id) {
-                    targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
+                    targetBrokerConfig = allProviders.find(b => b.id === broker_id);
                     if (!targetBrokerConfig) return resolve({ error: `Broker '${broker_id}' not found.` });
                 } else {
-                    const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
+                    const capableBroker = allProviders.find(b => {
+                        const pubs = b.publish || ((b.type === 'file' || b.type === 'dynamic') ? ['#'] : []);
+                        return pubs.some(p => mqttMatch(p, topic));
+                    });
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
 
                 const usedBrokerId = targetBrokerConfig.id;
-                const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
+                
+                // Allow dynamic files/streams to be implicitly published to
+                const allowedTopics = targetBrokerConfig.publish || ((targetBrokerConfig.type === 'file' || targetBrokerConfig.type === 'dynamic') ? ['#'] : []);
+                
+                const allowed = allowedTopics.some(p => mqttMatch(p, topic));
+
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
 
                 const connection = getBrokerConnection(usedBrokerId);
@@ -559,12 +562,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         list_project_files: async ({}, user) => {
             const rootFiles = fs.readdirSync(ROOT_PATH).filter(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.md'));
             const globalFiles = fs.existsSync(DATA_PATH) ? fs.readdirSync(DATA_PATH).filter(f => f.match(/\.(svg|html|htm|js|json|gltf|glb|bin)$/i)) : [];
-            let privateFiles = [];
             
+            let privateFiles = [];
             if (user && user.id) {
                 const userDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                 if (fs.existsSync(userDir)) {
@@ -574,7 +576,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
             return { root_files: rootFiles, data_files: [...globalFiles, ...privateFiles] };
         },
-
         get_file_content: async ({ filename }, user) => {
             let resolvedPath = null;
             
@@ -601,14 +602,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (resolvedPath.match(/\.(glb|bin|png|jpg|jpeg|ico)$/i)) {
                  return { error: "Cannot read binary file contents." };
             }
-
+            
             return { filename, content: fs.readFileSync(resolvedPath, 'utf8') };
         },
-
         save_file_to_data_directory: async ({ filename, content }, user) => {
             let targetDir = DATA_PATH;
             let accessLevel = "Global";
-            
+
             if (user && user.role !== 'admin') {
                 targetDir = path.join(SESSIONS_DIR, user.id, 'hmis'); 
                 if (!fs.existsSync(targetDir)) {
@@ -621,11 +621,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
             const resolvedPath = path.resolve(targetDir, path.basename(filename)); 
             if (!resolvedPath.startsWith(targetDir)) return { error: "Path traversal blocked." };
-
+            
             fs.writeFileSync(resolvedPath, content, 'utf8');
             return { success: true, path: `${accessLevel}/data/${filename}`, note: accessLevel === "Private" ? "File saved to your private workspace." : "File saved globally." };
         },
-
         create_hmi_view: async ({ view_name, hmi_content, js_content }, user) => {
             try {
                 let ext = path.extname(view_name).toLowerCase();
@@ -639,6 +638,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 
                 let targetDir = DATA_PATH;
                 let contextMessage = "Global";
+
                 if (user && user.id) {
                     targetDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                     contextMessage = "Private (User)";
@@ -662,11 +662,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 return { error: err.message };
             }
         },
-
         get_available_hmi_views: async ({}, user) => {
             const globalFiles = fs.readdirSync(DATA_PATH).filter(f => f.match(/\.(svg|html|htm)$/i));
             let allFiles = new Set(globalFiles);
-            
+
             if (user && user.id) {
                 const userDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                 if (fs.existsSync(userDir)) {
@@ -674,7 +673,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     privateFiles.forEach(f => allFiles.add(f)); 
                 }
             }
-            
+
             return { hmi_files: Array.from(allFiles).sort() };
         },
 
@@ -682,13 +681,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             return { config: mapperEngine.getMappings() };
         },
-
         update_mapper_rule: async ({ sourceTopic, targetTopic, targetCode }) => {
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
-
+            
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
@@ -713,7 +711,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${sqlPattern}'`];
                 if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
-
+                
                 db.serialize(() => {
                     db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                         if (err) resolve({ error: err.message });
@@ -725,21 +723,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 });
             });
         },
-
         get_simulator_status: async () => simulatorManager.getStatuses(),
-
         start_simulator: async ({ name }) => {
             const res = simulatorManager.startSimulator(name);
             wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
             return res;
         },
-
         stop_simulator: async ({ name }) => {
             const res = simulatorManager.stopSimulator(name);
             wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
             return res;
         },
-
         restart_application_server: async () => {
             setTimeout(() => process.exit(0), 1000);
             return { message: "Server restarting..." };
@@ -750,13 +744,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const rules = await alertManager.getRules(userId);
             return { rules };
         },
-
         list_active_alerts: async ({}, user) => {
             const userId = user ? user.id : null;
             const alerts = await alertManager.getActiveAlerts(userId);
             return { alerts };
         },
-
         create_alert_rule: async (args, user) => {
             if (!user) return { error: "Authentication required." };
             const ruleData = { ...args };
@@ -772,7 +764,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 return { error: e.message };
             }
         },
-
         update_alert_rule: async ({ id, ...updates }, user) => {
             if (!user) return { error: "Authentication required." };
             try {
@@ -783,7 +774,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 return { error: e.message };
             }
         },
-
         delete_alert_rule: async ({ id }, user) => {
             if (!user) return { error: "Authentication required." };
             try {
@@ -794,7 +784,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 return { error: e.message };
             }
         },
-
         update_alert_status: async ({ alert_id, status }, user) => {
             if (!user) return { error: "Authentication required." };
             try {
@@ -818,9 +807,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         apiUrl += 'chat/completions';
 
         // Context
-        const brokerContext = config.BROKER_CONFIGS.map(b => {
-            const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
-            return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
+        const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
+        const brokerContext = allProviders.map(b => {
+            let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
+            if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
+            return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
         }).join('\n');
 
         const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
@@ -870,6 +861,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 for (const toolCall of message.tool_calls) {
                     const fnName = toolCall.function.name;
                     let result;
+
                     try {
                         if (toolImplementations[fnName]) {
                             let args = {};
@@ -883,7 +875,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     } catch (err) {
                         result = JSON.stringify({ error: err.message });
                     }
-                    
+
                     conversation.push({
                         tool_call_id: toolCall.id,
                         role: "tool",
@@ -906,10 +898,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         logger.info("✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.");
     }
 
+
     // --- HTTP POST Endpoint (Standard Chat) ---
     router.post('/completion', async (req, res) => {
         const { messages, clientId } = req.body; 
-        
+
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
 
@@ -929,7 +922,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-
         if (res.flushHeaders) res.flushHeaders();
 
         // Padding to force Proxy buffer flush
@@ -940,9 +932,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         sendChunk(res, 'status', 'Processing request...', clientId);
 
         // --- SECURITY: Build Broker Context ---
-        const brokerContext = config.BROKER_CONFIGS.map(b => {
-            const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
-            return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
+        const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
+        const brokerContext = allProviders.map(b => {
+            let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
+            if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
+            return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
         }).join('\n');
 
         // --- PREPARE TOOLS & CONTEXT ---
@@ -954,15 +948,16 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             // Fallback if manifest fails
             systemPromptText = "You are an expert UNS Architect. CONTEXT:\n{{BROKER_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
         }
-        
+
         // Inject Dynamic Contexts
         systemPromptText = systemPromptText.replace('{{BROKER_CONTEXT}}', brokerContext);
         systemPromptText = systemPromptText.replace('{{TOOLS_CONTEXT}}', toolsContext);
 
         const systemMessage = { role: "system", content: systemPromptText };
         const safeUserMessages = messages.filter(m => m.role !== 'system');
+        
         let conversation = [systemMessage, ...safeUserMessages];
-
+        
         const headers = { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
@@ -1028,7 +1023,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                         
                         duration = Date.now() - startTime;
                         sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration }, clientId);
-                        
+
                         conversation.push({
                             tool_call_id: toolCall.id,
                             role: "tool",
@@ -1049,6 +1044,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             }
 
         } catch (error) {
+            // Added logger.error to track upstream LLM API errors on backend
             if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
                 logger.error({ 
                     err: error.message, 

@@ -56,6 +56,7 @@ graph TD
     subgraph FactoryFloor ["Factory Floor"]
         PLC["PLCs / Sensors"] -->|MQTT/Sparkplug| Broker1["Local Broker"]
         Cloud["AWS IoT / Azure"] -->|MQTTS| Broker2["Cloud Broker"]
+        CSV["Legacy Systems"] -->|CSV Streams| FileParser["Data Parsers"]
     end
 
     subgraph UNSViewer ["Korelate (Docker)"]
@@ -67,6 +68,7 @@ graph TD
        
         Backend <-->|Subscribe| Broker1
         Backend <-->|Subscribe| Broker2
+        Backend <-->|Loopback Stream| FileParser
         Backend -->|Write| DuckDB
         Backend <-->|Execute| Mapper
         Backend <-->|Orchestrate| Alerts
@@ -106,7 +108,7 @@ To handle environments ranging from a few updates a minute to thousands of messa
 
 ### Prerequisites
 * Docker & Docker Compose
-* Access to MQTT Broker(s) or OPC UA server(s)
+* Access to MQTT Broker(s), OPC UA server(s), or local CSV files
 
 ### 1. Quick Start
 ```bash
@@ -128,10 +130,10 @@ docker-compose up -d
 The application supports extensive configuration via environment variables.
 
 #### Connectivity & Permissions
-Define multiple brokers and explicitly set their Read/Write permissions using arrays.
+Define multiple providers and explicitly set their Read/Write permissions using arrays. Supported types are `mqtt`, `opcua`, and `file`.
 ```bash
-# Define multiple brokers (Minified JSON)
-MQTT_BROKERS='[{ "id":"local", "host":"mosquitto", "port":1883, "protocol":"mqtt", "subscribe":["#"], "publish":["uns/commands/#"] }, { "id":"cloud", "host":"aws-iot.com", "port":8883, "protocol":"mqtts", "subscribe":["#"], "publish": [], "certFilename":"cert.pem", "keyFilename":"key.pem", "caFilename":"root.pem" }]'
+# Define multiple providers (Minified JSON)
+DATA_PROVIDERS='[{"id":"local_mqtt", "type":"mqtt", "host":"localhost", "port":1883, "subscribe":["#"], "publish":["uns/commands/#"]}, {"id":"factory_opc", "type":"opcua", "endpointUrl":"opc.tcp://localhost:4840", "subscribe":[{"nodeId":"ns=1;s=Temperature", "topic":"uns/factory/temperature"}]}]'
 ```
 
 #### Storage Tuning
@@ -201,7 +203,7 @@ The viewer supports **Local** (Username/Password) and **Google OAuth** authentic
 ### 2. Dynamic Topic Tree
 The left panel displays the discovered UNS hierarchy.
 * **Sparkplug B Support:** Topics starting with `spBv1.0/` are automatically decoded from Protobuf to JSON.
-* **Multi-Broker:** The root nodes represent your different broker connections.
+* **Protocol Agnostic:** The root nodes represent your different broker connections (MQTT, OPC UA, or local CSV data parsers).
 * **Filtering & Animations:** You can filter topics on the fly, disable traversal animations for high-frequency branches, and toggle live updates to freeze the payload viewer for copy-pasting.
 
 ### 3. HMI Dashboards & 3D Digital Twins
@@ -222,6 +224,7 @@ Navigate through time using the embedded **DuckDB** engine.
 ### 5. Advanced Mapper (ETL Engine)
 Transform data on the fly using sandboxed JavaScript. The Mapper normalizes raw, proprietary payloads into standard UNS structures.
 * **Layered Config:** Users can "Save As New" to draft personal versions of mapping logic. Only Admins can "Save Live" to execute the logic in production.
+* **Dynamic Streams & Loopback:** You can use dynamically created data providers (like uploaded CSV streams) as fully functional message buses. You can subscribe to them, map them to new topics, and even publish back into the stream.
 * **Routing Modes:**
     * **UI Defined (Fan-out):** Returns a single `msg` object, which the engine automatically publishes to all comma-separated topics specified in the UI.
     * **Code Defined (Advanced):** The script returns an *array* of `{topic, payload}` objects, allowing complex conditional routing and splitting of God-node payloads into multiple semantic topics.
@@ -448,6 +451,7 @@ The application exposes a comprehensive REST API.
 | `POST` | `/api/admin/reset-db` | Truncates the database completely. | ✅ (Admin) |
 | `GET` | `/api/admin/hmi-assets` | List all HMI assets stored globally. | ✅ (Admin) |
 | `POST` | `/api/admin/hmi-assets` | Upload new HMI assets (.glb, .svg, .html...). | ✅ (Admin) |
+| `POST` | `/api/admin/data-parsers/csv` | Upload and start a dynamic CSV data stream. | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
 
 ---

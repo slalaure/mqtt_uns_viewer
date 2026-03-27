@@ -11,7 +11,9 @@
  * View module for the Publish tab.
  * Manages the manual publish form, Ace Editor, and simulator controls.
  * [UPDATED] Protocol-agnostic data providers support (MQTT, OPC UA, etc.).
+ * [UPDATED] Dynamic injection of new Data Providers (like CSV streams).
  */
+
 import { trackEvent, mqttPatternToRegex } from './utils.js'; 
 
 // --- DOM Element Querying ---
@@ -34,7 +36,7 @@ let isDarkTheme = localStorage.getItem('theme') === 'dark';
 let publishStatusTimer = null;
 let subscribedTopics = []; 
 let simControlsContainer = null; 
-let providerSelectElement = null; // Changed from brokerSelectElement
+let providerSelectElement = null; 
 let isMultiProvider = false; 
 let availableProviders = []; // Store full provider configs (MQTT + others)
 
@@ -69,7 +71,7 @@ export function initPublishView(options) {
     subscribedTopics = options.subscribedTopics || [];
     simControlsContainer = options.simulatorListContainer;
     isMultiProvider = options.isMultiBroker || false;
-    
+
     // Merge legacy broker configs and new data provider configs
     const bConfigs = options.brokerConfigs || [];
     const pConfigs = options.dataProviders || [];
@@ -103,6 +105,7 @@ export function initPublishView(options) {
     // ---  Multi-Provider Selector ---
     if (isMultiProvider && availableProviders.length > 0) {
         const firstFormGroup = publishForm.querySelector('.form-group');
+        
         const providerGroup = document.createElement('div');
         providerGroup.className = 'form-group';
         
@@ -112,8 +115,13 @@ export function initPublishView(options) {
         
         providerSelectElement = document.createElement('select');
         providerSelectElement.id = 'publish-provider-select';
-        
+
         availableProviders.forEach(provider => {
+            // Implicitly allow dynamic files to act as loopback streams
+            if (!provider.publish && (provider.type === 'file' || provider.type === 'dynamic')) {
+                provider.publish = ['#'];
+            }
+
             const option = document.createElement('option');
             option.value = provider.id;
             
@@ -129,10 +137,10 @@ export function initPublishView(options) {
 
         // Re-validate when provider changes
         providerSelectElement.addEventListener('change', validatePublishPermissions);
-        
+
         providerGroup.appendChild(label);
         providerGroup.appendChild(providerSelectElement);
-        
+
         if (firstFormGroup) {
             publishForm.insertBefore(providerGroup, firstFormGroup);
         } else {
@@ -179,12 +187,13 @@ function isPublishAllowed(providerId, topic) {
     }
     
     if (!providerConfig) return false;
-    
-    const publishPatterns = providerConfig.publish || [];
+
+    // File providers or dynamic streams should default to loopback enabled
+    const publishPatterns = providerConfig.publish || (providerConfig.type === 'file' || providerConfig.type === 'dynamic' ? ['#'] : []);
     
     // Check if strictly Read-Only
     if (publishPatterns.length === 0) return false;
-    
+
     // Check specific patterns
     for (const pattern of publishPatterns) {
         try {
@@ -196,6 +205,7 @@ function isPublishAllowed(providerId, topic) {
             console.error(`Invalid topic pattern: ${pattern}`, e);
         }
     }
+
     return false; 
 }
 
@@ -204,15 +214,17 @@ function isPublishAllowed(providerId, topic) {
  */
 function validatePublishPermissions() {
     if (!publishButton || !publishTopicInput) return;
-    
+
     const topic = publishTopicInput.value.trim();
     const providerId = providerSelectElement ? providerSelectElement.value : (availableProviders[0]?.id || 'default');
-    
     const providerConfig = availableProviders.find(p => p.id === providerId) || availableProviders[0];
+
     if (!providerConfig) return;
-    
+
     // 1. Check if Provider is Read-Only
-    const isReadOnly = (!providerConfig.publish || providerConfig.publish.length === 0);
+    const publishPatterns = providerConfig.publish || (providerConfig.type === 'file' || providerConfig.type === 'dynamic' ? ['#'] : []);
+    const isReadOnly = publishPatterns.length === 0;
+
     if (isReadOnly) {
         publishButton.disabled = true;
         publishButton.textContent = "🔒 Provider is Read-Only";
@@ -262,10 +274,10 @@ function onFormatChange() {
  */
 async function onPublishSubmit(event) {
     event.preventDefault();
+
     if (publishButton.disabled) return;
-    
-    trackEvent('publish_manual_submit');
-    
+    trackEvent('publish_manual_submit'); 
+
     const topic = publishTopicInput.value.trim(); 
     const payload = aceEditor.getValue();
     const format = publishFormatSelect.value;
@@ -273,7 +285,7 @@ async function onPublishSubmit(event) {
     const retain = publishRetainCheckbox.checked;
     
     const providerId = providerSelectElement ? providerSelectElement.value : (availableProviders[0]?.id);
-    
+
     if (!topic) {
         showPublishStatus('Topic/Path is required.', 'error');
         publishTopicInput.classList.add('input-error');
@@ -294,7 +306,7 @@ async function onPublishSubmit(event) {
     try {
         // We still use 'brokerId' in the JSON payload to preserve backend API compatibility
         const requestBody = { topic, payload, format, qos, retain, brokerId: providerId };
-        
+
         const response = await fetch('api/publish/message', {
             method: 'POST',
             headers: {
@@ -304,12 +316,13 @@ async function onPublishSubmit(event) {
         });
 
         const result = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(result.error || `HTTP error! Status: ${response.status}`);
         }
-        
+
         showPublishStatus(`${result.message || 'Message published!'}`, 'success');
+        
     } catch (err) {
         console.error("Publish error:", err);
         showPublishStatus(`Error: ${err.message}`, 'error');
@@ -325,7 +338,6 @@ function showPublishStatus(message, type = 'success') {
     if (!publishStatus) return;
     publishStatus.textContent = message;
     publishStatus.className = type;
-    
     clearTimeout(publishStatusTimer);
     publishStatusTimer = setTimeout(() => {
         publishStatus.textContent = '';
@@ -334,6 +346,7 @@ function showPublishStatus(message, type = 'success') {
 }
 
 // ---  Simulator Logic ---
+
 function formatSimName(name) {
     return name.split('_')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -344,7 +357,7 @@ function updateControlUI(controlEl, status) {
     const statusEl = controlEl.querySelector('.status-indicator');
     const startBtn = controlEl.querySelector('.btn-start-sim');
     const stopBtn = controlEl.querySelector('.btn-stop-sim');
-    
+
     if (status === 'running') {
         statusEl.textContent = 'Running';
         statusEl.classList.add('running');
@@ -362,32 +375,51 @@ function updateControlUI(controlEl, status) {
 
 export function updateSimulatorStatuses(statuses) {
     if (!simControlsContainer || !simulatorControlTemplate) return;
-    
     simControlsContainer.innerHTML = '';
+    
     if (Object.keys(statuses).length === 0) {
         simControlsContainer.innerHTML = '<p class="history-placeholder">No simulators are available.</p>';
         return;
     }
-    
+
     for (const [name, status] of Object.entries(statuses)) {
         const controlEl = simulatorControlTemplate.content.cloneNode(true).firstElementChild;
         const nameEl = controlEl.querySelector('.simulator-name');
         const startBtn = controlEl.querySelector('.btn-start-sim');
         const stopBtn = controlEl.querySelector('.btn-stop-sim');
-        
+
         nameEl.textContent = formatSimName(name);
         updateControlUI(controlEl, status); 
-        
+
         startBtn.addEventListener('click', () => {
             fetch(`api/simulator/start/${name}`, { method: 'POST' });
             trackEvent(`simulator_start_${name}`);
         });
-        
+
         stopBtn.addEventListener('click', () => {
             fetch(`api/simulator/stop/${name}`, { method: 'POST' });
             trackEvent(`simulator_stop_${name}`);
         });
-        
+
         simControlsContainer.appendChild(controlEl);
+    }
+}
+
+/**
+ * Dynamically adds a new data provider to the dropdown selector (e.g., when a CSV parser is started).
+ */
+export function addAvailablePublishProvider(providerId, type = 'dynamic') {
+    // Avoid duplicates
+    if (availableProviders.find(p => p.id === providerId)) return;
+    
+    // Auto-allow publish loopback for dynamically created streams
+    const newProvider = { id: providerId, type: type, publish: ['#'] };
+    availableProviders.push(newProvider);
+    
+    if (providerSelectElement) {
+        const option = document.createElement('option');
+        option.value = providerId;
+        option.textContent = `${providerId} [${type.toUpperCase()}]`;
+        providerSelectElement.appendChild(option);
     }
 }
