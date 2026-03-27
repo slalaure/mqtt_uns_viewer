@@ -10,7 +10,8 @@
  *
  * Reusable Tree View Manager Module
  * Encapsulates all logic for creating, updating, and interacting with one tree.
- * [UPDATED] Added I3X Semantic Mode & Semantic Drag and Drop support.
+ * [UPDATED] Protocol-agnostic hierarchy grouping & integrated I3X Semantic Mode with graph relationships.
+ * [UPDATED] Smart fallback for dynamically created providers (e.g., CSV Parsers).
  */
 
 export function createTreeManager(rootElement, options = {}) {
@@ -20,30 +21,51 @@ export function createTreeManager(rootElement, options = {}) {
         onCheckboxClick, 
         showCheckboxes = false, 
         allowFolderCollapse = true,
-        isMultiBroker = false 
+        isMultiBroker = false,
+        providersMap = {} // Maps provider/broker ID to technology type (mqtt, opcua, file...)
     } = options;
 
     const rootNode = rootElement;
-    let nodeMap = new Map(); // Stores references to <li> elements by topic
-    
+    let nodeMap = new Map(); // Stores references to <li> elements by topic path
+
     // --- [NEW] I3X Mode State ---
     let isI3xModeActive = false;
     let lastMqttEntries = []; // Cache to restore MQTT view when switching back
 
     /**
-     * Creates or updates a node in this tree (MQTT Mode).
+     * Smart fallback to guess the provider type if it wasn't registered in the initial config.
+     * Useful for dynamically launched CSV parsers.
+     */
+    function getProviderType(brokerId) {
+        if (!brokerId) return 'mqtt';
+        if (providersMap[brokerId]) return providersMap[brokerId];
+        
+        const lower = brokerId.toLowerCase();
+        if (lower.includes('csv') || lower.includes('file')) return 'file';
+        if (lower.includes('opc')) return 'opcua';
+        if (lower === 'i3x') return 'i3x';
+        
+        return 'mqtt'; // Ultimate fallback
+    }
+
+    /**
+     * Creates or updates a node in this tree.
+     * Organizes hierarchy by: Technology Type -> Provider ID -> Topic hierarchy
      */
     function update(brokerId, topic, payload, timestamp, updateOptions = {}) {
-        // [NEW] Block live MQTT updates if we are currently viewing the I3X Semantic Model
+        // Block live MQTT updates if we are currently viewing the I3X Semantic Model
         if (isI3xModeActive) return null;
 
         const { enableAnimations = false } = updateOptions;
-
-        // Safety check for brokerId
+        
         const safeBrokerId = brokerId || 'default';
-        const displayTopic = isMultiBroker ? `${safeBrokerId}/${topic}` : topic;
+        const providerType = getProviderType(safeBrokerId);
+        
+        // Remove leading slashes to prevent empty parts
+        const cleanTopic = topic.replace(/^\//, '');
+        const displayTopic = `${providerType}/${safeBrokerId}/${cleanTopic}`;
+        
         const parts = displayTopic.split('/');
-
         let currentTopicPath = '';
         let currentRealTopic = ''; 
         let currentUl = rootNode;
@@ -58,25 +80,22 @@ export function createTreeManager(rootElement, options = {}) {
         const formattedTimestamp = `${yyyy}/${mm}/${dd} ${timeStr}`;
 
         let li; 
-
         for (let index = 0; index < parts.length; index++) {
             const part = parts[index];
             currentTopicPath += (index > 0 ? '/' : '') + part;
 
-            // Reconstruct the real topic for data attributes
-            if (isMultiBroker) {
-                if (index > 0) {
-                    currentRealTopic += (index > 1 ? '/' : '') + part;
-                }
-            } else {
-                currentRealTopic += (index > 0 ? '/' : '') + part;
+            // Reconstruct the real topic for data attributes (skipping Tech and Provider levels)
+            let nodeSpecificTopic = '';
+            if (index >= 2) {
+                currentRealTopic += (index > 2 ? '/' : '') + part;
+                nodeSpecificTopic = currentRealTopic;
             }
 
             const isLastPart = index === parts.length - 1;
             const partId = `node-${treeId}-${currentTopicPath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
             li = nodeMap.get(currentTopicPath); 
-
+            
             // Filtering logic via Checkboxes
             if (li && showCheckboxes) {
                 const checkbox = li.querySelector(':scope > .node-container > .node-filter-checkbox');
@@ -86,51 +105,51 @@ export function createTreeManager(rootElement, options = {}) {
             }
 
             let isNewNode = false;
-
             if (!li) {
                 isNewNode = true;
                 li = document.createElement('li');
                 li.id = partId;
                 if (enableAnimations) li.classList.add('new-node');
-
+                
                 const nodeContainer = document.createElement('div');
                 nodeContainer.className = 'node-container';
-
-                // --- [NEW] Enable Semantic Drag & Drop (MQTT Fallback) ---
-                nodeContainer.draggable = true;
-                nodeContainer.addEventListener('dragstart', (e) => {
-                    const dragPayload = {
-                        type: 'topic',
-                        path: currentRealTopic,
-                        brokerId: safeBrokerId
-                    };
-                    e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
-                    e.dataTransfer.effectAllowed = 'copy';
-                });
 
                 let checkboxHtml = '';
                 if (showCheckboxes) {
                     checkboxHtml = `<input type="checkbox" class="node-filter-checkbox" checked>`;
                 }
-
+                
                 nodeContainer.innerHTML = `
                     ${checkboxHtml}
                     <span class="node-name">${part}</span>
                     <span class="node-timestamp"></span>
                 `;
 
-                const nodeSpecificTopic = (isMultiBroker && index === 0) ? '' : currentRealTopic;
                 nodeContainer.dataset.brokerId = safeBrokerId;
                 nodeContainer.dataset.topic = nodeSpecificTopic; 
 
+                // Semantic drag and drop fallback for data endpoints
+                if (index >= 2) {
+                    nodeContainer.draggable = true;
+                    nodeContainer.addEventListener('dragstart', (e) => {
+                        const dragPayload = {
+                            type: 'topic',
+                            path: nodeSpecificTopic,
+                            brokerId: safeBrokerId
+                        };
+                        e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
+                        e.dataTransfer.effectAllowed = 'copy';
+                    });
+                }
+
                 li.appendChild(nodeContainer);
 
-                // --- Find parent <ul> and append ---
+                // Find parent <ul> and append
                 const parentPathParts = parts.slice(0, index);
                 const parentDisplayTopic = parentPathParts.join('/');
                 const parentLi = nodeMap.get(parentDisplayTopic);
+                
                 let parentUl;
-
                 if (parentLi) {
                     parentUl = parentLi.querySelector(':scope > ul');
                     if (!parentUl) {
@@ -144,7 +163,7 @@ export function createTreeManager(rootElement, options = {}) {
                         rootNode.appendChild(parentUl);
                     }
                 }
-
+                
                 parentUl.appendChild(li);
                 nodeMap.set(currentTopicPath, li);
 
@@ -158,18 +177,18 @@ export function createTreeManager(rootElement, options = {}) {
 
             const nodeContainer = li.querySelector('.node-container');
             const timestampSpan = nodeContainer.querySelector('.node-timestamp');
-            if (timestampSpan) timestampSpan.textContent = formattedTimestamp;
-
+            if (timestampSpan && isLastPart) timestampSpan.textContent = formattedTimestamp;
+            
             affectedNodes.push({ element: li, isNew: isNewNode });
-            nodeContainer.dataset.payload = payload;
-
+            
             if (isLastPart) {
+                nodeContainer.dataset.payload = payload;
                 li.classList.add('is-file');
                 li.classList.remove('is-folder', 'collapsed');
             } else {
                 li.classList.add('is-folder');
             }
-
+            
             currentUl = li.querySelector('ul') || currentUl;
         }
 
@@ -194,20 +213,18 @@ export function createTreeManager(rootElement, options = {}) {
                 });
             }
         }
-
         return li; 
     }
 
     /**
-     * Wipes and rebuilds the tree from a list of topic entries (MQTT Mode).
+     * Wipes and rebuilds the tree from a list of topic entries.
      */
     function rebuild(entries) {
-        // [NEW] Cache the raw MQTT state
+        // Cache the raw MQTT state
         lastMqttEntries = entries;
         if (isI3xModeActive) return; // Do not rebuild MQTT tree if I3X mode is active
 
         console.log(`[tree-manager ${treeId}] Rebuilding tree with ${entries.length} topics...`); 
-
         const rootUl = rootNode.querySelector(':scope > ul');
         if (rootUl) {
             rootUl.innerHTML = '';
@@ -215,18 +232,22 @@ export function createTreeManager(rootElement, options = {}) {
         nodeMap.clear();
 
         const sortedEntries = entries.sort((a, b) => {
-            const brokerA = a.broker_id || 'default';
-            const brokerB = b.broker_id || 'default';
-            const topicA = isMultiBroker ? `${brokerA}/${a.topic}` : a.topic;
-            const topicB = isMultiBroker ? `${brokerB}/${b.topic}` : b.topic;
-            return topicA.localeCompare(topicB);
+            const brokerA = a.broker_id || a.brokerId || 'default';
+            const brokerB = b.broker_id || b.brokerId || 'default';
+            
+            const typeA = getProviderType(brokerA);
+            const typeB = getProviderType(brokerB);
+            
+            const strA = `${typeA}/${brokerA}/${a.topic}`;
+            const strB = `${typeB}/${brokerB}/${b.topic}`;
+            return strA.localeCompare(strB);
         });
 
         let i = 0;
         for (const entry of sortedEntries) {
             i++;
             try {
-                update(entry.broker_id, entry.topic, entry.payload, entry.timestamp, { enableAnimations: false });
+                update(entry.broker_id || entry.brokerId, entry.topic, entry.payload, entry.timestamp, { enableAnimations: false });
             } catch (e) {
                 console.error(`[tree-manager ${treeId}] Failed to update node for topic: ${entry.topic}`, e); 
             }
@@ -235,7 +256,7 @@ export function createTreeManager(rootElement, options = {}) {
     }
 
     /**
-     * --- [NEW] I3X Semantic Mode Logic ---
+     * --- I3X Semantic Mode Logic ---
      * Fetches instances from the I3X API and builds a hierarchical tree based on `parentId`.
      */
     async function setI3xMode(mode) {
@@ -243,12 +264,10 @@ export function createTreeManager(rootElement, options = {}) {
         if (mode) {
             const rootUl = rootNode.querySelector(':scope > ul');
             if (rootUl) rootUl.innerHTML = '<li style="padding: 10px; color: var(--color-text-secondary);">Loading Semantic Model...</li>';
-            
             try {
-                // Fetch I3X instance definitions (Metadata only)
-                const res = await fetch('api/i3x/objects');
+                const safeBasePath = document.querySelector('base')?.getAttribute('href') || '/';
+                const res = await fetch(`${safeBasePath}api/i3x/objects`);
                 if (!res.ok) throw new Error("Failed to fetch I3X objects");
-                
                 const objects = await res.json();
                 buildI3xTree(objects);
             } catch (err) {
@@ -256,100 +275,166 @@ export function createTreeManager(rootElement, options = {}) {
                 if (rootUl) rootUl.innerHTML = `<li style="padding: 10px; color: var(--color-danger);">Error loading semantic model: ${err.message}</li>`;
             }
         } else {
-            // Revert to MQTT
+            // Revert to raw protocol hierarchy
             rebuild(lastMqttEntries);
         }
     }
 
+    /**
+     * Integrates the I3X semantic models as a dedicated root node branch, 
+     * resolving children and complex graph relationship edges.
+     */
     function buildI3xTree(objects) {
-        const rootUl = rootNode.querySelector(':scope > ul');
-        if (!rootUl) return;
-        rootUl.innerHTML = '';
-        nodeMap.clear();
+        if (!objects || !Array.isArray(objects)) return;
 
-        const objMap = new Map();
+        let rootUl = rootNode.querySelector(':scope > ul');
+        if (!rootUl) {
+            rootUl = document.createElement('ul');
+            rootNode.appendChild(rootUl);
+        }
+        
+        let i3xRootLi = nodeMap.get('i3x_root');
+        if (!i3xRootLi) {
+            i3xRootLi = document.createElement('li');
+            i3xRootLi.id = `node-${treeId}-i3x-root`;
+            i3xRootLi.classList.add('is-folder'); 
+            
+            const nodeContainer = document.createElement('div');
+            nodeContainer.className = 'node-container';
+            
+            let checkboxHtml = showCheckboxes ? `<input type="checkbox" class="node-filter-checkbox" checked>` : '';
+            nodeContainer.innerHTML = `
+                ${checkboxHtml}
+                <span class="node-name" style="color: var(--color-primary); font-weight: bold; letter-spacing: 1px;">I3X_Semantic_Graph</span>
+            `;
+            
+            nodeContainer.dataset.brokerId = 'i3x';
+            nodeContainer.dataset.topic = '';
+            
+            i3xRootLi.appendChild(nodeContainer);
+            
+            const childUl = document.createElement('ul');
+            i3xRootLi.appendChild(childUl);
+            rootUl.appendChild(i3xRootLi);
+            nodeMap.set('i3x_root', i3xRootLi);
+            
+            if (onNodeClick) {
+                nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', ''));
+            }
+        }
+        
+        const i3xUl = i3xRootLi.querySelector(':scope > ul');
+        i3xUl.innerHTML = ''; 
+        
         const childrenMap = new Map();
-
-        // Map hierarchy
         objects.forEach(obj => {
-            objMap.set(obj.elementId, obj);
-            // In I3X, parentId can be '/' or null for root
             const parent = (obj.parentId === '/' || !obj.parentId) ? null : obj.parentId;
             if (!childrenMap.has(parent)) childrenMap.set(parent, []);
             childrenMap.get(parent).push(obj);
         });
-
-        function createNode(obj) {
+        
+        function createNode(obj, currentPath) {
             const li = document.createElement('li');
+            const path = `${currentPath}/${obj.elementId}`;
             li.id = `node-${treeId}-i3x-${obj.elementId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
             li.classList.add(obj.isComposition ? 'is-folder' : 'is-file');
-            
-            // I3X Composition nodes (folders) are collapsed by default
             if (obj.isComposition) li.classList.add('collapsed');
             
             const nodeContainer = document.createElement('div');
             nodeContainer.className = 'node-container';
             
-            // --- [NEW] Semantic Drag & Drop (I3X Mode) ---
             nodeContainer.draggable = true;
             nodeContainer.addEventListener('dragstart', (e) => {
-                const dragPayload = {
-                    type: 'element',
-                    id: obj.elementId,
-                    typeId: obj.typeId,
-                    namespaceUri: obj.namespaceUri
-                };
+                const dragPayload = { type: 'element', id: obj.elementId, typeId: obj.typeId, namespaceUri: obj.namespaceUri };
                 e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
                 e.dataTransfer.effectAllowed = 'copy';
             });
-
-            let checkboxHtml = '';
-            if (showCheckboxes) {
-                checkboxHtml = `<input type="checkbox" class="node-filter-checkbox" checked>`;
-            }
-
+            
+            let checkboxHtml = showCheckboxes ? `<input type="checkbox" class="node-filter-checkbox" checked>` : '';
             nodeContainer.innerHTML = `
                 ${checkboxHtml}
-                <span class="node-name" title="Type: ${obj.typeId}">${obj.displayName}</span>
-                <span class="node-timestamp" style="color:var(--color-primary); font-size:0.7em;">I3X</span>
+                <span class="node-name" title="Type: ${obj.typeId}">${obj.displayName || obj.elementId}</span>
+                <span class="node-timestamp" style="color:var(--color-primary); font-size:0.7em;">Semantic</span>
             `;
-
-            // Metadata for click handlers
+            
             nodeContainer.dataset.elementId = obj.elementId;
             nodeContainer.dataset.typeId = obj.typeId;
             nodeContainer.dataset.isI3x = "true";
-
+            nodeContainer.dataset.brokerId = 'i3x';
+            nodeContainer.dataset.topic = obj.elementId;
+            
             li.appendChild(nodeContainer);
-            nodeMap.set(obj.elementId, li);
-
+            nodeMap.set(`i3x_node_${path}`, li);
+            
             if (onNodeClick) {
-                // We pass 'i3x' as brokerId fallback, and elementId as topic for legacy compat
                 nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', obj.elementId));
             }
             if (showCheckboxes && onCheckboxClick) {
-                nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, 'i3x', obj.elementId));
+                const cb = nodeContainer.querySelector('.node-filter-checkbox');
+                if (cb) cb.addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, 'i3x', obj.elementId));
             }
-
-            // Build children recursively
+            
+            const childUl = document.createElement('ul');
+            let hasChildren = false;
+            
+            // 1. Hierarchical / Composition Children
             const children = childrenMap.get(obj.elementId) || [];
             if (children.length > 0) {
-                const childUl = document.createElement('ul');
-                children.forEach(child => {
-                    childUl.appendChild(createNode(child));
-                });
-                li.appendChild(childUl);
+                hasChildren = true;
+                children.forEach(child => childUl.appendChild(createNode(child, path)));
             }
+            
+            // 2. Specific Graph Relationships
+            if (obj.relationships) {
+                for (const [relType, targets] of Object.entries(obj.relationships)) {
+                    if (['HasParent', 'HasChildren', 'HasComponent', 'ComponentOf', 'InheritsFrom', 'InheritedBy'].includes(relType)) continue;
+                    
+                    const targetList = Array.isArray(targets) ? targets : [targets];
+                    targetList.forEach(targetId => {
+                        hasChildren = true;
+                        const relLi = document.createElement('li');
+                        relLi.classList.add('is-file');
+                        
+                        const relContainer = document.createElement('div');
+                        relContainer.className = 'node-container';
+                        relContainer.dataset.brokerId = 'i3x';
+                        relContainer.dataset.topic = targetId;
+                        relContainer.dataset.isI3x = "true";
+                        relContainer.dataset.elementId = targetId;
+                        
+                        let relCheckboxHtml = showCheckboxes ? `<input type="checkbox" class="node-filter-checkbox" checked>` : '';
+                        relContainer.innerHTML = `
+                            ${relCheckboxHtml}
+                            <span class="node-name" style="color: #8e44ad; font-style: italic;">🔗 ${relType}: ${targetId}</span>
+                        `;
+                        
+                        if (onNodeClick) {
+                            relContainer.addEventListener('click', (e) => onNodeClick(e, relContainer, 'i3x', targetId));
+                        }
+                        if (showCheckboxes && onCheckboxClick) {
+                            const cb = relContainer.querySelector('.node-filter-checkbox');
+                            if (cb) cb.addEventListener('click', (e) => onCheckboxClick(e, relContainer, 'i3x', targetId));
+                        }
+                        
+                        relLi.appendChild(relContainer);
+                        childUl.appendChild(relLi);
+                    });
+                }
+            }
+            
+            if (hasChildren) {
+                li.appendChild(childUl);
+            } else {
+                li.classList.remove('is-folder', 'collapsed');
+                li.classList.add('is-file');
+            }
+            
             return li;
         }
-
+        
         const rootObjects = childrenMap.get(null) || [];
-        if (rootObjects.length === 0) {
-            rootUl.innerHTML = '<li style="padding: 10px; color: var(--color-text-secondary);">No I3X objects found. Configure the model first.</li>';
-            return;
-        }
-
         rootObjects.forEach(obj => {
-            rootUl.appendChild(createNode(obj));
+            i3xUl.appendChild(createNode(obj, ''));
         });
     }
 
@@ -378,23 +463,24 @@ export function createTreeManager(rootElement, options = {}) {
     function filterNode(node, filterText) {
         const nodeContainer = node.querySelector(':scope > .node-container');
         if (!nodeContainer) return false;
-
+        
         const nodeName = nodeContainer.querySelector('.node-name').textContent.toLowerCase();
         const originalTopic = nodeContainer.dataset.topic?.toLowerCase() || '';
         const brokerId = nodeContainer.dataset.brokerId?.toLowerCase() || '';
-
+        
         const isMatch = nodeName.includes(filterText) || 
                         originalTopic.includes(filterText) || 
-                        (isMultiBroker && brokerId.includes(filterText));
-
+                        brokerId.includes(filterText);
+                        
         let hasVisibleChild = false;
         const children = node.querySelectorAll(':scope > ul > li');
+        
         children.forEach(child => {
             if (filterNode(child, filterText)) {
                 hasVisibleChild = true;
             }
         });
-
+        
         if (isMatch || hasVisibleChild) {
             node.classList.remove('filtered-out');
             if (hasVisibleChild && filterText) {
@@ -417,7 +503,8 @@ export function createTreeManager(rootElement, options = {}) {
     return {
         update,
         rebuild,
-        setI3xMode, // [NEW] Exposed semantic switch function
+        buildI3xTree,
+        setI3xMode, 
         colorTree,
         toggleAllFolders,
         applyFilter,

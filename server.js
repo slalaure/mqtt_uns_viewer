@@ -9,9 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Server Entry Point
- * [UPDATED] Refactored to use Hexagonal Architecture paths (connectors, storage, core, interfaces).
- * [UPDATED] Implemented I3X internal event bus and Northbound API.
- * [UPDATED] Added VIEW_MODELER_ENABLED configuration flag.
+ * [UPDATED] Refactored to properly expose unified DATA_PROVIDERS to the frontend API.
  */
 // --- Imports ---
 const pino = require('pino');
@@ -25,7 +23,7 @@ const { spawn } = require('child_process');
 const basicAuth = require('basic-auth');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const mqttMatch = require('mqtt-match');
-const { EventEmitter } = require('events'); // [NEW] Event bus for I3X
+const { EventEmitter } = require('events'); 
 
 // --- Auth Imports ---
 const session = require('express-session');
@@ -111,7 +109,7 @@ let brokerStatuses = new Map();
 let isPruning = false;
 let apiKeysConfig = { keys: [] };
 let isShuttingDown = false; // Global shutdown flag
-const i3xEvents = new EventEmitter(); // [NEW] Global Event Bus for I3X SSE
+const i3xEvents = new EventEmitter(); // Global Event Bus for I3X SSE
 
 // --- Configuration from Environment ---
 const config = {
@@ -141,7 +139,7 @@ const config = {
     VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false',
     VIEW_HMI_ENABLED: process.env.VIEW_HMI_ENABLED !== 'false', 
     VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false',
-    VIEW_MODELER_ENABLED: process.env.VIEW_MODELER_ENABLED !== 'false', // [NEW] Control Modeler visibility
+    VIEW_MODELER_ENABLED: process.env.VIEW_MODELER_ENABLED !== 'false', 
     VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false',
     VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
     VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
@@ -186,9 +184,9 @@ try {
                 if (!broker.subscribe) broker.subscribe = broker.topics || ['#'];
                 if (!broker.publish) broker.publish = (broker.canPublish === false) ? [] : ['#'];
             });
-            logger.info(`✅ Loaded ${config.BROKER_CONFIGS.length} broker configuration(s).`);
+            logger.info(`✅ Loaded ${config.BROKER_CONFIGS.length} legacy broker configuration(s).`);
         } catch (jsonErr) {
-            logger.warn({ err: jsonErr }, "⚠️ Invalid JSON in MQTT_BROKERS. Starting without brokers (Simulator/Offline Mode).");
+            logger.warn({ err: jsonErr }, "⚠️ Invalid JSON in MQTT_BROKERS.");
             config.BROKER_CONFIGS = [];
         }
     } else if (config.MQTT_BROKER_HOST) {
@@ -209,12 +207,9 @@ try {
             alpnProtocol: process.env.MQTT_ALPN_PROTOCOL?.trim() || null,
             rejectUnauthorized: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false'
         }];
-    } else {
-        logger.warn("⚠️ No MQTT broker configuration found (MQTT_BROKERS or MQTT_BROKER_HOST).");
-        config.BROKER_CONFIGS = [];
     }
 
-    // 2. Load DATA_PROVIDERS configuration
+    // Load DATA_PROVIDERS configuration (New Generic Standard)
     if (process.env.DATA_PROVIDERS) {
         try {
             config.DATA_PROVIDERS = JSON.parse(process.env.DATA_PROVIDERS);
@@ -233,7 +228,7 @@ try {
         brokerStatuses.set(provider.id, { status: 'connecting', error: null });
     }
 } catch (err) {
-    logger.error({ err }, "❌ Unexpected error during configuration parsing. Proceeding without brokers.");
+    logger.error({ err }, "❌ Unexpected error during configuration parsing.");
     config.BROKER_CONFIGS = [];
     config.DATA_PROVIDERS = [];
 }
@@ -300,7 +295,6 @@ app.use(session({
         sameSite: 'lax' 
     }
 }));
-
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -308,7 +302,6 @@ app.use(passport.session());
 passport.serializeUser((user, done) => {
     done(null, user.id);
 });
-
 passport.deserializeUser(async (id, done) => {
     try {
         const user = await userManager.findById(id);
@@ -323,10 +316,8 @@ passport.use(new LocalStrategy(async (username, password, done) => {
     try {
         const user = await userManager.findByUsername(username);
         if (!user) { return done(null, false, { message: 'Incorrect username.' }); }
-
         const isValid = await userManager.verifyPassword(password, user.password_hash);
         if (!isValid) { return done(null, false, { message: 'Incorrect password.' }); }
-
         return done(null, user);
     } catch (err) { return done(err); }
 }));
@@ -418,13 +409,13 @@ db = new duckdb.Database(dbFile, (err) => {
     });
 
     mapperEngine.setDb(db);
-
     const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
 
-    // --- [NEW] Intercept wsManager.broadcast to feed I3X Event Bus ---
+    // --- Intercept wsManager.broadcast to feed I3X Event Bus ---
     // This allows us to power SSE streaming without touching the dispatcher again
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
+    
     const originalBroadcast = wsManager.broadcast;
     wsManager.broadcast = (msgStr) => {
         originalBroadcast(msgStr);
@@ -459,11 +450,9 @@ db = new duckdb.Database(dbFile, (err) => {
 // --- Middleware & Routes ---
 const authMiddleware = (req, res, next) => {
     if (req.isAuthenticated()) return next();
-
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.gltf', '.glb', '.bin'];
     if (allowedExts.includes(ext)) return next();
-
     if (config.HTTP_USER && config.HTTP_PASSWORD) {
         const credentials = basicAuth(req);
         if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
@@ -472,11 +461,9 @@ const authMiddleware = (req, res, next) => {
         res.setHeader('WWW-Authenticate', 'Basic realm="Korelate"');
         return res.status(401).send('Authentication required.');
     }
-
     if (req.path.startsWith('/auth') || req.path === '/login') {
         return next();
     }
-
     if (!config.HTTP_USER && !config.HTTP_PASSWORD) return next();
     return res.status(401).send('Unauthorized. Please log in.');
 };
@@ -503,7 +490,6 @@ const ipFilterMiddleware = (req, res, next) => {
 
 const mainRouter = express.Router();
 mainRouter.use(express.json({ limit: '50mb' }));
-
 app.set('trust proxy', true);
 
 simulatorManager.init(logger, (topic, payload) => {
@@ -541,7 +527,6 @@ function resolveHmiPath(filename, req) {
 mainRouter.get('/api/hmi/file', (req, res) => {
     const filename = path.basename(req.query.name || '');
     if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).send('Invalid file type');
-
     const filePath = resolveHmiPath(filename, req);
     if (fs.existsSync(filePath)) {
         if (filename.endsWith('.glb')) res.setHeader('Content-Type', 'model/gltf-binary');
@@ -590,32 +575,25 @@ mainRouter.delete('/api/hmi/file', (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
     const filename = path.basename(req.query.name || '');
     if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).json({ error: "Invalid file type" });
-
     const globalPath = path.join(DATA_PATH, filename);
     let targetPath = null;
     let isPrivate = false;
-
+    
     if (req.user && req.user.id) {
         const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
         const userPath = path.join(userHmiDir, filename);
         if (fs.existsSync(userPath)) { targetPath = userPath; isPrivate = true; }
     }
-
     if (!targetPath && fs.existsSync(globalPath)) {
         targetPath = globalPath;
         isPrivate = false;
     }
-
-    if (!targetPath) {
-        return res.status(404).json({ error: "File not found" });
+    
+    if (!targetPath) return res.status(404).json({ error: "File not found" });
+    if (!isPrivate && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
     }
-
-    if (!isPrivate) {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: "Forbidden: Only Admins can delete Global HMI views." });
-        }
-    }
-
+    
     try {
         fs.unlinkSync(targetPath);
         logger.info(`Deleted View: ${targetPath}`);
@@ -635,15 +613,17 @@ mainRouter.get('/api/svg/file', (req, res) => { res.redirect(3.1, req.originalUr
 mainRouter.get('/api/svg/list', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
 mainRouter.get('/api/svg/bindings.js', (req, res) => { res.redirect(3.1, req.originalUrl.replace('/api/svg', '/api/hmi')); });
 
+// [UPDATED] Expose DATA_PROVIDERS array to Frontend so it can build generic dropdowns
 mainRouter.get('/api/config', (req, res) => {
     res.json({
         isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
-        brokerConfigs: config.BROKER_CONFIGS.map(b => ({ id: b.id, host: b.host, port: b.port, subscribe: b.subscribe, publish: b.publish })),
-        isMultiBroker: config.BROKER_CONFIGS.length > 1,
+        brokerConfigs: config.BROKER_CONFIGS.map(b => ({ id: b.id, host: b.host, port: b.port, subscribe: b.subscribe, publish: b.publish, type: 'mqtt' })),
+        dataProviders: config.DATA_PROVIDERS.map(p => ({ id: p.id, type: p.type, subscribe: p.subscribe, publish: p.publish })),
+        isMultiBroker: (config.BROKER_CONFIGS.length + config.DATA_PROVIDERS.length) > 1,
         viewTreeEnabled: config.VIEW_TREE_ENABLED,
         viewHmiEnabled: config.VIEW_HMI_ENABLED,
         viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,
-        viewModelerEnabled: config.VIEW_MODELER_ENABLED, // [NEW] Read from env
+        viewModelerEnabled: config.VIEW_MODELER_ENABLED, 
         viewMapperEnabled: config.VIEW_MAPPER_ENABLED,
         viewChartEnabled: config.VIEW_CHART_ENABLED,
         viewPublishEnabled: config.VIEW_PUBLISH_ENABLED,
@@ -684,7 +664,6 @@ mainRouter.use('/api/tools', ipFilterMiddleware, require('./interfaces/mcp/tools
 if (config.VIEW_CHAT_ENABLED) {
     mainRouter.use('/api/chat', ipFilterMiddleware, require('./interfaces/mcp/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
-
 if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./interfaces/web/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager)); 
 }
@@ -695,15 +674,15 @@ mainRouter.use('/api/chart', ipFilterMiddleware, require('./interfaces/web/chart
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
     const conn = getBrokerConnection(brokerId);
-    if (!conn || !conn.connected) return res.status(503).json({ error: "Broker not connected" });
-
+    if (!conn || !conn.connected) return res.status(503).json({ error: "Provider not connected" });
+    
     let finalPayload = payload;
     if (format === 'json' || typeof payload === 'object') {
         try { finalPayload = JSON.stringify(typeof payload === 'string' ? JSON.parse(payload) : payload); } catch(e) {}
     } else if (format === 'sparkplugb') {
         try { finalPayload = spBv10Codec.encodePayload(JSON.parse(payload)); } catch(e) { return res.status(400).json({ error: e.message }); }
     }
-
+    
     conn.publish(topic, finalPayload, { qos: parseInt(qos)||0, retain: !!retain }, (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true });
@@ -731,7 +710,6 @@ const serveSPA = (req, res) => {
             logger.error({ err }, "Failed to read index.html");
             return res.status(500).send("Server Error");
         }
-
         const safeBasePath = basePath.endsWith('/') ? basePath : basePath + '/';
         let modifiedHtml = data;
         modifiedHtml = modifiedHtml.replace('<head>', `<head>\n    <base href="${safeBasePath}">`);
@@ -747,14 +725,13 @@ const serveSPA = (req, res) => {
             });
         }
         modifiedHtml = modifiedHtml.replace('</head>', `<script>window.currentUser = ${userState};</script>\n</head>`);
-
+        
         const analyticsPlaceholder = '';
         if (config.ANALYTICS_ENABLED) {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ANALYTICS_SCRIPT);
         } else {
             modifiedHtml = modifiedHtml.replace(analyticsPlaceholder, ''); 
         }
-
         res.send(modifiedHtml);
     });
 };
@@ -796,31 +773,25 @@ async function gracefulShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     logger.info("\n✅ Gracefully shutting down...");
-
     setTimeout(() => {
         logger.error("❌ Shutdown timed out. Forcing exit.");
         process.exit(1);
     }, 5000).unref();
-
+    
     try {
         dataManager.stop();
         simulatorManager.getStatuses();
-
         await new Promise(resolve => wsManager.close(resolve));
-
         await new Promise((resolve) => {
             server.close(() => {
                 logger.info("✅ HTTP Server closed.");
                 resolve();
             });
         });
-
         connectorManager.closeAll(); 
         logger.info("✅ Data Connectors closed.");
-
         await dataManager.close();
         logger.info("✅ Database closed.");
-
         logger.info("✅ Shutdown complete.");
         process.exit(0);
     } catch (err) {
