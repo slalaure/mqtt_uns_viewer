@@ -161,7 +161,6 @@ const config = {
     ADMIN_USERNAME: process.env.ADMIN_USERNAME,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
 };
-
 // ---  Broker Configuration Parsing ---
 try {
     // 1. Load legacy MQTT_BROKERS list
@@ -594,8 +593,9 @@ mainRouter.use('/api/context', (req, res, next) => {
 });
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./routes/toolsApi')(logger));
 if (config.VIEW_CHAT_ENABLED) {
-    mainRouter.use('/api/chat', ipFilterMiddleware, require('./routes/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
+    mainRouter.use('/api/chat', ipFilterMiddleware, require('./interfaces/mcp/chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
 }
+
 if (config.VIEW_CONFIG_ENABLED) {
     mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./routes/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager));
 }

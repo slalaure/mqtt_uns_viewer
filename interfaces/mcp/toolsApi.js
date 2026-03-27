@@ -13,6 +13,7 @@
  * This router exposes helper functions specifically designed for external LLM agents
  * (like Prisme.ai, ChatGPT, etc.) to access project context via standard REST HTTP calls.
  * It replicates logic previously found only inside the MCP server only.
+ * [UPDATED] Relocated to interfaces/mcp/ and updated relative paths.
  */
 const express = require('express');
 const fs = require('fs');
@@ -20,8 +21,10 @@ const path = require('path');
 
 module.exports = (logger) => {
     const router = express.Router();
-    const DATA_PATH = path.join(__dirname, '..', 'data');
-    const ROOT_PATH = path.join(__dirname, '..');
+    
+    // [UPDATED] Paths adjusted for new location in /interfaces/mcp/
+    const ROOT_PATH = path.join(__dirname, '..', '..');
+    const DATA_PATH = path.join(ROOT_PATH, 'data');
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
 
     // Helper to load model
@@ -97,6 +100,7 @@ module.exports = (logger) => {
      */
     router.get('/files/content', (req, res) => {
         const filename = req.query.filename;
+
         if (!filename) {
             return res.status(400).json({ error: "Query parameter 'filename' is required." });
         }
