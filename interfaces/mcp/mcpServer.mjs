@@ -10,7 +10,7 @@
  *
  * MCP Server
  * Controls the Korelate via Model Context Protocol.
- * [UPDATED] Refactored Tool handlers to support HMI assets (HTML/SVG/GLB) instead of just SVGs.
+ * [UPDATED] Relocated to interfaces/mcp/ and updated relative paths.
  */
 // --- Imports (ESM) ---
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -50,19 +50,20 @@ if (HTTP_USER && HTTP_PASSWORD) {
 // --- Paths & Manifest Loading ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, 'data');
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 const MANIFEST_PATH = path.join(DATA_DIR, 'ai_tools_manifest.json');
 const MODEL_MANIFEST_PATH = path.join(DATA_DIR, 'uns_model.json');
+const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
 
 let toolsManifest = { tools: [] };
 let unsModel = [];
 
 function loadManifests() {
     try {
-        // Fallback pour localiser le manifest s'il est dans public
         let targetManifestPath = MANIFEST_PATH;
         if (!fs.existsSync(targetManifestPath)) {
-            targetManifestPath = path.join(__dirname, 'public', 'ai_tools_manifest.json');
+            targetManifestPath = path.join(PROJECT_ROOT, 'public', 'ai_tools_manifest.json');
         }
         
         if (fs.existsSync(targetManifestPath)) {
@@ -122,13 +123,11 @@ const parseTimeWindow = (timeExpression) => {
 const getMapperConfigInternal = async () => (await axios.get(`${API_BASE_URL}/mapper/config`, axiosConfig)).data;
 const saveMapperConfigInternal = async (config) => (await axios.post(`${API_BASE_URL}/mapper/config`, config, axiosConfig)).data;
 
-// --- Helper to convert JSON Schema (from Manifest) to Zod (for MCP SDK) ---
 function jsonSchemaToZod(schema) {
     const shape = {};
     if (schema.properties) {
         for (const [key, prop] of Object.entries(schema.properties)) {
             let zodType;
-            // Map JSON types to Zod
             if (prop.type === 'string') zodType = z.string();
             else if (prop.type === 'number') zodType = z.number();
             else if (prop.type === 'boolean') zodType = z.boolean();
@@ -136,12 +135,9 @@ function jsonSchemaToZod(schema) {
             else if (prop.type === 'array') zodType = z.array(z.string());
             else zodType = z.any();
 
-            // Add description
             if (prop.description) zodType = zodType.describe(prop.description);
-            // Add enums
             if (prop.enum) zodType = z.enum(prop.enum).describe(prop.description || "");
             
-            // Check required
             const isRequired = schema.required && schema.required.includes(key);
             if (!isRequired) {
                 zodType = zodType.optional();
@@ -153,7 +149,6 @@ function jsonSchemaToZod(schema) {
 }
 
 // --- Implementation Map ---
-// Maps tool names from manifest to actual async logic
 const implementations = {
     // READ
     get_application_status: async () => {
@@ -261,15 +256,15 @@ const implementations = {
         const res = await axios.post(`${API_BASE_URL}/publish/message`, body, axiosConfig);
         return { content: [{ type: "text", text: JSON.stringify(res.data) }] };
     },
-    // --- [UPDATED] FILES CAPABILITIES FOR HMI ---
+    // FILES CAPABILITIES
     list_project_files: async () => {
-        const rootFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.json'));
+        const rootFiles = fs.readdirSync(PROJECT_ROOT).filter(f => f.endsWith('.js') || f.endsWith('.mjs') || f.endsWith('.json') || f.endsWith('.md'));
         const dataFiles = fs.readdirSync(DATA_DIR).filter(f => f.match(/\.(svg|html|htm|js|json|gltf|glb|bin)$/i));
         return { content: [{ type: "text", text: JSON.stringify({ root_files: rootFiles, data_files: dataFiles }, null, 2) }] };
     },
     get_file_content: async ({ filename }) => {
-        const resolvedPath = path.resolve(__dirname, filename);
-        if (!resolvedPath.startsWith(__dirname)) return { content: [{ type: "text", text: "Path traversal blocked." }], isError: true };
+        const resolvedPath = path.resolve(PROJECT_ROOT, filename);
+        if (!resolvedPath.startsWith(PROJECT_ROOT)) return { content: [{ type: "text", text: "Path traversal blocked." }], isError: true };
         
         if (resolvedPath.match(/\.(glb|bin|png|jpg|jpeg|ico)$/i)) {
              return { content: [{ type: "text", text: "Cannot read binary file contents via MCP." }], isError: true };
@@ -349,7 +344,7 @@ const implementations = {
         const res = await axios.post(`${API_BASE_URL}/env/restart`, {}, axiosConfig);
         return { content: [{ type: "text", text: JSON.stringify(res.data) }] };
     },
-    // ALERTS [NEW]
+    // ALERTS
     list_alert_rules: async () => {
         const res = await axios.get(`${API_BASE_URL}/alerts/rules`, axiosConfig);
         return { content: [{ type: "text", text: JSON.stringify(res.data, null, 2) }] };
@@ -386,20 +381,16 @@ async function createMcpServer() {
         description: "Control the Korelate via tools defined in ai_tools_manifest.json.",
     });
 
-    // Dynamically register tools from manifest
     for (const toolDef of toolsManifest.tools) {
-        // Check if category enabled in env
         const flag = TOOL_FLAGS[toolDef.category];
-        if (flag === false) continue; // Skip disabled tools
+        if (flag === false) continue; 
 
-        // Get implementation
         const handler = implementations[toolDef.name];
         if (!handler) {
-            console.warn(`⚠️ Warning: Tool '${toolDef.name}' defined in manifest but missing in mcp_server.mjs`);
+            console.warn(`⚠️ Warning: Tool '${toolDef.name}' defined in manifest but missing in mcpServer.mjs`);
             continue;
         }
 
-        // Register with Zod schema converted from JSON
         server.registerTool(
             toolDef.name,
             {
@@ -425,7 +416,6 @@ async function createMcpServer() {
  * Main entry point.
  */
 async function main() {
-    // 1. Wait for Main API
     try {
         await axios.get(`${API_BASE_URL}/config`, axiosConfig);
         console.error(`✅ MCP Server connected to main API at: ${API_BASE_URL}/config`);
@@ -434,15 +424,12 @@ async function main() {
         process.exit(1);
     }
 
-    // 2. Create Server
     const server = await createMcpServer();
 
-    // 3. Start Transport
     if (TRANSPORT_MODE === "http") {
         const app = express();
         app.use(express.json());
 
-        // API Key Auth
         const mcpAuthMiddleware = (req, res, next) => {
             if (!MCP_API_KEY) return next();
             const key = req.headers['x-api-key'] || (req.headers['authorization'] || '').replace('Bearer ', '');
