@@ -1,0 +1,84 @@
+<div class="modeler-container" style="display: flex; height: 100%; width: 100%; overflow: hidden;">
+    <div class="modeler-sidebar" style="flex: 0 0 300px; border-right: 1px solid var(--color-border); background-color: var(--color-bg-secondary); display: flex; flex-direction: column;">
+        <div style="padding: 15px; border-bottom: 1px solid var(--color-border);">
+            <h2 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2em;">I3X Semantic Model</h2>
+            <div style="display: flex; gap: 10px;">
+                <button id="btn-modeler-refresh" class="tool-button" style="flex: 1;">↻ Refresh</button>
+                <button id="btn-modeler-save" class="tool-button button-primary" style="flex: 1;">💾 Save</button>
+            </div>
+            <div id="modeler-status" style="margin-top: 10px; font-size: 0.85em; font-weight: 500;"></div>
+        </div>
+        
+        <div style="flex: 1; overflow-y: auto; padding: 15px;">
+            <div class="modeler-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; font-size: 1em; color: var(--color-text-secondary);">Namespaces</h3>
+                    <button id="btn-modeler-add-namespace" class="tool-button" style="padding: 2px 8px; font-size: 1.2em;">+</button>
+                </div>
+                <ul id="modeler-list-namespaces" class="modeler-list" style="list-style: none; padding: 0; margin: 0 0 20px 0;"></ul>
+            </div>
+
+            <div class="modeler-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; font-size: 1em; color: var(--color-text-secondary);">Object Types</h3>
+                    <button id="btn-modeler-add-type" class="tool-button" style="padding: 2px 8px; font-size: 1.2em;">+</button>
+                </div>
+                <ul id="modeler-list-types" class="modeler-list" style="list-style: none; padding: 0; margin: 0 0 20px 0;"></ul>
+            </div>
+
+            <div class="modeler-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; font-size: 1em; color: var(--color-text-secondary);">Instances</h3>
+                    <button id="btn-modeler-add-instance" class="tool-button" style="padding: 2px 8px; font-size: 1.2em;">+</button>
+                </div>
+                <ul id="modeler-list-instances" class="modeler-list" style="list-style: none; padding: 0; margin: 0 0 20px 0;"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="modeler-editor-area" style="flex: 1; background-color: var(--color-bg); padding: 20px; overflow-y: auto;">
+        <div id="modeler-welcome" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-text-secondary);">
+            <div style="font-size: 4em; margin-bottom: 20px;">🏗️</div>
+            <h2>Semantic Modeler</h2>
+            <p>Select an item from the left panel to edit its properties, or create a new one.</p>
+        </div>
+
+        <form id="modeler-form" style="display: none; max-width: 800px; margin: 0 auto; background: var(--color-bg-secondary); padding: 20px; border-radius: 8px; border: 1px solid var(--color-border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 10px;">
+                <h2 id="modeler-form-title" style="margin: 0;">Edit Item</h2>
+                <button type="button" id="btn-modeler-delete" class="tool-button button-danger">Delete</button>
+            </div>
+            
+            <div id="modeler-dynamic-fields" style="display: flex; flex-direction: column; gap: 15px;">
+                </div>
+
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                <button type="submit" class="tool-button button-primary" style="padding: 10px 20px;">Apply Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .modeler-list li {
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        background-color: var(--color-bg);
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background-color 0.2s;
+    }
+    .modeler-list li:hover {
+        background-color: var(--color-bg-accent);
+    }
+    .modeler-list li.selected {
+        background-color: var(--color-primary);
+        color: white;
+        border-color: var(--color-primary-hover);
+    }
+</style>

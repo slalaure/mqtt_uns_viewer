@@ -10,19 +10,9 @@
  *
  * Reusable Tree View Manager Module
  * Encapsulates all logic for creating, updating, and interacting with one tree.
+ * [UPDATED] Added I3X Semantic Mode & Semantic Drag and Drop support.
  */
 
-/**
- * Creates a new tree manager instance.
- * @param {HTMLElement} rootElement The <ul> element to build the tree in.
- * @param {object} options
- * @param {string} options.treeId A unique ID prefix for nodes (e.g., 'main-tree').
- * @param {function} [options.onNodeClick] (event, nodeContainer, brokerId, topic) => void
- * @param {function} [options.onCheckboxClick] (event, nodeContainer, brokerId, topic) => void
- * @param {boolean} [options.showCheckboxes] Show filter checkboxes.
- * @param {boolean} [options.allowFolderCollapse] Allow folders to be collapsed.
- * @param {boolean} [options.isMultiBroker] Whether the app is in multi-broker mode.
- */
 export function createTreeManager(rootElement, options = {}) {
     const { 
         treeId, 
@@ -35,33 +25,31 @@ export function createTreeManager(rootElement, options = {}) {
 
     const rootNode = rootElement;
     let nodeMap = new Map(); // Stores references to <li> elements by topic
+    
+    // --- [NEW] I3X Mode State ---
+    let isI3xModeActive = false;
+    let lastMqttEntries = []; // Cache to restore MQTT view when switching back
 
     /**
-     * Creates or updates a node in this tree.
-     * @param {string} brokerId - The ID of the broker.
-     * @param {string} topic - Full topic string.
-     * @param {string} payload - The payload string.
-     * @param {string} timestamp - ISO timestamp.
-     * @param {object} updateOptions
-     * @param {boolean} updateOptions.enableAnimations
+     * Creates or updates a node in this tree (MQTT Mode).
      */
     function update(brokerId, topic, payload, timestamp, updateOptions = {}) {
+        // [NEW] Block live MQTT updates if we are currently viewing the I3X Semantic Model
+        if (isI3xModeActive) return null;
+
         const { enableAnimations = false } = updateOptions;
 
-        //  Safety check for brokerId to prevent "undefined" root folders
+        // Safety check for brokerId
         const safeBrokerId = brokerId || 'default';
-
-        //  Create the topic path that will be displayed in the tree.
         const displayTopic = isMultiBroker ? `${safeBrokerId}/${topic}` : topic;
-
         const parts = displayTopic.split('/');
+
         let currentTopicPath = '';
-        // Used to reconstruct the actual MQTT topic (without broker prefix if needed)
         let currentRealTopic = ''; 
         let currentUl = rootNode;
         const affectedNodes = [];
-        
-        // Format timestamp to YYYY/MM/DD HH:mm:ss
+
+        // Format timestamp
         const dateObj = new Date(timestamp);
         const yyyy = dateObj.getFullYear();
         const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -74,10 +62,9 @@ export function createTreeManager(rootElement, options = {}) {
         for (let index = 0; index < parts.length; index++) {
             const part = parts[index];
             currentTopicPath += (index > 0 ? '/' : '') + part;
-            
+
             // Reconstruct the real topic for data attributes
             if (isMultiBroker) {
-                // If multi-broker, skip the first part (brokerId) for the topic string
                 if (index > 0) {
                     currentRealTopic += (index > 1 ? '/' : '') + part;
                 }
@@ -86,22 +73,17 @@ export function createTreeManager(rootElement, options = {}) {
             }
 
             const isLastPart = index === parts.length - 1;
-            // The node ID must be unique *per tree*
             const partId = `node-${treeId}-${currentTopicPath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
             li = nodeMap.get(currentTopicPath); 
 
-            // --- FILTERING LOGIC ---
-            // If checkboxes are enabled, check if the current node exists and is unchecked.
-            // If it is unchecked, we assume the user wants to filter out this branch.
-            // We stop processing immediately, preventing updates or creation of children.
+            // Filtering logic via Checkboxes
             if (li && showCheckboxes) {
                 const checkbox = li.querySelector(':scope > .node-container > .node-filter-checkbox');
                 if (checkbox && !checkbox.checked) {
                     return null; // Stop updating this branch
                 }
             }
-            // -----------------------
 
             let isNewNode = false;
 
@@ -109,12 +91,23 @@ export function createTreeManager(rootElement, options = {}) {
                 isNewNode = true;
                 li = document.createElement('li');
                 li.id = partId;
-
                 if (enableAnimations) li.classList.add('new-node');
 
                 const nodeContainer = document.createElement('div');
                 nodeContainer.className = 'node-container';
-                
+
+                // --- [NEW] Enable Semantic Drag & Drop (MQTT Fallback) ---
+                nodeContainer.draggable = true;
+                nodeContainer.addEventListener('dragstart', (e) => {
+                    const dragPayload = {
+                        type: 'topic',
+                        path: currentRealTopic,
+                        brokerId: safeBrokerId
+                    };
+                    e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+
                 let checkboxHtml = '';
                 if (showCheckboxes) {
                     checkboxHtml = `<input type="checkbox" class="node-filter-checkbox" checked>`;
@@ -122,12 +115,10 @@ export function createTreeManager(rootElement, options = {}) {
 
                 nodeContainer.innerHTML = `
                     ${checkboxHtml}
-                    <span class="node-name"></span>
+                    <span class="node-name">${part}</span>
                     <span class="node-timestamp"></span>
                 `;
-                nodeContainer.querySelector('.node-name').textContent = part;
-                
-                // Store the specific path for this node level
+
                 const nodeSpecificTopic = (isMultiBroker && index === 0) ? '' : currentRealTopic;
                 nodeContainer.dataset.brokerId = safeBrokerId;
                 nodeContainer.dataset.topic = nodeSpecificTopic; 
@@ -141,14 +132,12 @@ export function createTreeManager(rootElement, options = {}) {
                 let parentUl;
 
                 if (parentLi) {
-                    // This is a child node
                     parentUl = parentLi.querySelector(':scope > ul');
                     if (!parentUl) {
                         parentUl = document.createElement('ul');
                         parentLi.appendChild(parentUl);
                     }
                 } else {
-                    // This is a top-level node. Find/create the root <ul> inside the container.
                     parentUl = rootNode.querySelector(':scope > ul');
                     if (!parentUl) {
                         parentUl = document.createElement('ul');
@@ -159,7 +148,6 @@ export function createTreeManager(rootElement, options = {}) {
                 parentUl.appendChild(li);
                 nodeMap.set(currentTopicPath, li);
 
-                // Add listeners with correct closure data
                 if (onNodeClick) {
                     nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
                 }
@@ -173,8 +161,6 @@ export function createTreeManager(rootElement, options = {}) {
             if (timestampSpan) timestampSpan.textContent = formattedTimestamp;
 
             affectedNodes.push({ element: li, isNew: isNewNode });
-
-            // Only set payload on the actual leaf node or updated node
             nodeContainer.dataset.payload = payload;
 
             if (isLastPart) {
@@ -185,7 +171,7 @@ export function createTreeManager(rootElement, options = {}) {
             }
 
             currentUl = li.querySelector('ul') || currentUl;
-        } // end for loop
+        }
 
         if (enableAnimations) {
             const disableAnimCheckbox = document.getElementById('disable-tree-animations');
@@ -194,6 +180,7 @@ export function createTreeManager(rootElement, options = {}) {
             if (!isAnimDisabled) {
                 const animationDelay = 150;
                 const animationDuration = 1200;
+
                 affectedNodes.forEach((nodeInfo, index) => {
                     setTimeout(() => {
                         if (nodeInfo.isNew) nodeInfo.element.classList.remove('new-node');
@@ -202,7 +189,6 @@ export function createTreeManager(rootElement, options = {}) {
                     }, index * animationDelay);
                 });
             } else {
-                // If animation is disabled, instantly remove the 'new-node' hidden class to make it visible right away
                 affectedNodes.forEach((nodeInfo) => {
                     if (nodeInfo.isNew) nodeInfo.element.classList.remove('new-node');
                 });
@@ -213,11 +199,15 @@ export function createTreeManager(rootElement, options = {}) {
     }
 
     /**
-     * Wipes and rebuilds the tree from a list of topic entries.
-     * @param {Array<object>} entries - Array of { broker_id, topic, payload, timestamp }
+     * Wipes and rebuilds the tree from a list of topic entries (MQTT Mode).
      */
     function rebuild(entries) {
+        // [NEW] Cache the raw MQTT state
+        lastMqttEntries = entries;
+        if (isI3xModeActive) return; // Do not rebuild MQTT tree if I3X mode is active
+
         console.log(`[tree-manager ${treeId}] Rebuilding tree with ${entries.length} topics...`); 
+
         const rootUl = rootNode.querySelector(':scope > ul');
         if (rootUl) {
             rootUl.innerHTML = '';
@@ -245,15 +235,132 @@ export function createTreeManager(rootElement, options = {}) {
     }
 
     /**
+     * --- [NEW] I3X Semantic Mode Logic ---
+     * Fetches instances from the I3X API and builds a hierarchical tree based on `parentId`.
+     */
+    async function setI3xMode(mode) {
+        isI3xModeActive = mode;
+        if (mode) {
+            const rootUl = rootNode.querySelector(':scope > ul');
+            if (rootUl) rootUl.innerHTML = '<li style="padding: 10px; color: var(--color-text-secondary);">Loading Semantic Model...</li>';
+            
+            try {
+                // Fetch I3X instance definitions (Metadata only)
+                const res = await fetch('api/i3x/objects');
+                if (!res.ok) throw new Error("Failed to fetch I3X objects");
+                
+                const objects = await res.json();
+                buildI3xTree(objects);
+            } catch (err) {
+                console.error(`[tree-manager ${treeId}] I3X fetch error:`, err);
+                if (rootUl) rootUl.innerHTML = `<li style="padding: 10px; color: var(--color-danger);">Error loading semantic model: ${err.message}</li>`;
+            }
+        } else {
+            // Revert to MQTT
+            rebuild(lastMqttEntries);
+        }
+    }
+
+    function buildI3xTree(objects) {
+        const rootUl = rootNode.querySelector(':scope > ul');
+        if (!rootUl) return;
+        rootUl.innerHTML = '';
+        nodeMap.clear();
+
+        const objMap = new Map();
+        const childrenMap = new Map();
+
+        // Map hierarchy
+        objects.forEach(obj => {
+            objMap.set(obj.elementId, obj);
+            // In I3X, parentId can be '/' or null for root
+            const parent = (obj.parentId === '/' || !obj.parentId) ? null : obj.parentId;
+            if (!childrenMap.has(parent)) childrenMap.set(parent, []);
+            childrenMap.get(parent).push(obj);
+        });
+
+        function createNode(obj) {
+            const li = document.createElement('li');
+            li.id = `node-${treeId}-i3x-${obj.elementId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+            li.classList.add(obj.isComposition ? 'is-folder' : 'is-file');
+            
+            // I3X Composition nodes (folders) are collapsed by default
+            if (obj.isComposition) li.classList.add('collapsed');
+            
+            const nodeContainer = document.createElement('div');
+            nodeContainer.className = 'node-container';
+            
+            // --- [NEW] Semantic Drag & Drop (I3X Mode) ---
+            nodeContainer.draggable = true;
+            nodeContainer.addEventListener('dragstart', (e) => {
+                const dragPayload = {
+                    type: 'element',
+                    id: obj.elementId,
+                    typeId: obj.typeId,
+                    namespaceUri: obj.namespaceUri
+                };
+                e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
+                e.dataTransfer.effectAllowed = 'copy';
+            });
+
+            let checkboxHtml = '';
+            if (showCheckboxes) {
+                checkboxHtml = `<input type="checkbox" class="node-filter-checkbox" checked>`;
+            }
+
+            nodeContainer.innerHTML = `
+                ${checkboxHtml}
+                <span class="node-name" title="Type: ${obj.typeId}">${obj.displayName}</span>
+                <span class="node-timestamp" style="color:var(--color-primary); font-size:0.7em;">I3X</span>
+            `;
+
+            // Metadata for click handlers
+            nodeContainer.dataset.elementId = obj.elementId;
+            nodeContainer.dataset.typeId = obj.typeId;
+            nodeContainer.dataset.isI3x = "true";
+
+            li.appendChild(nodeContainer);
+            nodeMap.set(obj.elementId, li);
+
+            if (onNodeClick) {
+                // We pass 'i3x' as brokerId fallback, and elementId as topic for legacy compat
+                nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', obj.elementId));
+            }
+            if (showCheckboxes && onCheckboxClick) {
+                nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, 'i3x', obj.elementId));
+            }
+
+            // Build children recursively
+            const children = childrenMap.get(obj.elementId) || [];
+            if (children.length > 0) {
+                const childUl = document.createElement('ul');
+                children.forEach(child => {
+                    childUl.appendChild(createNode(child));
+                });
+                li.appendChild(childUl);
+            }
+            return li;
+        }
+
+        const rootObjects = childrenMap.get(null) || [];
+        if (rootObjects.length === 0) {
+            rootUl.innerHTML = '<li style="padding: 10px; color: var(--color-text-secondary);">No I3X objects found. Configure the model first.</li>';
+            return;
+        }
+
+        rootObjects.forEach(obj => {
+            rootUl.appendChild(createNode(obj));
+        });
+    }
+
+    /**
      * Applies coloring logic to all nodes in this tree.
-     * @param {function} colorLogicFn - (brokerId, topic, liElement) => void
      */
     function colorTree(colorLogicFn) {
         rootNode.querySelectorAll('li > .node-container').forEach(nodeContainer => {
             const li = nodeContainer.closest('li');
             const brokerId = nodeContainer.dataset.brokerId;
             const topic = nodeContainer.dataset.topic;
-
             if (brokerId !== undefined && topic !== undefined) {
                  colorLogicFn(brokerId, topic, li);
             }
@@ -263,7 +370,6 @@ export function createTreeManager(rootElement, options = {}) {
     function toggleAllFolders(collapse) {
         const rootUl = rootNode.querySelector(':scope > ul');
         if (!rootUl) return;
-        
         rootUl.querySelectorAll('.is-folder').forEach(folderLi => {
             folderLi.classList.toggle('collapsed', collapse);
         });
@@ -311,6 +417,7 @@ export function createTreeManager(rootElement, options = {}) {
     return {
         update,
         rebuild,
+        setI3xMode, // [NEW] Exposed semantic switch function
         colorTree,
         toggleAllFolders,
         applyFilter,
