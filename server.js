@@ -37,6 +37,7 @@ const simulatorManager = require('./simulator');
 const dataManager = require('./storage/dataManager'); // [UPDATED]
 const userManager = require('./storage/userManager'); // [UPDATED]
 const alertManager = require('./core/engine/alertManager'); // [UPDATED]
+const semanticManager = require('./core/semantic/semanticManager'); // [NEW] I3X Semantic Engine
 
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
@@ -54,7 +55,6 @@ if (!fs.existsSync(SESSIONS_PATH)) {
 }
 
 // --- Analytics Script ---
-// This script will only be injected if ANALYTICS_ENABLED=true
 const ANALYTICS_SCRIPT = `
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
@@ -274,7 +274,6 @@ function updateBrokerStatus(brokerId, status, error = null) {
 // --- Express App & Server Setup ---
 const app = express();
 const server = http.createServer(app);
-// Enable trust proxy for Redbird/Traefik compatibility
 app.enable('trust proxy');
 
 // --- Session & Passport Setup ---
@@ -344,7 +343,7 @@ app.use((req, res, next) => {
 });
 
 // --- Mapper Engine Setup ---
-const mapperEngine = require('./core/engine/mapperEngine')( // [UPDATED]
+const mapperEngine = require('./core/engine/mapperEngine')( 
     activeConnections, 
     wsManager.broadcast, 
     logger,
@@ -365,6 +364,10 @@ db = new duckdb.Database(dbFile, (err) => {
     userManager.init(db, logger, SESSIONS_PATH);
     // 2. Initialize Alert Manager
     alertManager.init(db, logger, config, wsManager.broadcast);
+
+    // [NEW] Initialize Semantic Manager
+    semanticManager.init({ logger, config });
+
     // 3. Ensure Admin User Exists
     if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
         userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
@@ -396,12 +399,12 @@ db = new duckdb.Database(dbFile, (err) => {
     });
 
     mapperEngine.setDb(db);
-    const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); // [UPDATED]
+    const { getDbStatus, broadcastDbStatus, performMaintenance } = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
     dataManager.init(config, logger, mapperEngine, db, broadcastDbStatus);
     wsManager.initWebSocketManager(server, db, logger, basePath, getDbStatus, longReplacer, () => brokerStatuses);
     setInterval(performMaintenance, 15000);
-    // Initialize Provider Manager (Abstraction layer for MQTT, OPC UA, etc.)
-    providerManager.init({
+
+    connectorManager.init({ 
         config,
         logger,
         activeConnections,
@@ -472,13 +475,13 @@ simulatorManager.init(logger, (topic, payload) => {
 }, config.IS_SPARKPLUG_ENABLED);
 
 // --- Auth Routes ---
-mainRouter.use('/auth', require('./interfaces/web/authApi')(logger)); // [UPDATED]
+mainRouter.use('/auth', require('./interfaces/web/authApi')(logger)); 
 
 // --- Admin Routes ---
-mainRouter.use('/api/admin', require('./interfaces/web/adminApi')(logger, db, dataManager, DATA_PATH)); // [UPDATED]
+mainRouter.use('/api/admin', require('./interfaces/web/adminApi')(logger, db, dataManager, DATA_PATH)); 
 
 // --- Alert API Routes ---
-mainRouter.use('/api/alerts', ipFilterMiddleware, require('./interfaces/web/alertApi')(logger)); // [UPDATED]
+mainRouter.use('/api/alerts', ipFilterMiddleware, require('./interfaces/web/alertApi')(logger)); 
 
 /// --- Layered File System Helper for SVGs/HMI ---
 function resolveHmiPath(filename, req) {
@@ -623,8 +626,8 @@ if (config.IS_SIMULATOR_ENABLED) {
 
 mainRouter.use('/api/context', (req, res, next) => {
     if (!db) return res.status(503).json({ error: "DB not ready" });
-    const dbManager = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); // [UPDATED]
-    require('./interfaces/web/mcpApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next); // [UPDATED]
+    const dbManager = require('./storage/db_manager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
+    require('./interfaces/web/mcpApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next); 
 });
 
 mainRouter.use('/api/tools', ipFilterMiddleware, require('./interfaces/mcp/toolsApi')(logger));
@@ -634,11 +637,11 @@ if (config.VIEW_CHAT_ENABLED) {
 }
 
 if (config.VIEW_CONFIG_ENABLED) {
-    mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./interfaces/web/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager)); // [UPDATED]
+    mainRouter.use('/api/env', ipFilterMiddleware, requireAdmin, require('./interfaces/web/configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager)); 
 }
 
-mainRouter.use('/api/mapper', ipFilterMiddleware, require('./interfaces/web/mapperApi')(mapperEngine)); // [UPDATED]
-mainRouter.use('/api/chart', ipFilterMiddleware, require('./interfaces/web/chartApi')(CHART_CONFIG_PATH, logger)); // [UPDATED]
+mainRouter.use('/api/mapper', ipFilterMiddleware, require('./interfaces/web/mapperApi')(mapperEngine)); 
+mainRouter.use('/api/chart', ipFilterMiddleware, require('./interfaces/web/chartApi')(CHART_CONFIG_PATH, logger)); 
 
 mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
     const { topic, payload, format, qos, retain, brokerId } = req.body;
@@ -657,7 +660,7 @@ mainRouter.post('/api/publish/message', ipFilterMiddleware, (req, res) => {
 });
 
 if (config.EXTERNAL_API_ENABLED) {
-    mainRouter.use('/api/external', ipFilterMiddleware, require('./interfaces/web/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer)); // [UPDATED]
+    mainRouter.use('/api/external', ipFilterMiddleware, require('./interfaces/web/externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer)); 
 }
 
 if (config.VIEW_CONFIG_ENABLED) {
@@ -751,8 +754,8 @@ async function gracefulShutdown() {
                 resolve();
             });
         });
-        connectorManager.closeAll(); // [UPDATED]
-        logger.info("✅ Data Providers closed.");
+        connectorManager.closeAll(); 
+        logger.info("✅ Data Connectors closed.");
         await dataManager.close();
         logger.info("✅ Database closed.");
         logger.info("✅ Shutdown complete.");

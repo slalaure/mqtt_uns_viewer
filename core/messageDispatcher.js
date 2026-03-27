@@ -7,9 +7,9 @@
  * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
- * * Central Message Handler
+ * * * Central Message Dispatcher
  * Orchestrates the processing of a new message from ANY data provider (MQTT, OPC UA, File, etc.).
- * Fully agnostic: relies on providers to decode protocol-specific payloads (like Sparkplug).
+ * [UPDATED] Integrates SemanticManager to tag payloads with I3X elementId and typeId.
  */
 
 // --- Helper Functions ---
@@ -36,6 +36,7 @@ let mapperEngine;
 let dataManager;
 let broadcastDbStatus;
 let alertManager;
+const semanticManager = require('./semantic/semanticManager'); // [NEW] Semantic Engine
 
 const MAX_PAYLOAD_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -55,11 +56,11 @@ let throttleResetTimer = null;
 async function handleMessage(providerId, topic, payload, options = {}) {
     const timestamp = new Date();
     const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null } = options;
-    
+
     let payloadObjectForMapper = null; 
     let payloadStringForWs = null;     
     let payloadStringForDb = null;     
-    
+
     const handlerLogger = logger.child({ provider: providerId }); 
 
     try {
@@ -77,7 +78,6 @@ async function handleMessage(providerId, topic, payload, options = {}) {
         }
 
         // --- 2. Payload Size Protection ---
-        // Calculate size using rawBuffer if provided by provider, else derive it
         const payloadSize = rawBuffer ? rawBuffer.length : (Buffer.isBuffer(payload) ? payload.length : Buffer.byteLength(typeof payload === 'string' ? payload : JSON.stringify(payload) || '', 'utf8'));
         
         if (payloadSize > MAX_PAYLOAD_SIZE_BYTES) {
@@ -106,6 +106,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                 // Standard String/Buffer payload parsing
                 let tempPayloadString = Buffer.isBuffer(payload) ? payload.toString('utf-8') : payload;
                 payloadStringForWs = tempPayloadString;
+                
                 try {
                     payloadObjectForMapper = JSON.parse(tempPayloadString);
                     payloadStringForDb = tempPayloadString;
@@ -114,6 +115,20 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                      payloadObjectForMapper = { raw_payload: tempPayloadString };
                      payloadStringForDb = JSON.stringify(payloadObjectForMapper);
                 }
+            }
+
+            // --- 3.5 Semantic Enrichment (I3X) ---
+            // Ask SemanticManager if this raw topic maps to a known I3X Element
+            const semanticMatch = semanticManager.resolveTopic(topic);
+            if (semanticMatch && payloadObjectForMapper && typeof payloadObjectForMapper === 'object') {
+                payloadObjectForMapper._i3x = {
+                    elementId: semanticMatch.elementId,
+                    typeId: semanticMatch.typeId,
+                    isComposition: semanticMatch.isComposition
+                };
+                // Re-stringify so DuckDB and WebSockets receive the enriched payload
+                payloadStringForDb = JSON.stringify(payloadObjectForMapper, longReplacer);
+                payloadStringForWs = JSON.stringify(payloadObjectForMapper, longReplacer, 2);
             }
         }
 
@@ -129,7 +144,6 @@ async function handleMessage(providerId, topic, payload, options = {}) {
 
         // --- 5. DB / Mapper / Alert Execution ---
         const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
-
         dataManager.insertMessage({ 
             brokerId: providerId, 
             timestamp, 
@@ -142,7 +156,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
         if (!needsDb) {
             await mapperEngine.processMessage(providerId, topic, payloadObjectForMapper, isSparkplugOrigin);
         }
-        
+
         if (alertManager) {
             alertManager.processMessage(providerId, topic, payloadObjectForMapper);
         }
@@ -153,10 +167,10 @@ async function handleMessage(providerId, topic, payload, options = {}) {
 }
 
 /**
- * Initializes the Central Message Handler.
+ * Initializes the Central Message Dispatcher.
  */
 function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManager, appBroadcastDbStatus, appAlertManager) {
-    logger = appLogger.child({ component: 'MessageHandler' });
+    logger = appLogger.child({ component: 'MessageDispatcher' });
     config = appConfig;
     wsManager = appWsManager;
     mapperEngine = appMapperEngine;
@@ -167,8 +181,8 @@ function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManage
     if (!throttleResetTimer) {
         throttleResetTimer = setInterval(() => { namespaceCounts.clear(); }, 1000);
     }
-    
-    logger.info("✅ Central Message Handler initialized (Protocol Agnostic).");
+
+    logger.info("✅ Central Message Dispatcher initialized (Protocol Agnostic).");
     return handleMessage; 
 }
 
