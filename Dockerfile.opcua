@@ -1,0 +1,36 @@
+# Dockerfile for OPC UA Server
+# Multi-stage build to keep image slim
+
+FROM node:22-alpine AS builder
+
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Final stage
+FROM node:22-alpine
+
+WORKDIR /usr/src/app
+
+# Set NODE_ENV
+ENV NODE_ENV=production
+
+# Copy node_modules from builder
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy only the OPC UA server file (keep image lean)
+COPY config/opcua/opcua-server.js ./opcua-server.js
+
+# Expose OPC UA port
+EXPOSE 4840
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+    CMD node -e "const net = require('net'); const s = net.createConnection(4840, 'localhost'); s.on('connect', () => {s.destroy(); process.exit(0)}); s.on('error', () => process.exit(1));}"
+
+# Start the OPC UA server
+CMD ["node", "opcua-server.js"]

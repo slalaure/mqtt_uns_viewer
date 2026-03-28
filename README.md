@@ -110,22 +110,41 @@ To handle environments ranging from a few updates a minute to thousands of messa
 * Docker & Docker Compose
 * Access to MQTT Broker(s), OPC UA server(s), or local CSV files
 
-### 1. Quick Start
+### 1. Quick Start (Local Testing)
+
+**For fastest setup with embedded test servers:**
+
 ```bash
-# Clone the repository
+git clone https://github.com/slalaure/korelate.git
+cd korelate
+
+# Start with embedded MQTT & OPC UA servers (preconfigured)
+docker-compose -f docker-compose.yml.local up -d
+```
+
+* **Dashboard:** `http://localhost:8080` (Admin: `admin` / Password: `password`)
+* **MQTT Broker:** `mqtt://localhost:1883`
+* **OPC UA Server:** `opc.tcp://localhost:4840`
+* **MCP Endpoint:** `http://localhost:3000/mcp`
+
+👉 **See [LOCAL_TESTING.md](LOCAL_TESTING.md) for complete guide, sample data, and troubleshooting.**
+
+### 2. Standard Deployment
+
+```bash
 git clone https://github.com/slalaure/korelate.git
 cd korelate
 
 # Setup configuration
 cp .env.example .env
 
-# Start the stack (Multi-Arch image available on Docker Hub)
+# Start the stack (connect to your external brokers)
 docker-compose up -d
 ```
-* **Dashboard:** `http://localhost:8080`
-* **MCP Endpoint:** `http://localhost:3000/mcp`
 
-### 2. Configuration (`.env`)
+Then configure your MQTT & OPC UA brokers in the web UI at `http://localhost:8080/config.html`.
+
+### 3. Configuration (`.env`)
 
 The application supports extensive configuration via environment variables.
 

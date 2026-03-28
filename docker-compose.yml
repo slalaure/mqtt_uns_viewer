@@ -15,6 +15,7 @@ services:
       - NODE_ENV=production
       - PORT=8080
       - BASE_PATH=/
+      - MQTT_BROKERS=[] # Local MQTT broker config - override with services below if using local brokers
     # Assign to the explicit internal network
     networks:
       - mqtt_viewer_net
@@ -25,6 +26,8 @@ services:
         max-size: "10m"   # Rotate logs every 10MB
         max-file: "3"     # Keep maximum 3 rotated files
     # Default Dockerfile CMD ["node", "server.js"] is used
+    depends_on:
+      - mqtt  # [OPTIONAL] Comment out if not using local MQTT broker
 
   # Service 2: The MCP server (mcpServer.mjs)
   mcp:
@@ -57,6 +60,66 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Service 3: [OPTIONAL] Simple MQTT Broker (Mosquitto)
+  # Dockerfile comment out to disable local MQTT broker and use external brokers instead
+  mqtt:
+    image: eclipse-mosquitto:2.0.18-alpine
+    container_name: korelate_mqtt
+    restart: always
+    ports:
+      - "1883:1883"  # MQTT port
+      - "9001:9001"  # WebSocket port
+    volumes:
+      - ./config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - mqtt_viewer_net
+    environment:
+      # Mosquitto doesn't use env vars for config, but this documents the setup
+      - MOSQUITTO_BROKER_VERSION=2.0.18
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/broker/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Service 4: [OPTIONAL] Simple OPC UA Server
+  # Uncomment to enable local OPC UA test server
+  opcua:
+    build:
+      context: .
+      dockerfile: Dockerfile.opcua
+    container_name: korelate_opcua
+    restart: always
+    ports:
+      - "4840:4840"  # OPC UA port
+    environment:
+      - NODE_ENV=production
+      - OPCUA_PORT=4840
+    networks:
+      - mqtt_viewer_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const socket = net.createConnection(4840, 'localhost'); socket.on('connect', () => {socket.destroy(); process.exit(0)}); socket.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# ----- Named Volumes for Persistence -----
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
 
 # Define specific network settings to use RFC 6598 (CGNAT) space
 # This prevents conflicts with standard 192.168.x.x or 10.x.x.x corporate networks

@@ -207,6 +207,31 @@ try {
             rejectUnauthorized: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false'
         }];
     }
+
+    // Fallback to local embedded Docker MQTT broker when nothing is configured
+    // (useful for local dev and `docker-compose.yml.local` setup).
+    if (config.BROKER_CONFIGS.length === 0 && process.env.ENABLE_LOCAL_MQTT_FALLBACK !== 'false') {
+        const localBroker = {
+            id: "local_mqtt",
+            host: process.env.LOCAL_MQTT_HOST || "mqtt",
+            port: parseInt(process.env.LOCAL_MQTT_PORT, 10) || 1883,
+            protocol: "mqtt",
+            clientId: "mqtt-uns-viewer-local",
+            username: process.env.LOCAL_MQTT_USERNAME || "",
+            password: process.env.LOCAL_MQTT_PASSWORD || "",
+            subscribe: ["#"],
+            publish: ["#"],
+            certFilename: "",
+            keyFilename: "",
+            caFilename: "",
+            alpnProtocol: "",
+            rejectUnauthorized: false
+        };
+
+        config.BROKER_CONFIGS.push(localBroker);
+        logger.info(`✅ No MQTT brokers configured; using local fallback ${localBroker.host}:${localBroker.port}`);
+    }
+
     // Load DATA_PROVIDERS configuration (New Generic Standard)
     if (process.env.DATA_PROVIDERS) {
         try {
@@ -478,6 +503,25 @@ simulatorManager.init(logger, (topic, payload) => {
     }
 }, config.IS_SPARKPLUG_ENABLED);
 
+// Auto-start default simulators for local testing
+if (config.IS_SIMULATOR_ENABLED) {
+    setTimeout(() => {
+        const defaultSimulators = ['stark', 'deathstar', 'paris_metro', 'mainchem'];
+        defaultSimulators.forEach(simName => {
+            try {
+                const result = simulatorManager.startSimulator(simName);
+                if (result.status === 'running') {
+                    logger.info(`Auto-started simulator: ${simName}`);
+                } else {
+                    logger.warn(`Failed to auto-start simulator ${simName}: ${result.status}`);
+                }
+            } catch (err) {
+                logger.error({ err }, `Error auto-starting simulator ${simName}`);
+            }
+        });
+    }, 5000); // Wait 5 seconds for MQTT connection to be established
+}
+
 // --- Auth Routes ---
 mainRouter.use('/auth', require('./interfaces/web/authApi')(logger)); 
 // --- Admin Routes ---
@@ -538,19 +582,19 @@ mainRouter.get('/api/hmi/list', (req, res) => {
             }
         }
         res.json(Array.from(files).sort());
-    } catch { 
-        res.status(500).json([]); 
+    } catch {
+        res.status(500).json([]);
     }
 });
 
 mainRouter.get('/api/hmi/bindings.js', (req, res) => {
     const filename = path.basename(req.query.name || '');
     const filePath = resolveHmiPath(filename, req);
-    res.setHeader('Content-Type', 'application/javascript'); 
-    if (fs.existsSync(filePath)) { 
-        res.sendFile(filePath); 
-    } else { 
-        res.send('// No bindings'); 
+    res.setHeader('Content-Type', 'application/javascript');
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.send('// No bindings');
     }
 });
 

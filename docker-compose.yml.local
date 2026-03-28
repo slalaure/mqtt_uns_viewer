@@ -1,0 +1,149 @@
+# docker-compose.yml.local
+# Local testing with embedded MQTT and OPC UA servers
+# 
+# Usage:
+#   docker-compose -f docker-compose.yml.local up
+#
+# This configuration:
+# - Starts the app with preconfigured MQTT & OPC UA brokers
+# - Includes embedded Mosquitto MQTT broker
+# - Includes embedded OPC UA test server
+# - All services on a private Docker network
+#
+# Access:
+# - Web UI:      http://localhost:8080
+# - MCP Server:  http://localhost:3000
+# - MQTT:        mqtt://localhost:1883 (or mqtt://mqtt:1883 from within Docker)
+# - OPC UA:      opc.tcp://localhost:4840 (or opc.tcp://opcua:4840 from within Docker)
+
+version: '3.8'
+services:
+  # Main Application - Preconfigured with local brokers
+  app:
+    build:
+      context: .
+    container_name: korelate_app_local
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/usr/src/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - BASE_PATH=/
+      - ENABLE_LOCAL_MQTT_FALLBACK=true
+      - LOCAL_MQTT_HOST=mqtt
+      - LOCAL_MQTT_PORT=1883
+      # Preconfigured MQTT broker for local testing (fallback still works if MQTT_BROKERS is empty)
+      - MQTT_BROKERS='[{"id":"local-mqtt","host":"mqtt","port":1883,"protocol":"mqtt","clientId":"mqtt-uns-viewer-local","username":"","password":"","subscribe":["#"],"publish":["#"],"certFilename":"","keyFilename":"","caFilename":"","alpnProtocol":"","rejectUnauthorized":false}]'
+      # Local admin account for testing
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=password
+      - SESSION_SECRET=local-testing-secret
+      - PUBLIC_URL=http://localhost:8080
+      # Enable all simulator features for testing
+      - SIMULATOR_ENABLED=true
+      - VIEW_CONFIG_ENABLED=true
+      - EXTERNAL_API_ENABLED=true
+    networks:
+      - mqtt_viewer_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      mqtt:
+        condition: service_healthy
+      opcua:
+        condition: service_healthy
+
+  # MCP Server
+  mcp:
+    build:
+      context: .
+    container_name: korelate_mcp_local
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/usr/src/app/data
+    environment:
+      - NODE_ENV=production
+      - MCP_TRANSPORT=http
+      - MCP_PORT=3000
+      - MAIN_APP_HOST=app
+      - PORT=8080
+      - BASE_PATH=/
+    networks:
+      - mqtt_viewer_net
+    command: node interfaces/mcp/mcpServer.mjs
+    depends_on:
+      - app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Local MQTT Broker (Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:2.1.2-alpine
+    container_name: korelate_mqtt_local
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - mqtt_viewer_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1883"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Local OPC UA Server
+  opcua:
+    build:
+      context: .
+      dockerfile: Dockerfile.opcua
+    container_name: korelate_opcua_local
+    restart: always
+    ports:
+      - "4840:4840"
+    environment:
+      - NODE_ENV=production
+      - OPCUA_PORT=4840
+    networks:
+      - mqtt_viewer_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const socket = net.createConnection(4840, 'localhost'); socket.on('connect', () => {socket.destroy(); process.exit(0)}); socket.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
+
+networks:
+  mqtt_viewer_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 100.64.0.0/24
