@@ -21,6 +21,7 @@ class ConnectorManager {
      */
     init(context) {
         this.context = context;
+        this.app = context.app;
         this.logger = context.logger.child({ component: 'ConnectorManager' });
         this.logger.info("Initializing Data Connectors Abstraction Layer...");
 

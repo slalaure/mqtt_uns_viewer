@@ -27,20 +27,30 @@ The application is **pre-configured** to connect to these local brokers automati
 > - `stark` (Stack Industries)
 > - `deathstar` (Death Star)
 > - `paris_metro` (RATP)
-> - `mainchem` (anciennement manuchem)
+> - `hydrochem` (HyDroChem-AG)
 > 
 > Si vous avez un simulateur local non commité, placez-le dans `data/simulators` et mettez-le dans `.gitignore`.
 
-### Option 2: Using the Standard Compose with Manual Configuration
+### Option 3: HTTP Data Ingestion (REST)
 
-If you prefer to customize which services to run:
+You can also ingest data into the UNS using simple HTTP POST requests. 
+This is enabled via the `http` provider type in `DATA_PROVIDERS`.
 
+**Default Endpoint**: `POST /api/ingest/rest_ingest/*` (where `*` is your topic hierarchy)
+
+Example using `curl`:
 ```bash
-# Start with main app, MQTT, and OPC UA (pick and choose)
-docker-compose up app mqtt opcua -d
-```
+# Publish JSON data to a topic
+curl -X POST http://localhost:8080/api/ingest/rest_ingest/factory/line1/temp \
+     -H "Content-Type: application/json" \
+     -d '{"value": 24.5, "unit": "C"}'
 
-Then manually configure MQTT brokers in the web UI (`http://localhost:8080/config.html`).
+# Publish raw text or XML
+curl -X POST http://localhost:8080/api/ingest/rest_ingest/factory/status \
+     -H "Content-Type: text/plain" \
+     -d "RUNNING"
+```
+The topic depth is limited to **10 levels**.
 
 ## Architecture
 

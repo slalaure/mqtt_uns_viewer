@@ -1,7 +1,7 @@
 /**
  * @license Apache License, Version 2.0
  * @author Sebastien Lalaurette
- * Custom JS Bindings for the ManuCHEM 2026 HMI Dashboard.
+ * Custom JS Bindings for the HyDroChem-AG 2026 HMI Dashboard.
  * Fixes CSS ID selectors and implements generic data-key fallbacks properly.
  */
 
@@ -34,7 +34,7 @@ function createWebTexture() {
 
 window.registerHmiBindings({
     initialize: (hmiRoot) => {
-        console.log("[ManuCHEM HMI] Initialized.");
+        console.log("[HyDroChem-AG HMI] Initialized.");
         
         hmiRoot.dataset.fanSpeed = 0;
         hmiRoot.dataset.webSpeed = 0;

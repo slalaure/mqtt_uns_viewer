@@ -1,12 +1,12 @@
 /**
  * @license Apache License, Version 2.0
  * @author Sebastien Lalaurette
- * Custom JS Bindings for the ManuCHEM 2026 Operations Dashboard.
+ * Custom JS Bindings for the HyDroChem-AG 2026 Operations Dashboard.
  */
 
 window.registerSvgBindings({
     initialize: (svgRoot) => {
-        console.log("[ManuCHEM] Dashboard Initialized.");
+        console.log("[HyDroChem-AG] Dashboard Initialized.");
         // Utilisation de querySelector, beaucoup plus fiable sur les SVG injectés
         const alertBox = svgRoot.querySelector('#g_alert_box');
         if (alertBox) alertBox.style.display = 'none';

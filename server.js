@@ -438,6 +438,7 @@ db = new duckdb.Database(dbFile, (err) => {
     connectorManager.init({ 
         config,
         logger,
+        app,
         activeConnections,
         brokerStatuses,
         wsManager,
@@ -506,7 +507,7 @@ simulatorManager.init(logger, (topic, payload) => {
 // Auto-start default simulators for local testing
 if (config.IS_SIMULATOR_ENABLED) {
     setTimeout(() => {
-        const defaultSimulators = ['stark', 'deathstar', 'paris_metro', 'mainchem'];
+        const defaultSimulators = ['stark', 'deathstar', 'paris_metro', 'hydrochem'];
         defaultSimulators.forEach(simName => {
             try {
                 const result = simulatorManager.startSimulator(simName);
