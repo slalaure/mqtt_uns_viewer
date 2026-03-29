@@ -8,7 +8,7 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2026 Sebastien Lalaurette
  *
- * Simulation Scenario: ManuCHEM 2026 - Enhanced RCA (Red Herrings & Cascading Faults)
+ * Simulation Scenario: HyDroChem-AG 2026 - Enhanced RCA (Red Herrings & Cascading Faults)
  * Location: Frankfurt, Germany
  * Focus: AI Root Cause Analysis filtering out false leads across WMS/LIMS to find IT/OT correlation.
  */
@@ -158,7 +158,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     const scenario = [
         // 1. WMS Allocates Ink Lot to lines
         () => {
-            logger.info("[ManuCHEM] WMS allocating Ink Lot PTIR-992");
+            logger.info("[HyDroChem-AG] WMS allocating Ink Lot PTIR-992");
             return { 
                 topic: 'frankfurt/wms/inventory/allocation', 
                 payload: simState.wms.ink_lot 
@@ -166,7 +166,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 2. ERP Releases Work Order
         () => {
-            logger.info("[ManuCHEM] ERP releasing Work Order WO-PEM-2026");
+            logger.info("[HyDroChem-AG] ERP releasing Work Order WO-PEM-2026");
             simState.erp.workOrder.status = "RELEASED";
             return { 
                 topic: 'frankfurt/erp/workorder/WO-PEM-2026/status', 
@@ -175,7 +175,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 3. MES starts Production on Line 2
         () => {
-            logger.info("[ManuCHEM] MES starting Coating Line 2");
+            logger.info("[HyDroChem-AG] MES starting Coating Line 2");
             simState.mes.coating_line_2.status = "RUNNING";
             simState.mes.coating_line_2.active_wo = "WO-PEM-2026";
             
@@ -192,7 +192,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 4. THE INCIDENT: Micro Grid Sag (150ms)
         () => {
-            logger.warn("[ManuCHEM] INJECTING GRID ANOMALY: Voltage Sag");
+            logger.warn("[HyDroChem-AG] INJECTING GRID ANOMALY: Voltage Sag");
             simState.grid_status = 'sag';
             return { 
                 topic: 'frankfurt/external/hessen_grid/alerts', 
@@ -201,7 +201,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 5. SCADA Alarm Triggered & Acknowledged by Operator
         () => {
-            logger.warn("[ManuCHEM] Operator acknowledges SCADA warning but ignores it.");
+            logger.warn("[HyDroChem-AG] Operator acknowledges SCADA warning but ignores it.");
             simState.grid_status = 'nominal'; // Grid recovered instantly
             return {
                 topic: 'frankfurt/ot/scada/alarms/line_2',
@@ -217,7 +217,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 6. Production continues, unaware of the latent defect
         () => {
-            logger.info("[ManuCHEM] Line 2 running... (Latent defect created on web)");
+            logger.info("[HyDroChem-AG] Line 2 running... (Latent defect created on web)");
             return { 
                 topic: 'frankfurt/mes/operations/line_2/heartbeat', 
                 payload: { status: "RUNNING", output_meters: 400, target: 500 } 
@@ -225,7 +225,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 7. LIMS Note Added (The Red Herring)
         () => {
-            logger.info("[ManuCHEM] Quality Manager adds LIMS note regarding ink lot.");
+            logger.info("[HyDroChem-AG] Quality Manager adds LIMS note regarding ink lot.");
             simState.lims.latest_note = "Suspect dispersion issue with new Platinum-Iridium catalyst ink batch (Lot #PTIR-992) introduced this morning.";
             return {
                 topic: 'frankfurt/lims/lab_notes/WO-PEM-2026',
@@ -234,7 +234,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 8. MES finishes Production
         () => {
-            logger.info("[ManuCHEM] MES completing Work Order");
+            logger.info("[HyDroChem-AG] MES completing Work Order");
             simState.mes.coating_line_2.status = "IDLE";
             simState.mes.coating_line_2.active_wo = null;
             simState.ot.drying_oven.status = "IDLE";
@@ -246,7 +246,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 9. QMS AOI Inspection (Fails)
         () => {
-            logger.error("[ManuCHEM] QMS AOI Inspection FAILED due to micro-fissures.");
+            logger.error("[HyDroChem-AG] QMS AOI Inspection FAILED due to micro-fissures.");
             simState.qms.inspection_status = "COMPLETED";
             simState.qms.micro_fissure_rate = 15.4; // Spiked
             simState.qms.catalyst_loading_uniformity = 88.2; 
@@ -263,7 +263,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         },
         // 10. ERP Quarantines the Batch
         () => {
-            logger.error("[ManuCHEM] ERP Quarantining Batch WO-PEM-2026");
+            logger.error("[HyDroChem-AG] ERP Quarantining Batch WO-PEM-2026");
             simState.erp.workOrder.status = "QUARANTINED";
             simState.erp.workOrder.batch_quality = "REJECTED";
             return { 
@@ -277,7 +277,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     function start() {
         if (narrativeInterval) return; 
 
-        logger.info(`[ManuCHEM] Starting NARRATIVE loop. Publishing every ${NARRATIVE_INTERVAL_MS / 1000}s.`);
+        logger.info(`[HyDroChem-AG] Starting NARRATIVE loop. Publishing every ${NARRATIVE_INTERVAL_MS / 1000}s.`);
         narrativeInterval = setInterval(() => {
             let msg = null;
             do {
@@ -290,7 +290,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         }, NARRATIVE_INTERVAL_MS);
 
         if (sensorInterval) clearInterval(sensorInterval);
-        logger.info(`[ManuCHEM] Starting SENSOR loop. Publishing every ${SENSOR_INTERVAL_MS / 1000}s.`);
+        logger.info(`[HyDroChem-AG] Starting SENSOR loop. Publishing every ${SENSOR_INTERVAL_MS / 1000}s.`);
         sensorInterval = setInterval(publishSensorData, SENSOR_INTERVAL_MS);
         publishSensorData(); 
     }
@@ -298,13 +298,13 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
     function stop() {
         let stopped = false;
         if (narrativeInterval) {
-            logger.info("[ManuCHEM] Stopping narrative loop.");
+            logger.info("[HyDroChem-AG] Stopping narrative loop.");
             clearInterval(narrativeInterval);
             narrativeInterval = null;
             stopped = true;
         }
         if (sensorInterval) {
-            logger.info("[ManuCHEM] Stopping sensor loop.");
+            logger.info("[HyDroChem-AG] Stopping sensor loop.");
             clearInterval(sensorInterval);
             sensorInterval = null;
             stopped = true;
@@ -317,7 +317,7 @@ module.exports = (logger, publish, isSparkplugEnabled) => {
         simState.qms.inspection_status = "IDLE";
         simState.mes.coating_line_2.status = "IDLE";
         
-        logger.info("[ManuCHEM] Simulator stopped and reset.");
+        logger.info("[HyDroChem-AG] Simulator stopped and reset.");
         return stopped;
     }
 

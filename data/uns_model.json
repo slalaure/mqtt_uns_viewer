@@ -5,63 +5,120 @@
       "displayName": "I3X Core"
     },
     {
-      "uri": "https://factory.local/models",
-      "displayName": "Factory Models"
+      "uri": "https://galactic-empire.mil/uns",
+      "displayName": "Galactic Empire UNS"
+    },
+    {
+      "uri": "https://hydrochem-ag.com/uns",
+      "displayName": "HyDroChem-AG Industrial UNS"
+    },
+    {
+      "uri": "https://ratp.fr/uns",
+      "displayName": "RATP Paris Métro UNS"
+    },
+    {
+      "uri": "https://stark-industries.com/uns",
+      "displayName": "Stark Industries UNS"
     }
   ],
   "objectTypes": [
     {
-      "elementId": "SiteType",
-      "displayName": "Production Site",
-      "namespaceUri": "https://factory.local/models",
+      "elementId": "Organization",
+      "displayName": "Organization",
+      "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
-        "description": "A physical manufacturing site."
+        "properties": {
+          "name": { "type": "string" },
+          "headquarters": { "type": "string" }
+        }
       }
     },
     {
-      "elementId": "LineType",
-      "displayName": "Production Line",
-      "namespaceUri": "https://factory.local/models",
+      "elementId": "Site",
+      "displayName": "Physical Site",
+      "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
-        "description": "A continuous production line."
+        "properties": {
+          "location": { "type": "string" },
+          "site_type": { "type": "string", "enum": ["Manufacturing", "R&D", "Logistics", "Transit"] }
+        }
       }
     },
     {
-      "elementId": "MachineType",
-      "displayName": "Machine Asset",
-      "namespaceUri": "https://factory.local/models",
+      "elementId": "Area",
+      "displayName": "Production Area",
+      "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
-        "description": "A specific piece of equipment."
+        "properties": {
+          "status": { "type": "string" },
+          "supervisor": { "type": "string" }
+        }
       }
     },
     {
-      "elementId": "SiloType",
-      "displayName": "Storage Silo",
-      "namespaceUri": "https://factory.local/models",
+      "elementId": "Equipment",
+      "displayName": "General Equipment",
+      "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
-        "description": "A container for raw material storage."
+        "properties": {
+          "model": { "type": "string" },
+          "serial_number": { "type": "string" },
+          "status": { "type": "string" }
+        }
       }
     },
     {
-      "elementId": "MixerType",
-      "displayName": "Industrial Mixer",
-      "namespaceUri": "https://factory.local/models",
+      "elementId": "TransportLine",
+      "displayName": "Transit Line",
+      "namespaceUri": "https://ratp.fr/uns",
       "schema": {
         "type": "object",
-        "description": "Equipment for blending materials."
+        "properties": {
+          "line_number": { "type": "string" },
+          "status": { "type": "string" },
+          "message": { "type": "string" }
+        }
       }
     },
     {
-      "elementId": "SensorType",
-      "displayName": "Telemetry Sensor",
-      "namespaceUri": "https://factory.local/models",
+      "elementId": "MetroTrain",
+      "displayName": "Metro Trainset",
+      "namespaceUri": "https://ratp.fr/uns",
       "schema": {
-        "type": "number",
-        "description": "A raw sensor data point."
+        "type": "object",
+        "properties": {
+          "train_id": { "type": "string" },
+          "line": { "type": "string" },
+          "passengers": { "type": "number" },
+          "capacity": { "type": "number" },
+          "occupancy_percent": { "type": "number" },
+          "speed": { "type": "number" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    {
+      "elementId": "MetroStation",
+      "displayName": "Metro Station",
+      "namespaceUri": "https://ratp.fr/uns",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "station_id": { "type": "string" },
+          "passengers": { "type": "number" },
+          "capacity": { "type": "number" },
+          "air_quality": {
+            "type": "object",
+            "properties": {
+              "co2": { "type": "number" },
+              "pm2_5": { "type": "number" }
+            }
+          }
+        }
       }
     }
   ],
@@ -91,83 +148,146 @@
       "reverseOf": "HasComponent"
     },
     {
-      "elementId": "SuppliesTo",
-      "displayName": "Supplies Material To",
-      "namespaceUri": "https://factory.local/models",
-      "reverseOf": "SuppliedBy"
+      "elementId": "Monitors",
+      "displayName": "Monitors",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "MonitoredBy"
     },
     {
-      "elementId": "SuppliedBy",
-      "displayName": "Is Supplied By",
-      "namespaceUri": "https://factory.local/models",
-      "reverseOf": "SuppliesTo"
+      "elementId": "Supplies",
+      "displayName": "Supplies",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "SuppliedBy"
     }
   ],
   "instances": [
     {
-      "elementId": "Site_Paris",
-      "displayName": "Usine Paris",
-      "typeId": "SiteType",
+      "elementId": "Galactic_Empire",
+      "displayName": "Galactic Empire",
+      "typeId": "Organization",
       "parentId": "/",
       "isComposition": true,
-      "namespaceUri": "https://factory.local/models"
+      "namespaceUri": "https://galactic-empire.mil/uns"
     },
     {
-      "elementId": "Line_1",
-      "displayName": "Ligne Assemblage 1",
-      "typeId": "LineType",
-      "parentId": "Site_Paris",
+      "elementId": "Death_Star_01",
+      "displayName": "Death Star I",
+      "typeId": "Site",
+      "parentId": "Galactic_Empire",
       "isComposition": true,
-      "namespaceUri": "https://factory.local/models"
+      "namespaceUri": "https://galactic-empire.mil/uns"
     },
     {
-      "elementId": "Silo_Farine_01",
-      "displayName": "Silo à Farine A",
-      "typeId": "SiloType",
-      "parentId": "Line_1",
-      "isComposition": false,
-      "namespaceUri": "https://factory.local/models",
-      "topic_mapping": "factory/paris/line1/silo1/level",
-      "relationships": {
-        "SuppliesTo": "Mixer_Central_01"
-      }
-    },
-    {
-      "elementId": "Mixer_Central_01",
-      "displayName": "Mélangeur Principal",
-      "typeId": "MixerType",
-      "parentId": "Line_1",
+      "elementId": "Superlaser",
+      "displayName": "Kyber Superlaser",
+      "typeId": "Equipment",
+      "parentId": "Death_Star_01",
       "isComposition": true,
-      "namespaceUri": "https://factory.local/models",
-      "relationships": {
-        "SuppliedBy": "Silo_Farine_01"
-      }
+      "namespaceUri": "https://galactic-empire.mil/uns",
+      "topic_mapping": "galactic_empire/death_star/weapon_systems/superlaser/charge"
     },
     {
-      "elementId": "Mixer_Temp",
-      "displayName": "Température Mélangeur",
-      "typeId": "SensorType",
-      "parentId": "Mixer_Central_01",
-      "isComposition": false,
-      "namespaceUri": "https://factory.local/models",
-      "topic_mapping": "factory/paris/line1/mixer1/temp"
-    },
-    {
-      "elementId": "Robot_Soudure",
-      "displayName": "Robot de Soudure A",
-      "typeId": "MachineType",
-      "parentId": "Line_1",
+      "elementId": "Main_Reactor",
+      "displayName": "Hypermatter Reactor",
+      "typeId": "Equipment",
+      "parentId": "Death_Star_01",
       "isComposition": true,
-      "namespaceUri": "https://factory.local/models"
+      "namespaceUri": "https://galactic-empire.mil/uns",
+      "topic_mapping": "galactic_empire/death_star/power_systems/main_reactor/output"
     },
     {
-      "elementId": "Robot_Temp",
-      "displayName": "Capteur Température Robot",
-      "typeId": "SensorType",
-      "parentId": "Robot_Soudure",
-      "isComposition": false,
-      "namespaceUri": "https://factory.local/models",
-      "topic_mapping": "factory/paris/line1/robot/temp"
+      "elementId": "HyDroChem_AG",
+      "displayName": "HyDroChem-AG",
+      "typeId": "Organization",
+      "parentId": "/",
+      "isComposition": true,
+      "namespaceUri": "https://hydrochem-ag.com/uns"
+    },
+    {
+      "elementId": "Frankfurt_Plant",
+      "displayName": "Frankfurt Industriepark",
+      "typeId": "Site",
+      "parentId": "HyDroChem_AG",
+      "isComposition": true,
+      "namespaceUri": "https://hydrochem-ag.com/uns"
+    },
+    {
+      "elementId": "Coating_Line_2",
+      "displayName": "PEM Coating Line 02",
+      "typeId": "Area",
+      "parentId": "Frankfurt_Plant",
+      "isComposition": true,
+      "namespaceUri": "https://hydrochem-ag.com/uns",
+      "topic_mapping": "frankfurt/mes/operations/line_2/status"
+    },
+    {
+      "elementId": "Drying_Oven_L2",
+      "displayName": "Industrial Drying Oven",
+      "typeId": "Equipment",
+      "parentId": "Coating_Line_2",
+      "isComposition": true,
+      "namespaceUri": "https://hydrochem-ag.com/uns",
+      "topic_mapping": "frankfurt/ot/line_2/drying_oven/telemetry"
+    },
+    {
+      "elementId": "RATP_Network",
+      "displayName": "RATP Paris",
+      "typeId": "Organization",
+      "parentId": "/",
+      "isComposition": true,
+      "namespaceUri": "https://ratp.fr/uns"
+    },
+    {
+      "elementId": "Metro_Line_1",
+      "displayName": "Ligne 1",
+      "typeId": "TransportLine",
+      "parentId": "RATP_Network",
+      "isComposition": true,
+      "namespaceUri": "https://ratp.fr/uns",
+      "topic_mapping": "ratp/uns/line/1/status"
+    },
+    {
+      "elementId": "Train_MP05_05",
+      "displayName": "Train MP05-05",
+      "typeId": "MetroTrain",
+      "parentId": "Metro_Line_1",
+      "isComposition": true,
+      "namespaceUri": "https://ratp.fr/uns",
+      "topic_mapping": "ratp/uns/line/1/train/MP05-05/telemetry"
+    },
+    {
+      "elementId": "Stark_Industries",
+      "displayName": "Stark Industries",
+      "typeId": "Organization",
+      "parentId": "/",
+      "isComposition": true,
+      "namespaceUri": "https://stark-industries.com/uns"
+    },
+    {
+      "elementId": "Malibu_Facility",
+      "displayName": "Malibu R&D Center",
+      "typeId": "Site",
+      "parentId": "Stark_Industries",
+      "isComposition": true,
+      "namespaceUri": "https://stark-industries.com/uns"
+    },
+    {
+      "elementId": "Arc_Reactor_Feed",
+      "displayName": "Main Arc Reactor Feed",
+      "typeId": "Equipment",
+      "parentId": "Malibu_Facility",
+      "isComposition": true,
+      "namespaceUri": "https://stark-industries.com/uns",
+      "topic_mapping": "stark_industries/malibu_facility/bms/main_power_feed"
+    },
+    {
+      "elementId": "Robot_Arm_01",
+      "displayName": "Dum-E Robotic Arm",
+      "typeId": "Equipment",
+      "parentId": "Malibu_Facility",
+      "isComposition": true,
+      "namespaceUri": "https://stark-industries.com/uns",
+      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/robotic_arm_01/speed"
     }
   ],
   "legacy_concepts": []
