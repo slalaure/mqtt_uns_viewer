@@ -391,23 +391,13 @@ db = new duckdb.Database(dbFile, (err) => {
     if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
         userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
     }
-    // 4. Ensure tables exist
+    // 4. Ensure table exists
     db.exec(`
         CREATE TABLE IF NOT EXISTS mqtt_events (
             timestamp TIMESTAMPTZ,
             topic VARCHAR,
             payload JSON,
             broker_id VARCHAR
-        );
-        CREATE TABLE IF NOT EXISTS webhooks (
-            id VARCHAR PRIMARY KEY,
-            topic VARCHAR,
-            url VARCHAR,
-            method VARCHAR DEFAULT 'POST',
-            last_triggered TIMESTAMPTZ,
-            min_interval_ms INTEGER DEFAULT 1000,
-            active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
     `, (createErr) => {
         if (createErr) {

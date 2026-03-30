@@ -18,7 +18,26 @@ class WebhookManager {
     init(db, logger) {
         this.db = db;
         this.logger = logger.child({ component: 'WebhookManager' });
-        this.loadWebhooks();
+
+        // Ensure table exists before loading
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id VARCHAR PRIMARY KEY,
+                topic VARCHAR,
+                url VARCHAR,
+                method VARCHAR DEFAULT 'POST',
+                last_triggered TIMESTAMPTZ,
+                min_interval_ms INTEGER DEFAULT 1000,
+                active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+        `, (err) => {
+            if (err) {
+                this.logger.error({ err }, "Failed to ensure webhooks table exists");
+                return;
+            }
+            this.loadWebhooks();
+        });
     }
 
     async loadWebhooks() {
