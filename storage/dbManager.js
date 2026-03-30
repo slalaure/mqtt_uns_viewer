@@ -37,16 +37,31 @@ module.exports = (db, dbFile, dbWalFile, broadcast, logger, maxSizeMB, pruneChun
         });
     }
 
-    function pruneOldEvents(onComplete) {
+    function pruneOldEvents(statusData, onComplete) {
         setIsPruning(true);
         broadcast(JSON.stringify({ type: 'pruning-status', status: 'started' }));
-        logger.info(`✅    -> Pruning ${pruneChunkSize} oldest events...`);
+
+        // Adaptive multiplier: If we are significantly over the limit, prune more aggressively
+        let multiplier = 1;
+        if (maxSizeMB && statusData.dbSizeMB > maxSizeMB) {
+            const overLimitRatio = statusData.dbSizeMB / maxSizeMB;
+            if (overLimitRatio > 2.0) multiplier = 20;      // 2x over limit -> delete 10,000 rows
+            else if (overLimitRatio > 1.5) multiplier = 10; // 1.5x over limit -> delete 5,000 rows
+            else if (overLimitRatio > 1.2) multiplier = 5;  // 1.2x over limit -> delete 2,500 rows
+            else if (overLimitRatio > 1.1) multiplier = 2;  // 1.1x over limit -> delete 1,000 rows
+        }
+
+        const rowsToDelete = pruneChunkSize * multiplier;
+        logger.info(`✅    -> Database size (${statusData.dbSizeMB.toFixed(2)} MB) exceeds limit of ${maxSizeMB} MB.`);
+        logger.info(`✅    -> Pruning ${rowsToDelete} oldest events (Chunk: ${pruneChunkSize} x ${multiplier})...`);
+        
         const query = `DELETE FROM mqtt_events WHERE rowid IN (SELECT rowid FROM mqtt_events ORDER BY timestamp ASC LIMIT ?);`;
 
-        db.run(query, [pruneChunkSize], (err) => {
+        db.run(query, [rowsToDelete], (err) => {
             if (err) logger.error({ err }, "❌ Error during pruning:");
             logger.info("✅    -> Pruning complete. Reclaiming disk space...");
             
+            // Reclaim space and merge WAL
             db.exec("VACUUM; CHECKPOINT;", (err) => {
                 if (err) logger.error({ err }, "❌ Error during VACUUM/CHECKPOINT:");
                 else logger.info("✅    -> Space reclaimed.");
@@ -64,6 +79,8 @@ module.exports = (db, dbFile, dbWalFile, broadcast, logger, maxSizeMB, pruneChun
             return;
         }
 
+        // Perform a regular checkpoint to keep WAL file size under control
+        // and ensure on-disk size matches actual data volume.
         db.exec("CHECKPOINT;", (err) => {
             if (err) {
                 logger.error({ err }, "❌ Error during maintenance CHECKPOINT:");
@@ -73,8 +90,7 @@ module.exports = (db, dbFile, dbWalFile, broadcast, logger, maxSizeMB, pruneChun
                 broadcast(JSON.stringify(statusData));
 
                 if (maxSizeMB && statusData.dbSizeMB > maxSizeMB) {
-                    logger.warn(`Database size (${statusData.dbSizeMB.toFixed(2)} MB) exceeds limit of ${maxSizeMB} MB.`);
-                    pruneOldEvents(() => {
+                    pruneOldEvents(statusData, () => {
                         broadcastDbStatus(); // Update UI with new size after prune
                     });
                 }
