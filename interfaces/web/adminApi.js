@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const connectorManager = require('../../connectors/connectorManager');
+const webhookManager = require('../../core/webhookManager');
 
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
@@ -353,6 +354,46 @@ module.exports = (logger, db, dataManager, dataPath) => {
             logger.error({ err }, "[AdminAPI] Failed to start CSV Parser.");
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
             res.status(500).json({ error: `Failed to start parser: ${err.message}` });
+        }
+    });
+
+    // --- Webhook Management ---
+
+    router.get('/webhooks', async (req, res) => {
+        try {
+            const webhooks = await webhookManager.listAllWebhooks();
+            res.json(webhooks);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    router.post('/webhooks', async (req, res) => {
+        try {
+            const { topic, url, method, min_interval_ms } = req.body;
+            const id = `webhook-${Date.now()}`;
+            await webhookManager.addWebhook({ id, topic, url, method, min_interval_ms });
+            res.json({ success: true, id });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    router.delete('/webhooks/:id', async (req, res) => {
+        try {
+            await webhookManager.deleteWebhook(req.params.id);
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    router.post('/webhooks/clear', async (req, res) => {
+        try {
+            await webhookManager.clearAllWebhooks();
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
         }
     });
 

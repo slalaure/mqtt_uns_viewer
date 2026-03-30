@@ -5,6 +5,7 @@
     <button class="sub-tab-button" data-target="admin-assets-panel">🖼️ HMI Assets</button>
     <button class="sub-tab-button" data-target="admin-simulators-panel">🕹️ Simulators</button>
     <button class="sub-tab-button" data-target="admin-parsers-panel">📂 Data Parsers</button>
+    <button class="sub-tab-button" data-target="admin-webhooks-panel">🔗 Webhooks</button>
 </div>
 
 <div id="admin-users-panel" class="alerts-content-container active">
@@ -203,4 +204,54 @@
             </div>
         </div>
     </div>
-</div>
+    </div>
+
+    <div id="admin-webhooks-panel" class="alerts-content-container">
+    <div class="payload-header" style="margin-bottom: 15px;">
+        <div>
+            <h2 style="margin-bottom: 5px;">Webhooks Subscriptions</h2>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Register and manage HTTP callbacks for real-time events.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button id="btn-webhooks-refresh" class="mapper-button">Refresh List</button>
+            <button id="btn-webhooks-clear" class="danger-button">Clear All</button>
+        </div>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin-top:0;">Register New Webhook</h3>
+        <form id="webhook-register-form" style="display: flex; flex-direction: column; gap: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 15px;">
+                <div class="form-group" style="margin:0;">
+                    <label>Topic Pattern</label>
+                    <input type="text" id="webhook-topic" placeholder="factory/line1/#" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Webhook URL</label>
+                    <input type="url" id="webhook-url" placeholder="https://api.my-app.com/webhook" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Anti-flood (ms)</label>
+                    <input type="number" id="webhook-interval" value="1000" min="0" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+                </div>
+            </div>
+            <button type="submit" class="mapper-button button-primary" style="align-self: flex-start; padding: 10px 20px;">Add Webhook</button>
+        </form>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                <tr>
+                    <th style="padding: 10px; font-weight: 500;">ID</th>
+                    <th style="padding: 10px; font-weight: 500;">Topic Pattern</th>
+                    <th style="padding: 10px; font-weight: 500;">URL</th>
+                    <th style="padding: 10px; font-weight: 500;">Interval</th>
+                    <th style="padding: 10px; font-weight: 500;">Last Triggered</th>
+                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="admin-webhooks-table-body">
+                <tr><td colspan="6" style="text-align:center; padding:20px;">Loading webhooks...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    </div>

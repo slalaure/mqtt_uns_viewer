@@ -38,6 +38,10 @@ let btnUploadSim = null;
 let simUploadInput = null;
 let simUploadStatus = null;
 let btnSimRefresh = null;
+let webhooksTableBody = null;
+let webhookRegisterForm = null;
+let btnWebhooksRefresh = null;
+let btnWebhooksClear = null;
 let isViewInitialized = false;
 // --- Elements for HMI/Simulator Code Editor ---
 let adminAceEditor = null;
@@ -95,6 +99,7 @@ function initializeElements(container) {
             if (targetId === 'admin-alerts-panel') loadResolvedStats();
             if (targetId === 'admin-assets-panel') loadHmiAssets();
             if (targetId === 'admin-simulators-panel') loadSimulators();
+            if (targetId === 'admin-webhooks-panel') loadWebhooks();
             // Data parsers panel doesn't require immediate fetch on load currently
         });
     });
@@ -146,7 +151,22 @@ function initializeElements(container) {
         btnSimRefresh.addEventListener('click', loadSimulators);
     }
     
-    // 7. Data Parsers Logic (CSV)
+    // 7. Webhooks Logic
+    webhooksTableBody = document.getElementById('admin-webhooks-table-body');
+    webhookRegisterForm = document.getElementById('webhook-register-form');
+    btnWebhooksRefresh = document.getElementById('btn-webhooks-refresh');
+    btnWebhooksClear = document.getElementById('btn-webhooks-clear');
+    if (webhookRegisterForm) {
+        webhookRegisterForm.addEventListener('submit', onRegisterWebhook);
+    }
+    if (btnWebhooksRefresh) {
+        btnWebhooksRefresh.addEventListener('click', loadWebhooks);
+    }
+    if (btnWebhooksClear) {
+        btnWebhooksClear.addEventListener('click', onClearWebhooks);
+    }
+
+    // 8. Data Parsers Logic (CSV)
     const csvForm = document.getElementById('csv-parser-form');
     if (csvForm) {
         csvForm.addEventListener('submit', onStartCsvParser);
@@ -190,6 +210,8 @@ export function onAdminViewShow() {
         loadHmiAssets();
     } else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') {
         loadSimulators();
+    } else if (activeTab && activeTab.dataset.target === 'admin-webhooks-panel') {
+        loadWebhooks();
     } else if (activeTab && activeTab.dataset.target === 'admin-parsers-panel') {
         // Data parsers panel is active
     } else {
@@ -723,4 +745,100 @@ async function saveAssetEditor() {
         btnSave.textContent = originalText;
         btnSave.disabled = false;
     }
-}
+    }
+
+    // --- Webhooks Management Functions ---
+    async function loadWebhooks() {
+    if (!webhooksTableBody) return;
+    webhooksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading webhooks...</td></tr>';
+    try {
+        const res = await fetch('api/admin/webhooks');
+        if (!res.ok) throw new Error("Failed to fetch webhooks list.");
+        const webhooks = await res.json();
+        renderWebhooks(webhooks);
+    } catch (e) {
+        console.error("Webhooks Load Error:", e);
+        webhooksTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
+    }
+    }
+
+    function renderWebhooks(webhooks) {
+    webhooksTableBody.innerHTML = '';
+    if (webhooks.length === 0) {
+        webhooksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">No webhooks registered.</td></tr>';
+        return;
+    }
+    webhooks.forEach(w => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--color-border)';
+        const lastTriggered = w.last_triggered ? new Date(w.last_triggered).toLocaleString() : 'Never';
+        tr.innerHTML = `
+            <td style="padding: 10px; font-size: 0.8em; font-family: monospace;">${w.id}</td>
+            <td style="padding: 10px;"><code>${w.topic}</code></td>
+            <td style="padding: 10px;"><a href="${w.url}" target="_blank" style="color: var(--color-primary); font-size: 0.9em;">${w.url}</a></td>
+            <td style="padding: 10px;">${w.min_interval_ms}ms</td>
+            <td style="padding: 10px; font-size: 0.9em;">${lastTriggered}</td>
+            <td style="padding: 10px; text-align: right;">
+                <button class="tool-button button-danger btn-delete-webhook" data-id="${w.id}">Delete</button>
+            </td>
+        `;
+        webhooksTableBody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.btn-delete-webhook').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            deleteWebhook(id);
+        });
+    });
+    }
+
+    async function onRegisterWebhook(e) {
+    e.preventDefault();
+    const topic = document.getElementById('webhook-topic').value;
+    const url = document.getElementById('webhook-url').value;
+    const interval = document.getElementById('webhook-interval').value;
+
+    try {
+        const res = await fetch('api/admin/webhooks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, url, method: 'POST', min_interval_ms: parseInt(interval, 10) })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('webhook-register-form').reset();
+            loadWebhooks();
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch (e) {
+        alert("Request failed: " + e.message);
+    }
+    }
+
+    async function deleteWebhook(id) {
+    const isConfirmed = await confirmModal('Delete Webhook', `Are you sure you want to delete webhook ${id}?`, 'Delete', true);
+    if (!isConfirmed) return;
+    try {
+        const res = await fetch(`api/admin/webhooks/${id}`, { method: 'DELETE' });
+        if ((await res.json()).success) {
+            loadWebhooks();
+        }
+    } catch (e) {
+        alert("Delete failed: " + e.message);
+    }
+    }
+
+    async function onClearWebhooks() {
+    const isConfirmed = await confirmModal('Clear All Webhooks', '⚠️ Are you sure you want to delete ALL webhooks?', 'Clear All', true);
+    if (!isConfirmed) return;
+    try {
+        const res = await fetch('api/admin/webhooks/clear', { method: 'POST' });
+        if ((await res.json()).success) {
+            loadWebhooks();
+        }
+    } catch (e) {
+        alert("Clear failed: " + e.message);
+    }
+    }

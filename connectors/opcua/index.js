@@ -12,7 +12,7 @@ const {
     ClientMonitoredItem, 
     DataType 
 } = require("node-opcua");
-const BaseProvider = require('../base-provider');
+const BaseProvider = require('../baseProvider');
 
 class OpcUaProvider extends BaseProvider {
     constructor(config, context) {

@@ -9,7 +9,7 @@ const mqtt = require('mqtt');
 const fs = require('fs');
 const path = require('path');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); // Moved here!
-const BaseProvider = require('../base-provider');
+const BaseProvider = require('../baseProvider');
 
 class MqttProvider extends BaseProvider {
     constructor(config, context) {

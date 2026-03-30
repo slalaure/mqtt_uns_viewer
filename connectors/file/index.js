@@ -9,7 +9,7 @@
 const fs = require('fs');
 const readline = require('readline');
 const path = require('path');
-const BaseProvider = require('../base-provider');
+const BaseProvider = require('../baseProvider');
 
 class FileProvider extends BaseProvider {
     constructor(config, context) {
@@ -176,4 +176,29 @@ class FileProvider extends BaseProvider {
     }
 }
 
-module.exports = FileProvider;
+module.exports = FileProvider;etNodeId,
+            attributeId: AttributeIds.Value,
+            value: {
+                value: {
+                    dataType: dataType,
+                    value: parsedValue
+                }
+            }
+        };
+
+        this.session.write(nodeToWrite, (err, statusCode) => {
+            if (err) {
+                this.logger.error({ err, topic }, "Failed to write to OPC UA node.");
+                if (callback) callback(err);
+            } else if (statusCode.value !== 0) {
+                const error = new Error(`OPC UA Write failed with status: ${statusCode.name}`);
+                this.logger.error({ topic, status: statusCode.name }, "Failed to write to OPC UA node.");
+                if (callback) callback(error);
+            } else {
+                if (callback) callback(null);
+            }
+        });
+    }
+}
+
+module.exports = OpcUaProvider;

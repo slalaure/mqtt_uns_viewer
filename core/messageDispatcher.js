@@ -161,6 +161,10 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             alertManager.processMessage(providerId, topic, payloadObjectForMapper);
         }
 
+        // --- 6. [NEW] Webhook Execution ---
+        const webhookManager = require('./webhookManager');
+        webhookManager.trigger(topic, payloadObjectForMapper);
+
     } catch (err) {
         handlerLogger.error({ msg: `❌ UNEXPECTED ERROR processing topic ${topic}`, error_message: err.message });
     }
