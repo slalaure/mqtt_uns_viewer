@@ -23,16 +23,14 @@ module.exports = (logger) => {
     router.post('/login', (req, res, next) => {
         passport.authenticate('local', (err, user, info) => {
             if (err) {
-                logger.error({ err }, "Auth Error during local login");
-                return res.status(500).json({ error: "Internal Server Error" });
+                return next(err);
             }
             if (!user) {
                 return res.status(401).json({ error: info.message || "Authentication failed" });
             }
             req.logIn(user, (err) => {
                 if (err) {
-                    logger.error({ err }, "Login Session Error");
-                    return res.status(500).json({ error: "Failed to create session" });
+                    return next(err);
                 }
                 logger.info(`User logged in: ${user.username || user.email}`);
                 return res.json({ 
@@ -49,7 +47,7 @@ module.exports = (logger) => {
     });
 
     // --- [NEW] Registration Route ---
-    router.post('/register', async (req, res) => {
+    router.post('/register', async (req, res, next) => {
         const { username, password } = req.body;
         
         if (!username || !password || password.length < 6) {
@@ -62,16 +60,15 @@ module.exports = (logger) => {
             
             // Automatically log in after registration
             req.logIn(user, (err) => {
-                if (err) return res.status(500).json({ error: "Registration successful, but auto-login failed." });
+                if (err) return next(err);
                 res.json({ success: true, user: { id: user.id, username: user.username } });
             });
         } catch (err) {
-            logger.warn({ err }, "Registration failed");
             // Check for specific "Already exists" error from userManager
             if (err.message.includes('exists')) {
                 return res.status(409).json({ error: "Username already taken." });
             }
-            res.status(500).json({ error: "Registration failed." });
+            next(err);
         }
     });
 

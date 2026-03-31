@@ -24,6 +24,7 @@ let config = null;
 let pool = null;
 let isConnected = false;
 let isConnecting = false;
+let dlqManager = null;
 
 let timescaleWriteQueue = []; // Queue for batch inserts
 let timescaleBatchTimer = null; // Timer for batch processor
@@ -32,10 +33,12 @@ let timescaleBatchTimer = null; // Timer for batch processor
  * Initializes the TimescaleDB repository.
  * @param {pino.Logger} appLogger
  * @param {object} appConfig
+ * @param {object} appDlqManager
  */
-async function init(appLogger, appConfig) {
+async function init(appLogger, appConfig, appDlqManager) {
     logger = appLogger.child({ component: 'TimescaleRepo' });
     config = appConfig;
+    dlqManager = appDlqManager;
 
     logger.info("Initializing TimescaleDB repository...");
     await connect();
@@ -91,13 +94,14 @@ async function connect() {
 async function createTableIfNotExists(client) {
     const tableName = config.PG_TABLE_NAME || 'mqtt_events';
     
-    // 1. Create standard table  - Add broker_id
+    // 1. Create standard table  - Add broker_id and correlation_id
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS ${tableName} (
             timestamp TIMESTAMPTZ NOT NULL,
             topic     VARCHAR NOT NULL,
             payload   JSONB,
-            broker_id VARCHAR
+            broker_id VARCHAR,
+            correlation_id VARCHAR
         );
     `;
     
@@ -155,15 +159,15 @@ function formatBatchForInsert(batch, tableName) {
     const values = [];
     let paramIndex = 1;
     
-    //  Add brokerId to the insert
+    //  Add brokerId and correlationId to the insert
     const placeholders = batch.map(msg => {
-        values.push(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.brokerId);
-        const p = `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3})`;
-        paramIndex += 4;
+        values.push(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.brokerId, msg.correlationId || null);
+        const p = `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`;
+        paramIndex += 5;
         return p;
     }).join(',');
 
-    const query = `INSERT INTO ${tableName} (timestamp, topic, payload, broker_id) VALUES ${placeholders}`;
+    const query = `INSERT INTO ${tableName} (timestamp, topic, payload, broker_id, correlation_id) VALUES ${placeholders}`;
     return { query, values };
 }
 
@@ -192,14 +196,18 @@ async function processTimescaleQueue() {
         await pool.query(query, values);
         logger.info(`✅ 🐘 Batch inserted ${batch.length} messages into TimescaleDB. (Queue: ${timescaleWriteQueue.length})`);
     } catch (err) {
-        logger.error({ err }, `❌ TimescaleDB batch insert failed. Re-queuing ${batch.length} messages.`);
-        // Add the failed batch back to the *front* of the queue
-        timescaleWriteQueue.unshift(...batch);
+        // [NEW] Distinguish between transient connection errors and non-recoverable errors
+        const isTransient = err.code && (err.code.startsWith('08') || err.code.startsWith('57') || err.code === 'ECONNRESET');
         
-        // Handle connection errors
-        if (err.code === 'ECONNRESET' || err.code === '57P01') { // 57P01 = admin shutdown
-            logger.warn("TimescaleDB connection lost. Setting status to disconnected.");
+        if (isTransient) {
+            logger.error({ err: err.message, code: err.code }, `❌ TimescaleDB batch insert failed (Transient). Re-queuing ${batch.length} messages.`);
+            timescaleWriteQueue.unshift(...batch);
             isConnected = false;
+        } else {
+            logger.error({ err: err.message, code: err.code }, `❌ TimescaleDB batch insert failed (Non-recoverable). Sending ${batch.length} messages to DLQ.`);
+            if (dlqManager) {
+                dlqManager.push(batch);
+            }
         }
     }
 }

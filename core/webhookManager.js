@@ -104,7 +104,7 @@ class WebhookManager {
         });
     }
 
-    trigger(topic, payload) {
+    trigger(topic, payload, correlationId = null) {
         const now = Date.now();
         
         for (const webhook of this.webhooks) {
@@ -117,13 +117,13 @@ class WebhookManager {
                 }
 
                 this.lastTriggered.set(webhook.id, now);
-                this.executeWebhook(webhook, topic, payload);
+                this.executeWebhook(webhook, topic, payload, correlationId);
             }
         }
     }
 
-    async executeWebhook(webhook, topic, payload) {
-        this.logger.debug(`Executing webhook ${webhook.id} for topic ${topic} -> ${webhook.url}`);
+    async executeWebhook(webhook, topic, payload, correlationId = null) {
+        this.logger.debug({ webhookId: webhook.id, topic, correlationId }, `Executing webhook`);
         
         try {
             const response = await axios({
@@ -133,18 +133,19 @@ class WebhookManager {
                     topic,
                     payload,
                     timestamp: new Date().toISOString(),
-                    webhookId: webhook.id
+                    webhookId: webhook.id,
+                    correlationId // [NEW] Propagate trace ID to 3rd party systems
                 },
                 timeout: 5000
             });
             
-            this.logger.debug(`Webhook ${webhook.id} responded with status ${response.status}`);
+            this.logger.debug({ webhookId: webhook.id, status: response.status, correlationId }, `Webhook executed successfully`);
             
             // Update last_triggered in DB (async, don't wait)
             this.db.run("UPDATE webhooks SET last_triggered = CURRENT_TIMESTAMP WHERE id = ?", [webhook.id]);
             
         } catch (err) {
-            this.logger.warn({ err: err.message, url: webhook.url }, `Webhook ${webhook.id} failed`);
+            this.logger.warn({ err: err.message, url: webhook.url, correlationId }, `Webhook ${webhook.id} failed`);
         }
     }
 }

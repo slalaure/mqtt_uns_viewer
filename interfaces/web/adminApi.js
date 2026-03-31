@@ -14,6 +14,7 @@
  */
 const express = require('express');
 const userManager = require('../../storage/userManager');
+const dlqManager = require('../../storage/dlqManager');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -129,18 +130,17 @@ module.exports = (logger, db, dataManager, dataPath) => {
     router.use(requireAdmin);
 
     // --- List All Users ---
-    router.get('/users', async (req, res) => {
+    router.get('/users', async (req, res, next) => {
         try {
             const users = await userManager.getAllUsers();
             res.json(users);
         } catch (err) {
-            logger.error({ err }, "Failed to list users");
-            res.status(500).json({ error: "Internal Server Error" });
+            next(err);
         }
     });
 
     // --- Delete User ---
-    router.delete('/users/:id', async (req, res) => {
+    router.delete('/users/:id', async (req, res, next) => {
         const userIdToDelete = req.params.id;
 
         // Prevent self-deletion
@@ -153,14 +153,13 @@ module.exports = (logger, db, dataManager, dataPath) => {
             logger.info(`[AdminAPI] User ${userIdToDelete} deleted by admin ${req.user.username}`);
             res.json({ success: true, message: "User and associated data deleted." });
         } catch (err) {
-            logger.error({ err }, "Failed to delete user");
-            res.status(500).json({ error: "Failed to delete user." });
+            next(err);
         }
     });
 
     // --- Database Maintenance ---
 
-    router.post('/import-db', uploadJson.single('db_import'), async (req, res) => {
+    router.post('/import-db', uploadJson.single('db_import'), async (req, res, next) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No JSON file uploaded.' });
         }
@@ -202,21 +201,19 @@ module.exports = (logger, db, dataManager, dataPath) => {
             res.json({ success: true, message: `Successfully queued ${count} entries for import.` });
 
         } catch (err) {
-            logger.error({ err }, "[AdminAPI] Import failed.");
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
-            res.status(500).json({ error: `Import failed: ${err.message}` });
+            next(err);
         }
     });
 
-    router.post('/reset-db', (req, res) => {
+    router.post('/reset-db', (req, res, next) => {
         if (!db) return res.status(503).json({ error: "Database not available." });
         logger.warn(`⚠️ [AdminAPI] Admin ${req.user.username} initiated full DB RESET.`);
 
         db.serialize(() => {
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
-                    logger.error({ err }, "Failed to truncate mqtt_events");
-                    return res.status(500).json({ error: "Failed to clear database." });
+                    return next(err);
                 }
 
                 db.run("VACUUM;", (vacErr) => {
@@ -228,9 +225,52 @@ module.exports = (logger, db, dataManager, dataPath) => {
         });
     });
 
+    // --- DLQ Management ---
+
+    router.get('/dlq/status', (req, res, next) => {
+        try {
+            const messages = dlqManager.getMessages();
+            res.json({ count: messages.length });
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    router.post('/dlq/replay', async (req, res, next) => {
+        try {
+            const messages = dlqManager.getMessages();
+            
+            if (messages.length === 0) {
+                return res.json({ success: true, message: "DLQ is empty, nothing to replay." });
+            }
+
+            logger.info(`[AdminAPI] Replaying ${messages.length} messages from DLQ...`);
+
+            for (const msg of messages) {
+                dataManager.insertMessage(msg);
+            }
+
+            dlqManager.clear();
+            logger.info(`[AdminAPI] Successfully replayed ${messages.length} messages and cleared DLQ.`);
+            res.json({ success: true, message: `Successfully replayed ${messages.length} messages.` });
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    router.post('/dlq/clear', (req, res, next) => {
+        try {
+            dlqManager.clear();
+            logger.info("[AdminAPI] DLQ cleared by admin.");
+            res.json({ success: true, message: "DLQ cleared successfully." });
+        } catch (err) {
+            next(err);
+        }
+    });
+
     // --- HMI Assets Management ---
 
-    router.get('/hmi-assets', (req, res) => {
+    router.get('/hmi-assets', (req, res, next) => {
         try {
             if (!fs.existsSync(dataPath)) return res.json([]);
             // Filter out simulator files
@@ -243,12 +283,11 @@ module.exports = (logger, db, dataManager, dataPath) => {
             fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
             res.json(fileStats);
         } catch (err) {
-            logger.error({ err }, "Failed to list HMI assets");
-            res.status(500).json({ error: "Failed to list assets." });
+            next(err);
         }
     });
 
-    router.post('/hmi-assets', uploadHmi.array('assets', 20), (req, res) => {
+    router.post('/hmi-assets', uploadHmi.array('assets', 20), (req, res, next) => {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'No valid files uploaded.' });
         }
@@ -257,7 +296,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} assets.`, files: fileNames });
     });
 
-    router.delete('/hmi-assets/:filename', (req, res) => {
+    router.delete('/hmi-assets/:filename', (req, res, next) => {
         const filename = path.basename(req.params.filename);
         const filepath = path.join(dataPath, filename);
 
@@ -270,13 +309,13 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 res.status(404).json({ error: "Asset not found." });
             }
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // --- [UPDATED] Simulators Management ---
 
-    router.get('/simulators', (req, res) => {
+    router.get('/simulators', (req, res, next) => {
         try {
             if (!fs.existsSync(simulatorsPath)) return res.json([]);
             // Scans the simulators subfolder
@@ -288,12 +327,11 @@ module.exports = (logger, db, dataManager, dataPath) => {
             fileStats.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
             res.json(fileStats);
         } catch (err) {
-            logger.error({ err }, "Failed to list simulators");
-            res.status(500).json({ error: "Failed to list simulators." });
+            next(err);
         }
     });
 
-    router.post('/simulators', uploadSimulator.array('assets', 20), (req, res) => {
+    router.post('/simulators', uploadSimulator.array('assets', 20), (req, res, next) => {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'No valid simulator files uploaded.' });
         }
@@ -302,7 +340,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} simulators. Restart server to activate.`, files: fileNames });
     });
 
-    router.delete('/simulators/:filename', (req, res) => {
+    router.delete('/simulators/:filename', (req, res, next) => {
         const filename = path.basename(req.params.filename);
         const filepath = path.join(simulatorsPath, filename); // Correctly points to simulators folder
 
@@ -315,13 +353,12 @@ module.exports = (logger, db, dataManager, dataPath) => {
                 res.status(404).json({ error: "Simulator not found." });
             }
         } catch (err) {
-            logger.error({ err }, `Failed to delete Simulator: ${filename}`);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // --- [NEW] Data Parsers Management (CSV) ---
-    router.post('/data-parsers/csv', uploadCsv.single('csv_file'), async (req, res) => {
+    router.post('/data-parsers/csv', uploadCsv.single('csv_file'), async (req, res, next) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No CSV file uploaded.' });
         }
@@ -351,49 +388,48 @@ module.exports = (logger, db, dataManager, dataPath) => {
             });
 
         } catch (err) {
-            logger.error({ err }, "[AdminAPI] Failed to start CSV Parser.");
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
-            res.status(500).json({ error: `Failed to start parser: ${err.message}` });
+            next(err);
         }
     });
 
     // --- Webhook Management ---
 
-    router.get('/webhooks', async (req, res) => {
+    router.get('/webhooks', async (req, res, next) => {
         try {
             const webhooks = await webhookManager.listAllWebhooks();
             res.json(webhooks);
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
-    router.post('/webhooks', async (req, res) => {
+    router.post('/webhooks', async (req, res, next) => {
         try {
             const { topic, url, method, min_interval_ms } = req.body;
             const id = `webhook-${Date.now()}`;
             await webhookManager.addWebhook({ id, topic, url, method, min_interval_ms });
             res.json({ success: true, id });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
-    router.delete('/webhooks/:id', async (req, res) => {
+    router.delete('/webhooks/:id', async (req, res, next) => {
         try {
             await webhookManager.deleteWebhook(req.params.id);
             res.json({ success: true });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
-    router.post('/webhooks/clear', async (req, res) => {
+    router.post('/webhooks/clear', async (req, res, next) => {
         try {
             await webhookManager.clearAllWebhooks();
             res.json({ success: true });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 

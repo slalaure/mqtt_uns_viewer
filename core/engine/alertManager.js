@@ -79,6 +79,7 @@ function init(database, appLogger, config, appBroadcaster) {
             status VARCHAR,
             analysis_result VARCHAR,
             handled_by VARCHAR,
+            correlation_id VARCHAR,
             created_at TIMESTAMPTZ,
             updated_at TIMESTAMPTZ
         );
@@ -96,6 +97,10 @@ function init(database, appLogger, config, appBroadcaster) {
                     if (!columns.some(col => col.name === 'analysis_result')) {
                         logger.warn("⚠️ Migrating 'active_alerts': Adding 'analysis_result' column...");
                         db.run("ALTER TABLE active_alerts ADD COLUMN analysis_result VARCHAR;");
+                    }
+                    if (!columns.some(col => col.name === 'correlation_id')) {
+                        logger.warn("⚠️ Migrating 'active_alerts': Adding 'correlation_id' column...");
+                        db.run("ALTER TABLE active_alerts ADD COLUMN correlation_id VARCHAR;");
                     }
                 }
             });
@@ -249,7 +254,7 @@ function purgeResolvedAlerts() {
         });
     });
 }
-async function processMessage(brokerId, topic, payload) {
+async function processMessage(brokerId, topic, payload, correlationId = null) {
     if (!db) return;
     db.all("SELECT * FROM alert_rules WHERE enabled = true", async (err, rules) => {
         if (err || !rules || rules.length === 0) return;
@@ -257,7 +262,7 @@ async function processMessage(brokerId, topic, payload) {
             const regex = new RegExp("^" + rule.topic_pattern.replace(/\+/g, '[^/]+').replace(/#/g, '.*') + "$");
             if (regex.test(topic)) {
                 try {
-                    const msgContext = { topic, brokerId, payload };
+                    const msgContext = { topic, brokerId, payload, correlationId };
                     const context = vm.createContext(createSandbox(msgContext));
                     const wrappedCode = `(async () => { ${rule.condition_code} })()`;
                     const script = new vm.Script(wrappedCode);
@@ -282,17 +287,17 @@ function triggerAlert(rule, msgContext) {
         const now = new Date().toISOString();
         const triggerVal = JSON.stringify(msgContext.payload).substring(0, 200);
         const insertQuery = `
-            INSERT INTO active_alerts (id, rule_id, topic, broker_id, trigger_value, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'new', ?, ?)
+            INSERT INTO active_alerts (id, rule_id, topic, broker_id, trigger_value, status, correlation_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?)
         `;
-        db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, now, now, (insErr) => {
-            if (insErr) return logger.error({ err: insErr }, "Failed to persist alert.");
-            logger.info(`🚨 New Alert Triggered: ${rule.name} on ${msgContext.topic}`);
+        db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, msgContext.correlationId || null, now, now, (insErr) => {
+            if (insErr) return logger.error({ err: insErr, correlationId: msgContext.correlationId }, "Failed to persist alert.");
+            logger.info({ msg: `🚨 New Alert Triggered: ${rule.name} on ${msgContext.topic}`, correlationId: msgContext.correlationId });
             if (broadcaster) {
                 broadcaster(JSON.stringify({
                     type: 'alert-triggered',
                     alert: {
-                        id: alertId, ruleName: rule.name, topic: msgContext.topic, severity: rule.severity, timestamp: now
+                        id: alertId, ruleName: rule.name, topic: msgContext.topic, severity: rule.severity, timestamp: now, correlationId: msgContext.correlationId
                     }
                 }));
             }
@@ -302,9 +307,11 @@ function triggerAlert(rule, msgContext) {
 }
 async function executeWorkflow(alertId, rule, msgContext) {
     let finalAnalysis = "No analysis performed.";
+    const correlationId = msgContext.correlationId;
+
     // 1. Execute LLM Analysis (if agent configured)
     if (rule.workflow_prompt && agentRunner) {
-        if (logger) logger.info(`[AlertWorkflow] Starting AI Analysis for Alert ${alertId}...`);
+        if (logger) logger.info({ msg: `[AlertWorkflow] Starting AI Analysis for Alert ${alertId}...`, correlationId });
         // Update status to analyzing
         updateAlertStatus(alertId, 'analyzing', 'System (AI)');
         
@@ -315,6 +322,7 @@ async function executeWorkflow(alertId, rule, msgContext) {
             - Rule: "${rule.name}" (${rule.severity})
             - Topic: ${msgContext.topic}
             - Trigger Payload: ${JSON.stringify(msgContext.payload)}
+            - Correlation ID: ${correlationId || 'N/A'}
             
             USER INSTRUCTION: ${rule.workflow_prompt}
             
@@ -333,12 +341,12 @@ async function executeWorkflow(alertId, rule, msgContext) {
         `;
         try {
             // Run the Agent Loop (Max 10 turns)
-            finalAnalysis = await agentRunner(systemPrompt, "Proceed with investigation and provide the structured report.");
+            finalAnalysis = await agentRunner(systemPrompt, `Proceed with investigation for alert ${alertId}. Trace ID: ${correlationId || 'none'}`);
             // Save result to DB and set status to Open (Action required)
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
-            if (logger) logger.info(`[AlertWorkflow] AI Analysis complete for ${alertId}`);
+            if (logger) logger.info({ msg: `[AlertWorkflow] AI Analysis complete for ${alertId}`, correlationId });
         } catch (aiError) {
-            if (logger) logger.error({ err: aiError }, `[AlertWorkflow] AI Analysis failed for ${alertId}`);
+            if (logger) logger.error({ err: aiError, correlationId }, `[AlertWorkflow] AI Analysis failed for ${alertId}`);
             finalAnalysis = `## TRIGGER\nUnknown Error\n## ACTION\nCheck logs manually\n## REPORT\nAI Analysis Failed: ${aiError.message}`;
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
         }
@@ -351,12 +359,13 @@ async function executeWorkflow(alertId, rule, msgContext) {
             await axios.post(notifications.webhook, {
                 text: `🚨 *${rule.severity.toUpperCase()}: ${rule.name}*\n` +
                       `*Topic:* ${msgContext.topic}\n` +
-                      `*Value:* ${JSON.stringify(msgContext.payload)}\n\n` +
+                      `*Value:* ${JSON.stringify(msgContext.payload)}\n` +
+                      `*Trace ID:* ${correlationId || 'N/A'}\n\n` +
                       `*🤖 AI Analysis:*\n${finalAnalysis}`
             });
-            if (logger) logger.info(`Webhook sent for alert ${alertId}`);
+            if (logger) logger.info({ msg: `Webhook sent for alert ${alertId}`, correlationId });
         } catch (e) {
-            if (logger) logger.error(`Webhook failed: ${e.message}`);
+            if (logger) logger.error({ msg: `Webhook failed: ${e.message}`, correlationId });
         }
     }
 }

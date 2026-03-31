@@ -164,7 +164,7 @@ const broadcastMetrics = () => {
     }, 1500); 
 };
 
-const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg = null, debugMsg = null) => {
+const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg = null, debugMsg = null, correlationId = null) => {
     const ruleId = `${rule.sourceTopic}::${target.id}`;
     if (!metrics.has(ruleId)) {
         metrics.set(ruleId, { count: 0, logs: [] });
@@ -176,6 +176,7 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
     const logEntry = {
         ts: new Date().toISOString(),
         inTopic: inTopic,
+        correlationId: correlationId // [NEW] Link metrics to raw message trace
     };
 
     if (errorMsg) {
@@ -243,14 +244,15 @@ const isPublishAllowed = (brokerId, topic) => {
     return publishPatterns.some(pattern => mqttMatch(pattern, topic));
 };
 
-const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin = false) => {
+const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin = false, correlationId = null) => {
     const activeRules = getActiveRules();
     if (activeRules.length === 0) return;
 
     const originalMsg = {
         topic: topic,
         payload: payloadObject,
-        brokerId: brokerId 
+        brokerId: brokerId,
+        correlationId: correlationId // [NEW] Inject into sandbox
     };
 
     for (const rule of activeRules) {
@@ -259,14 +261,14 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
             const targetPromises = rule.targets.map(async (target) => {
                 if (!target.enabled) return;
 
-                updateMetrics(rule, target, topic, null, null, null, "Rule matched. Attempting execution...");
+                updateMetrics(rule, target, topic, null, null, null, "Rule matched. Attempting execution...", correlationId);
 
                 try {
                     let msgForSandbox;
                     try {
                         msgForSandbox = JSON.parse(JSON.stringify(originalMsg));
                     } catch(copyErr) {
-                        engineLogger.error({ err: copyErr, topic: topic }, "Mapper Engine: Failed to deep copy message for sandbox.");
+                        engineLogger.error({ err: copyErr, topic: topic, correlationId }, "Mapper Engine: Failed to deep copy message for sandbox.");
                         return; 
                     }
 
@@ -302,7 +304,8 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                 const viewContext = {
                                     ...res.payload,
                                     topic: topic,
-                                    brokerId: brokerId
+                                    brokerId: brokerId,
+                                    correlationId: correlationId // [NEW] Allow Mustache to use it
                                 };
 
                                 if (declaredTopics.length > 0) {
@@ -329,7 +332,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                         outputPayload = spBv10Codec.encodePayload(res.payload);
                                         outputPayloadForMetrics = JSON.stringify(res.payload, payloadReplacer);
                                     } catch (encodeErr) {
-                                        engineLogger.error({ err: encodeErr, rule: rule.sourceTopic, target: target.id, payload: res.payload }, "❌ Mapper Engine: Failed to re-encode payload as Sparkplug Protobuf.");
+                                        engineLogger.error({ err: encodeErr, rule: rule.sourceTopic, target: target.id, payload: res.payload, correlationId }, "❌ Mapper Engine: Failed to re-encode payload as Sparkplug Protobuf.");
                                         continue; 
                                     }
                                 } else {
@@ -342,33 +345,42 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                 
                                 if (connection && connection.connected) {
                                     if (isPublishAllowed(targetBrokerId, outputTopic)) {
-                                        connection.publish(outputTopic, outputPayload, { qos: 1, retain: false });
+                                        // [UPDATED] Propagate correlationId if broker/protocol supports it (MQTT v5 User Properties)
+                                        const publishOptions = { qos: 1, retain: false };
+                                        if (correlationId) {
+                                            publishOptions.properties = {
+                                                userProperties: { correlationId: correlationId }
+                                            };
+                                        }
+
+                                        connection.publish(outputTopic, outputPayload, publishOptions);
                                         
                                         broadcastCallback(JSON.stringify({
                                             type: 'mapped-topic-generated',
                                             brokerId: targetBrokerId, 
-                                            topic: outputTopic
+                                            topic: outputTopic,
+                                            correlationId // [NEW] Link fan-out message to original
                                         }));
 
-                                        updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null);
+                                        updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null, correlationId);
                                     } else {
                                         const errorMessage = `Target broker '${targetBrokerId}' does not allow publishing to '${outputTopic}'. Check config.`;
-                                        engineLogger.warn(errorMessage);
-                                        updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                                        engineLogger.warn({ msg: errorMessage, correlationId });
+                                        updateMetrics(rule, target, topic, null, null, errorMessage, null, correlationId);
                                     }
                                 } else {
                                     const errorMessage = `Target broker '${targetBrokerId}' not found or not connected. Cannot publish.`;
-                                    engineLogger.error(errorMessage);
-                                    updateMetrics(rule, target, topic, null, null, errorMessage, null);
+                                    engineLogger.error({ msg: errorMessage, correlationId });
+                                    updateMetrics(rule, target, topic, null, null, errorMessage, null, correlationId);
                                 }
                             }
                         }
                     } else if (resultMsg === null) {
-                        updateMetrics(rule, target, topic, null, null, null, "Script executed and returned null (skipped publish).");
+                        updateMetrics(rule, target, topic, null, null, null, "Script executed and returned null (skipped publish).", correlationId);
                     }
 
                 } catch (err) {
-                    engineLogger.error({ err, ruleName: rule.sourceTopic, targetId: target.id }, "❌ Mapper Engine: Error executing async JS transform.");
+                    engineLogger.error({ err, ruleName: rule.sourceTopic, targetId: target.id, correlationId }, "❌ Mapper Engine: Error executing async JS transform.");
                     let errorString = "Unknown execution error"; 
                     if (err) {
                         if (err.stack) {
@@ -379,7 +391,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                             errorString = err.toString();
                         }
                     }
-                    updateMetrics(rule, target, topic, null, null, errorString, null);
+                    updateMetrics(rule, target, topic, null, null, errorString, null, correlationId);
                 }
             }); 
             await Promise.all(targetPromises);

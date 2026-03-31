@@ -135,7 +135,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
     // --- Session Management Routes ---
     // LIST Sessions
-    router.get('/sessions', (req, res) => {
+    router.get('/sessions', (req, res, next) => {
         const chatsDir = getUserChatsDir(req);
         try {
             const files = fs.readdirSync(chatsDir).filter(f => f.endsWith('.json'));
@@ -163,12 +163,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
             res.json(sessions);
         } catch (e) {
-            logger.error({ err: e }, "Failed to list chat sessions");
-            res.json([]);
+            next(e);
         }
     });
     // LOAD Session History
-    router.get('/session/:id', (req, res) => {
+    router.get('/session/:id', (req, res, next) => {
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         // Security check
@@ -178,14 +177,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const history = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                 res.json(history);
             } catch (e) {
-                res.json([]);
+                next(e);
             }
         } else {
             res.json([]); // New empty session
         }
     });
     // SAVE Session History
-    router.post('/session/:id', (req, res) => {
+    router.post('/session/:id', (req, res, next) => {
         const history = req.body;
         if (!Array.isArray(history)) {
             return res.status(400).json({ error: "History must be an array" });
@@ -195,22 +194,25 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
         fs.writeFile(filePath, JSON.stringify(history, null, 2), (err) => {
             if (err) {
-                logger.error({ err }, "Failed to save chat history");
-                return res.status(500).json({ error: "Save failed" });
+                return next(err);
             }
             res.json({ success: true });
         });
     });
     // DELETE Session
-    router.delete('/session/:id', (req, res) => {
+    router.delete('/session/:id', (req, res, next) => {
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+            res.json({ success: true });
+        } catch (e) {
+            next(e);
         }
-        res.json({ success: true });
     });
     // STOP Generation Endpoint
     router.post('/stop', (req, res) => {
@@ -229,13 +231,13 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     });
 
     // --- Legacy /history Route ---
-    router.get('/history', (req, res) => {
+    router.get('/history', (req, res, next) => {
         req.params.id = 'default';
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `default.json`);
         if (fs.existsSync(filePath)) {
             try { res.json(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } 
-            catch (e) { res.json([]); }
+            catch (e) { next(e); }
         } else { res.json([]); }
     });
     // --- 1. Prepare Tools for OpenAI ---
@@ -791,10 +793,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     }
 
     // --- HTTP POST Endpoint (Standard Chat) ---
-    router.post('/completion', async (req, res) => {
+    router.post('/completion', async (req, res, next) => {
         const { messages, clientId } = req.body; 
         if (!messages) return res.status(400).json({ error: "Missing messages." });
-        if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
+        if (!config.LLM_API_KEY) {
+            const err = new Error("LLM_API_KEY is not configured.");
+            err.status = 500;
+            return next(err);
+        }
         // Setup Abort Controller for this request
         const abortController = new AbortController();
         if (clientId) {

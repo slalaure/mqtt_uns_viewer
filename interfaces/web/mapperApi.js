@@ -74,7 +74,7 @@ module.exports = (mapperEngine) => {
 
     // --- Update Active Config (Live Deploy) ---
     // [SECURED] Only Admins can change the live running logic of the server
-    router.post('/config', (req, res) => {
+    router.post('/config', (req, res, next) => {
         if (!req.user || req.user.role !== 'admin') {
             return res.status(403).json({ error: "Forbidden: Only Administrators can deploy live mapping rules." });
         }
@@ -82,7 +82,7 @@ module.exports = (mapperEngine) => {
             mapperEngine.saveMappings(req.body); // Save to mappings.json and update memory
             res.json({ success: true, message: "Configuration deployed to Live Engine." });
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            next(error);
         }
     });
 
@@ -111,7 +111,7 @@ module.exports = (mapperEngine) => {
     });
 
     // Save a version
-    router.post('/version/:name', (req, res) => {
+    router.post('/version/:name', (req, res, next) => {
         const name = req.params.name;
         // Basic sanitization
         if (!name || name.includes('/') || name.includes('\\')) {
@@ -132,13 +132,13 @@ module.exports = (mapperEngine) => {
         const filePath = path.join(targetDir, `${name}.json`);
         
         fs.writeFile(filePath, JSON.stringify(config, null, 2), (err) => {
-            if (err) return res.status(500).json({ error: err.message });
+            if (err) return next(err);
             res.json({ success: true, message: `Version saved (${contextMsg}).` });
         });
     });
 
     // Load a version (Priority: Private > Global)
-    router.get('/version/:name', (req, res) => {
+    router.get('/version/:name', (req, res, next) => {
         const name = req.params.name;
         const resolved = resolveVersionPath(name, req);
 
@@ -147,20 +147,20 @@ module.exports = (mapperEngine) => {
         }
 
         fs.readFile(resolved.path, 'utf8', (err, data) => {
-            if (err) return res.status(500).json({ error: err.message });
+            if (err) return next(err);
             try {
                 const json = JSON.parse(data);
                 // Inject metadata so UI knows source
                 json._metadata = { source: resolved.type }; 
                 res.json(json);
             } catch (e) {
-                res.status(500).json({ error: "Invalid file content" });
+                next(e);
             }
         });
     });
 
     // Delete a version
-    router.delete('/version/:name', (req, res) => {
+    router.delete('/version/:name', (req, res, next) => {
         const name = req.params.name;
         const safeName = path.basename(name);
         
@@ -169,8 +169,12 @@ module.exports = (mapperEngine) => {
         if (userDir) {
             const privatePath = path.join(userDir, `${safeName}.json`);
             if (fs.existsSync(privatePath)) {
-                fs.unlinkSync(privatePath);
-                return res.json({ success: true, message: "Private version deleted." });
+                try {
+                    fs.unlinkSync(privatePath);
+                    return res.json({ success: true, message: "Private version deleted." });
+                } catch (e) {
+                    return next(e);
+                }
             }
         }
 
@@ -178,8 +182,12 @@ module.exports = (mapperEngine) => {
         if (req.user && req.user.role === 'admin') {
             const globalPath = path.join(GLOBAL_VERSIONS_DIR, `${safeName}.json`);
             if (fs.existsSync(globalPath)) {
-                fs.unlinkSync(globalPath);
-                return res.json({ success: true, message: "Global version deleted." });
+                try {
+                    fs.unlinkSync(globalPath);
+                    return res.json({ success: true, message: "Global version deleted." });
+                } catch (e) {
+                    return next(e);
+                }
             }
         } else {
             // Check if it exists globally to give correct error

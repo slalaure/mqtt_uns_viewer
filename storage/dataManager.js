@@ -20,6 +20,7 @@
 // Import repository modules
 const duckDbRepo = require('./duckdbRepository');
 const timescaleRepo = require('./timescaleRepository');
+const dlqManager = require('./dlqManager');
 
 // --- Module-level State ---
 let logger = null;
@@ -38,15 +39,18 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
     logger = appLogger.child({ component: 'DataManager' });
     config = appConfig;
 
+    // 0. Initialize the DLQ (Dead Letter Queue) manager
+    dlqManager.init(appLogger, appConfig);
+
     // 1. Initialize the DuckDB repository (always enabled for the UI)
     // We pass the active DB connection to it.
-    duckDbRepo.init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine);
+    duckDbRepo.init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine, dlqManager);
 
     // 2. Check and initialize the perennial repository (e.g., Timescale)
     isTimescaleEnabled = config.PERENNIAL_DRIVER === 'timescale';
     if (isTimescaleEnabled) {
         logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
-        timescaleRepo.init(appLogger, appConfig);
+        timescaleRepo.init(appLogger, appConfig, dlqManager);
     } else {
         logger.info("Perennial storage driver is set to 'none'. Only writing to DuckDB.");
     }

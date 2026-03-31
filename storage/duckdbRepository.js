@@ -21,6 +21,7 @@ let config = null;
 let db = null; // The database connection
 let mapperEngine = null;
 let broadcastDbStatus = null;
+let dlqManager = null;
 let dbWriteQueue = []; // Queue for batch inserts
 let dbBatchTimer = null; // Timer for batch processor
 
@@ -33,13 +34,15 @@ const MAX_QUEUE_SIZE = 20000;
  * @param {duckdb.Database} dbConnection - The active DuckDB connection.
  * @param {function} appBroadcastDbStatus
  * @param {object} appMapperEngine
+ * @param {object} appDlqManager
  */
-function init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine) {
+function init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine, appDlqManager) {
     logger = appLogger.child({ component: 'DuckDBRepo' });
     config = appConfig;
     db = dbConnection; // Use the connection from server.js
     broadcastDbStatus = appBroadcastDbStatus;
     mapperEngine = appMapperEngine;
+    dlqManager = appDlqManager;
 
     logger.info("✅ 🦆 DuckDB Repository initialized.");
     startDbBatchProcessor();
@@ -118,7 +121,7 @@ function processDbQueue() {
         // [CRITICAL FIX] Use CAST(? AS TIMESTAMPTZ) in the SQL.
         // We will pass the ISO string directly. DuckDB handles ISO strings with 'Z' correctly 
         // as UTC when cast to TIMESTAMPTZ, preventing the 1h offset.
-        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload, broker_id) VALUES (CAST(? AS TIMESTAMPTZ), ?, ?, ?)');
+        const stmt = db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload, broker_id, correlation_id) VALUES (CAST(? AS TIMESTAMPTZ), ?, ?, ?, ?)');
         let errorCount = 0;
 
         for (const msg of batch) {
@@ -126,7 +129,7 @@ function processDbQueue() {
             // This ensures "2026-02-03T16:30:00.000Z" is passed, preserving the 'Z'.
             const timestampIso = msg.timestamp.toISOString();
             
-            stmt.run(timestampIso, msg.topic, msg.payloadStringForDb, msg.brokerId, (runErr) => {
+            stmt.run(timestampIso, msg.topic, msg.payloadStringForDb, msg.brokerId, msg.correlationId || null, (runErr) => {
                 if (runErr) {
                     logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
                     errorCount++;
@@ -138,16 +141,19 @@ function processDbQueue() {
             if (finalizeErr) {
                  logger.error({ err: finalizeErr }, "DB Batch: Failed to finalize statement");
                  db.run('ROLLBACK;'); 
+                 if (dlqManager) dlqManager.push(batch);
                  return;
             }
 
             if (errorCount > 0) {
                 logger.warn(`DB Batch: ${errorCount} errors, rolling back transaction.`);
                 db.run('ROLLBACK;');
+                if (dlqManager) dlqManager.push(batch);
             } else {
                 db.run('COMMIT;', (commitErr) => {
                     if (commitErr) {
                         logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
+                        if (dlqManager) dlqManager.push(batch);
                     } else {
                         logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
 
@@ -157,12 +163,13 @@ function processDbQueue() {
                                 if (msg.needsDb) { 
                                     try {
                                         const payloadObject = JSON.parse(msg.payloadStringForDb);
-                                        //  Pass brokerId to mapper
+                                        //  Pass brokerId and correlationId to mapper
                                         await mapperEngine.processMessage(
                                             msg.brokerId,
                                             msg.topic, 
                                             payloadObject,
-                                            msg.isSparkplugOrigin
+                                            msg.isSparkplugOrigin,
+                                            msg.correlationId
                                         );
                                     } catch (mapperErr) {
                                         logger.error({ err: mapperErr, topic: msg.topic }, "Mapper trigger failed after batch.");

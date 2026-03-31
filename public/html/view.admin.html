@@ -50,6 +50,24 @@
             </div>
             <div id="db-import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
         </div>
+        
+        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin-top:0;">Dead Letter Queue (DLQ) Recovery</h3>
+            <p style="font-size: 0.9em; margin-bottom: 15px;">
+                Manage messages that failed to insert into the database during transient errors or schema mismatches.
+            </p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background-color: var(--color-bg-tertiary); padding: 10px; border-radius: 4px; border: 1px solid var(--color-border);">
+                <div>
+                    <strong>Failed Messages in DLQ:</strong> <span id="stats-dlq-count" style="font-weight:bold; font-size: 1.1em; margin-left: 5px;">--</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button id="btn-replay-dlq" class="mapper-button button-primary" style="flex: 1;" disabled>Replay Failed Messages</button>
+                <button id="btn-clear-dlq" class="danger-button" style="flex: 1;" disabled>Clear DLQ</button>
+            </div>
+            <div id="dlq-status-message" style="margin-top: 10px; font-size: 0.9em; text-align: center;"></div>
+        </div>
+
         <div style="background-color: rgba(220, 53, 69, 0.05); border: 1px solid var(--color-danger); border-radius: 8px; padding: 20px;">
             <h3 style="margin-top:0; color: var(--color-danger);">⚠️ Danger Zone</h3>
             <p style="font-size: 0.9em; margin-bottom: 15px;">

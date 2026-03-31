@@ -63,7 +63,7 @@ module.exports = (getMainConnection, logger, apiKeysConfig, longReplacer) => {
 
 
     // --- External Publish Endpoint ---
-    router.post('/publish', apiKeyAuthMiddleware, (req, res) => {
+    router.post('/publish', apiKeyAuthMiddleware, (req, res, next) => {
         // At this point, the client is IP-authorized (by server.js) and API key is valid
         const mainConnection = getMainConnection(); // Get the connection at request time
         
@@ -106,8 +106,7 @@ module.exports = (getMainConnection, logger, apiKeysConfig, longReplacer) => {
         // 4. Publish
         mainConnection.publish(topic, finalPayload, { qos: qosLevel, retain: retainFlag }, (err) => {
             if (err) {
-                logger.error({ err, topic: topic, apiKey: apiKeyConfig.name }, "❌ Error processing external API publish:");
-                return res.status(500).json({ error: `Failed to publish. ${err.message}` });
+                return next(err);
             }
             
             // Note: We don't log the payload content here for security/privacy.

@@ -55,36 +55,40 @@ module.exports = (defaultConfigPath, logger) => {
 
     // --- GET Configuration (Merged) ---
     // [FIX] Route updated to /config to match frontend and tests
-    router.get('/config', (req, res) => {
-        // 1. Load Global Configs
-        const globalData = readChartFile(defaultConfigPath);
-        // Mark global items
-        globalData.configurations.forEach(c => {
-            c._isGlobal = true; // Flag for Frontend UI
-            c.name = `[GLOBAL] ${c.name}`; // Visual cue
-        });
+    router.get('/config', (req, res, next) => {
+        try {
+            // 1. Load Global Configs
+            const globalData = readChartFile(defaultConfigPath);
+            // Mark global items
+            globalData.configurations.forEach(c => {
+                c._isGlobal = true; // Flag for Frontend UI
+                c.name = `[GLOBAL] ${c.name}`; // Visual cue
+            });
 
-        // 2. Load Private Configs (if user logged in)
-        let privateData = { configurations: [] };
-        const userPath = getUserChartPath(req);
-        if (userPath) {
-            privateData = readChartFile(userPath);
+            // 2. Load Private Configs (if user logged in)
+            let privateData = { configurations: [] };
+            const userPath = getUserChartPath(req);
+            if (userPath) {
+                privateData = readChartFile(userPath);
+            }
+
+            // 3. Merge: Private items appear after Global items
+            // Note: We do NOT override Global items with Private ones here to prevent confusion.
+            // Users must save as a new copy if they want to edit a global chart.
+            const mergedConfigs = [
+                ...globalData.configurations,
+                ...privateData.configurations
+            ];
+
+            res.json({ configurations: mergedConfigs });
+        } catch (err) {
+            next(err);
         }
-
-        // 3. Merge: Private items appear after Global items
-        // Note: We do NOT override Global items with Private ones here to prevent confusion.
-        // Users must save as a new copy if they want to edit a global chart.
-        const mergedConfigs = [
-            ...globalData.configurations,
-            ...privateData.configurations
-        ];
-
-        res.json({ configurations: mergedConfigs });
     });
 
     // --- SAVE Configuration (Partitioned) ---
     // [FIX] Route updated to /config to match frontend and tests
-    router.post('/config', (req, res) => {
+    router.post('/config', (req, res, next) => {
         const incomingConfig = req.body;
         if (!incomingConfig || !Array.isArray(incomingConfig.configurations)) {
             return res.status(400).json({ error: "Invalid configuration format" });
@@ -157,8 +161,7 @@ module.exports = (defaultConfigPath, logger) => {
 
             res.json({ success: true });
         } catch (err) {
-            logger.error({ err }, "Error saving chart config");
-            res.status(500).json({ error: "Failed to save configuration" });
+            next(err);
         }
     });
 

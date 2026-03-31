@@ -76,7 +76,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
     // --- Certificate Routes ---
 
     // GET /api/env/certs: List available certificates
-    router.get('/certs', (req, res) => {
+    router.get('/certs', (req, res, next) => {
         try {
             if (!fs.existsSync(certsPath)) {
                 return res.json([]);
@@ -84,8 +84,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             const files = fs.readdirSync(certsPath);
             res.json(files);
         } catch (err) {
-            logger.error({ err }, "Error listing certificates");
-            res.status(500).json({ error: 'Could not list certificate files.' });
+            next(err);
         }
     });
 
@@ -101,7 +100,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
     // --- UNS Model Routes ---
 
     // GET /api/env/model: Get the current UNS Model JSON
-    router.get('/model', (req, res) => {
+    router.get('/model', (req, res, next) => {
         try {
             if (!fs.existsSync(modelPath)) {
                 return res.json([]); // Return empty array if no model exists
@@ -110,13 +109,12 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             const json = JSON.parse(content);
             res.json(json);
         } catch (err) {
-            logger.error({ err }, "Error reading uns_model.json");
-            res.status(500).json({ error: 'Could not read UNS model file.' });
+            next(err);
         }
     });
 
     // POST /api/env/model: Update/Upload UNS Model JSON
-    router.post('/model', (req, res) => {
+    router.post('/model', (req, res, next) => {
         try {
             const newModel = req.body;
             
@@ -131,14 +129,13 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             logger.info("✅ UNS Model (uns_model.json) updated via API.");
             res.json({ message: 'UNS Model saved successfully.' });
         } catch (err) {
-            logger.error({ err }, "Error writing uns_model.json");
-            res.status(500).json({ error: 'Could not save UNS model file.' });
+            next(err);
         }
     });
 
     // --- [NEW] Database Import Route ---
     // POST /api/env/import-db: Imports a JSON file into configured databases
-    router.post('/import-db', uploadJson.single('db_import'), async (req, res) => {
+    router.post('/import-db', uploadJson.single('db_import'), async (req, res, next) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No JSON file uploaded.' });
         }
@@ -189,10 +186,9 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             });
 
         } catch (err) {
-            logger.error({ err }, "[ImportDB] Import failed.");
             // Try to cleanup
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
-            res.status(500).json({ error: `Import failed: ${err.message}` });
+            next(err);
         }
     });
 
@@ -200,19 +196,18 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
     // --- Environment Config Routes ---
 
     // GET: Reads and parses the .env file
-    router.get('/', (req, res) => {
+    router.get('/', (req, res, next) => {
         try {
             const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
             const config = dotenv.parse(envFileContent);
             res.json(config);
         } catch (err) {
-            logger.error({ err }, "Error parsing .env file");
-            res.status(500).json({ error: 'Could not read or parse .env file.' });
+            next(err);
         }
     });
 
     // POST: Saves the new configuration
-    router.post('/', (req, res) => {
+    router.post('/', (req, res, next) => {
         const newConfig = req.body;
         const tempPath = path.join(dataPath, '.env.tmp');
         let envFileContent = "";
@@ -246,8 +241,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
             res.json({ message: 'Configuration saved successfully.' });
         } catch (err) {
-            logger.error({ err }, "Error writing to .env file:");
-            res.status(500).json({ error: 'Could not write to .env file. Check server logs for details.' });
+            next(err);
         }
     });
 
@@ -259,7 +253,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
     });
 
     // POST /api/env/reset-db: Resets the DuckDB database
-    router.post('/reset-db', (req, res) => {
+    router.post('/reset-db', (req, res, next) => {
         if (!db) {
             return res.status(503).json({ error: "Database not connected/available." });
         }
@@ -270,8 +264,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             // 1. Delete all records
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
-                    logger.error({ err }, "Failed to truncate mqtt_events");
-                    return res.status(500).json({ error: "Failed to clear database table." });
+                    return next(err);
                 }
 
                 // 2. Vacuum to reclaim disk space

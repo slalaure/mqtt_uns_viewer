@@ -12,6 +12,8 @@
  * [UPDATED] Integrates SemanticManager to tag payloads with I3X elementId and typeId.
  */
 
+const crypto = require('crypto');
+
 // --- Helper Functions ---
 function longReplacer(key, value) {
     if (typeof value === 'bigint') {
@@ -55,13 +57,15 @@ let throttleResetTimer = null;
  */
 async function handleMessage(providerId, topic, payload, options = {}) {
     const timestamp = new Date();
+    const correlationId = crypto.randomUUID(); // [NEW] Generate Trace ID
     const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null } = options;
 
     let payloadObjectForMapper = null; 
     let payloadStringForWs = null;     
     let payloadStringForDb = null;     
 
-    const handlerLogger = logger.child({ provider: providerId }); 
+    // [UPDATED] Include correlationId in all logs for this message
+    const handlerLogger = logger.child({ provider: providerId, correlationId }); 
 
     try {
         // --- 1. Smart Namespace Rate Limiting (Anti-Spam) ---
@@ -138,7 +142,8 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             brokerId: providerId, 
             topic,
             payload: payloadStringForWs,
-            timestamp: timestamp.toISOString()
+            timestamp: timestamp.toISOString(),
+            correlationId // [NEW] Send trace ID to UI if needed
         };
         wsManager.broadcast(JSON.stringify(finalMessageObject));
 
@@ -150,20 +155,21 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             topic, 
             payloadStringForDb, 
             isSparkplugOrigin, 
-            needsDb
+            needsDb,
+            correlationId // [NEW] Propagate to DB
         });
 
         if (!needsDb) {
-            await mapperEngine.processMessage(providerId, topic, payloadObjectForMapper, isSparkplugOrigin);
+            await mapperEngine.processMessage(providerId, topic, payloadObjectForMapper, isSparkplugOrigin, correlationId);
         }
 
         if (alertManager) {
-            alertManager.processMessage(providerId, topic, payloadObjectForMapper);
+            alertManager.processMessage(providerId, topic, payloadObjectForMapper, correlationId);
         }
 
         // --- 6. [NEW] Webhook Execution ---
         const webhookManager = require('./webhookManager');
-        webhookManager.trigger(topic, payloadObjectForMapper);
+        webhookManager.trigger(topic, payloadObjectForMapper, correlationId);
 
     } catch (err) {
         handlerLogger.error({ msg: `❌ UNEXPECTED ERROR processing topic ${topic}`, error_message: err.message });

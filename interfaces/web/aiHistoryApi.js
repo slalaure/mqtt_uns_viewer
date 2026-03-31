@@ -7,11 +7,15 @@ module.exports = () => {
     const DATA_DIR = path.join(__dirname, '../../data');
     const aiActionManager = new AiActionManager(DATA_DIR);
 
-    router.get('/', (req, res) => {
-        res.json(aiActionManager.getHistory());
+    router.get('/', (req, res, next) => {
+        try {
+            res.json(aiActionManager.getHistory());
+        } catch (err) {
+            next(err);
+        }
     });
 
-    router.post('/:id/revert', async (req, res) => {
+    router.post('/:id/revert', async (req, res, next) => {
         const actionId = req.params.id;
         const action = aiActionManager.getHistory().find(a => a.id === actionId);
         
@@ -31,7 +35,7 @@ module.exports = () => {
                 return res.json({ error: "Revert from Web UI only supports files currently. For mappers/alerts, use Chat Assistant ('Revert the last action')." });
             }
         } catch(e) {
-            return res.status(500).json({ error: e.message });
+            next(e);
         }
     });
 

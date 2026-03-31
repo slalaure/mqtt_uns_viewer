@@ -64,24 +64,23 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.get('/topics', (req, res) => {
+    router.get('/topics', (req, res, next) => {
         log("Listing topics...");
         db.serialize(() => {
             db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events ORDER BY broker_id, topic ASC", (err, rows) => {
                 if (err) {
-                    console.error("❌ Failed to query topics:", err);
-                    return res.status(500).json({ error: "Failed to query topics from database." });
+                    return next(err);
                 }
                 res.json(rows);
             });
         });
     });
 
-    router.get('/tree', (req, res) => {
+    router.get('/tree', (req, res, next) => {
         db.serialize(() => {
             db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events", (err, rows) => {
                 if (err) {
-                    return res.status(500).json({ error: "Failed to query topics from database." });
+                    return next(err);
                 }
 
                 const tree = {};
@@ -106,7 +105,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     // --- [NEW] Get Last Known State AS OF a specific timestamp ---
     // This implements the "State at Point in Time" logic.
     // Even if the last message was 6 hours ago, if it's the latest relative to the timestamp, it returns it.
-    router.get('/last-known', (req, res) => {
+    router.get('/last-known', (req, res, next) => {
         const timestampIso = req.query.timestamp;
         if (!timestampIso) {
             return res.status(400).json({ error: "Missing 'timestamp' query parameter (ISO 8601)." });
@@ -127,8 +126,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         db.serialize(() => {
             db.all(query, timestampIso, (err, rows) => {
                 if (err) {
-                    console.error("❌ Last-Known Query Error:", err);
-                    return res.status(500).json({ error: "Database query failed." });
+                    return next(err);
                 }
 
                 const results = rows.map(row => {
@@ -214,7 +212,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.get('/search', (req, res) => {
+    router.get('/search', (req, res, next) => {
         const query = req.query.q;
         const brokerId = req.query.brokerId;
         const startDate = req.query.startDate;
@@ -261,8 +259,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         db.serialize(() => {
             db.all(sqlQuery, (err, rows) => {
                 if (err) {
-                    console.error("❌ Search Error:", err);
-                    return res.status(500).json({ error: "Database search query failed." });
+                    return next(err);
                 }
 
                 const results = rows.map(row => {
@@ -278,7 +275,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.post('/search/model', (req, res) => {
+    router.post('/search/model', (req, res, next) => {
         const { topic_template, filters, broker_id } = req.body; 
 
         if (!topic_template) {
@@ -325,8 +322,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         db.serialize(() => {
             db.all(sqlQuery, (err, rows) => {
                 if (err) {
-                    console.error("❌ Model Search Error:", err);
-                    return res.status(500).json({ error: "Database model search query failed." });
+                    return next(err);
                 }
 
                 const results = rows.map(row => {
@@ -340,7 +336,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.post('/prune-topic', (req, res) => {
+    router.post('/prune-topic', (req, res, next) => {
         // [SECURED] Admin Only Check
         if (!req.user || req.user.role !== 'admin') {
             return res.status(403).json({ error: "Forbidden: Only Admins can prune database history." });
@@ -360,8 +356,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         db.serialize(() => {
             db.run(query, function(err) { 
                 if (err) {
-                    console.error("❌ Prune Error:", err);
-                    return res.status(500).json({ error: "Database prune query failed." });
+                    return next(err);
                 }
                 const changes = this.changes;
                 db.exec("CHECKPOINT; VACUUM;", (vacErr) => {
@@ -372,7 +367,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.get('/topic/:topic(*)', (req, res) => {
+    router.get('/topic/:topic(*)', (req, res, next) => {
         const topic = req.params.topic;
         const brokerId = req.query.brokerId; 
 
@@ -390,8 +385,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         db.serialize(() => {
             db.all(query, ...params, (err, rows) => {
                 if (err) {
-                    console.error("❌ Topic Query Error:", err);
-                    return res.status(500).json({ error: "Database query failed." });
+                    return next(err);
                 }
 
                 if (!rows || rows.length === 0) {
@@ -407,7 +401,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.get('/history/:topic(*)', (req, res) => {
+    router.get('/history/:topic(*)', (req, res, next) => {
         const topic = req.params.topic;
         const brokerId = req.query.brokerId; 
         const limit = parseInt(req.query.limit, 10) || 20;
@@ -439,8 +433,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         db.serialize(() => {
             db.all(query, ...params, (err, rows) => {
                 if (err) {
-                    console.error("❌ History Query Error:", err);
-                    return res.status(500).json({ error: "Database query failed." });
+                    return next(err);
                 }
 
                 const results = rows.map(row => {

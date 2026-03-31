@@ -21,6 +21,11 @@ let importInput = null;
 let importStatus = null;
 let btnResetDb = null;
 let resetDbStatus = null;
+// --- Elements for DLQ Maintenance ---
+let dlqCountEl = null;
+let btnReplayDlq = null;
+let btnClearDlq = null;
+let dlqStatusMsg = null;
 // --- Elements for Alerts Maintenance ---
 let resolvedCountEl = null;
 let resolvedSizeEl = null;
@@ -96,6 +101,7 @@ function initializeElements(container) {
             if (targetPanel) targetPanel.classList.add('active');
             // Load data based on tab
             if (targetId === 'admin-users-panel') loadUsers();
+            if (targetId === 'admin-db-panel') loadDlqStatus();
             if (targetId === 'admin-alerts-panel') loadResolvedStats();
             if (targetId === 'admin-assets-panel') loadHmiAssets();
             if (targetId === 'admin-simulators-panel') loadSimulators();
@@ -120,6 +126,19 @@ function initializeElements(container) {
         btnResetDb.className = 'tool-button button-danger';
         btnResetDb.addEventListener('click', onResetDB);
     }
+    
+    dlqCountEl = document.getElementById('stats-dlq-count');
+    btnReplayDlq = document.getElementById('btn-replay-dlq');
+    btnClearDlq = document.getElementById('btn-clear-dlq');
+    dlqStatusMsg = document.getElementById('dlq-status-message');
+    
+    if (btnReplayDlq) {
+        btnReplayDlq.addEventListener('click', onReplayDlq);
+    }
+    if (btnClearDlq) {
+        btnClearDlq.addEventListener('click', onClearDlq);
+    }
+
     // 4. Alerts Maintenance Logic
     resolvedCountEl = document.getElementById('stats-resolved-count');
     resolvedSizeEl = document.getElementById('stats-resolved-size');
@@ -209,6 +228,8 @@ export function onAdminViewShow() {
     const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
     if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') {
         loadResolvedStats();
+    } else if (activeTab && activeTab.dataset.target === 'admin-db-panel') {
+        loadDlqStatus();
     } else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') {
         loadHmiAssets();
     } else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') {
@@ -364,6 +385,85 @@ async function onResetDB() {
         setTimeout(() => { resetDbStatus.textContent = ''; }, 5000);
     }
 }
+
+async function loadDlqStatus() {
+    if (!dlqCountEl) return;
+    try {
+        const res = await fetch('api/admin/dlq/status');
+        if (!res.ok) throw new Error("Failed to load DLQ status");
+        const data = await res.json();
+        const count = data.count || 0;
+        dlqCountEl.textContent = count;
+        
+        btnReplayDlq.disabled = count === 0;
+        btnClearDlq.disabled = count === 0;
+        
+        if (count > 0) {
+            dlqCountEl.style.color = 'var(--color-danger)';
+        } else {
+            dlqCountEl.style.color = 'var(--color-success)';
+        }
+    } catch (err) {
+        console.error("Failed to load DLQ status:", err);
+        dlqCountEl.textContent = "Error";
+        dlqCountEl.style.color = 'var(--color-danger)';
+    }
+}
+
+async function onReplayDlq() {
+    const isConfirmed = await confirmModal('Replay DLQ', 'Are you sure you want to replay all failed messages in the Dead Letter Queue? They will be re-queued for database insertion.', 'Replay', false);
+    if (!isConfirmed) return;
+
+    btnReplayDlq.disabled = true;
+    btnClearDlq.disabled = true;
+    dlqStatusMsg.textContent = "Replaying messages...";
+    dlqStatusMsg.style.color = "var(--color-text)";
+
+    try {
+        const res = await fetch('api/admin/dlq/replay', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Replay failed.");
+        
+        dlqStatusMsg.textContent = `✅ ${data.message}`;
+        dlqStatusMsg.style.color = "var(--color-success)";
+        loadDlqStatus();
+    } catch (err) {
+        dlqStatusMsg.textContent = `❌ Error: ${err.message}`;
+        dlqStatusMsg.style.color = "var(--color-danger)";
+        btnReplayDlq.disabled = false;
+        btnClearDlq.disabled = false;
+    } finally {
+        setTimeout(() => { if (dlqStatusMsg.textContent.includes('✅')) dlqStatusMsg.textContent = ''; }, 5000);
+    }
+}
+
+async function onClearDlq() {
+    const isConfirmed = await confirmModal('Clear DLQ', '⚠️ WARNING: This will permanently delete all failed messages from the Dead Letter Queue. This action cannot be undone.', 'Clear DLQ', true);
+    if (!isConfirmed) return;
+
+    btnReplayDlq.disabled = true;
+    btnClearDlq.disabled = true;
+    dlqStatusMsg.textContent = "Clearing DLQ...";
+    dlqStatusMsg.style.color = "var(--color-text)";
+
+    try {
+        const res = await fetch('api/admin/dlq/clear', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Clear failed.");
+        
+        dlqStatusMsg.textContent = `✅ ${data.message}`;
+        dlqStatusMsg.style.color = "var(--color-success)";
+        loadDlqStatus();
+    } catch (err) {
+        dlqStatusMsg.textContent = `❌ Error: ${err.message}`;
+        dlqStatusMsg.style.color = "var(--color-danger)";
+        btnReplayDlq.disabled = false;
+        btnClearDlq.disabled = false;
+    } finally {
+        setTimeout(() => { if (dlqStatusMsg.textContent.includes('✅')) dlqStatusMsg.textContent = ''; }, 5000);
+    }
+}
+
 // --- Alerts Maintenance Functions ---
 async function loadResolvedStats() {
     if (!resolvedCountEl) return;

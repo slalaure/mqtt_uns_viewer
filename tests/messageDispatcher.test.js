@@ -90,4 +90,38 @@ describe('MessageDispatcher', () => {
         expect(parsedDbPayload.error).toBe("PAYLOAD_TOO_LARGE");
         expect(parsedDbPayload.original_size_bytes).toBeGreaterThan(2 * 1024 * 1024);
     });
+
+    test('should generate and propagate a unique correlationId for each message', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'sensors/temp';
+        const payload = JSON.stringify({ value: 25 });
+
+        // Mock mapperEngine to NOT require DB so processMessage is called immediately
+        mockMapperEngine.rulesForTopicRequireDb.mockReturnValue(false);
+
+        await handleMessage(providerId, topic, payload);
+
+        // 1. Verify it was passed to dataManager.insertMessage
+        expect(mockDataManager.insertMessage).toHaveBeenCalledWith(expect.objectContaining({
+            correlationId: expect.any(String)
+        }));
+
+        const correlationId = mockDataManager.insertMessage.mock.calls[0][0].correlationId;
+        expect(correlationId).toHaveLength(36); // UUID length
+
+        // 2. Verify same ID was passed to mapperEngine.processMessage
+        expect(mockMapperEngine.processMessage).toHaveBeenCalledWith(
+            providerId, topic, expect.any(Object), false, correlationId
+        );
+
+        // 3. Verify same ID was passed to alertManager.processMessage
+        expect(mockAlertManager.processMessage).toHaveBeenCalledWith(
+            providerId, topic, expect.any(Object), correlationId
+        );
+
+        // 4. Verify ID is in the WebSocket broadcast
+        const broadcastCall = mockWsManager.broadcast.mock.calls[0][0];
+        const broadcastObj = JSON.parse(broadcastCall);
+        expect(broadcastObj.correlationId).toBe(correlationId);
+    });
 });

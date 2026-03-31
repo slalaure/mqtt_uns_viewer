@@ -70,7 +70,7 @@ module.exports = (logger) => {
      * Concept: "List Project Files"
      * Returns: Lists of files in root and data directories.
      */
-    router.get('/files/list', (req, res) => {
+    router.get('/files/list', (req, res, next) => {
         try {
             // Filter for safe extensions to avoid exposing sensitive system files
             const safeExts = ['.js', '.mjs', '.json', '.md', '.svg'];
@@ -87,8 +87,7 @@ module.exports = (logger) => {
                 data_files: dataFiles.map(f => `data/${f}`) 
             });
         } catch (err) {
-            logger.error({ err }, "Error listing project files");
-            res.status(500).json({ error: "Failed to list files." });
+            next(err);
         }
     });
 
@@ -98,7 +97,7 @@ module.exports = (logger) => {
      * Query Param: ?filename=simulator-stark.js
      * Returns: Content of the file.
      */
-    router.get('/files/content', (req, res) => {
+    router.get('/files/content', (req, res, next) => {
         const filename = req.query.filename;
 
         if (!filename) {
@@ -122,8 +121,7 @@ module.exports = (logger) => {
             const content = fs.readFileSync(fullPath, 'utf8');
             res.json({ filename: sanitizedPath, content: content });
         } catch (err) {
-            logger.error({ err }, "Error reading file content");
-            res.status(500).json({ error: "Failed to read file." });
+            next(err);
         }
     });
 
@@ -132,7 +130,7 @@ module.exports = (logger) => {
      * Concept: "Save File to 'data' Directory"
      * Body: { "filename": "my_view.svg", "content": "<svg>...</svg>" }
      */
-    router.post('/files/save-data', (req, res) => {
+    router.post('/files/save-data', (req, res, next) => {
         const { filename, content } = req.body;
 
         if (!filename || !content) {
@@ -148,8 +146,7 @@ module.exports = (logger) => {
             logger.info(`[ToolsAPI] Saved file to data/${sanitizedFilename}`);
             res.json({ success: true, path: `data/${sanitizedFilename}` });
         } catch (err) {
-            logger.error({ err }, "Error saving file");
-            res.status(500).json({ error: "Failed to save file." });
+            next(err);
         }
     });
 
