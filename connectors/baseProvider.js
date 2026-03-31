@@ -51,10 +51,11 @@ class BaseProvider {
      * Core method to forward incoming messages from the source to the central engine.
      * @param {string} topic - The topic, address, or identifier of the data
      * @param {Buffer|string} payload - The raw payload
+     * @param {Object} options - Metadata injected by the provider (e.g., correlationId)
      */
-    handleIncomingMessage(topic, payload) {
+    handleIncomingMessage(topic, payload, options = {}) {
         if (this.context.handleMessage) {
-            this.context.handleMessage(this.id, topic, payload);
+            this.context.handleMessage(this.id, topic, payload, options);
         } else {
             this.logger.warn(`Message dropped: Central handler not bound for ${this.id}`);
         }

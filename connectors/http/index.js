@@ -5,6 +5,7 @@
  * Implements the BaseProvider interface for receiving data via HTTP POST.
  * Allows ingesting data into the UNS via a RESTful endpoint.
  */
+
 const BaseProvider = require('../baseProvider');
 const express = require('express');
 const mqttMatch = require('mqtt-match');
@@ -17,7 +18,7 @@ class HttpProvider extends BaseProvider {
         this.app = context.app;
         this.routeMounted = false;
         this.pathPrefix = config.pathPrefix || `/api/ingest/${this.id}`;
-        
+
         // Define allowed topics from config
         this.allowedPublish = config.publish || ['#']; // For ingestion
         this.allowedSubscribe = config.subscribe || ['#']; // For webhooks
@@ -33,7 +34,7 @@ class HttpProvider extends BaseProvider {
         if (this.routeMounted) return true;
 
         this.logger.info(`Mounting HTTP routes for ${this.id}`);
-        
+
         // --- 1. Ingestion Route (Pseudo-Publish) ---
         // Use a wildcard to capture the topic hierarchy
         this.app.post(`${this.pathPrefix}/*`, express.text({ type: '*/*' }), (req, res) => {
@@ -56,12 +57,17 @@ class HttpProvider extends BaseProvider {
                 // Handle Payload
                 let payload = req.body;
                 const contentType = req.headers['content-type'] || '';
+                
                 if (contentType.includes('application/json')) {
                     try { payload = JSON.parse(req.body); } catch (e) { this.logger.warn(`JSON parse fail for ${topic}`); }
                 }
 
+                // Extract Correlation ID from HTTP Headers
+                const correlationId = req.headers['x-correlation-id'] || null;
+
                 // Forward to Central Engine
-                this.handleIncomingMessage(topic, payload);
+                this.handleIncomingMessage(topic, payload, { correlationId });
+
                 res.status(200).json({ success: true, topic, provider: this.id });
             } catch (err) {
                 this.logger.error({ err }, "Error handling HTTP ingestion");
