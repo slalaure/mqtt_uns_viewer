@@ -298,6 +298,21 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         return { tools: enabledTools, context: descriptions.join('\n') };
     };
 
+    // --- Action Manager ---
+    const AiActionManager = require('./aiActionManager');
+    const aiActionManager = new AiActionManager(DATA_DIR);
+
+    const SENSITIVE_TOOLS = [
+        'update_uns_model', 
+        'save_file_to_data_directory', 
+        'create_hmi_view', 
+        'update_mapper_rule', 
+        'prune_topic_history', 
+        'create_alert_rule',
+        'update_alert_rule',
+        'delete_alert_rule'
+    ];
+
     // --- Tool Implementations ---
     const toolImplementations = {
         get_application_status: async () => {
@@ -476,7 +491,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     const newModel = JSON.parse(model_json);
                     if (!Array.isArray(newModel)) return resolve({ error: "Model must be a JSON Array." });
                     
+                    const backupPath = aiActionManager.backupFile(MODEL_MANIFEST_PATH);
                     fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
+                    aiActionManager.logAction(user, 'update_uns_model', {}, { backupPath, originalPath: MODEL_MANIFEST_PATH });
+
                     resolve({ success: true, message: "UNS Model Manifest updated successfully." });
                 } catch (error) {
                     resolve({ error: `Error updating model: ${error.message}` });
@@ -622,7 +640,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const resolvedPath = path.resolve(targetDir, path.basename(filename)); 
             if (!resolvedPath.startsWith(targetDir)) return { error: "Path traversal blocked." };
             
+            const backupPath = aiActionManager.backupFile(resolvedPath);
             fs.writeFileSync(resolvedPath, content, 'utf8');
+            aiActionManager.logAction(user, 'save_file_to_data_directory', { filename }, { backupPath, originalPath: resolvedPath });
+            
             return { success: true, path: `${accessLevel}/data/${filename}`, note: accessLevel === "Private" ? "File saved to your private workspace." : "File saved globally." };
         },
         create_hmi_view: async ({ view_name, hmi_content, js_content }, user) => {
@@ -650,9 +671,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const hmiPath = path.join(targetDir, hmiFilename);
                 const jsPath = path.join(targetDir, jsFilename);
                 
+                let originalState = {};
+                if (fs.existsSync(hmiPath)) originalState.hmiBackup = aiActionManager.backupFile(hmiPath);
+                if (fs.existsSync(jsPath)) originalState.jsBackup = aiActionManager.backupFile(jsPath);
+                originalState.hmiPath = hmiPath;
+                originalState.jsPath = jsPath;
+
                 fs.writeFileSync(hmiPath, hmi_content, 'utf8');
                 fs.writeFileSync(jsPath, js_content, 'utf8');
                 
+                aiActionManager.logAction(user, 'create_hmi_view', { view_name }, originalState);
+
                 return { 
                     success: true, 
                     message: `HMI View '${hmiFilename}' created successfully in ${contextMessage} storage. Go to the HMI Dashboard tab to select it.` 
@@ -792,6 +821,68 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 return { success: true, message: `Alert ${alert_id} marked as ${status}.` };
             } catch (e) {
                 return { error: e.message };
+            }
+        },
+        get_ai_action_history: async ({ limit = 10 }, user) => {
+            let history = aiActionManager.getHistory();
+            if (user && user.role !== 'admin') {
+                history = history.filter(h => h.user === user.username);
+            }
+            return { history: history.slice(0, limit) };
+        },
+        revert_ai_action: async ({ action_id }, user) => {
+            const action = aiActionManager.getHistory().find(a => a.id === action_id);
+            if (!action) return { error: `Action '${action_id}' not found.` };
+            if (user && user.role !== 'admin' && action.user !== user.username) return { error: "Forbidden: You did not initiate this action." };
+
+            const { toolName, originalState } = action;
+            if (!originalState) return { error: "No backup available for this action." };
+
+            try {
+                if (toolName === 'create_hmi_view') {
+                    aiActionManager.restoreFile(originalState.hmiBackup, originalState.hmiPath);
+                    aiActionManager.restoreFile(originalState.jsBackup, originalState.jsPath);
+                    return { success: true, message: "HMI files reverted." };
+                } else if (toolName === 'save_file_to_data_directory') {
+                    aiActionManager.restoreFile(originalState.backupPath, originalState.originalPath);
+                    return { success: true, message: "File reverted." };
+                } else if (toolName === 'update_uns_model') {
+                    aiActionManager.restoreFile(originalState.backupPath, originalState.originalPath);
+                    loadUnsModel();
+                    return { success: true, message: "UNS model reverted." };
+                } else if (toolName === 'update_mapper_rule') {
+                    if (!mapperEngine) return { error: "Mapper unavailable." };
+                    const config = mapperEngine.getMappings();
+                    const activeVersion = config.versions.find(v => v.id === originalState.activeVersionId);
+                    if (!activeVersion) return { error: "Mapper version missing." };
+                    
+                    const oldRule = originalState.ruleBackup ? JSON.parse(originalState.ruleBackup) : null;
+                    const { sourceTopic } = action.args;
+                    activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic.trim() !== sourceTopic.trim());
+                    if (oldRule) activeVersion.rules.push(oldRule);
+                    
+                    mapperEngine.saveMappings(config);
+                    return { success: true, message: "Mapper rule reverted." };
+                } else if (toolName === 'delete_alert_rule') {
+                    if (originalState.ruleBackup) {
+                        const { id, ...ruleRest } = originalState.ruleBackup;
+                        await alertManager.createRule({ ...ruleRest, override_id: id });
+                        return { success: true, message: "Alert rule restored." };
+                    }
+                } else if (toolName === 'create_alert_rule') {
+                    await alertManager.deleteRule(originalState.createdId, user.id, true);
+                    return { success: true, message: "Alert rule removed." };
+                } else if (toolName === 'update_alert_rule') {
+                    if (originalState.ruleBackup) {
+                        const { id, ...ruleRest } = originalState.ruleBackup;
+                        await alertManager.updateRule(id, user.id, ruleRest, true);
+                        return { success: true, message: "Alert rule reverted." };
+                    }
+                }
+
+                return { error: `Revert logic not implemented for ${toolName}.` };
+            } catch (e) {
+                return { error: `Failed to revert: ${e.message}` };
             }
         }
     };
@@ -976,25 +1067,57 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 turnCount++;
                 sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`, clientId);
 
-                const requestPayload = {
-                    model: config.LLM_MODEL,
-                    messages: conversation,
-                    stream: false, 
-                    temperature: 0.1,
-                    tools: enabledTools.length > 0 ? enabledTools : undefined,
-                    tool_choice: enabledTools.length > 0 ? "auto" : undefined
-                };
+                let message;
+                
+                // Check if we are resuming an interrupted session (awaiting approval)
+                if (turnCount === 1 && conversation.length > 0) {
+                    const lastMsg = conversation[conversation.length - 1];
+                    if (lastMsg.role === 'assistant' && lastMsg.tool_calls) {
+                        message = conversation.pop(); // Pop it so it acts like it just came from the LLM
+                        sendChunk(res, 'status', 'Resuming tool execution...', clientId);
+                    }
+                }
 
-                const response = await axios.post(apiUrl, requestPayload, { 
-                    headers, 
-                    timeout: LLM_TIMEOUT_MS,
-                    signal: abortController.signal 
-                });
+                if (!message) {
+                    const requestPayload = {
+                        model: config.LLM_MODEL,
+                        messages: conversation,
+                        stream: false, 
+                        temperature: 0.1,
+                        tools: enabledTools.length > 0 ? enabledTools : undefined,
+                        tool_choice: enabledTools.length > 0 ? "auto" : undefined
+                    };
 
-                const message = response.data.choices[0].message;
+                    const response = await axios.post(apiUrl, requestPayload, { 
+                        headers, 
+                        timeout: LLM_TIMEOUT_MS,
+                        signal: abortController.signal 
+                    });
+                    message = response.data.choices[0].message;
+                }
 
                 // Case 1: The model wants to call tools
                 if (message.tool_calls && message.tool_calls.length > 0) {
+                    // --- VALIDATION / APPROVAL CHECK ---
+                    let requiresApproval = false;
+                    let pendingSensitiveCalls = [];
+                    if (!req.body.autoApproveSession) {
+                        for (const toolCall of message.tool_calls) {
+                            if (SENSITIVE_TOOLS.includes(toolCall.function.name) && 
+                                (!req.body.approvedToolCallIds || !req.body.approvedToolCallIds.includes(toolCall.id))) {
+                                requiresApproval = true;
+                                pendingSensitiveCalls.push(toolCall);
+                            }
+                        }
+                    }
+
+                    if (requiresApproval) {
+                        sendChunk(res, 'message', message, clientId); 
+                        sendChunk(res, 'approval_required', { toolCalls: pendingSensitiveCalls }, clientId);
+                        finalMessageSent = true; 
+                        break; 
+                    }
+
                     conversation.push(message); 
                     
                     for (const toolCall of message.tool_calls) {

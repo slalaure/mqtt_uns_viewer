@@ -6,6 +6,7 @@
     <button class="sub-tab-button" data-target="admin-simulators-panel">🕹️ Simulators</button>
     <button class="sub-tab-button" data-target="admin-parsers-panel">📂 Data Parsers</button>
     <button class="sub-tab-button" data-target="admin-webhooks-panel">🔗 Webhooks</button>
+    <button class="sub-tab-button" data-target="admin-ai-panel">🤖 AI History</button>
 </div>
 
 <div id="admin-users-panel" class="alerts-content-container active">
@@ -182,6 +183,32 @@
                 <button type="submit" id="btn-start-csv-parser" class="mapper-button button-primary" style="align-self: flex-start; padding: 10px 20px;">Start CSV Parser</button>
                 <div id="csv-parser-status" style="font-weight: 500;"></div>
             </form>
+        </div>
+    </div>
+</div>
+
+<div id="admin-ai-panel" class="alerts-content-container" style="display: none;">
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h2>AI Actions History</h2>
+        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
+            Review and revert modifications made by the AI Assistant.
+        </p>
+        <button id="btn-ai-history-refresh" class="mapper-button" style="margin-bottom: 15px;">↻ Refresh</button>
+        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em;">
+                <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                    <tr>
+                        <th style="padding: 10px; font-weight: 500;">Time</th>
+                        <th style="padding: 10px; font-weight: 500;">User</th>
+                        <th style="padding: 10px; font-weight: 500;">Tool</th>
+                        <th style="padding: 10px; font-weight: 500;">Details</th>
+                        <th style="padding: 10px; text-align: right; font-weight: 500;">Revert</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-ai-history-tbody">
+                    <tr><td colspan="5" style="text-align:center; padding:20px;">Loading history...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

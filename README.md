@@ -258,9 +258,11 @@ Visualize correlations instantly with high performance.
 
 ### 7. AI Chat Assistant (Multimodal)
 A floating assistant powered by LLMs (OpenAI, Gemini, Local models) running a recursive agentic loop.
-* **Multimodal Inputs:** * **Voice (STT/TTS):** Speak to the assistant (continuous listening mode) and hear responses natively.
+* **Multimodal Inputs:**
+  * **Voice (STT/TTS):** Speak to the assistant (continuous listening mode) and hear responses natively.
   * **Vision:** Use your device's camera or upload images/logs to give the AI context on physical equipment.
 * **Capabilities:** Can search data, infer schemas, generate SQL, configure mapping rules, create HMI dashboards (`create_hmi_view`), and control built-in simulators.
+* **AI Safety (Approval Workflow):** For sensitive operations (modifying model, creating files, updating mapper), the UI prompts for user approval before execution. You can "Approve Once" or "Approve for Session" to streamline your workflow.
 * **Proxy-Resilient Streaming:** Uses NDJSON HTTP streaming with WebSocket fallbacks so the "Thinking..." and "Executing tool..." statuses work flawlessly behind strict reverse proxies.
 * **Session Management:** Slide out the left menu to switch between historical chats, start new ones, or delete them.
 
@@ -278,7 +280,20 @@ Korelate provides a native, northbound implementation of the **I3X (Industrial I
 * [cite_start]**Recursive Context:** Supports `maxDepth` recursion in both Last Known Value and Historical queries, allowing clients to fetch entire equipment hierarchies in a single call.
 * [cite_start]**Write-Back Capability:** Supports RFC 4.2.2.1, enabling authenticated clients to send command values back to the factory floor via the standardized interface.
 
-### 10. Configuration Interface (Admin Only)
+### 10. CDM Modeler (Core Data Model)
+Korelate includes a powerful graphical editor to define your plant's semantic hierarchy and metadata.
+* **Concept Definition:** Map industrial concepts to physical MQTT topics.
+* **Data Governance & Security:** Explicitly tag data nodes with **Sensitivity Levels** (Public, Internal, Confidential, Secret) and **Privacy/Compliance** flags (GDPR, Health/HDS, Financial/PCI).
+* **Graph Visualization:** Explore relationships beyond simple hierarchies (e.g., "Machine A SuppliesTo Tank B") using an interactive Vis-Network graph.
+* **I3X Compatibility:** Seamlessly bridge legacy tag names to a standardized I3X element structure.
+
+### 11. AI Safety & Governance (Admin)
+As the AI Agent gains more autonomy, Korelate provides tools to monitor and control its actions.
+* **Approval UI:** Standardizes the "Human-in-the-loop" pattern for any destructive or modifying action initiated by an LLM.
+* **AI History Dashboard:** Accessible in the Admin panel, this view logs every tool execution, showing the user, timestamp, and arguments.
+* **Automatic Backups & Rollback:** Most AI modifications (HMI files, model changes) automatically create point-in-time backups. You can revert any AI action with a single click or by asking the chat assistant ("Undo your last change").
+
+### 12. Configuration Interface (Admin Only)
 Accessible via the Cog icon (`/config.html`) or the Admin Tab.
 * **Environment:** Modify `.env` variables (Brokers, LLM settings, Limits) and restart the server from the UI.
 * **Certificates:** Upload SSL/TLS certificates for secure MQTT MTLS connections.
@@ -477,6 +492,8 @@ The application exposes a comprehensive REST API.
 | `POST` | `/api/admin/reset-db` | Truncates the database completely. | ✅ (Admin) |
 | `GET` | `/api/admin/hmi-assets` | List all HMI assets stored globally. | ✅ (Admin) |
 | `POST` | `/api/admin/hmi-assets` | Upload new HMI assets (.glb, .svg, .html...). | ✅ (Admin) |
+| `GET` | `/api/admin/ai_history` | View history of AI-initiated modifications. | ✅ (Admin) |
+| `POST` | `/api/admin/ai_history/:id/revert` | Revert a specific AI action using its backup. | ✅ (Admin) |
 | `POST` | `/api/admin/data-parsers/csv` | Upload and start a dynamic CSV data stream. | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
 

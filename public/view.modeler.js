@@ -555,6 +555,31 @@ function renderForm() {
                 <input type="checkbox" name="isComposition" id="chk-comp" ${itemData.isComposition ? 'checked' : ''} style="width: 18px; height: 18px;">
                 <label for="chk-comp" style="margin:0; cursor:pointer; font-weight: 500;">Is Composition (Contains nested components)</label>
             </div>
+            <div style="margin-top: 20px; padding: 15px; background: var(--color-bg-tertiary); border-radius: 6px; border: 1px solid var(--color-border);">
+                <label class="modern-label" style="color: var(--color-primary); margin-bottom: 10px; display: block;">Data Governance & Security</label>
+                <div style="display:flex; gap: 15px;">
+                    <div style="flex:1;">
+                        <label class="modern-label">Sensitivity Level</label>
+                        <select name="sensitivity" class="modern-input">
+                            <option value="public" ${itemData.sensitivity === 'public' ? 'selected' : ''}>🟢 Public</option>
+                            <option value="internal" ${(!itemData.sensitivity || itemData.sensitivity === 'internal') ? 'selected' : ''}>🟡 Internal</option>
+                            <option value="confidential" ${itemData.sensitivity === 'confidential' ? 'selected' : ''}>🟠 Confidential</option>
+                            <option value="secret" ${itemData.sensitivity === 'secret' ? 'selected' : ''}>🔴 Secret</option>
+                        </select>
+                    </div>
+                    <div style="flex:1;">
+                        <label class="modern-label">Privacy / Compliance</label>
+                        <select name="privacy" class="modern-input">
+                            <option value="none" ${(!itemData.privacy || itemData.privacy === 'none') ? 'selected' : ''}>None</option>
+                            <option value="basic" ${itemData.privacy === 'basic' ? 'selected' : ''}>Basic Privacy</option>
+                            <option value="gdpr" ${itemData.privacy === 'gdpr' ? 'selected' : ''}>⚖️ GDPR / PII</option>
+                            <option value="health" ${itemData.privacy === 'health' ? 'selected' : ''}>🏥 Health Data (HDS/HIPAA)</option>
+                            <option value="financial" ${itemData.privacy === 'financial' ? 'selected' : ''}>💰 Financial / PCI</option>
+                            <option value="sensitive" ${itemData.privacy === 'sensitive' ? 'selected' : ''}>🛡️ Highly Sensitive (Religion/Opinions)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--color-border);">
                 <label class="modern-label" style="color: var(--color-primary);">MQTT Topic Mapping Pattern</label>
                 <div style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:8px;">Link this object to a raw MQTT topic stream to receive live data.</div>

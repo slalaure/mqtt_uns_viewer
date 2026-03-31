@@ -531,6 +531,7 @@ if (config.IS_SIMULATOR_ENABLED) {
 mainRouter.use('/auth', require('./interfaces/web/authApi')(logger)); 
 // --- Admin Routes ---
 mainRouter.use('/api/admin', require('./interfaces/web/adminApi')(logger, db, dataManager, DATA_PATH)); 
+mainRouter.use('/api/admin/ai_history', requireAdmin, require('./interfaces/web/aiHistoryApi')());
 // --- Alert API Routes ---
 mainRouter.use('/api/alerts', ipFilterMiddleware, require('./interfaces/web/alertApi')(logger)); 
 // --- [NEW] I3X API Standard Routes ---

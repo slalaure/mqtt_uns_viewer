@@ -68,6 +68,7 @@ let onFileCreatedCallback = null;
 // --- Streaming UI ---
 let currentLogDiv = null; 
 let hasToolActivity = false; 
+let pendingApproval = null; // Store pending approval chunk
 
 // --- Deduplication Set ---
 let processedChunkIds = new Set();
@@ -634,8 +635,12 @@ async function saveHistory() {
     }
 }
 
-function addMessageToState(role, content, toolCalls=null) {
-    const msg = { role, content, timestamp: Date.now(), tool_calls: toolCalls };
+function addMessageToState(role, content, toolCalls=null, toolCallId=null, name=null) {
+    const msg = { role, content, timestamp: Date.now() };
+    if (toolCalls) msg.tool_calls = toolCalls;
+    if (toolCallId) msg.tool_call_id = toolCallId;
+    if (name) msg.name = name;
+    
     conversationHistory.push(msg);
     if(conversationHistory.length > 50) conversationHistory = conversationHistory.slice(-50);
     saveHistory(); 
@@ -744,7 +749,7 @@ function appendToLog(container, text, type = 'info') {
 let assistantMsgFromStream = null;
 
 function processStreamChunk(type, content) {
-    if (!currentLogDiv && type !== 'message' && type !== 'error') {
+    if (!currentLogDiv && type !== 'message' && type !== 'error' && type !== 'approval_required') {
         // If we missed the start, create log div now
         currentLogDiv = createLogDiv();
     }
@@ -763,7 +768,58 @@ function processStreamChunk(type, content) {
         // Handle stopping/error gracefully in UI
         if (currentLogDiv) appendToLog(currentLogDiv, content, 'error');
         throw new Error(content);
+    } else if (type === 'approval_required') {
+        pendingApproval = content;
     }
+}
+
+function renderApprovalUI(approvalData) {
+    const div = document.createElement('div');
+    div.className = `chat-message system`;
+    div.style.borderLeft = '3px solid var(--color-warning)';
+    div.style.background = 'color-mix(in srgb, var(--color-warning) 10%, transparent)';
+    
+    let html = `<div style="font-weight:bold; margin-bottom:5px;">⚠️ Approval Required</div>`;
+    html += `<div style="font-size:0.9em; margin-bottom:10px;">The AI wants to perform potentially destructive actions:</div>`;
+    
+    approvalData.toolCalls.forEach(tc => {
+        html += `<div style="font-family:monospace; font-size:0.85em; background:var(--color-bg-secondary); padding:5px; border-radius:4px; margin-bottom:5px;">
+            > ${tc.function.name}(...)
+        </div>`;
+    });
+
+    html += `<div style="display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;">
+        <button class="tool-button button-primary btn-approve-once" style="flex:1;">Approve Once</button>
+        <button class="tool-button btn-approve-session" style="flex:1;">Approve for Session</button>
+        <button class="tool-button button-danger btn-deny" style="flex:1;">Deny</button>
+    </div>`;
+
+    div.innerHTML = html;
+    chatHistory.appendChild(div);
+    scrollToBottom();
+
+    div.querySelector('.btn-approve-once').onclick = () => {
+        window.approvedToolCallIds = approvalData.toolCalls.map(tc => tc.id);
+        div.style.opacity = '0.5';
+        div.style.pointerEvents = 'none';
+        sendMessage(false, true); // Resume
+    };
+
+    div.querySelector('.btn-approve-session').onclick = () => {
+        window.autoApproveSession = true;
+        div.style.opacity = '0.5';
+        div.style.pointerEvents = 'none';
+        sendMessage(false, true); // Resume
+    };
+
+    div.querySelector('.btn-deny').onclick = () => {
+        approvalData.toolCalls.forEach(tc => {
+            addMessageToState('tool', "User denied execution.", null, tc.id, tc.function.name);
+        });
+        div.style.opacity = '0.5';
+        div.style.pointerEvents = 'none';
+        sendMessage(false, true); // Resume with denial responses
+    };
 }
 
 function updateUIState(processing) {
@@ -777,7 +833,7 @@ function updateUIState(processing) {
 }
 
 // --- STREAMING SEND MESSAGE ---
-async function sendMessage(fromVoice = false) {
+async function sendMessage(fromVoice = false, isResuming = false) {
     if (isProcessing) return;
 
     window.speechSynthesis.cancel();
@@ -789,27 +845,31 @@ async function sendMessage(fromVoice = false) {
     const isVoice = fromVoice || wasLastInputVoice;
     wasLastInputVoice = false; 
 
-    const text = chatInput.value.trim();
-    if (!text && !pendingAttachment) return;
+    // If not resuming, it's a fresh user message
+    if (!isResuming) {
+        const text = chatInput.value.trim();
+        if (!text && !pendingAttachment) return;
 
-    let messageContent = text;
+        let messageContent = text;
 
-    if (pendingAttachment) {
-        if (pendingAttachment.type === 'image') {
-            messageContent = [{ type: "text", text: text }, { type: "image_url", image_url: { url: pendingAttachment.content } }];
-        } else {
-            messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
+        if (pendingAttachment) {
+            if (pendingAttachment.type === 'image') {
+                messageContent = [{ type: "text", text: text }, { type: "image_url", image_url: { url: pendingAttachment.content } }];
+            } else {
+                messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
+            }
         }
+
+        chatInput.value = ''; autoResizeInput();
+        pendingAttachment = null; renderPreview(); fileInput.value = '';
+
+        addMessageToState('user', messageContent);
     }
-
-    chatInput.value = ''; autoResizeInput();
-    pendingAttachment = null; renderPreview(); fileInput.value = '';
-
-    addMessageToState('user', messageContent);
 
     isProcessing = true;
     hasToolActivity = false; 
     assistantMsgFromStream = null; 
+    pendingApproval = null;
     processedChunkIds.clear(); 
 
     updateUIState(true); 
@@ -829,7 +889,9 @@ async function sendMessage(fromVoice = false) {
         const requestBody = { 
             messages: messagesPayload,
             userLanguage: navigator.language,
-            clientId: window.wsClientId || null 
+            clientId: window.wsClientId || null,
+            autoApproveSession: window.autoApproveSession || false,
+            approvedToolCallIds: window.approvedToolCallIds || []
         };
 
         const response = await fetch(url, {
@@ -837,6 +899,9 @@ async function sendMessage(fromVoice = false) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
+
+        // Reset single-use approvals
+        window.approvedToolCallIds = [];
 
         if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
 
@@ -889,6 +954,10 @@ async function sendMessage(fromVoice = false) {
 
             if (isVoice && assistantMsgFromStream.content) {
                 speakText(assistantMsgFromStream.content);
+            }
+            
+            if (pendingApproval) {
+                renderApprovalUI(pendingApproval);
             }
         } 
 

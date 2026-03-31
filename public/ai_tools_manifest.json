@@ -1,598 +1,655 @@
 {
-  "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or HMI), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n3. **UNS Model Adherence (Publishing & Simulating)**: When asked to trigger an alarm, publish data, or simulate an event, you MUST FIRST use `get_model_definition` to find the exact `topic_template` and `schema`.\n   - DO NOT invent topic structures.\n   - DO NOT invent JSON payloads. Strictly respect the enums, casing, and types defined in the schema.\n\n### DEVELOPER GUIDE FOR HMI DASHBOARDS & 3D DIGITAL TWINS\nWhen the user asks for a diagram, synoptic, dashboard, or 3D view, use `create_hmi_view`.\n1. You can generate HTML (including `<a-scene>` for A-Frame 3D) or pure SVG XML. Ensure elements have unique `id` or `data-key` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerHmiBindings({\n  initialize: (hmiRoot) => { console.log(\"HMI initialized\"); },\n  update: (brokerId, topic, payload, hmiRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema\n    // 3. Update DOM using REAL tag names\n  },\n  reset: (hmiRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names or topic structures. Use the tools provided to discover the environment state.",
-  "tools": [
-    {
-      "name": "get_application_status",
-      "description": "Provides a high-level health check of the application, including MQTT connection status, database size, and message counts.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "list_topics",
-      "description": "Lists all unique MQTT topics currently stored in the database. Use this to discover available data points before searching or mapping.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "get_topics_list",
-      "description": "Returns a flat list of all unique MQTT topics currently known, including their broker ID. Useful for disambiguating identical topics across different brokers.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "search_data",
-      "description": "Performs a full-text search for a keyword across all topic names and payload contents. IMPORTANT: Data is mostly in ENGLISH. Translate keywords if needed.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "type": "string",
-            "description": "Space-separated English keywords (e.g., 'maintenance cmms')."
-          },
-          "time_expression": {
-            "type": "string",
-            "description": "Natural language time range (e.g., 'last 24 hours', 'since yesterday')."
-          },
-          "limit": {
-            "type": "number",
-            "description": "Max results to return."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional. Filter by specific broker ID."
-          }
+    "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or HMI), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n3. **UNS Model Adherence (Publishing & Simulating)**: When asked to trigger an alarm, publish data, or simulate an event, you MUST FIRST use `get_model_definition` to find the exact `topic_template` and `schema`.\n   - DO NOT invent topic structures.\n   - DO NOT invent JSON payloads. Strictly respect the enums, casing, and types defined in the schema.\n\n### DEVELOPER GUIDE FOR HMI DASHBOARDS & 3D DIGITAL TWINS\nWhen the user asks for a diagram, synoptic, dashboard, or 3D view, use `create_hmi_view`.\n1. You can generate HTML (including `<a-scene>` for A-Frame 3D) or pure SVG XML. Ensure elements have unique `id` or `data-key` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerHmiBindings({\n  initialize: (hmiRoot) => { console.log(\"HMI initialized\"); },\n  update: (brokerId, topic, payload, hmiRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema\n    // 3. Update DOM using REAL tag names\n  },\n  reset: (hmiRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names or topic structures. Use the tools provided to discover the environment state.",
+    "tools": [
+        {
+            "name": "get_application_status",
+            "description": "Provides a high-level health check of the application, including MQTT connection status, database size, and message counts.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         },
-        "required": [
-          "query"
-        ]
-      }
-    },
-    {
-      "name": "get_topic_history",
-      "description": "Get historical messages for a topic, optionally filtered by a time range.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic": {
-            "type": "string",
-            "description": "The exact MQTT topic string."
-          },
-          "time_expression": {
-            "type": "string",
-            "description": "Natural language time range (e.g., 'last week', 'from 2pm to 4pm')."
-          },
-          "limit": {
-            "type": "number",
-            "description": "Max results (default 20)."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional. Filter by specific broker ID."
-          }
+        {
+            "name": "list_topics",
+            "description": "Lists all unique MQTT topics currently stored in the database. Use this to discover available data points before searching or mapping.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         },
-        "required": [
-          "topic"
-        ]
-      }
-    },
-    {
-      "name": "aggregate_time_series",
-      "description": "Aggregates numerical time-series data for a topic over a specific time range using a chosen math function (MEAN, MAX, MIN, etc). Returns max 500 points. Use this to analyze trends, generate summaries, or inspect long periods without overloading your context limit.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic": {
-            "type": "string",
-            "description": "The exact MQTT topic."
-          },
-          "variables": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "List of JSON paths for the numeric variables to aggregate (e.g., ['temperature_c', 'metrics[0].value'])."
-          },
-          "time_expression": {
-            "type": "string",
-            "description": "Natural language time range (e.g., 'last 7 days', 'yesterday')."
-          },
-          "aggregation": {
-            "type": "string",
-            "enum": ["MEAN", "MAX", "MIN", "MEDIAN", "SD", "RANGE", "SUM"],
-            "description": "Aggregation function to apply. Default is MEAN."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional broker ID."
-          }
+        {
+            "name": "get_topics_list",
+            "description": "Returns a flat list of all unique MQTT topics currently known, including their broker ID. Useful for disambiguating identical topics across different brokers.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         },
-        "required": ["topic", "variables", "time_expression"]
-      }
-    },
-    {
-      "name": "get_latest_message",
-      "description": "Retrieves the most recent message for a single, exact MQTT topic.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic": {
-            "type": "string",
-            "description": "The exact MQTT topic."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional. Filter by specific broker ID."
-          }
+        {
+            "name": "search_data",
+            "description": "Performs a full-text search for a keyword across all topic names and payload contents. IMPORTANT: Data is mostly in ENGLISH. Translate keywords if needed.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Space-separated English keywords (e.g., 'maintenance cmms')."
+                    },
+                    "time_expression": {
+                        "type": "string",
+                        "description": "Natural language time range (e.g., 'last 24 hours', 'since yesterday')."
+                    },
+                    "limit": {
+                        "type": "number",
+                        "description": "Max results to return."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional. Filter by specific broker ID."
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
         },
-        "required": [
-          "topic"
-        ]
-      }
-    },
-    {
-      "name": "search_uns_concept",
-      "description": "Performs a precise, structured search for MQTT messages based on a known UNS concept and specific data filters.",
-      "category": "ENABLE_SEMANTIC",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "concept": {
-            "type": "string",
-            "description": "The concept name (e.g., 'Work Order', 'Maintenance Request')."
-          },
-          "filters": {
-            "type": "object",
-            "description": "Key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional. Broker ID."
-          }
+        {
+            "name": "get_topic_history",
+            "description": "Get historical messages for a topic, optionally filtered by a time range.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The exact MQTT topic string."
+                    },
+                    "time_expression": {
+                        "type": "string",
+                        "description": "Natural language time range (e.g., 'last week', 'from 2pm to 4pm')."
+                    },
+                    "limit": {
+                        "type": "number",
+                        "description": "Max results (default 20)."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional. Filter by specific broker ID."
+                    }
+                },
+                "required": [
+                    "topic"
+                ]
+            }
         },
-        "required": [
-          "concept"
-        ]
-      }
-    },
-    {
-      "name": "infer_schema",
-      "description": "Analyzes recent messages for a given topic pattern (e.g., 'stark_industries/security/%') and returns the inferred JSON payload schema.",
-      "category": "ENABLE_SEMANTIC",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic_pattern": {
-            "type": "string",
-            "description": "SQL LIKE pattern (e.g., 'factory/line1/%')."
-          }
+        {
+            "name": "aggregate_time_series",
+            "description": "Aggregates numerical time-series data for a topic over a specific time range using a chosen math function (MEAN, MAX, MIN, etc). Returns max 500 points. Use this to analyze trends, generate summaries, or inspect long periods without overloading your context limit.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The exact MQTT topic."
+                    },
+                    "variables": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "List of JSON paths for the numeric variables to aggregate (e.g., ['temperature_c', 'metrics[0].value'])."
+                    },
+                    "time_expression": {
+                        "type": "string",
+                        "description": "Natural language time range (e.g., 'last 7 days', 'yesterday')."
+                    },
+                    "aggregation": {
+                        "type": "string",
+                        "enum": [
+                            "MEAN",
+                            "MAX",
+                            "MIN",
+                            "MEDIAN",
+                            "SD",
+                            "RANGE",
+                            "SUM"
+                        ],
+                        "description": "Aggregation function to apply. Default is MEAN."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional broker ID."
+                    }
+                },
+                "required": [
+                    "topic",
+                    "variables",
+                    "time_expression"
+                ]
+            }
         },
-        "required": [
-          "topic_pattern"
-        ]
-      }
-    },
-    {
-      "name": "get_model_definition",
-      "description": "Get the definition (schema, topic template) for a concept from the UNS Model Manifest.",
-      "category": "ENABLE_SEMANTIC",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "concept": {
-            "type": "string",
-            "description": "Keyword or concept name."
-          }
+        {
+            "name": "get_latest_message",
+            "description": "Retrieves the most recent message for a single, exact MQTT topic.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The exact MQTT topic."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional. Filter by specific broker ID."
+                    }
+                },
+                "required": [
+                    "topic"
+                ]
+            }
         },
-        "required": [
-          "concept"
-        ]
-      }
-    },
-    {
-      "name": "update_uns_model",
-      "description": "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
-      "category": "ENABLE_ADMIN",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "model_json": {
-            "type": "string",
-            "description": "The full JSON string representing the new model array. Must be a valid JSON array of definition objects."
-          }
+        {
+            "name": "search_uns_concept",
+            "description": "Performs a precise, structured search for MQTT messages based on a known UNS concept and specific data filters.",
+            "category": "ENABLE_SEMANTIC",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "concept": {
+                        "type": "string",
+                        "description": "The concept name (e.g., 'Work Order', 'Maintenance Request')."
+                    },
+                    "filters": {
+                        "type": "object",
+                        "description": "Key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional. Broker ID."
+                    }
+                },
+                "required": [
+                    "concept"
+                ]
+            }
         },
-        "required": [
-          "model_json"
-        ]
-      }
-    },
-    {
-      "name": "publish_message",
-      "description": "Publish a NEW MQTT message. You MUST strictly follow the topic template and JSON schema from get_model_definition if applicable. Check 'Broker Permissions' in system prompt to choose the correct broker_id.",
-      "category": "ENABLE_PUBLISH",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic": {
-            "type": "string",
-            "description": "Target topic (e.g., 'mqttunsviewer/site/crane/load')."
-          },
-          "payload": {
-            "type": "string",
-            "description": "The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."
-          },
-          "format": {
-            "type": "string",
-            "enum": [
-              "string",
-              "json",
-              "sparkplugb"
-            ],
-            "description": "Payload format."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional. ID of the broker to use."
-          },
-          "qos": {
-            "type": "number",
-            "description": "The QoS level (0, 1, or 2)."
-          },
-          "retain": {
-            "type": "boolean",
-            "description": "Whether to set the retain flag."
-          }
+        {
+            "name": "infer_schema",
+            "description": "Analyzes recent messages for a given topic pattern (e.g., 'stark_industries/security/%') and returns the inferred JSON payload schema.",
+            "category": "ENABLE_SEMANTIC",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic_pattern": {
+                        "type": "string",
+                        "description": "SQL LIKE pattern (e.g., 'factory/line1/%')."
+                    }
+                },
+                "required": [
+                    "topic_pattern"
+                ]
+            }
         },
-        "required": [
-          "topic",
-          "payload"
-        ]
-      }
-    },
-    {
-      "name": "list_project_files",
-      "description": "Lists files in the project root and `data` directory. Useful for finding existing views, 3D models (.glb), or simulators.",
-      "category": "ENABLE_FILES",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "get_file_content",
-      "description": "Reads the content of a file (HTML, SVG, JS, JSON). Cannot read binary 3D files.",
-      "category": "ENABLE_FILES",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "filename": {
-            "type": "string",
-            "description": "Relative path (e.g., 'data/view.html')."
-          }
+        {
+            "name": "get_model_definition",
+            "description": "Get the definition (schema, topic template) for a concept from the UNS Model Manifest.",
+            "category": "ENABLE_SEMANTIC",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "concept": {
+                        "type": "string",
+                        "description": "Keyword or concept name."
+                    }
+                },
+                "required": [
+                    "concept"
+                ]
+            }
         },
-        "required": [
-          "filename"
-        ]
-      }
-    },
-    {
-      "name": "save_file_to_data_directory",
-      "description": "Saves content to a file in the `data/` directory. Use for HTML, SVGs, JS bindings, or Simulators.",
-      "category": "ENABLE_FILES",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "filename": {
-            "type": "string",
-            "description": "The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_dashboard.html')."
-          },
-          "content": {
-            "type": "string",
-            "description": "The full text content to save."
-          }
+        {
+            "name": "update_uns_model",
+            "description": "Updates the content of the `uns_model.json` file. This allows adding new concepts or modifying existing schemas in the semantic model.",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_json": {
+                        "type": "string",
+                        "description": "The full JSON string representing the new model array. Must be a valid JSON array of definition objects."
+                    }
+                },
+                "required": [
+                    "model_json"
+                ]
+            }
         },
-        "required": [
-          "filename",
-          "content"
-        ]
-      }
-    },
-    {
-      "name": "create_hmi_view",
-      "description": "Creates a new interactive HMI dashboard by saving TWO files: the view (.html or .svg) and its logic script (.js). Use this when the user asks for a 'dashboard', 'diagram', 'synoptic', or '3D view'. Ensure you have identified the relevant MQTT topics first.",
-      "category": "ENABLE_FILES",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "view_name": {
-            "type": "string",
-            "description": "Filename with extension (e.g., 'pump_station.html' or 'motor.svg')."
-          },
-          "hmi_content": {
-            "type": "string",
-            "description": "The complete HTML or XML SVG code. Can include <a-scene> for 3D. Must include unique IDs or data-keys for dynamic elements."
-          },
-          "js_content": {
-            "type": "string",
-            "description": "The JavaScript code using 'window.registerHmiBindings({...})' to animate the HMI based on MQTT data."
-          }
+        {
+            "name": "publish_message",
+            "description": "Publish a NEW MQTT message. You MUST strictly follow the topic template and JSON schema from get_model_definition if applicable. Check 'Broker Permissions' in system prompt to choose the correct broker_id.",
+            "category": "ENABLE_PUBLISH",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Target topic (e.g., 'mqttunsviewer/site/crane/load')."
+                    },
+                    "payload": {
+                        "type": "string",
+                        "description": "The payload as a string. If format is 'json' or 'sparkplugb', this must be a valid JSON string."
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": [
+                            "string",
+                            "json",
+                            "sparkplugb"
+                        ],
+                        "description": "Payload format."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional. ID of the broker to use."
+                    },
+                    "qos": {
+                        "type": "number",
+                        "description": "The QoS level (0, 1, or 2)."
+                    },
+                    "retain": {
+                        "type": "boolean",
+                        "description": "Whether to set the retain flag."
+                    }
+                },
+                "required": [
+                    "topic",
+                    "payload"
+                ]
+            }
         },
-        "required": [
-          "view_name",
-          "hmi_content",
-          "js_content"
-        ]
-      }
-    },
-    {
-      "name": "get_available_hmi_views",
-      "description": "Lists all HMI files (.html, .svg) available in the /data directory that can be displayed in the 'HMI Dashboard' tab.",
-      "category": "ENABLE_FILES",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "get_mapper_config",
-      "description": "Retrieves the entire (JSON) configuration for the Topic Mapper engine, including all versions and rules.",
-      "category": "ENABLE_MAPPER",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "update_mapper_rule",
-      "description": "Adds or updates a mapping rule in the active configuration. WARNING: The code runs in a sandbox. You MUST act on `msg` (input) and return `msg` (output).",
-      "category": "ENABLE_MAPPER",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "sourceTopic": {
-            "type": "string",
-            "description": "The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."
-          },
-          "targetTopic": {
-            "type": "string",
-            "description": "The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."
-          },
-          "targetCode": {
-            "type": "string",
-            "description": "The ASYNC JavaScript code for the transformation. Must return the `msg` object."
-          }
+        {
+            "name": "list_project_files",
+            "description": "Lists files in the project root and `data` directory. Useful for finding existing views, 3D models (.glb), or simulators.",
+            "category": "ENABLE_FILES",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         },
-        "required": [
-          "sourceTopic",
-          "targetTopic",
-          "targetCode"
-        ]
-      }
-    },
-    {
-      "name": "prune_topic_history",
-      "description": "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
-      "category": "ENABLE_ADMIN",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "topic_pattern": {
-            "type": "string",
-            "description": "The topic pattern to prune, using MQTT wildcards (+, #)."
-          },
-          "broker_id": {
-            "type": "string",
-            "description": "Optional. The ID of the broker to prune from (e.g., 'broker_1')."
-          }
+        {
+            "name": "get_file_content",
+            "description": "Reads the content of a file (HTML, SVG, JS, JSON). Cannot read binary 3D files.",
+            "category": "ENABLE_FILES",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "Relative path (e.g., 'data/view.html')."
+                    }
+                },
+                "required": [
+                    "filename"
+                ]
+            }
         },
-        "required": [
-          "topic_pattern"
-        ]
-      }
-    },
-    {
-      "name": "get_simulator_status",
-      "description": "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
-      "category": "ENABLE_SIMULATOR",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "start_simulator",
-      "description": "Starts a specific MQTT data simulator by name.",
-      "category": "ENABLE_SIMULATOR",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name of the scenario to start (e.g., 'stark_industries')."
-          }
+        {
+            "name": "save_file_to_data_directory",
+            "description": "Saves content to a file in the `data/` directory. Use for HTML, SVGs, JS bindings, or Simulators.",
+            "category": "ENABLE_FILES",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "The name of the file to create inside the 'data/' directory (e.g., 'my_llm_simulator.js' or 'my_dashboard.html')."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The full text content to save."
+                    }
+                },
+                "required": [
+                    "filename",
+                    "content"
+                ]
+            }
         },
-        "required": [
-          "name"
-        ]
-      }
-    },
-    {
-      "name": "stop_simulator",
-      "description": "Stops a specific MQTT data simulator by name.",
-      "category": "ENABLE_SIMULATOR",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name of the scenario to stop."
-          }
+        {
+            "name": "create_hmi_view",
+            "description": "Creates a new interactive HMI dashboard by saving TWO files: the view (.html or .svg) and its logic script (.js). Use this when the user asks for a 'dashboard', 'diagram', 'synoptic', or '3D view'. Ensure you have identified the relevant MQTT topics first.",
+            "category": "ENABLE_FILES",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "view_name": {
+                        "type": "string",
+                        "description": "Filename with extension (e.g., 'pump_station.html' or 'motor.svg')."
+                    },
+                    "hmi_content": {
+                        "type": "string",
+                        "description": "The complete HTML or XML SVG code. Can include <a-scene> for 3D. Must include unique IDs or data-keys for dynamic elements."
+                    },
+                    "js_content": {
+                        "type": "string",
+                        "description": "The JavaScript code using 'window.registerHmiBindings({...})' to animate the HMI based on MQTT data."
+                    }
+                },
+                "required": [
+                    "view_name",
+                    "hmi_content",
+                    "js_content"
+                ]
+            }
         },
-        "required": [
-          "name"
-        ]
-      }
-    },
-    {
-      "name": "restart_application_server",
-      "description": "Triggers a graceful restart of the main MQTT UNS Viewer web server.",
-      "category": "ENABLE_ADMIN",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "list_alert_rules",
-      "description": "Lists all defined alert rules. Includes rule ID, name, severity, and status.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "list_active_alerts",
-      "description": "Lists currently triggered alerts. Includes timestamp, severity, status (new, acknowledged, etc.) and analysis.",
-      "category": "ENABLE_READ",
-      "inputSchema": {
-        "type": "object",
-        "properties": {},
-        "required": []
-      }
-    },
-    {
-      "name": "create_alert_rule",
-      "description": "Creates a new detection rule. condition_code is JS returning boolean (e.g., `return msg.payload.value > 50`).",
-      "category": "ENABLE_ADMIN",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Descriptive name for the rule."
-          },
-          "topic_pattern": {
-            "type": "string",
-            "description": "MQTT topic pattern (e.g., factory/+/temp)."
-          },
-          "condition_code": {
-            "type": "string",
-            "description": "JavaScript condition. Access `msg.payload`. Must return boolean."
-          },
-          "severity": {
-            "type": "string",
-            "enum": ["info", "warning", "critical"],
-            "description": "Alert severity."
-          },
-          "workflow_prompt": {
-            "type": "string",
-            "description": "Optional instructions for AI Agent when alert triggers."
-          },
-          "is_global": {
-            "type": "boolean",
-            "description": "If true, creates a global rule (Admin only)."
-          }
+        {
+            "name": "get_available_hmi_views",
+            "description": "Lists all HMI files (.html, .svg) available in the /data directory that can be displayed in the 'HMI Dashboard' tab.",
+            "category": "ENABLE_FILES",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         },
-        "required": [
-          "name",
-          "topic_pattern",
-          "condition_code",
-          "severity"
-        ]
-      }
-    },
-    {
-      "name": "update_alert_rule",
-      "description": "Updates an existing alert rule.",
-      "category": "ENABLE_ADMIN",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "The ID of the rule to update."
-          },
-          "name": {
-            "type": "string"
-          },
-          "topic_pattern": {
-            "type": "string"
-          },
-          "condition_code": {
-            "type": "string"
-          },
-          "severity": {
-            "type": "string",
-            "enum": ["info", "warning", "critical"]
-          },
-          "workflow_prompt": {
-            "type": "string"
-          }
+        {
+            "name": "get_mapper_config",
+            "description": "Retrieves the entire (JSON) configuration for the Topic Mapper engine, including all versions and rules.",
+            "category": "ENABLE_MAPPER",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
         },
-        "required": [
-          "id"
-        ]
-      }
-    },
-    {
-      "name": "delete_alert_rule",
-      "description": "Deletes an alert rule.",
-      "category": "ENABLE_ADMIN",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "The ID of the rule to delete."
-          }
+        {
+            "name": "update_mapper_rule",
+            "description": "Adds or updates a mapping rule in the active configuration. WARNING: The code runs in a sandbox. You MUST act on `msg` (input) and return `msg` (output).",
+            "category": "ENABLE_MAPPER",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "sourceTopic": {
+                        "type": "string",
+                        "description": "The exact source topic to match (e.g., 'stark_industries/malibu_facility/mes/oee')."
+                    },
+                    "targetTopic": {
+                        "type": "string",
+                        "description": "The destination topic to publish to (e.g., 'UNS/malibu/kpi/oee_percent')."
+                    },
+                    "targetCode": {
+                        "type": "string",
+                        "description": "The ASYNC JavaScript code for the transformation. Must return the `msg` object."
+                    }
+                },
+                "required": [
+                    "sourceTopic",
+                    "targetTopic",
+                    "targetCode"
+                ]
+            }
         },
-        "required": [
-          "id"
-        ]
-      }
-    },
-    {
-      "name": "update_alert_status",
-      "description": "Updates the status of a triggered alert (e.g., acknowledge it).",
-      "category": "ENABLE_PUBLISH",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "alert_id": {
-            "type": "string",
-            "description": "The ID of the alert instance."
-          },
-          "status": {
-            "type": "string",
-            "enum": ["acknowledged", "resolved"],
-            "description": "New status."
-          }
+        {
+            "name": "prune_topic_history",
+            "description": "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "topic_pattern": {
+                        "type": "string",
+                        "description": "The topic pattern to prune, using MQTT wildcards (+, #)."
+                    },
+                    "broker_id": {
+                        "type": "string",
+                        "description": "Optional. The ID of the broker to prune from (e.g., 'broker_1')."
+                    }
+                },
+                "required": [
+                    "topic_pattern"
+                ]
+            }
         },
-        "required": [
-          "alert_id",
-          "status"
-        ]
-      }
-    }
-  ]
+        {
+            "name": "get_simulator_status",
+            "description": "Gets the current status of all available simulators (e.g., 'stark_industries', 'death_star').",
+            "category": "ENABLE_SIMULATOR",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "start_simulator",
+            "description": "Starts a specific MQTT data simulator by name.",
+            "category": "ENABLE_SIMULATOR",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the scenario to start (e.g., 'stark_industries')."
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            }
+        },
+        {
+            "name": "stop_simulator",
+            "description": "Stops a specific MQTT data simulator by name.",
+            "category": "ENABLE_SIMULATOR",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the scenario to stop."
+                    }
+                },
+                "required": [
+                    "name"
+                ]
+            }
+        },
+        {
+            "name": "restart_application_server",
+            "description": "Triggers a graceful restart of the main MQTT UNS Viewer web server.",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "list_alert_rules",
+            "description": "Lists all defined alert rules. Includes rule ID, name, severity, and status.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "list_active_alerts",
+            "description": "Lists currently triggered alerts. Includes timestamp, severity, status (new, acknowledged, etc.) and analysis.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "create_alert_rule",
+            "description": "Creates a new detection rule. condition_code is JS returning boolean (e.g., `return msg.payload.value > 50`).",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Descriptive name for the rule."
+                    },
+                    "topic_pattern": {
+                        "type": "string",
+                        "description": "MQTT topic pattern (e.g., factory/+/temp)."
+                    },
+                    "condition_code": {
+                        "type": "string",
+                        "description": "JavaScript condition. Access `msg.payload`. Must return boolean."
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": [
+                            "info",
+                            "warning",
+                            "critical"
+                        ],
+                        "description": "Alert severity."
+                    },
+                    "workflow_prompt": {
+                        "type": "string",
+                        "description": "Optional instructions for AI Agent when alert triggers."
+                    },
+                    "is_global": {
+                        "type": "boolean",
+                        "description": "If true, creates a global rule (Admin only)."
+                    }
+                },
+                "required": [
+                    "name",
+                    "topic_pattern",
+                    "condition_code",
+                    "severity"
+                ]
+            }
+        },
+        {
+            "name": "update_alert_rule",
+            "description": "Updates an existing alert rule.",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The ID of the rule to update."
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "topic_pattern": {
+                        "type": "string"
+                    },
+                    "condition_code": {
+                        "type": "string"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "enum": [
+                            "info",
+                            "warning",
+                            "critical"
+                        ]
+                    },
+                    "workflow_prompt": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            }
+        },
+        {
+            "name": "delete_alert_rule",
+            "description": "Deletes an alert rule.",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The ID of the rule to delete."
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            }
+        },
+        {
+            "name": "update_alert_status",
+            "description": "Updates the status of a triggered alert (e.g., acknowledge it).",
+            "category": "ENABLE_PUBLISH",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "alert_id": {
+                        "type": "string",
+                        "description": "The ID of the alert instance."
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "acknowledged",
+                            "resolved"
+                        ],
+                        "description": "New status."
+                    }
+                },
+                "required": [
+                    "alert_id",
+                    "status"
+                ]
+            }
+        },
+        {
+            "name": "get_ai_action_history",
+            "description": "Returns the history of modifications performed by the AI. Use this to find the action_id to revert.",
+            "category": "hmi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "number",
+                        "description": "How many past actions to return."
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "revert_ai_action",
+            "description": "Reverts a destructive/modifying action previously executed by the AI (e.g. restoring a backed-up file or rolling back a rule). Look up the action ID first using get_ai_action_history.",
+            "category": "hmi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action_id": {
+                        "type": "string",
+                        "description": "The ID of the action to revert."
+                    }
+                },
+                "required": [
+                    "action_id"
+                ]
+            }
+        }
+    ]
 }

@@ -25,3 +25,4 @@ repomix-output.xml
 .repomix/bundles.json
 repomix.config.json
 docker-compose.yml.demo
+data/simulators/simulator-alat.js

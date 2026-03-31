@@ -100,9 +100,12 @@ function initializeElements(container) {
             if (targetId === 'admin-assets-panel') loadHmiAssets();
             if (targetId === 'admin-simulators-panel') loadSimulators();
             if (targetId === 'admin-webhooks-panel') loadWebhooks();
+            if (targetId === 'admin-ai-panel') loadAiHistory();
             // Data parsers panel doesn't require immediate fetch on load currently
         });
     });
+
+    document.getElementById('btn-ai-history-refresh')?.addEventListener('click', loadAiHistory);
     // 3. Database Maintenance Logic
     btnImportDb = document.getElementById('btn-import-db');
     importInput = document.getElementById('db-import-input');
@@ -841,4 +844,75 @@ async function saveAssetEditor() {
     } catch (e) {
         alert("Clear failed: " + e.message);
     }
+    }
+
+    // --- AI History Logic ---
+    async function loadAiHistory() {
+        const tbody = document.getElementById('admin-ai-history-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading AI History...</td></tr>';
+        try {
+            const res = await fetch('api/admin/ai_history');
+            if (!res.ok) throw new Error("Failed to fetch AI history.");
+            const history = await res.json();
+            renderAiHistory(history, tbody);
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
+        }
+    }
+
+    function renderAiHistory(history, tbody) {
+        tbody.innerHTML = '';
+        if (!history || history.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">No AI modifications recorded.</td></tr>';
+            return;
+        }
+
+        history.forEach(action => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--color-border)';
+            const time = new Date(action.timestamp).toLocaleString();
+            
+            let details = '';
+            if (action.toolName === 'create_hmi_view') details = `View: ${action.args.view_name}`;
+            else if (action.toolName === 'save_file_to_data_directory') details = `File: ${action.args.filename}`;
+            else if (action.toolName === 'update_mapper_rule') details = `Mapper: ${action.args.sourceTopic}`;
+            else details = JSON.stringify(action.args).substring(0, 50) + '...';
+
+            const canRevert = action.originalState != null;
+            const revertBtn = canRevert 
+                ? `<button class="tool-button button-danger btn-revert-ai" data-id="${action.id}" data-tool="${action.toolName}">Revert</button>` 
+                : `<span style="font-size:0.8em; color:var(--color-text-secondary);">No Backup</span>`;
+
+            tr.innerHTML = `
+                <td style="padding: 10px; font-size: 0.85em;">${time}</td>
+                <td style="padding: 10px;">${action.user}</td>
+                <td style="padding: 10px; font-family: monospace;">${action.toolName}</td>
+                <td style="padding: 10px; font-size: 0.9em;">${details}</td>
+                <td style="padding: 10px; text-align: right;">${revertBtn}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.btn-revert-ai').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.dataset.id;
+                const tool = e.target.dataset.tool;
+                const isConfirmed = await confirmModal('Revert AI Action', `Are you sure you want to revert the AI modification: ${tool}?`, 'Revert', true);
+                if (!isConfirmed) return;
+                
+                try {
+                    const res = await fetch(`api/admin/ai_history/${id}/revert`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert("✅ Action reverted successfully.");
+                        loadAiHistory();
+                    } else {
+                        alert("❌ Error: " + data.error);
+                    }
+                } catch (err) {
+                    alert("Request failed: " + err.message);
+                }
+            });
+        });
     }
