@@ -9,7 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  * * * Central Message Dispatcher
  * Orchestrates the processing of a new message from ANY data provider (MQTT, OPC UA, File, etc.).
- * [UPDATED] Integrates SemanticManager to tag payloads with I3X elementId and typeId.
+ * [UPDATED] Handles ingress Correlation IDs or generates them if missing.
  */
 
 const crypto = require('crypto');
@@ -38,7 +38,7 @@ let mapperEngine;
 let dataManager;
 let broadcastDbStatus;
 let alertManager;
-const semanticManager = require('./semantic/semanticManager'); // [NEW] Semantic Engine
+const semanticManager = require('./semantic/semanticManager'); // Semantic Engine
 
 const MAX_PAYLOAD_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -53,24 +53,27 @@ let throttleResetTimer = null;
  * @param {string} providerId - The ID of the provider sending the data
  * @param {string} topic - The destination topic/node
  * @param {any} payload - The payload (String, Buffer, or parsed JS Object)
- * @param {Object} options - Metadata injected by the provider (e.g., isSparkplugOrigin)
+ * @param {Object} options - Metadata injected by the provider (e.g., isSparkplugOrigin, correlationId)
  */
 async function handleMessage(providerId, topic, payload, options = {}) {
     const timestamp = new Date();
-    const correlationId = crypto.randomUUID(); // [NEW] Generate Trace ID
-    const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null } = options;
+    
+    // [UPDATED] Use ingress correlationId if provided, otherwise generate a new one
+    const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null, correlationId: ingressCorrelationId } = options;
+    const correlationId = ingressCorrelationId || crypto.randomUUID(); 
 
     let payloadObjectForMapper = null; 
     let payloadStringForWs = null;     
     let payloadStringForDb = null;     
 
-    // [UPDATED] Include correlationId in all logs for this message
+    // Include correlationId in all logs for this message
     const handlerLogger = logger.child({ provider: providerId, correlationId }); 
 
     try {
         // --- 1. Smart Namespace Rate Limiting (Anti-Spam) ---
         const parts = topic.split('/');
         const namespace = parts.length > 1 ? `${providerId}:${parts[0]}/${parts[1]}` : `${providerId}:${parts[0]}`;
+
         const count = (namespaceCounts.get(namespace) || 0) + 1;
         namespaceCounts.set(namespace, count);
 
@@ -83,7 +86,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
 
         // --- 2. Payload Size Protection ---
         const payloadSize = rawBuffer ? rawBuffer.length : (Buffer.isBuffer(payload) ? payload.length : Buffer.byteLength(typeof payload === 'string' ? payload : JSON.stringify(payload) || '', 'utf8'));
-        
+
         if (payloadSize > MAX_PAYLOAD_SIZE_BYTES) {
             handlerLogger.warn({ topic, size: payloadSize }, "⚠️ Payload too large. Truncating to prevent DoS.");
             const oversizeMsg = { 
@@ -101,6 +104,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                 payloadStringForWs = rawBuffer ? rawBuffer.toString('hex') : "unknown_hex";
                 payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeError });
                 payloadObjectForMapper = safeJsonParse(payloadStringForDb);
+
             } else if (typeof payload === 'object' && !Buffer.isBuffer(payload)) {
                 // The Provider ALREADY decoded the payload into a JS Object (e.g. Sparkplug)
                 payloadObjectForMapper = payload;
@@ -143,7 +147,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             topic,
             payload: payloadStringForWs,
             timestamp: timestamp.toISOString(),
-            correlationId // [NEW] Send trace ID to UI if needed
+            correlationId // Send trace ID to UI if needed
         };
         wsManager.broadcast(JSON.stringify(finalMessageObject));
 
@@ -156,7 +160,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             payloadStringForDb, 
             isSparkplugOrigin, 
             needsDb,
-            correlationId // [NEW] Propagate to DB
+            correlationId // Propagate to DB
         });
 
         if (!needsDb) {
@@ -167,7 +171,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             alertManager.processMessage(providerId, topic, payloadObjectForMapper, correlationId);
         }
 
-        // --- 6. [NEW] Webhook Execution ---
+        // --- 6. Webhook Execution ---
         const webhookManager = require('./webhookManager');
         webhookManager.trigger(topic, payloadObjectForMapper, correlationId);
 
@@ -191,8 +195,8 @@ function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManage
     if (!throttleResetTimer) {
         throttleResetTimer = setInterval(() => { namespaceCounts.clear(); }, 1000);
     }
-
     logger.info("✅ Central Message Dispatcher initialized (Protocol Agnostic).");
+
     return handleMessage; 
 }
 

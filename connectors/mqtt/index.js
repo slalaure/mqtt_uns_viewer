@@ -3,12 +3,13 @@
  * @author Sebastien Lalaurette
  * * MQTT Provider Plugin
  * Implements the BaseProvider interface for MQTT/MQTTS connections.
- * Handles MQTT-specific payload decoding (like Sparkplug B).
+ * Handles MQTT-specific payload decoding (like Sparkplug B) and MQTT v5 properties.
  */
+
 const mqtt = require('mqtt');
 const fs = require('fs');
 const path = require('path');
-const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); // Moved here!
+const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); 
 const BaseProvider = require('../baseProvider');
 
 class MqttProvider extends BaseProvider {
@@ -76,10 +77,10 @@ class MqttProvider extends BaseProvider {
                 this.logger.info(`✅ Connected.`);
                 this.connected = true;
                 this.updateStatus('connected');
-                
+
                 const rawTopics = (subscribe && subscribe.length > 0) ? subscribe : topics;
                 const subscriptionTopics = Array.isArray(rawTopics) ? rawTopics.map(t => t.trim()) : [];
-                
+
                 if (subscriptionTopics.length > 0) {
                     this.client.subscribe(subscriptionTopics, { qos: 1 }, (err) => {
                         if (err) this.logger.error({ err }, `❌ Subscription failed`);
@@ -89,7 +90,8 @@ class MqttProvider extends BaseProvider {
                 resolve(true);
             });
 
-            this.client.on('message', (topic, payload) => {
+            // [UPDATED] Added packet parameter to extract MQTT v5 properties
+            this.client.on('message', (topic, payload, packet) => {
                 let isSparkplugOrigin = false;
                 let processedPayload = payload;
                 let decodeError = null;
@@ -105,12 +107,23 @@ class MqttProvider extends BaseProvider {
                     }
                 }
 
+                // [NEW] Extract Correlation ID from MQTT v5 properties if available
+                let correlationId = null;
+                if (packet && packet.properties) {
+                    if (packet.properties.userProperties && packet.properties.userProperties.correlationId) {
+                        correlationId = packet.properties.userProperties.correlationId;
+                    } else if (packet.properties.correlationData) {
+                        correlationId = packet.properties.correlationData.toString();
+                    }
+                }
+
                 // Pass the processed payload and metadata to the central engine
                 if (this.context.handleMessage) {
                     this.context.handleMessage(this.id, topic, processedPayload, {
                         isSparkplugOrigin,
                         rawBuffer: payload,
-                        decodeError
+                        decodeError,
+                        correlationId
                     });
                 } else {
                     this.logger.warn(`Message dropped: Central handler not bound for ${this.id}`);
