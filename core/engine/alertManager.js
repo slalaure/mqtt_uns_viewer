@@ -11,6 +11,7 @@
  * Alert Manager (Root Service)
  * Handles Alert Rules definitions, Real-time evaluation, and Alert Lifecycle state.
  * Integrated with Autonomous AI Agent Workflow.
+ * [UPDATED] Implemented V8 Script/Regex caching and Event Loop yielding for extreme high-throughput.
  */
 const crypto = require('crypto');
 const vm = require('vm');
@@ -20,6 +21,7 @@ let logger = null;
 let llmConfig = null;
 let broadcaster = null;
 let agentRunner = null; // Holds the AI Agent function
+
 // Sandbox configuration for safe evaluation
 const createSandbox = (msg) => {
     return {
@@ -50,11 +52,13 @@ const createSandbox = (msg) => {
         }
     };
 };
+
 function init(database, appLogger, config, appBroadcaster) {
     db = database;
     logger = appLogger.child({ component: 'AlertManager' });
     llmConfig = config;
     broadcaster = appBroadcaster;
+    
     const createRulesTable = `
         CREATE TABLE IF NOT EXISTS alert_rules (
             id VARCHAR PRIMARY KEY,
@@ -69,6 +73,7 @@ function init(database, appLogger, config, appBroadcaster) {
             created_at TIMESTAMPTZ
         );
     `;
+    
     const createAlertsTable = `
         CREATE TABLE IF NOT EXISTS active_alerts (
             id VARCHAR PRIMARY KEY,
@@ -84,10 +89,10 @@ function init(database, appLogger, config, appBroadcaster) {
             updated_at TIMESTAMPTZ
         );
     `;
+    
     db.run(createRulesTable);
     db.run(createAlertsTable, (err) => {
         if (!err) {
-            // [UPDATED] Schema Migration for existing databases
             db.all("PRAGMA table_info(active_alerts);", (pragmaErr, columns) => {
                 if (columns) {
                     if (!columns.some(col => col.name === 'handled_by')) {
@@ -106,22 +111,23 @@ function init(database, appLogger, config, appBroadcaster) {
             });
         }
     });
+    
     logger.info("✅ Alert Manager initialized.");
-    // [FIX] Log here if agent was registered before init
     if (agentRunner) {
         logger.info("✅ Alert Manager: AI Agent capabilities (pre-registered) are active.");
     }
 }
+
 /**
  * Registers the AI Agent runner function from chatApi.js
  */
 function registerAgentRunner(runnerFn) {
     agentRunner = runnerFn;
-    // [FIX] Only log if logger is initialized, otherwise init() will log it.
     if (logger) {
         logger.info("✅ Alert Manager: AI Agent capabilities registered.");
     }
 }
+
 function createRule(ruleData) {
     return new Promise((resolve, reject) => {
         const id = `rule_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -139,6 +145,7 @@ function createRule(ruleData) {
         });
     });
 }
+
 function updateRule(id, userId, ruleData, isAdmin) {
     return new Promise((resolve, reject) => {
         db.all("SELECT owner_id FROM alert_rules WHERE id = ?", id, (err, rows) => {
@@ -162,6 +169,7 @@ function updateRule(id, userId, ruleData, isAdmin) {
         });
     });
 }
+
 function getRules(userId) {
     return new Promise((resolve, reject) => {
         let query = "SELECT * FROM alert_rules WHERE owner_id = 'global'";
@@ -180,6 +188,7 @@ function getRules(userId) {
         });
     });
 }
+
 function deleteRule(ruleId, userId, isAdmin) {
     return new Promise((resolve, reject) => {
         db.all("SELECT owner_id FROM alert_rules WHERE id = ?", ruleId, (err, rows) => {
@@ -196,6 +205,7 @@ function deleteRule(ruleId, userId, isAdmin) {
         });
     });
 }
+
 function getActiveAlerts(userId) {
     return new Promise((resolve, reject) => {
         const query = `
@@ -212,6 +222,7 @@ function getActiveAlerts(userId) {
         });
     });
 }
+
 function updateAlertStatus(alertId, status, username, analysisResult = null) {
     return new Promise((resolve, reject) => {
         const now = new Date().toISOString();
@@ -225,7 +236,6 @@ function updateAlertStatus(alertId, status, username, analysisResult = null) {
         params.push(alertId);
         db.run(query, ...params, (err) => {
             if (err) return reject(err);
-            // Broadcast update
             if (broadcaster) {
                 broadcaster(JSON.stringify({ type: 'alert-updated', alertId, status, analysisResult }));
             }
@@ -233,18 +243,18 @@ function updateAlertStatus(alertId, status, username, analysisResult = null) {
         });
     });
 }
+
 function getResolvedAlertsStats() {
     return new Promise((resolve, reject) => {
         db.all("SELECT COUNT(*) as count FROM active_alerts WHERE status = 'resolved'", (err, rows) => {
             if (err) return reject(err);
-            // [CRITICAL FIX] Convert DuckDB BigInt to Number before math operations
             const count = rows[0]?.count ? Number(rows[0].count) : 0;
-            // Estimated size (approx 1KB per alert record)
             const estimatedSizeMb = (count / 1024).toFixed(2); 
             resolve({ count, estimatedSizeMb });
         });
     });
 }
+
 function purgeResolvedAlerts() {
     return new Promise((resolve, reject) => {
         db.run("DELETE FROM active_alerts WHERE status = 'resolved'", function(err) {
@@ -254,19 +264,38 @@ function purgeResolvedAlerts() {
         });
     });
 }
+
 async function processMessage(brokerId, topic, payload, correlationId = null) {
     if (!db) return;
+    
     db.all("SELECT * FROM alert_rules WHERE enabled = true", async (err, rules) => {
         if (err || !rules || rules.length === 0) return;
+        
         for (const rule of rules) {
-            const regex = new RegExp("^" + rule.topic_pattern.replace(/\+/g, '[^/]+').replace(/#/g, '.*') + "$");
-            if (regex.test(topic)) {
+            // [NEW] Cache RegExp object to avoid recompilation overhead
+            if (!rule._cachedRegex || rule._rawPattern !== rule.topic_pattern) {
+                rule._cachedRegex = new RegExp("^" + rule.topic_pattern.replace(/\+/g, '[^/]+').replace(/#/g, '.*') + "$");
+                rule._rawPattern = rule.topic_pattern;
+            }
+
+            if (rule._cachedRegex.test(topic)) {
                 try {
                     const msgContext = { topic, brokerId, payload, correlationId };
-                    const context = vm.createContext(createSandbox(msgContext));
-                    const wrappedCode = `(async () => { ${rule.condition_code} })()`;
-                    const script = new vm.Script(wrappedCode);
-                    const isTriggered = await script.runInContext(context, { timeout: 1000 });
+                    
+                    // [NEW] Yield to Event Loop to prevent starvation during massive packet storms
+                    await new Promise(setImmediate);
+                    
+                    const context = vm.createContext(createSandbox(msgContext), { microtaskMode: 'afterEvaluate' });
+                    
+                    // [NEW] Cache compiled vm.Script to eliminate V8 compilation spike
+                    if (!rule._cachedScript || rule._rawCode !== rule.condition_code) {
+                        const wrappedCode = `(async () => { ${rule.condition_code} })()`;
+                        rule._cachedScript = new vm.Script(wrappedCode);
+                        rule._rawCode = rule.condition_code;
+                    }
+                    
+                    const isTriggered = await rule._cachedScript.runInContext(context, { timeout: 1000 });
+                    
                     if (isTriggered === true) {
                         triggerAlert(rule, msgContext);
                     }
@@ -275,6 +304,7 @@ async function processMessage(brokerId, topic, payload, correlationId = null) {
         }
     });
 }
+
 function triggerAlert(rule, msgContext) {
     const dedupQuery = `
         SELECT id FROM active_alerts 
@@ -283,16 +313,21 @@ function triggerAlert(rule, msgContext) {
     db.all(dedupQuery, rule.id, msgContext.topic, (err, rows) => {
         if (err) return;
         if (rows.length > 0) return;
+        
         const alertId = `alert_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
         const now = new Date().toISOString();
         const triggerVal = JSON.stringify(msgContext.payload).substring(0, 200);
+        
         const insertQuery = `
             INSERT INTO active_alerts (id, rule_id, topic, broker_id, trigger_value, status, correlation_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?)
         `;
+        
         db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, msgContext.correlationId || null, now, now, (insErr) => {
             if (insErr) return logger.error({ err: insErr, correlationId: msgContext.correlationId }, "Failed to persist alert.");
+            
             logger.info({ msg: `🚨 New Alert Triggered: ${rule.name} on ${msgContext.topic}`, correlationId: msgContext.correlationId });
+            
             if (broadcaster) {
                 broadcaster(JSON.stringify({
                     type: 'alert-triggered',
@@ -305,6 +340,7 @@ function triggerAlert(rule, msgContext) {
         });
     });
 }
+
 async function executeWorkflow(alertId, rule, msgContext) {
     let finalAnalysis = "No analysis performed.";
     const correlationId = msgContext.correlationId;
@@ -312,10 +348,9 @@ async function executeWorkflow(alertId, rule, msgContext) {
     // 1. Execute LLM Analysis (if agent configured)
     if (rule.workflow_prompt && agentRunner) {
         if (logger) logger.info({ msg: `[AlertWorkflow] Starting AI Analysis for Alert ${alertId}...`, correlationId });
-        // Update status to analyzing
+        
         updateAlertStatus(alertId, 'analyzing', 'System (AI)');
         
-        // [MODIFIED] Structured Prompt for Section Extraction
         const systemPrompt = `
             You are an Autonomous Industrial Alert Analyst.
             An alert triggered with the following context:
@@ -340,9 +375,7 @@ async function executeWorkflow(alertId, rule, msgContext) {
             [Your full detailed analysis in Markdown, including findings, history analysis, and reasoning.]
         `;
         try {
-            // Run the Agent Loop (Max 10 turns)
             finalAnalysis = await agentRunner(systemPrompt, `Proceed with investigation for alert ${alertId}. Trace ID: ${correlationId || 'none'}`);
-            // Save result to DB and set status to Open (Action required)
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
             if (logger) logger.info({ msg: `[AlertWorkflow] AI Analysis complete for ${alertId}`, correlationId });
         } catch (aiError) {
@@ -351,9 +384,11 @@ async function executeWorkflow(alertId, rule, msgContext) {
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
         }
     }
+    
     // 2. Send Notifications (Webhook) with Analysis
     let notifications = {};
     try { notifications = JSON.parse(rule.notifications); } catch(e){}
+    
     if (notifications.webhook) {
         try {
             await axios.post(notifications.webhook, {
@@ -369,6 +404,7 @@ async function executeWorkflow(alertId, rule, msgContext) {
         }
     }
 }
+
 module.exports = {
     init,
     registerAgentRunner,

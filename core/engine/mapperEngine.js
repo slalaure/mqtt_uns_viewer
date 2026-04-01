@@ -12,6 +12,7 @@
  * Supports versioning, multi-target rules, JS/Mustache modes, and metrics.
  * [UPDATED] File path adjusted for new location in core/engine/
  * [UPDATED] isPublishAllowed now supports dynamic DATA_PROVIDERS (e.g. CSV stream).
+ * [UPDATED] Implemented V8 Script caching and Event Loop yielding for extreme high-throughput.
  */
 
 const fs = require('fs');
@@ -176,7 +177,7 @@ const updateMetrics = (rule, target, inTopic, outPayloadStr, outTopic, errorMsg 
     const logEntry = {
         ts: new Date().toISOString(),
         inTopic: inTopic,
-        correlationId: correlationId // [NEW] Link metrics to raw message trace
+        correlationId: correlationId 
     };
 
     if (errorMsg) {
@@ -221,11 +222,9 @@ const rulesForTopicRequireDb = (topic) => {
     return false; 
 };
 
-//  Helper to check if publishing is allowed based on server config
 const isPublishAllowed = (brokerId, topic) => {
-    if (!serverConfig) return true; // Default allow if no config
+    if (!serverConfig) return true; 
     
-    // Combine legacy brokers and new data providers
     const allConfigs = [
         ...(serverConfig.BROKER_CONFIGS || []),
         ...(serverConfig.DATA_PROVIDERS || [])
@@ -234,13 +233,12 @@ const isPublishAllowed = (brokerId, topic) => {
     const providerConfig = allConfigs.find(b => b.id === brokerId);
     
     if (!providerConfig) {
-        // Fallback for dynamic providers (e.g. CSV parser started from Admin UI)
         if (activeConnections.has(brokerId)) return true;
         return false; 
     }
     
     const publishPatterns = providerConfig.publish || [];
-    if (publishPatterns.length === 0) return false; // Read-Only
+    if (publishPatterns.length === 0) return false; 
     return publishPatterns.some(pattern => mqttMatch(pattern, topic));
 };
 
@@ -252,7 +250,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
         topic: topic,
         payload: payloadObject,
         brokerId: brokerId,
-        correlationId: correlationId // [NEW] Inject into sandbox
+        correlationId: correlationId 
     };
 
     for (const rule of activeRules) {
@@ -272,18 +270,23 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                         return; 
                     }
 
+                    // [NEW] Yield to Event Loop to prevent starvation during massive packet storms
+                    await new Promise(setImmediate);
+
                     let resultMsg = null;
-                    const context = vm.createContext(createSandbox(msgForSandbox));
+                    const context = vm.createContext(createSandbox(msgForSandbox), { microtaskMode: 'afterEvaluate' });
                     
-                    const cleanCode = target.code.replace(/\u00A0/g, " ");
-                    const script = new vm.Script(`(async () => { ${cleanCode} })();`); 
-                    resultMsg = await script.runInContext(context, { timeout: 2000 }); 
+                    // [NEW] Compile and Cache the V8 Script to eliminate CPU spikes on hot loops
+                    if (!target._cachedScript || target._rawCode !== target.code) {
+                        const cleanCode = target.code.replace(/\u00A0/g, " ");
+                        target._cachedScript = new vm.Script(`(async () => { ${cleanCode} })();`);
+                        target._rawCode = target.code;
+                    }
+                    
+                    resultMsg = await target._cachedScript.runInContext(context, { timeout: 2000 }); 
 
                     if (resultMsg !== null && resultMsg !== undefined) {
-                        // Support returning an array of messages
                         const results = Array.isArray(resultMsg) ? resultMsg : [resultMsg];
-
-                        // Parse UI declared topics for fan-out
                         const declaredTopics = target.outputTopic ? target.outputTopic.split(',').map(t => t.trim()).filter(t => t) : [];
 
                         for (const res of results) {
@@ -292,7 +295,6 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                             let outputTopicsToPublish = [];
 
                             if (Array.isArray(resultMsg)) {
-                                // Array return: The script explicitly defines the routing
                                 if (res.topic) {
                                     outputTopicsToPublish.push(res.topic);
                                 } else {
@@ -300,12 +302,11 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                     continue;
                                 }
                             } else {
-                                // Single object return: Use the declared UI topics (fan-out via Mustache)
                                 const viewContext = {
                                     ...res.payload,
                                     topic: topic,
                                     brokerId: brokerId,
-                                    correlationId: correlationId // [NEW] Allow Mustache to use it
+                                    correlationId: correlationId
                                 };
 
                                 if (declaredTopics.length > 0) {
@@ -313,14 +314,12 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                         outputTopicsToPublish.push(mustache.render(dt, viewContext));
                                     }
                                 } else {
-                                    // Fallback if UI is empty but script overrides topic
                                     if (res.topic && res.topic !== topic) {
                                          outputTopicsToPublish.push(res.topic);
                                     }
                                 }
                             }
 
-                            // Now publish to all resolved output topics
                             for (const outputTopic of outputTopicsToPublish) {
                                 let outputPayload; 
                                 let outputPayloadForMetrics; 
@@ -345,7 +344,6 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                 
                                 if (connection && connection.connected) {
                                     if (isPublishAllowed(targetBrokerId, outputTopic)) {
-                                        // [UPDATED] Propagate correlationId if broker/protocol supports it (MQTT v5 User Properties)
                                         const publishOptions = { qos: 1, retain: false };
                                         if (correlationId) {
                                             publishOptions.properties = {
@@ -359,7 +357,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                             type: 'mapped-topic-generated',
                                             brokerId: targetBrokerId, 
                                             topic: outputTopic,
-                                            correlationId // [NEW] Link fan-out message to original
+                                            correlationId
                                         }));
 
                                         updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null, correlationId);
