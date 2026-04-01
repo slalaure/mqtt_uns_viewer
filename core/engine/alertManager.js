@@ -12,10 +12,13 @@
  * Handles Alert Rules definitions, Real-time evaluation, and Alert Lifecycle state.
  * Integrated with Autonomous AI Agent Workflow.
  * [UPDATED] Implemented V8 Script/Regex caching and Event Loop yielding for extreme high-throughput.
+ * [UPDATED] Prompt engineering delegated to the internal llmEngine.
  */
 const crypto = require('crypto');
 const vm = require('vm');
 const axios = require('axios');
+const llmEngine = require('./llmEngine');
+
 let db = null;
 let logger = null;
 let llmConfig = null;
@@ -272,7 +275,7 @@ async function processMessage(brokerId, topic, payload, correlationId = null) {
         if (err || !rules || rules.length === 0) return;
         
         for (const rule of rules) {
-            // [NEW] Cache RegExp object to avoid recompilation overhead
+            // Cache RegExp object to avoid recompilation overhead
             if (!rule._cachedRegex || rule._rawPattern !== rule.topic_pattern) {
                 rule._cachedRegex = new RegExp("^" + rule.topic_pattern.replace(/\+/g, '[^/]+').replace(/#/g, '.*') + "$");
                 rule._rawPattern = rule.topic_pattern;
@@ -282,12 +285,12 @@ async function processMessage(brokerId, topic, payload, correlationId = null) {
                 try {
                     const msgContext = { topic, brokerId, payload, correlationId };
                     
-                    // [NEW] Yield to Event Loop to prevent starvation during massive packet storms
+                    // Yield to Event Loop to prevent starvation during massive packet storms
                     await new Promise(setImmediate);
                     
                     const context = vm.createContext(createSandbox(msgContext), { microtaskMode: 'afterEvaluate' });
                     
-                    // [NEW] Cache compiled vm.Script to eliminate V8 compilation spike
+                    // Cache compiled vm.Script to eliminate V8 compilation spike
                     if (!rule._cachedScript || rule._rawCode !== rule.condition_code) {
                         const wrappedCode = `(async () => { ${rule.condition_code} })()`;
                         rule._cachedScript = new vm.Script(wrappedCode);
@@ -351,29 +354,8 @@ async function executeWorkflow(alertId, rule, msgContext) {
         
         updateAlertStatus(alertId, 'analyzing', 'System (AI)');
         
-        const systemPrompt = `
-            You are an Autonomous Industrial Alert Analyst.
-            An alert triggered with the following context:
-            - Rule: "${rule.name}" (${rule.severity})
-            - Topic: ${msgContext.topic}
-            - Trigger Payload: ${JSON.stringify(msgContext.payload)}
-            - Correlation ID: ${correlationId || 'N/A'}
-            
-            USER INSTRUCTION: ${rule.workflow_prompt}
-            
-            Investigate using available tools to find the root cause.
-            
-            CRITICAL: You MUST end your response with the following structured sections exactly:
+        const systemPrompt = llmEngine.generateAlertAnalysisPrompt(rule, msgContext);
 
-            ## TRIGGER
-            [One short sentence explaining exactly WHY the alert triggered. Example: "Temp 75C > Threshold 70C" or "Sensor X reported Fault code 99"]
-
-            ## ACTION
-            [One short, imperative sentence for the operator. Example: "Inspect cooling fan motor" or "Evacuate area immediately"]
-
-            ## REPORT
-            [Your full detailed analysis in Markdown, including findings, history analysis, and reasoning.]
-        `;
         try {
             finalAnalysis = await agentRunner(systemPrompt, `Proceed with investigation for alert ${alertId}. Trace ID: ${correlationId || 'none'}`);
             updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);

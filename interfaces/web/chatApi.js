@@ -9,28 +9,31 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
- * [UPDATED] Refactored Tool handlers to support HMI assets (HTML/SVG/GLB) instead of just SVGs.
+ * [UPDATED] Extracted LLM API calls and Prompt generation to llmEngine.
  */
 const express = require('express');
-const axios = require('axios');
 const mqttMatch = require('mqtt-match'); 
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto'); // For UUIDs
 const chrono = require('chrono-node');
-// [NEW] Import Alert Manager from ROOT to inject agent capability
+
 const alertManager = require('../../core/engine/alertManager');
+const llmEngine = require('../../core/engine/llmEngine');
+
 // --- Constants ---
 const MAX_AGENT_TURNS = 30; // Limit recursion to 30 turns
-const LLM_TIMEOUT_MS = 180000; // 180s timeout
+
 // --- State for Abort Control ---
 // Map<clientId, { abortController: AbortController, res: Response }>
 const activeStreams = new Map();
+
 // Helper to escape SQL string
 const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/'/g, "''");
 };
+
 // Helper to parse natural language time expression into SQL bounds
 const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
@@ -41,6 +44,7 @@ const parseTimeWindow = (timeExpression) => {
     let end = firstResult.end ? firstResult.end.date() : new Date(); 
     return { start, end };
 };
+
 // Helper to infer schema
 function _inferSchema(messages) {
     const schema = {};
@@ -58,14 +62,16 @@ function _inferSchema(messages) {
     }
     return schema;
 }
+
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
     const router = express.Router();
-    const ROOT_PATH = path.join(__dirname, '..','..');
+    const ROOT_PATH = path.join(__dirname, '..', '..');
     const DATA_PATH = path.join(ROOT_PATH, 'data');
     const PUBLIC_PATH = path.join(ROOT_PATH, 'public');
     const MANIFEST_PATH = path.join(PUBLIC_PATH, 'ai_tools_manifest.json');
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
     const SESSIONS_DIR = path.join(DATA_PATH, 'sessions');
+
     // --- Load Tools Manifest ---
     let toolsManifest = { system_prompt_template: "", tools: [] };
     const loadManifest = () => {
@@ -82,20 +88,20 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
     loadManifest(); // Initial load
+
     // --- Helper to send chunks via HTTP AND WebSocket ---
     const sendChunk = (res, type, content, clientId) => {
-        // Check if stream was aborted before sending
         if (clientId && !activeStreams.has(clientId)) return;
-        // Generate a unique ID for this chunk to allow frontend deduplication
+
         const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         const chunkData = { type, content, id: chunkId };
-        // 1. HTTP Streaming
+
         if (res && !res.writableEnded && res.writable) {
             const jsonStr = JSON.stringify(chunkData);
             res.write(jsonStr + '\n');
             if (res.flush) res.flush();
         }
-        // 2. WebSocket Unicast
+        
         if (clientId) {
             wsManager.sendToClient(clientId, {
                 type: 'chat-stream',
@@ -105,6 +111,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             });
         }
     };
+
     // Helper to load model
     let unsModel = [];
     const loadUnsModel = () => {
@@ -120,6 +127,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
     loadUnsModel();
+
     // --- User Scoped Session Directory Helper ---
     const getUserChatsDir = (req) => {
         let basePath;
@@ -133,8 +141,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
         return basePath;
     };
+
     // --- Session Management Routes ---
-    // LIST Sessions
+    
     router.get('/sessions', (req, res, next) => {
         const chatsDir = getUserChatsDir(req);
         try {
@@ -159,18 +168,16 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     updatedAt: stats.mtime
                 };
             });
-            // Sort by newest first
             sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
             res.json(sessions);
         } catch (e) {
             next(e);
         }
     });
-    // LOAD Session History
+
     router.get('/session/:id', (req, res, next) => {
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
-        // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
         if (fs.existsSync(filePath)) {
             try {
@@ -180,10 +187,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 next(e);
             }
         } else {
-            res.json([]); // New empty session
+            res.json([]);
         }
     });
-    // SAVE Session History
+
     router.post('/session/:id', (req, res, next) => {
         const history = req.body;
         if (!Array.isArray(history)) {
@@ -193,28 +200,23 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
         fs.writeFile(filePath, JSON.stringify(history, null, 2), (err) => {
-            if (err) {
-                return next(err);
-            }
+            if (err) return next(err);
             res.json({ success: true });
         });
     });
-    // DELETE Session
+
     router.delete('/session/:id', (req, res, next) => {
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
-        // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
         try {
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             res.json({ success: true });
         } catch (e) {
             next(e);
         }
     });
-    // STOP Generation Endpoint
+
     router.post('/stop', (req, res) => {
         const { clientId } = req.body;
         if (clientId && activeStreams.has(clientId)) {
@@ -230,7 +232,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     });
 
-    // --- Legacy /history Route ---
     router.get('/history', (req, res, next) => {
         req.params.id = 'default';
         const chatsDir = getUserChatsDir(req);
@@ -240,8 +241,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             catch (e) { next(e); }
         } else { res.json([]); }
     });
-    // --- 1. Prepare Tools for OpenAI ---
-    // Filter enabled tools based on config AND get descriptions for system prompt
+
     const getEnabledToolsInfo = () => {
         const enabledTools = [];
         const descriptions = [];
@@ -256,11 +256,26 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     parameters: toolDef.inputSchema
                 }
             });
-            // Add to Prompt Context
             descriptions.push(`- **${toolDef.name}**: ${toolDef.description}`);
         });
         return { tools: enabledTools, context: descriptions.join('\n') };
     };
+
+    // --- Action Manager ---
+    const AiActionManager = require('../mcp/aiActionManager');
+    const aiActionManager = new AiActionManager(DATA_PATH);
+
+    const SENSITIVE_TOOLS = [
+        'update_uns_model', 
+        'save_file_to_data_directory', 
+        'create_hmi_view', 
+        'update_mapper_rule', 
+        'prune_topic_history', 
+        'create_alert_rule',
+        'update_alert_rule',
+        'delete_alert_rule'
+    ];
+
     // --- Tool Implementations ---
     const toolImplementations = {
         get_application_status: async () => {
@@ -337,7 +352,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             });
         },
         
-        // Aggregate Time Series Tool (Leveraging DuckDB time_bucket)
         aggregate_time_series: async ({ topic, variables, time_expression, aggregation = 'MEAN', broker_id }) => {
             return new Promise((resolve, reject) => {
                 const timeWindow = parseTimeWindow(time_expression);
@@ -346,7 +360,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 const startMs = timeWindow.start.getTime();
                 const endMs = timeWindow.end.getTime();
                 const spanMs = endMs - startMs;
-                // Target exactly 500 buckets to keep response size optimal for the LLM
                 const bucketMs = Math.max(1000, Math.floor(spanMs / 500));
                 const aggFuncMap = { 'MEAN': 'AVG', 'MAX': 'MAX', 'MIN': 'MIN', 'MEDIAN': 'MEDIAN', 'SD': 'STDDEV', 'RANGE': 'RANGE', 'SUM': 'SUM' };
                 const aggType = aggFuncMap[aggregation] || 'AVG';
@@ -357,7 +370,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     if (v === '(value)') {
                         valExpr = `TRY_CAST(CAST(payload AS VARCHAR) AS DOUBLE)`;
                     } else {
-                        // Support JSON path extraction properly
                         let safePath = escapeSQL(v);
                         if (!safePath.startsWith('$')) {
                              safePath = safePath.startsWith('[') ? '$' + safePath : '$.' + safePath;
@@ -425,7 +437,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 try {
                     const newModel = JSON.parse(model_json);
                     if (!Array.isArray(newModel)) return resolve({ error: "Model must be a JSON Array." });
+                    
+                    const backupPath = aiActionManager.backupFile(MODEL_MANIFEST_PATH);
                     fs.writeFileSync(MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
+                    aiActionManager.logAction(user, 'update_uns_model', {}, { backupPath, originalPath: MODEL_MANIFEST_PATH });
+
                     resolve({ success: true, message: "UNS Model Manifest updated successfully." });
                 } catch (error) {
                     resolve({ error: `Error updating model: ${error.message}` });
@@ -471,19 +487,29 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         publish_message: async ({ topic, payload, retain = false, broker_id }) => {
             return new Promise((resolve) => {
                 logger.info(`[ChatAPI:publish] Topic: ${topic}`);
-                let targetBrokerConfig = config.BROKER_CONFIGS[0]; 
+                const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
+                let targetBrokerConfig = allProviders[0]; 
+                
                 if (broker_id) {
-                    targetBrokerConfig = config.BROKER_CONFIGS.find(b => b.id === broker_id);
+                    targetBrokerConfig = allProviders.find(b => b.id === broker_id);
                     if (!targetBrokerConfig) return resolve({ error: `Broker '${broker_id}' not found.` });
                 } else {
-                    const capableBroker = config.BROKER_CONFIGS.find(b => b.publish && b.publish.some(p => mqttMatch(p, topic)));
+                    const capableBroker = allProviders.find(b => {
+                        const pubs = b.publish || ((b.type === 'file' || b.type === 'dynamic') ? ['#'] : []);
+                        return pubs.some(p => mqttMatch(p, topic));
+                    });
                     if (capableBroker) targetBrokerConfig = capableBroker;
                 }
                 const usedBrokerId = targetBrokerConfig.id;
-                const allowed = targetBrokerConfig.publish && targetBrokerConfig.publish.some(p => mqttMatch(p, topic));
+                
+                const allowedTopics = targetBrokerConfig.publish || ((targetBrokerConfig.type === 'file' || targetBrokerConfig.type === 'dynamic') ? ['#'] : []);
+                const allowed = allowedTopics.some(p => mqttMatch(p, topic));
+                
                 if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
+                
                 const connection = getBrokerConnection(usedBrokerId);
                 if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
+                
                 let finalPayload = payload;
                 if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
                 connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
@@ -493,11 +519,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             });
         },
         list_project_files: async ({}, user) => {
-            const rootFiles = fs.readdirSync(path.join(__dirname, '..')).filter(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.md'));
+            const rootFiles = fs.readdirSync(ROOT_PATH).filter(f => f.endsWith('.js') || f.endsWith('.json') || f.endsWith('.md'));
             const globalFiles = fs.existsSync(DATA_PATH) ? fs.readdirSync(DATA_PATH).filter(f => f.match(/\.(svg|html|htm|js|json|gltf|glb|bin)$/i)) : [];
             let privateFiles = [];
             if (user && user.id) {
-                const userDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
+                const userDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                 if (fs.existsSync(userDir)) {
                     privateFiles = fs.readdirSync(userDir).map(f => `${f} (Private)`);
                 }
@@ -507,7 +533,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         get_file_content: async ({ filename }, user) => {
             let resolvedPath = null;
             if (user && user.id) {
-                const userHmiDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
+                const userHmiDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                 const userFile = path.join(userHmiDir, filename); 
                 if (fs.existsSync(userFile)) resolvedPath = userFile;
             }
@@ -516,14 +542,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 if (fs.existsSync(globalDataFile)) resolvedPath = globalDataFile;
             }
             if (!resolvedPath) {
-                const rootFile = path.join(__dirname, '..', filename);
+                const rootFile = path.join(ROOT_PATH, filename);
                 if (fs.existsSync(rootFile)) resolvedPath = rootFile;
             }
             if (!resolvedPath) return { error: "File not found." };
-            const relative = path.relative(path.join(__dirname, '..'), resolvedPath);
+            const relative = path.relative(ROOT_PATH, resolvedPath);
             if (relative.startsWith('..') && !path.isAbsolute(resolvedPath)) return { error: "Path traversal blocked." };
-            
-            // Prevent reading binary files for LLM
             if (resolvedPath.match(/\.(glb|bin|png|jpg|jpeg|ico)$/i)) {
                  return { error: "Cannot read binary file contents." };
             }
@@ -533,7 +557,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             let targetDir = DATA_PATH;
             let accessLevel = "Global";
             if (user && user.role !== 'admin') {
-                targetDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
+                targetDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                 if (!fs.existsSync(targetDir)) {
                     try { fs.mkdirSync(targetDir, { recursive: true }); } catch (e) {}
                 }
@@ -543,16 +567,19 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             }
             const resolvedPath = path.resolve(targetDir, path.basename(filename)); 
             if (!resolvedPath.startsWith(targetDir)) return { error: "Path traversal blocked." };
+            
+            const backupPath = aiActionManager.backupFile(resolvedPath);
             fs.writeFileSync(resolvedPath, content, 'utf8');
+            aiActionManager.logAction(user, 'save_file_to_data_directory', { filename }, { backupPath, originalPath: resolvedPath });
+
             return { success: true, path: `${accessLevel}/data/${filename}`, note: accessLevel === "Private" ? "File saved to your private workspace." : "File saved globally." };
         },
         create_hmi_view: async ({ view_name, hmi_content, js_content }, user) => {
             try {
-                // Ensure extension is provided, fallback to .html if not
                 let ext = path.extname(view_name).toLowerCase();
                 let baseName = path.basename(view_name, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
                 if (ext !== '.svg' && ext !== '.html' && ext !== '.htm') {
-                    ext = '.html'; // Default to HTML
+                    ext = '.html';
                 }
                 
                 const hmiFilename = `${baseName}${ext}`;
@@ -561,7 +588,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 let contextMessage = "Global";
                 
                 if (user && user.id) {
-                    targetDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
+                    targetDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                     contextMessage = "Private (User)";
                     if (!fs.existsSync(targetDir)) {
                         fs.mkdirSync(targetDir, { recursive: true });
@@ -570,8 +597,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 
                 const hmiPath = path.join(targetDir, hmiFilename);
                 const jsPath = path.join(targetDir, jsFilename);
+
+                let originalState = {};
+                if (fs.existsSync(hmiPath)) originalState.hmiBackup = aiActionManager.backupFile(hmiPath);
+                if (fs.existsSync(jsPath)) originalState.jsBackup = aiActionManager.backupFile(jsPath);
+                originalState.hmiPath = hmiPath;
+                originalState.jsPath = jsPath;
+
                 fs.writeFileSync(hmiPath, hmi_content, 'utf8');
                 fs.writeFileSync(jsPath, js_content, 'utf8');
+
+                aiActionManager.logAction(user, 'create_hmi_view', { view_name }, originalState);
                 
                 return { 
                     success: true, 
@@ -586,7 +622,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             const globalFiles = fs.readdirSync(DATA_PATH).filter(f => f.match(/\.(svg|html|htm)$/i));
             let allFiles = new Set(globalFiles);
             if (user && user.id) {
-                const userDir = path.join(SESSIONS_DIR, user.id, 'hmis'); // [REFACTORED]
+                const userDir = path.join(SESSIONS_DIR, user.id, 'hmis');
                 if (fs.existsSync(userDir)) {
                     const privateFiles = fs.readdirSync(userDir).filter(f => f.match(/\.(svg|html|htm)$/i));
                     privateFiles.forEach(f => allFiles.add(f)); 
@@ -598,12 +634,15 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             return { config: mapperEngine.getMappings() };
         },
-        update_mapper_rule: async ({ sourceTopic, targetTopic, targetCode }) => {
+        update_mapper_rule: async ({ sourceTopic, targetTopic, targetCode }, user) => {
             if (!mapperEngine) return { error: "Mapper Engine not available." };
             const config = mapperEngine.getMappings();
             const activeVersion = config.versions.find(v => v.id === config.activeVersionId);
             if (!activeVersion) return { error: "No active mapper version found." };
+            
             let rule = activeVersion.rules.find(r => r.sourceTopic.trim() === sourceTopic.trim());
+            let ruleBackup = rule ? JSON.stringify(rule) : null;
+
             if (!rule) {
                 rule = { sourceTopic: sourceTopic.trim(), targets: [] };
                 activeVersion.rules.push(rule);
@@ -616,6 +655,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 mode: "js",
                 code: sanitizedCode
             });
+
+            aiActionManager.logAction(user, 'update_mapper_rule', { sourceTopic, targetTopic }, { activeVersionId: config.activeVersionId, ruleBackup });
             const result = mapperEngine.saveMappings(config);
             return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
         },
@@ -664,12 +705,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (!user) return { error: "Authentication required." };
             const ruleData = { ...args };
             ruleData.owner_id = user.id;
-            // Admin can create global rules
             if (user.role === 'admin' && args.is_global) {
                 ruleData.owner_id = 'global';
             }
             try {
                 const result = await alertManager.createRule(ruleData);
+                aiActionManager.logAction(user, 'create_alert_rule', args, { createdId: result.id });
                 return { success: true, rule: result };
             } catch (e) {
                 return { error: e.message };
@@ -679,7 +720,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (!user) return { error: "Authentication required." };
             try {
                 const isAdmin = user.role === 'admin';
+                const existingRules = await alertManager.getRules(user.id);
+                const ruleBackup = existingRules.find(r => r.id === id);
+                
                 const result = await alertManager.updateRule(id, user.id, updates, isAdmin);
+                aiActionManager.logAction(user, 'update_alert_rule', { id, ...updates }, { ruleBackup });
                 return { success: true, rule: result };
             } catch (e) {
                 return { error: e.message };
@@ -689,7 +734,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             if (!user) return { error: "Authentication required." };
             try {
                 const isAdmin = user.role === 'admin';
+                const existingRules = await alertManager.getRules(user.id);
+                const ruleBackup = existingRules.find(r => r.id === id);
+
                 await alertManager.deleteRule(id, user.id, isAdmin);
+                aiActionManager.logAction(user, 'delete_alert_rule', { id }, { ruleBackup });
                 return { success: true, message: "Rule deleted." };
             } catch (e) {
                 return { error: e.message };
@@ -704,88 +753,103 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             } catch (e) {
                 return { error: e.message };
             }
+        },
+        get_ai_action_history: async ({ limit = 10 }, user) => {
+            let history = aiActionManager.getHistory();
+            if (user && user.role !== 'admin') {
+                history = history.filter(h => h.user === user.username);
+            }
+            return { history: history.slice(0, limit) };
+        },
+        revert_ai_action: async ({ action_id }, user) => {
+            const action = aiActionManager.getHistory().find(a => a.id === action_id);
+            if (!action) return { error: `Action '${action_id}' not found.` };
+            if (user && user.role !== 'admin' && action.user !== user.username) return { error: "Forbidden: You did not initiate this action." };
+
+            const { toolName, originalState } = action;
+            if (!originalState) return { error: "No backup available for this action." };
+
+            try {
+                if (toolName === 'create_hmi_view') {
+                    aiActionManager.restoreFile(originalState.hmiBackup, originalState.hmiPath);
+                    aiActionManager.restoreFile(originalState.jsBackup, originalState.jsPath);
+                    return { success: true, message: "HMI files reverted." };
+                } else if (toolName === 'save_file_to_data_directory') {
+                    aiActionManager.restoreFile(originalState.backupPath, originalState.originalPath);
+                    return { success: true, message: "File reverted." };
+                } else if (toolName === 'update_uns_model') {
+                    aiActionManager.restoreFile(originalState.backupPath, originalState.originalPath);
+                    loadUnsModel();
+                    return { success: true, message: "UNS model reverted." };
+                } else if (toolName === 'update_mapper_rule') {
+                    if (!mapperEngine) return { error: "Mapper unavailable." };
+                    const config = mapperEngine.getMappings();
+                    const activeVersion = config.versions.find(v => v.id === originalState.activeVersionId);
+                    if (!activeVersion) return { error: "Mapper version missing." };
+                    
+                    const oldRule = originalState.ruleBackup ? JSON.parse(originalState.ruleBackup) : null;
+                    const { sourceTopic } = action.args;
+                    activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic.trim() !== sourceTopic.trim());
+                    if (oldRule) activeVersion.rules.push(oldRule);
+                    
+                    mapperEngine.saveMappings(config);
+                    return { success: true, message: "Mapper rule reverted." };
+                } else if (toolName === 'delete_alert_rule') {
+                    if (originalState.ruleBackup) {
+                        const { id, ...ruleRest } = originalState.ruleBackup;
+                        await alertManager.createRule({ ...ruleRest, override_id: id });
+                        return { success: true, message: "Alert rule restored." };
+                    }
+                } else if (toolName === 'create_alert_rule') {
+                    await alertManager.deleteRule(originalState.createdId, user.id, true);
+                    return { success: true, message: "Alert rule removed." };
+                } else if (toolName === 'update_alert_rule') {
+                    if (originalState.ruleBackup) {
+                        const { id, ...ruleRest } = originalState.ruleBackup;
+                        await alertManager.updateRule(id, user.id, ruleRest, true);
+                        return { success: true, message: "Alert rule reverted." };
+                    }
+                }
+
+                return { error: `Revert logic not implemented for ${toolName}.` };
+            } catch (e) {
+                return { error: `Failed to revert: ${e.message}` };
+            }
         }
     };
+
     //  INTERNAL AGENT RUNNER 
     // Executes the agent loop autonomously (no HTTP res needed)
     // Returns Promise<String> with the final response
     const runInternalAgent = async (systemPrompt, userPrompt) => {
-        if (!config.LLM_API_KEY) throw new Error("LLM_API_KEY not configured.");
-        let apiUrl = config.LLM_API_URL;
-        if (!apiUrl.endsWith('/')) apiUrl += '/';
-        apiUrl += 'chat/completions';
-        // Context
-        const brokerContext = config.BROKER_CONFIGS.map(b => {
-            const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
-            return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
+        const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
+        const brokerContext = allProviders.map(b => {
+            let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
+            if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
+            return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
         }).join('\n');
-        
+
         const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
-        let systemPromptText = toolsManifest.system_prompt_template || "You are an expert UNS Architect. CONTEXT:\n{{BROKER_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
-        systemPromptText = systemPromptText.replace('{{BROKER_CONTEXT}}', brokerContext);
-        systemPromptText = systemPromptText.replace('{{TOOLS_CONTEXT}}', toolsContext);
-        systemPromptText += `\n\nSYSTEM INSTRUCTION: ${systemPrompt}`;
-        
-        let conversation = [
-            { role: "system", content: systemPromptText },
-            { role: "user", content: userPrompt }
-        ];
-        
-        const headers = { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.LLM_API_KEY}`
-        };
-        // System User for Tool Execution
+
+        const systemPromptText = llmEngine.generateChatSystemPrompt(
+            toolsManifest.system_prompt_template,
+            brokerContext,
+            toolsContext
+        ) + `\n\nSYSTEM INSTRUCTION: ${systemPrompt}`;
+
         const systemUser = { id: 'system', role: 'admin', username: 'AlertSystem' };
-        let turnCount = 0;
-        let finalResponse = "";
-        // Agent Loop
-        while (turnCount < MAX_AGENT_TURNS && !finalResponse) {
-            turnCount++;
-            logger.info(`[InternalAgent] Turn ${turnCount}...`);
-            const requestPayload = {
-                model: config.LLM_MODEL,
-                messages: conversation,
-                stream: false, 
-                temperature: 0.1,
-                tools: enabledTools.length > 0 ? enabledTools : undefined,
-                tool_choice: enabledTools.length > 0 ? "auto" : undefined
-            };
-            const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
-            const message = response.data.choices[0].message;
-            // Handle Tools
-            if (message.tool_calls && message.tool_calls.length > 0) {
-                conversation.push(message);
-                for (const toolCall of message.tool_calls) {
-                    const fnName = toolCall.function.name;
-                    let result;
-                    try {
-                        if (toolImplementations[fnName]) {
-                            let args = {};
-                            try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
-                            logger.info(`[InternalAgent] Executing tool: ${fnName}`);
-                            result = await toolImplementations[fnName](args, systemUser);
-                            result = JSON.stringify(result);
-                        } else {
-                            result = JSON.stringify({ error: "Tool not implemented." });
-                        }
-                    } catch (err) {
-                        result = JSON.stringify({ error: err.message });
-                    }
-                    conversation.push({
-                        tool_call_id: toolCall.id,
-                        role: "tool",
-                        name: fnName,
-                        content: result
-                    });
-                }
-            } else {
-                // Final Text
-                finalResponse = message.content;
-            }
-        }
-        return finalResponse || "No response generated.";
+
+        return await llmEngine.runAutonomousAgent(
+            systemPromptText,
+            userPrompt,
+            config,
+            enabledTools,
+            toolImplementations,
+            systemUser,
+            logger
+        );
     };
+
     // --- Inject the Runner into Alert Manager ---
     if (alertManager && alertManager.registerAgentRunner) {
         alertManager.registerAgentRunner(runInternalAgent);
@@ -795,21 +859,20 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     // --- HTTP POST Endpoint (Standard Chat) ---
     router.post('/completion', async (req, res, next) => {
         const { messages, clientId } = req.body; 
+
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) {
             const err = new Error("LLM_API_KEY is not configured.");
             err.status = 500;
             return next(err);
         }
+        
         // Setup Abort Controller for this request
         const abortController = new AbortController();
         if (clientId) {
             activeStreams.set(clientId, { abortController, res });
         }
-        
-        let apiUrl = config.LLM_API_URL;
-        if (!apiUrl.endsWith('/')) apiUrl += '/';
-        apiUrl += 'chat/completions';
+
         // Set Headers for Streaming Response
         res.setHeader('Content-Type', 'application/x-ndjson');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -817,69 +880,103 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         res.setHeader('X-Accel-Buffering', 'no');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         if (res.flushHeaders) res.flushHeaders();
+
         // Padding to force Proxy buffer flush
         const padding = " ".repeat(4096); 
         res.write(`{"type":"ping","content":"padding_ignored"}${padding}\n`);
         if (res.flush) res.flush();
+
         sendChunk(res, 'status', 'Processing request...', clientId);
+
         // --- SECURITY: Build Broker Context ---
-        const brokerContext = config.BROKER_CONFIGS.map(b => {
-            const pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
-            return `- Broker '${b.id}': Publish Allowed=${pubRules}`;
+        const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
+        const brokerContext = allProviders.map(b => {
+            let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
+            if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
+            return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
         }).join('\n');
+
         // --- PREPARE TOOLS & CONTEXT ---
         const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
-        // --- Use Template from Manifest ---
-        let systemPromptText = toolsManifest.system_prompt_template;
-        if (!systemPromptText) {
-            // Fallback if manifest fails
-            systemPromptText = "You are an expert UNS Architect. CONTEXT:\n{{BROKER_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
-        }
-        // Inject Dynamic Contexts
-        systemPromptText = systemPromptText.replace('{{BROKER_CONTEXT}}', brokerContext);
-        systemPromptText = systemPromptText.replace('{{TOOLS_CONTEXT}}', toolsContext);
+
+        const systemPromptText = llmEngine.generateChatSystemPrompt(
+            toolsManifest.system_prompt_template,
+            brokerContext,
+            toolsContext
+        );
+
         const systemMessage = { role: "system", content: systemPromptText };
         const safeUserMessages = messages.filter(m => m.role !== 'system');
+        
         let conversation = [systemMessage, ...safeUserMessages];
         
-        const headers = { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.LLM_API_KEY}`
-        };
         // --- AGENT LOOP ---
         let turnCount = 0;
         let finalMessageSent = false;
+
         try {
             while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
                 if (abortController.signal.aborted) {
                     throw new Error("Generation cancelled by user.");
                 }
+
                 turnCount++;
                 sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`, clientId);
-                const requestPayload = {
-                    model: config.LLM_MODEL,
-                    messages: conversation,
-                    stream: false, 
-                    temperature: 0.1,
-                    tools: enabledTools.length > 0 ? enabledTools : undefined,
-                    tool_choice: enabledTools.length > 0 ? "auto" : undefined
-                };
-                const response = await axios.post(apiUrl, requestPayload, { 
-                    headers, 
-                    timeout: LLM_TIMEOUT_MS,
-                    signal: abortController.signal 
-                });
-                const message = response.data.choices[0].message;
+
+                let message;
+                
+                // Check if we are resuming an interrupted session (awaiting approval)
+                if (turnCount === 1 && conversation.length > 0) {
+                    const lastMsg = conversation[conversation.length - 1];
+                    if (lastMsg.role === 'assistant' && lastMsg.tool_calls) {
+                        message = conversation.pop(); // Pop it so it acts like it just came from the LLM
+                        sendChunk(res, 'status', 'Resuming tool execution...', clientId);
+                    }
+                }
+
+                if (!message) {
+                    message = await llmEngine.fetchChatCompletion(
+                        conversation,
+                        config,
+                        enabledTools,
+                        abortController.signal
+                    );
+                }
+
                 // Case 1: The model wants to call tools
                 if (message.tool_calls && message.tool_calls.length > 0) {
+                    // --- VALIDATION / APPROVAL CHECK ---
+                    let requiresApproval = false;
+                    let pendingSensitiveCalls = [];
+                    if (!req.body.autoApproveSession) {
+                        for (const toolCall of message.tool_calls) {
+                            if (SENSITIVE_TOOLS.includes(toolCall.function.name) && 
+                                (!req.body.approvedToolCallIds || !req.body.approvedToolCallIds.includes(toolCall.id))) {
+                                requiresApproval = true;
+                                pendingSensitiveCalls.push(toolCall);
+                            }
+                        }
+                    }
+
+                    if (requiresApproval) {
+                        sendChunk(res, 'message', message, clientId); 
+                        sendChunk(res, 'approval_required', { toolCalls: pendingSensitiveCalls }, clientId);
+                        finalMessageSent = true; 
+                        break; 
+                    }
+
                     conversation.push(message); 
+                    
                     for (const toolCall of message.tool_calls) {
                         if (abortController.signal.aborted) throw new Error("Generation cancelled by user.");
+
                         const fnName = toolCall.function.name;
                         sendChunk(res, 'tool_start', { name: fnName }, clientId);
+                        
                         let result;
                         let duration = 0;
                         const startTime = Date.now();
+                        
                         try {
                             if (toolImplementations[fnName]) { 
                                 let args = {};
@@ -893,8 +990,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
                             result = JSON.stringify({ error: err.message });
                         }
+                        
                         duration = Date.now() - startTime;
                         sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration }, clientId);
+
                         conversation.push({
                             tool_call_id: toolCall.id,
                             role: "tool",
@@ -909,11 +1008,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     finalMessageSent = true;
                 }
             }
+
             if (!finalMessageSent) {
                 sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
             }
+
         } catch (error) {
-            // Added logger.error to track upstream LLM API errors on backend
             if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
                 logger.error({ 
                     err: error.message, 
@@ -940,5 +1040,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             res.end();
         }
     });
+
     return router;
 };
