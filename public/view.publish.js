@@ -16,7 +16,7 @@
  */
 
 import { state, subscribe } from './state.js';
-import { trackEvent, mqttPatternToRegex } from './utils.js'; 
+import { trackEvent, mqttPatternToRegex, showToast } from './utils.js'; 
 
 // --- DOM Element Querying ---
 const publishForm = document.getElementById('publish-form');
@@ -25,7 +25,6 @@ const publishFormatSelect = document.getElementById('publish-format');
 const publishQosSelect = document.getElementById('publish-qos');
 const publishRetainCheckbox = document.getElementById('publish-retain');
 const publishButton = document.getElementById('publish-button');
-const publishStatus = document.getElementById('publish-status');
 const payloadEditorDiv = document.getElementById('publish-payload-editor');
 
 //  Simulator controls
@@ -35,7 +34,6 @@ const simulatorControlTemplate = document.getElementById('simulator-control-temp
 // --- Module-level State ---
 let aceEditor = null;
 let isDarkTheme = state.isDarkMode; // Read from global state
-let publishStatusTimer = null;
 let subscribedTopics = []; 
 let simControlsContainer = null; 
 let providerSelectElement = null; 
@@ -267,13 +265,11 @@ function validatePublishPermissions() {
             publishButton.textContent = "⛔ Topic Not Allowed";
             publishTopicInput.classList.add('input-error');
             publishTopicInput.title = "Publishing to this topic is restricted by provider configuration.";
-            showPublishStatus('Topic forbidden by configuration.', 'error');
         } else {
             publishButton.disabled = false;
             publishButton.textContent = "Publish Message";
             publishTopicInput.classList.remove('input-error');
             publishTopicInput.title = "";
-            if (publishStatus.className === 'error') publishStatus.textContent = '';
         }
     } else {
         publishButton.disabled = false;
@@ -313,22 +309,21 @@ async function onPublishSubmit(event) {
     const providerId = providerSelectElement ? providerSelectElement.value : (availableProviders[0]?.id);
 
     if (!topic) {
-        showPublishStatus('Topic/Path is required.', 'error');
+        showToast('Topic/Path is required.', 'error');
         publishTopicInput.classList.add('input-error');
         return;
     }
 
     // Client-side security check before sending
     if (!isPublishAllowed(providerId, topic)) {
-        showPublishStatus('⛔ Security Block: Publishing to this topic/path is not allowed by config.', 'error');
+        showToast('⛔ Security Block: Publishing to this topic/path is not allowed by config.', 'error');
         publishTopicInput.classList.add('input-error');
         return;
     }
 
     publishButton.disabled = true;
     publishButton.textContent = 'Publishing...';
-    showPublishStatus('Publishing...', 'success');
-
+    
     try {
         // We still use 'brokerId' in the JSON payload to preserve backend API compatibility
         const requestBody = { topic, payload, format, qos, retain, brokerId: providerId };
@@ -347,28 +342,14 @@ async function onPublishSubmit(event) {
             throw new Error(result.error || `HTTP error! Status: ${response.status}`);
         }
 
-        showPublishStatus(`${result.message || 'Message published!'}`, 'success');
+        showToast(`${result.message || 'Message published!'}`, 'success');
         
     } catch (err) {
         console.error("Publish error:", err);
-        showPublishStatus(`Error: ${err.message}`, 'error');
+        showToast(`Error: ${err.message}`, 'error');
     } finally {
         validatePublishPermissions();
     }
-}
-
-/**
- * Helper to show a status message in the publish UI.
- */
-function showPublishStatus(message, type = 'success') {
-    if (!publishStatus) return;
-    publishStatus.textContent = message;
-    publishStatus.className = type;
-    clearTimeout(publishStatusTimer);
-    publishStatusTimer = setTimeout(() => {
-        publishStatus.textContent = '';
-        publishStatus.className = '';
-    }, 4000);
 }
 
 // ---  Simulator Logic ---
@@ -419,11 +400,13 @@ export function updateSimulatorStatuses(statuses) {
 
         startBtn.addEventListener('click', () => {
             fetch(`api/simulator/start/${name}`, { method: 'POST' });
+            showToast(`Starting simulator: ${formatSimName(name)}`, 'info');
             trackEvent(`simulator_start_${name}`);
         });
 
         stopBtn.addEventListener('click', () => {
             fetch(`api/simulator/stop/${name}`, { method: 'POST' });
+            showToast(`Stopping simulator: ${formatSimName(name)}`, 'info');
             trackEvent(`simulator_stop_${name}`);
         });
 

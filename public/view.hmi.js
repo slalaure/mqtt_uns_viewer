@@ -5,7 +5,7 @@
  * Handles HTML pages, dynamic A-Frame, generic HTML data binding, 
  * embedded live charts, AND Embedded SVGs with their own JS logic.
  */
-import { formatTimestampForLabel, trackEvent, confirmModal } from './utils.js';
+import { formatTimestampForLabel, trackEvent, confirmModal, showToast } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
@@ -256,13 +256,14 @@ async function deleteCurrentHmi() {
     try {
         const res = await fetch(`api/hmi/file?name=${encodeURIComponent(filename)}`, { method: 'DELETE' });
         if(res.ok) {
+            showToast(`View '${filename}' deleted successfully.`, "success");
             refreshHmiList();
         } else {
             const data = await res.json();
-            alert("Error: " + data.error);
+            showToast("Error: " + data.error, "error");
         }
     } catch(e) {
-        alert("Request failed: " + e.message);
+        showToast("Request failed: " + e.message, "error");
     }
 }
 

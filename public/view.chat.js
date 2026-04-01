@@ -12,9 +12,10 @@
  * Includes Continuous Voice Input and Language-Aware Output.
  * Optimized for Chrome "Google" Voices & Safari compatibility.
  * [UPDATED] Uses Proxy-based state manager to inject current UI context (topic/broker) into AI prompts.
+ * [UPDATED] Integrated showToast system to replace native alerts for camera/mic issues.
  */
 import { state } from './state.js';
-import { trackEvent, confirmModal } from './utils.js';
+import { trackEvent, confirmModal, showToast } from './utils.js';
 
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-widget-container');
@@ -337,7 +338,7 @@ async function deleteSession(id) {
     try {
         await fetch(`${appBasePath}/api/chat/session/${id}`, { method: 'DELETE' });
     } catch (e) {
-        alert("Failed to delete session");
+        showToast("Failed to delete session", "error");
     }
 }
 
@@ -392,10 +393,12 @@ function injectCameraUI() {
 
 async function openCamera() {
     if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        alert("Camera requires HTTPS or localhost.");
+        showToast("Camera requires HTTPS or localhost.", "warning");
         return;
     }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return alert("Camera not supported");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return showToast("Camera not supported", "error");
+    }
 
     try {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
@@ -406,7 +409,7 @@ async function openCamera() {
             userWantMicActive = false;
             recognition?.stop();
         }
-    } catch (err) { alert("Camera error: " + err.message); }
+    } catch (err) { showToast("Camera error: " + err.message, "error"); }
 }
 
 function closeCamera() {
@@ -489,7 +492,7 @@ function injectVoiceUI() {
 
     btnMic.addEventListener('click', () => {
         if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            alert("Voice input requires HTTPS security.");
+            showToast("Voice input requires HTTPS security.", "warning");
             return;
         }
 

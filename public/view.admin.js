@@ -11,7 +11,7 @@
  * Admin View Module
  * Handles User Management, Database Maintenance, Alerts Maintenance, HMI Assets, Simulators, and Data Parsers.
  */
-import { confirmModal } from './utils.js';
+import { confirmModal, showToast } from './utils.js';
 let usersTableBody = null;
 // --- Elements for Tabs ---
 let subNavButtons = null;
@@ -20,28 +20,23 @@ let btnImportDb = null;
 let importInput = null;
 let importStatus = null;
 let btnResetDb = null;
-let resetDbStatus = null;
 // --- Elements for DLQ Maintenance ---
 let dlqCountEl = null;
 let btnReplayDlq = null;
 let btnClearDlq = null;
-let dlqStatusMsg = null;
 // --- Elements for Alerts Maintenance ---
 let resolvedCountEl = null;
 let resolvedSizeEl = null;
 let btnPurgeAlerts = null;
-let purgeStatus = null;
 // --- Elements for HMI Assets Maintenance ---
 let hmiAssetsTableBody = null;
 let btnUploadHmi = null;
 let hmiUploadInput = null;
-let hmiUploadStatus = null;
 let btnHmiRefresh = null;
 // --- Elements for Simulators Maintenance ---
 let simTableBody = null;
 let btnUploadSim = null;
 let simUploadInput = null;
-let simUploadStatus = null;
 let btnSimRefresh = null;
 let webhooksTableBody = null;
 let webhookRegisterForm = null;
@@ -87,7 +82,7 @@ function initializeElements(container) {
     }
     // 2. Tab Navigation Logic
     subNavButtons = container.querySelectorAll('.sub-tab-button');
-    const panelClass = 'alerts-content-container'; 
+    const panelClass = 'alerts-content-container';
     subNavButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             // Remove active from all buttons
@@ -117,7 +112,6 @@ function initializeElements(container) {
     importInput = document.getElementById('db-import-input');
     importStatus = document.getElementById('db-import-status');
     btnResetDb = document.getElementById('btn-reset-db');
-    resetDbStatus = document.getElementById('reset-db-status');
     if (btnImportDb && importInput) {
         btnImportDb.className = 'tool-button button-primary';
         btnImportDb.addEventListener('click', onImportDB);
@@ -126,12 +120,11 @@ function initializeElements(container) {
         btnResetDb.className = 'tool-button button-danger';
         btnResetDb.addEventListener('click', onResetDB);
     }
-    
+
     dlqCountEl = document.getElementById('stats-dlq-count');
     btnReplayDlq = document.getElementById('btn-replay-dlq');
     btnClearDlq = document.getElementById('btn-clear-dlq');
-    dlqStatusMsg = document.getElementById('dlq-status-message');
-    
+
     if (btnReplayDlq) {
         btnReplayDlq.addEventListener('click', onReplayDlq);
     }
@@ -143,7 +136,6 @@ function initializeElements(container) {
     resolvedCountEl = document.getElementById('stats-resolved-count');
     resolvedSizeEl = document.getElementById('stats-resolved-size');
     btnPurgeAlerts = document.getElementById('btn-purge-alerts');
-    purgeStatus = document.getElementById('purge-alerts-status');
     if (btnPurgeAlerts) {
         btnPurgeAlerts.className = 'tool-button button-danger';
         btnPurgeAlerts.addEventListener('click', onPurgeAlerts);
@@ -152,7 +144,6 @@ function initializeElements(container) {
     hmiAssetsTableBody = document.getElementById('admin-hmi-table-body');
     btnUploadHmi = document.getElementById('btn-upload-hmi');
     hmiUploadInput = document.getElementById('hmi-upload-input');
-    hmiUploadStatus = document.getElementById('hmi-upload-status');
     btnHmiRefresh = document.getElementById('btn-hmi-refresh');
     if (btnUploadHmi && hmiUploadInput) {
         btnUploadHmi.addEventListener('click', onUploadHmiAssets);
@@ -164,7 +155,6 @@ function initializeElements(container) {
     simTableBody = document.getElementById('admin-sim-table-body');
     btnUploadSim = document.getElementById('btn-upload-sim');
     simUploadInput = document.getElementById('sim-upload-input');
-    simUploadStatus = document.getElementById('sim-upload-status');
     btnSimRefresh = document.getElementById('btn-sim-refresh');
     if (btnUploadSim && simUploadInput) {
         btnUploadSim.addEventListener('click', onUploadSimulators);
@@ -172,7 +162,7 @@ function initializeElements(container) {
     if (btnSimRefresh) {
         btnSimRefresh.addEventListener('click', loadSimulators);
     }
-    
+
     // 7. Webhooks Logic
     webhooksTableBody = document.getElementById('admin-webhooks-table-body');
     webhookRegisterForm = document.getElementById('webhook-register-form');
@@ -201,7 +191,7 @@ function initializeElements(container) {
         adminAceEditor.setOptions({
             fontSize: "14px",
             fontFamily: "monospace",
-            enableBasicAutocompletion: true, 
+            enableBasicAutocompletion: true,
             enableLiveAutocompletion: true,
             useWorker: false // Disables heavy web workers to avoid 404s on air-gapped instances
         });
@@ -211,8 +201,8 @@ function initializeElements(container) {
     document.getElementById('btn-admin-editor-delete')?.addEventListener('click', async () => {
         if (currentEditingFilename) {
             const isSimulator = currentEditingFilename.toLowerCase().startsWith('simulator-');
-            const deleted = isSimulator 
-                ? await deleteSimulator(currentEditingFilename) 
+            const deleted = isSimulator
+                ? await deleteSimulator(currentEditingFilename)
                 : await deleteHmiAsset(currentEditingFilename);
             if (deleted) closeAssetEditor();
         }
@@ -275,8 +265,8 @@ function renderUsers(users) {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid var(--color-border)';
         const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : 'Never';
-        const roleBadge = user.role === 'admin' 
-            ? '<span style="background:var(--color-danger); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">ADMIN</span>' 
+        const roleBadge = user.role === 'admin'
+            ? '<span style="background:var(--color-danger); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">ADMIN</span>'
             : '<span style="background:var(--color-success); color:white; padding:2px 6px; border-radius:4px; font-size:0.8em;">USER</span>';
         const isSelf = window.currentUser && window.currentUser.id === user.id;
         const deleteDisabled = isSelf ? 'disabled title="You cannot delete yourself"' : '';
@@ -312,29 +302,35 @@ async function deleteUser(id, username) {
         const res = await fetch(`api/admin/users/${id}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) {
+            showToast("User and associated data deleted successfully.", "success");
             loadUsers(); // Refresh list
         } else {
-            alert("Error: " + data.error);
+            showToast("Error: " + data.error, "error");
         }
     } catch (e) {
-        alert("Request failed: " + e.message);
+        showToast("Request failed: " + e.message, "error");
     }
 }
 // --- Database Maintenance Functions ---
 async function onImportDB() {
     const file = importInput.files[0];
     if (!file) {
-        alert("Please select a JSON export file first.");
+        showToast("Please select a JSON export file first.", "warning");
         return;
     }
     const isConfirmed = await confirmModal('Import Database', `Import data from '${file.name}'?\nThis will be queued and processed in the background.`, 'Import', false);
     if (!isConfirmed) return;
+
     const formData = new FormData();
     formData.append('db_import', file);
     btnImportDb.disabled = true;
     btnImportDb.textContent = "Importing...";
-    importStatus.textContent = "Uploading & Processing...";
-    importStatus.style.color = "var(--color-text)";
+
+    if (importStatus) {
+        importStatus.textContent = "Uploading & Processing...";
+        importStatus.style.color = "var(--color-text)";
+    }
+
     try {
         const response = await fetch('api/admin/import-db', {
             method: 'POST',
@@ -344,28 +340,24 @@ async function onImportDB() {
         if (!response.ok) {
             throw new Error(result.error || "Import failed.");
         }
-        importStatus.textContent = result.message; 
-        importStatus.style.color = 'var(--color-success)';
-        importInput.value = ''; 
+        showToast(result.message, "success");
+        if (importStatus) importStatus.textContent = '';
+        importInput.value = '';
     } catch (e) {
-        importStatus.textContent = `❌ Error: ${e.message}`;
-        importStatus.style.color = 'var(--color-danger)';
+        showToast(`Import Error: ${e.message}`, "error");
+        if (importStatus) importStatus.textContent = '';
     } finally {
         btnImportDb.disabled = false;
         btnImportDb.textContent = "Import Data";
-        setTimeout(() => {
-            if (importStatus.textContent.includes('Successfully')) {
-                importStatus.textContent = '';
-            }
-        }, 5000);
     }
 }
 async function onResetDB() {
     const isConfirmed = await confirmModal('Reset Database', '⚠️ WARNING: This will permanently DELETE ALL DATA in the history database.\n\nAre you sure you want to reset the database to zero?', 'Reset DB', true);
     if (!isConfirmed) return;
+
     btnResetDb.disabled = true;
     btnResetDb.textContent = "Resetting...";
-    resetDbStatus.textContent = "";
+
     try {
         const response = await fetch('api/admin/reset-db', {
             method: 'POST'
@@ -374,15 +366,12 @@ async function onResetDB() {
         if (!response.ok) {
             throw new Error(result.error || "Reset failed.");
         }
-        resetDbStatus.textContent = "✅ Database reset successfully!";
-        resetDbStatus.style.color = 'var(--color-success)';
+        showToast("Database reset successfully!", "success");
     } catch (e) {
-        resetDbStatus.textContent = `❌ Error: ${e.message}`;
-        resetDbStatus.style.color = 'var(--color-danger)';
+        showToast(`Reset Error: ${e.message}`, "error");
     } finally {
         btnResetDb.disabled = false;
         btnResetDb.textContent = "Reset Database to 0";
-        setTimeout(() => { resetDbStatus.textContent = ''; }, 5000);
     }
 }
 
@@ -394,10 +383,10 @@ async function loadDlqStatus() {
         const data = await res.json();
         const count = data.count || 0;
         dlqCountEl.textContent = count;
-        
+
         btnReplayDlq.disabled = count === 0;
         btnClearDlq.disabled = count === 0;
-        
+
         if (count > 0) {
             dlqCountEl.style.color = 'var(--color-danger)';
         } else {
@@ -416,24 +405,18 @@ async function onReplayDlq() {
 
     btnReplayDlq.disabled = true;
     btnClearDlq.disabled = true;
-    dlqStatusMsg.textContent = "Replaying messages...";
-    dlqStatusMsg.style.color = "var(--color-text)";
 
     try {
         const res = await fetch('api/admin/dlq/replay', { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Replay failed.");
-        
-        dlqStatusMsg.textContent = `✅ ${data.message}`;
-        dlqStatusMsg.style.color = "var(--color-success)";
+
+        showToast(data.message, "success");
         loadDlqStatus();
     } catch (err) {
-        dlqStatusMsg.textContent = `❌ Error: ${err.message}`;
-        dlqStatusMsg.style.color = "var(--color-danger)";
+        showToast(`Replay Error: ${err.message}`, "error");
         btnReplayDlq.disabled = false;
         btnClearDlq.disabled = false;
-    } finally {
-        setTimeout(() => { if (dlqStatusMsg.textContent.includes('✅')) dlqStatusMsg.textContent = ''; }, 5000);
     }
 }
 
@@ -443,24 +426,18 @@ async function onClearDlq() {
 
     btnReplayDlq.disabled = true;
     btnClearDlq.disabled = true;
-    dlqStatusMsg.textContent = "Clearing DLQ...";
-    dlqStatusMsg.style.color = "var(--color-text)";
 
     try {
         const res = await fetch('api/admin/dlq/clear', { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Clear failed.");
-        
-        dlqStatusMsg.textContent = `✅ ${data.message}`;
-        dlqStatusMsg.style.color = "var(--color-success)";
+
+        showToast(data.message, "success");
         loadDlqStatus();
     } catch (err) {
-        dlqStatusMsg.textContent = `❌ Error: ${err.message}`;
-        dlqStatusMsg.style.color = "var(--color-danger)";
+        showToast(`Clear Error: ${err.message}`, "error");
         btnReplayDlq.disabled = false;
         btnClearDlq.disabled = false;
-    } finally {
-        setTimeout(() => { if (dlqStatusMsg.textContent.includes('✅')) dlqStatusMsg.textContent = ''; }, 5000);
     }
 }
 
@@ -481,26 +458,24 @@ async function loadResolvedStats() {
 async function onPurgeAlerts() {
     const isConfirmed = await confirmModal('Purge Alerts', 'Are you sure you want to delete ALL resolved alerts?', 'Purge', true);
     if (!isConfirmed) return;
+
     btnPurgeAlerts.disabled = true;
     btnPurgeAlerts.textContent = "Purging...";
-    purgeStatus.textContent = "";
+
     try {
         const res = await fetch('api/alerts/admin/purge', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-            purgeStatus.textContent = "✅ Alerts purged.";
-            purgeStatus.style.color = "var(--color-success)";
-            loadResolvedStats(); 
+            showToast("Alerts purged successfully.", "success");
+            loadResolvedStats();
         } else {
             throw new Error(data.error);
         }
     } catch (e) {
-        purgeStatus.textContent = "❌ Error: " + e.message;
-        purgeStatus.style.color = "var(--color-danger)";
+        showToast("Purge Error: " + e.message, "error");
     } finally {
         btnPurgeAlerts.disabled = false;
         btnPurgeAlerts.textContent = "Purge Resolved Alerts";
-        setTimeout(() => { purgeStatus.textContent = ''; }, 3000);
     }
 }
 // --- HMI Assets & Simulators Shared Functions ---
@@ -578,17 +553,17 @@ function renderHmiAssets(assets) {
 async function onUploadHmiAssets() {
     const files = hmiUploadInput.files;
     if (!files || files.length === 0) {
-        alert("Please select at least one file to upload.");
+        showToast("Please select at least one file to upload.", "warning");
         return;
     }
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
         formData.append('assets', files[i]);
     }
+
     btnUploadHmi.disabled = true;
     btnUploadHmi.textContent = "Uploading...";
-    hmiUploadStatus.textContent = "Processing upload...";
-    hmiUploadStatus.style.color = "var(--color-text)";
+
     try {
         const response = await fetch('api/admin/hmi-assets', {
             method: 'POST',
@@ -598,21 +573,14 @@ async function onUploadHmiAssets() {
         if (!response.ok) {
             throw new Error(result.error || "Upload failed.");
         }
-        hmiUploadStatus.textContent = `✅ ${result.message}`; 
-        hmiUploadStatus.style.color = 'var(--color-success)';
+        showToast(result.message, "success");
         hmiUploadInput.value = ''; // Clear input
         loadHmiAssets(); // Refresh list automatically
     } catch (e) {
-        hmiUploadStatus.textContent = `❌ Error: ${e.message}`;
-        hmiUploadStatus.style.color = 'var(--color-danger)';
+        showToast(`Upload Error: ${e.message}`, "error");
     } finally {
         btnUploadHmi.disabled = false;
         btnUploadHmi.textContent = "Upload Files";
-        setTimeout(() => {
-            if (hmiUploadStatus.textContent.includes('✅')) {
-                hmiUploadStatus.textContent = '';
-            }
-        }, 5000);
     }
 }
 async function deleteHmiAsset(filename) {
@@ -622,13 +590,14 @@ async function deleteHmiAsset(filename) {
         const res = await fetch(`api/admin/hmi-assets/${encodeURIComponent(filename)}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) {
+            showToast(`Asset '${filename}' deleted successfully.`, "success");
             loadHmiAssets(); // Refresh list
             return true;
         } else {
-            alert("Error: " + data.error);
+            showToast("Error: " + data.error, "error");
         }
     } catch (e) {
-        alert("Request failed: " + e.message);
+        showToast("Request failed: " + e.message, "error");
     }
     return false;
 }
@@ -684,17 +653,17 @@ function renderSimulators(assets) {
 async function onUploadSimulators() {
     const files = simUploadInput.files;
     if (!files || files.length === 0) {
-        alert("Please select at least one file to upload.");
+        showToast("Please select at least one file to upload.", "warning");
         return;
     }
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
         formData.append('assets', files[i]);
     }
+
     btnUploadSim.disabled = true;
     btnUploadSim.textContent = "Uploading...";
-    simUploadStatus.textContent = "Processing upload...";
-    simUploadStatus.style.color = "var(--color-text)";
+
     try {
         const response = await fetch('api/admin/simulators', {
             method: 'POST',
@@ -704,21 +673,14 @@ async function onUploadSimulators() {
         if (!response.ok) {
             throw new Error(result.error || "Upload failed.");
         }
-        simUploadStatus.textContent = `✅ ${result.message}`; 
-        simUploadStatus.style.color = 'var(--color-success)';
+        showToast(result.message, "success");
         simUploadInput.value = ''; // Clear input
         loadSimulators(); // Refresh list automatically
     } catch (e) {
-        simUploadStatus.textContent = `❌ Error: ${e.message}`;
-        simUploadStatus.style.color = 'var(--color-danger)';
+        showToast(`Upload Error: ${e.message}`, "error");
     } finally {
         btnUploadSim.disabled = false;
         btnUploadSim.textContent = "Upload Files";
-        setTimeout(() => {
-            if (simUploadStatus.textContent.includes('✅')) {
-                simUploadStatus.textContent = '';
-            }
-        }, 5000);
     }
 }
 async function deleteSimulator(filename) {
@@ -728,13 +690,14 @@ async function deleteSimulator(filename) {
         const res = await fetch(`api/admin/simulators/${encodeURIComponent(filename)}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) {
+            showToast(`Simulator '${filename}' deleted successfully.`, "success");
             loadSimulators(); // Refresh list
             return true;
         } else {
-            alert("Error: " + data.error);
+            showToast("Error: " + data.error, "error");
         }
     } catch (e) {
-        alert("Request failed: " + e.message);
+        showToast("Request failed: " + e.message, "error");
     }
     return false;
 }
@@ -746,10 +709,9 @@ async function onStartCsvParser(e) {
     const defaultTopic = document.getElementById('csv-default-topic').value;
     const timeDelta = document.getElementById('csv-time-delta').value;
     const loop = document.getElementById('csv-loop').checked;
-    const statusEl = document.getElementById('csv-parser-status');
 
     const file = fileInput.files[0];
-    if (!file) return alert("Select a CSV file.");
+    if (!file) return showToast("Select a CSV file.", "warning");
 
     const formData = new FormData();
     formData.append('csv_file', file);
@@ -760,8 +722,6 @@ async function onStartCsvParser(e) {
     const btn = document.getElementById('btn-start-csv-parser');
     btn.disabled = true;
     btn.textContent = "Starting...";
-    statusEl.textContent = "Uploading and parsing...";
-    statusEl.style.color = "var(--color-text)";
 
     try {
         const res = await fetch('api/admin/data-parsers/csv', {
@@ -771,16 +731,13 @@ async function onStartCsvParser(e) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to start parser");
 
-        statusEl.textContent = `✅ Parser started! ID: ${data.providerId}`;
-        statusEl.style.color = "var(--color-success)";
+        showToast(`Parser started! ID: ${data.providerId}`, "success");
         fileInput.value = '';
-    } catch(err) {
-        statusEl.textContent = `❌ Error: ${err.message}`;
-        statusEl.style.color = "var(--color-danger)";
+    } catch (err) {
+        showToast(`Error: ${err.message}`, "error");
     } finally {
         btn.disabled = false;
         btn.textContent = "Start CSV Parser";
-        setTimeout(() => { if(statusEl.textContent.includes('✅')) statusEl.textContent = ''; }, 5000);
     }
 }
 
@@ -806,7 +763,7 @@ async function openAssetEditor(filename) {
         // Force resize after display change
         setTimeout(() => adminAceEditor.resize(), 50);
     } catch (e) {
-        alert("Error opening editor: " + e.message);
+        showToast("Error opening editor: " + e.message, "error");
     }
 }
 function closeAssetEditor() {
@@ -835,6 +792,8 @@ async function saveAssetEditor() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Save failed.");
+
+        showToast("Asset saved successfully.", "success");
         // Refresh the correct list
         if (isSimulator) {
             loadSimulators();
@@ -843,15 +802,15 @@ async function saveAssetEditor() {
         }
         closeAssetEditor();
     } catch (e) {
-        alert("Error saving file: " + e.message);
+        showToast("Error saving file: " + e.message, "error");
     } finally {
         btnSave.textContent = originalText;
         btnSave.disabled = false;
     }
-    }
+}
 
-    // --- Webhooks Management Functions ---
-    async function loadWebhooks() {
+// --- Webhooks Management Functions ---
+async function loadWebhooks() {
     if (!webhooksTableBody) return;
     webhooksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">Loading webhooks...</td></tr>';
     try {
@@ -863,9 +822,9 @@ async function saveAssetEditor() {
         console.error("Webhooks Load Error:", e);
         webhooksTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
     }
-    }
+}
 
-    function renderWebhooks(webhooks) {
+function renderWebhooks(webhooks) {
     webhooksTableBody.innerHTML = '';
     if (webhooks.length === 0) {
         webhooksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">No webhooks registered.</td></tr>';
@@ -894,9 +853,9 @@ async function saveAssetEditor() {
             deleteWebhook(id);
         });
     });
-    }
+}
 
-    async function onRegisterWebhook(e) {
+async function onRegisterWebhook(e) {
     e.preventDefault();
     const topic = document.getElementById('webhook-topic').value;
     const url = document.getElementById('webhook-url').value;
@@ -910,109 +869,112 @@ async function saveAssetEditor() {
         });
         const data = await res.json();
         if (data.success) {
+            showToast("Webhook registered successfully.", "success");
             document.getElementById('webhook-register-form').reset();
             loadWebhooks();
         } else {
-            alert("Error: " + data.error);
+            showToast("Error: " + data.error, "error");
         }
     } catch (e) {
-        alert("Request failed: " + e.message);
+        showToast("Request failed: " + e.message, "error");
     }
-    }
+}
 
-    async function deleteWebhook(id) {
+async function deleteWebhook(id) {
     const isConfirmed = await confirmModal('Delete Webhook', `Are you sure you want to delete webhook ${id}?`, 'Delete', true);
     if (!isConfirmed) return;
     try {
         const res = await fetch(`api/admin/webhooks/${id}`, { method: 'DELETE' });
         if ((await res.json()).success) {
+            showToast("Webhook deleted.", "success");
             loadWebhooks();
         }
     } catch (e) {
-        alert("Delete failed: " + e.message);
+        showToast("Delete failed: " + e.message, "error");
     }
-    }
+}
 
-    async function onClearWebhooks() {
+async function onClearWebhooks() {
     const isConfirmed = await confirmModal('Clear All Webhooks', '⚠️ Are you sure you want to delete ALL webhooks?', 'Clear All', true);
     if (!isConfirmed) return;
     try {
         const res = await fetch('api/admin/webhooks/clear', { method: 'POST' });
         if ((await res.json()).success) {
+            showToast("All webhooks cleared.", "success");
             loadWebhooks();
         }
     } catch (e) {
-        alert("Clear failed: " + e.message);
+        showToast("Clear failed: " + e.message, "error");
     }
+}
+
+// --- AI History Logic ---
+async function loadAiHistory() {
+    const tbody = document.getElementById('admin-ai-history-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading AI History...</td></tr>';
+    try {
+        const res = await fetch('api/admin/ai_history');
+        if (!res.ok) throw new Error("Failed to fetch AI history.");
+        const history = await res.json();
+        renderAiHistory(history, tbody);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function renderAiHistory(history, tbody) {
+    tbody.innerHTML = '';
+    if (!history || history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">No AI modifications recorded.</td></tr>';
+        return;
     }
 
-    // --- AI History Logic ---
-    async function loadAiHistory() {
-        const tbody = document.getElementById('admin-ai-history-tbody');
-        if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">Loading AI History...</td></tr>';
-        try {
-            const res = await fetch('api/admin/ai_history');
-            if (!res.ok) throw new Error("Failed to fetch AI history.");
-            const history = await res.json();
-            renderAiHistory(history, tbody);
-        } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-danger); padding: 20px;">Error: ${e.message}</td></tr>`;
-        }
-    }
+    history.forEach(action => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--color-border)';
+        const time = new Date(action.timestamp).toLocaleString();
 
-    function renderAiHistory(history, tbody) {
-        tbody.innerHTML = '';
-        if (!history || history.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">No AI modifications recorded.</td></tr>';
-            return;
-        }
+        let details = '';
+        if (action.toolName === 'create_hmi_view') details = `View: ${action.args.view_name}`;
+        else if (action.toolName === 'save_file_to_data_directory') details = `File: ${action.args.filename}`;
+        else if (action.toolName === 'update_mapper_rule') details = `Mapper: ${action.args.sourceTopic}`;
+        else details = JSON.stringify(action.args).substring(0, 50) + '...';
 
-        history.forEach(action => {
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = '1px solid var(--color-border)';
-            const time = new Date(action.timestamp).toLocaleString();
-            
-            let details = '';
-            if (action.toolName === 'create_hmi_view') details = `View: ${action.args.view_name}`;
-            else if (action.toolName === 'save_file_to_data_directory') details = `File: ${action.args.filename}`;
-            else if (action.toolName === 'update_mapper_rule') details = `Mapper: ${action.args.sourceTopic}`;
-            else details = JSON.stringify(action.args).substring(0, 50) + '...';
+        const canRevert = action.originalState != null;
+        const revertBtn = canRevert
+            ? `<button class="tool-button button-danger btn-revert-ai" data-id="${action.id}" data-tool="${action.toolName}">Revert</button>`
+            : `<span style="font-size:0.8em; color:var(--color-text-secondary);">No Backup</span>`;
 
-            const canRevert = action.originalState != null;
-            const revertBtn = canRevert 
-                ? `<button class="tool-button button-danger btn-revert-ai" data-id="${action.id}" data-tool="${action.toolName}">Revert</button>` 
-                : `<span style="font-size:0.8em; color:var(--color-text-secondary);">No Backup</span>`;
-
-            tr.innerHTML = `
+        tr.innerHTML = `
                 <td style="padding: 10px; font-size: 0.85em;">${time}</td>
                 <td style="padding: 10px;">${action.user}</td>
                 <td style="padding: 10px; font-family: monospace;">${action.toolName}</td>
                 <td style="padding: 10px; font-size: 0.9em;">${details}</td>
                 <td style="padding: 10px; text-align: right;">${revertBtn}</td>
             `;
-            tbody.appendChild(tr);
-        });
+        tbody.appendChild(tr);
+    });
 
-        document.querySelectorAll('.btn-revert-ai').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = e.target.dataset.id;
-                const tool = e.target.dataset.tool;
-                const isConfirmed = await confirmModal('Revert AI Action', `Are you sure you want to revert the AI modification: ${tool}?`, 'Revert', true);
-                if (!isConfirmed) return;
-                
-                try {
-                    const res = await fetch(`api/admin/ai_history/${id}/revert`, { method: 'POST' });
-                    const data = await res.json();
-                    if (data.success) {
-                        alert("✅ Action reverted successfully.");
-                        loadAiHistory();
-                    } else {
-                        alert("❌ Error: " + data.error);
-                    }
-                } catch (err) {
-                    alert("Request failed: " + err.message);
+    document.querySelectorAll('.btn-revert-ai').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            const tool = e.target.dataset.tool;
+            const isConfirmed = await confirmModal('Revert AI Action', `Are you sure you want to revert the AI modification: ${tool}?`, 'Revert', true);
+            if (!isConfirmed) return;
+
+            try {
+                const res = await fetch(`api/admin/ai_history/${id}/revert`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("Action reverted successfully.", "success");
+                    loadAiHistory();
+                } else {
+                    showToast("Error: " + data.error, "error");
                 }
-            });
+            } catch (err) {
+                showToast("Request failed: " + err.message, "error");
+            }
         });
-    }
+    });
+}

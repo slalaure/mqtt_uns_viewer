@@ -13,9 +13,10 @@
  * according to I3X specifications. 
  * Integrates vis-network for interactive Relationship Graphs.
  * [UPDATED] Graph engine now renders custom relationships (SuppliesTo, etc.) with specific styling.
+ * [UPDATED] Replaced native alerts and inline status text with centralized showToast system.
  */
 
-import { confirmModal, trackEvent, makeResizable } from './utils.js';
+import { confirmModal, trackEvent, makeResizable, showToast } from './utils.js';
 
 // --- State ---
 let currentModel = null;
@@ -133,12 +134,6 @@ export function onModelerViewShow() {
     }
 }
 
-function showStatus(message, isError = false) {
-    statusMsg.textContent = message;
-    statusMsg.style.color = isError ? 'var(--color-danger)' : 'var(--color-success)';
-    setTimeout(() => statusMsg.textContent = '', 4000);
-}
-
 // --- 1. Model Loading & Tree Building ---
 async function loadModel() {
     try {
@@ -155,7 +150,7 @@ async function loadModel() {
             clearEditor();
         }
     } catch (e) {
-        showStatus(e.message, true);
+        showToast(e.message, 'error');
     }
 }
 
@@ -602,7 +597,12 @@ function handleFormSubmit(e) {
 
     for (let [key, value] of formData.entries()) {
         if (key === 'schema' || key === 'relationships') {
-            try { value = JSON.parse(value); } catch(err) { alert(`Invalid JSON in ${key}`); return; }
+            try { 
+                value = JSON.parse(value); 
+            } catch(err) { 
+                showToast(`Invalid JSON in ${key}`, 'error'); 
+                return; 
+            }
         }
         if (key === 'isComposition') value = true;
         if (value === "" || (typeof value === 'object' && Object.keys(value).length === 0)) delete ref[key];
@@ -618,7 +618,7 @@ function handleFormSubmit(e) {
 
     renderTree();
     drawRelationshipGraph(); 
-    showStatus("Changes applied locally. Remember to Save to Server.", false);
+    showToast("Changes applied locally. Remember to Save to Server.", 'info');
     btnSave.classList.add('btn-unsaved'); 
 }
 
@@ -701,12 +701,12 @@ async function saveModelToServer() {
         }
 
         btnSave.classList.remove('btn-unsaved');
-        showStatus("✅ Model deployed to server.");
+        showToast("Model deployed to server.", 'success');
         if (window.appCallbacks && window.appCallbacks.refreshSemanticTrees) {
             window.appCallbacks.refreshSemanticTrees();
         }
     } catch (e) {
-        showStatus(`❌ ${e.message}`, true);
+        showToast(e.message, 'error');
     } finally {
         btnSave.disabled = false;
         btnSave.innerHTML = "💾 Save";

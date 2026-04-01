@@ -16,7 +16,7 @@
 
 // Import shared utilities and state
 import { state, subscribe } from './state.js';
-import { mqttPatternToClientRegex, trackEvent } from './utils.js'; 
+import { mqttPatternToClientRegex, trackEvent, showToast } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 
 // --- DOM Element Querying ---
@@ -63,7 +63,6 @@ return [
 let mapperConfig = { versions: [], activeVersionId: null };
 let mapperMetrics = {};
 let mappedTargetTopics = new Map(); 
-let mapperSaveTimer = null;
 let currentEditingBrokerId = null; 
 let currentEditingSourceTopic = null;
 let currentEditingPayload = null; // Stores payload for maximized editor reference
@@ -248,7 +247,7 @@ async function loadMapperConfig() {
         appCallbacks.colorAllTrees();
     } catch (error) {
         console.error('Error loading mapper config:', error);
-        showMapperSaveStatus('Error loading config', 'error');
+        showToast('Error loading mapper configuration', 'error');
     }
 }
 
@@ -640,7 +639,7 @@ function onAddTarget() {
     const existingRule = activeVersion.rules.find(r => r.sourceTopic === currentEditingSourceTopic);
     if (!existingRule) {
         if (maxMappersLimit > 0 && activeVersion.rules.length >= maxMappersLimit) {
-            alert(`Cannot add new mapping rule. You have reached the maximum limit of ${maxMappersLimit} mapping rules for this demo.\nPlease ask an administrator to clean up old rules or versions.`);
+            showToast(`Cannot add new mapping rule. You have reached the maximum limit of ${maxMappersLimit} mapping rules for this demo.\nPlease ask an administrator to clean up old rules or versions.`, "warning");
             return; 
         }
     }
@@ -801,11 +800,11 @@ async function onSave() {
     }
 
     if (hasInvalidMapping) {
-        showMapperSaveStatus('ERROR: Invalid mapping(s) found (JSON Source -> spBv1.0/ Target). Cannot save.', 'error');
+        showToast('ERROR: Invalid mapping(s) found (JSON Source -> spBv1.0/ Target). Cannot save.', 'error');
         return;
     }
 
-    showMapperSaveStatus('Saving to Live Engine...');
+    showToast('Saving to Live Engine...', 'info');
     try {
         if(activeVersion) {
             activeVersion.rules = activeVersion.rules.filter(r => r.targets && r.targets.length > 0);
@@ -823,11 +822,11 @@ async function onSave() {
         }
         
         state.mapperUnsaved = false; // Reset visual state after success
-        showMapperSaveStatus('Live Deployed!', 'success');
+        showToast('Live Deployed!', 'success');
         appCallbacks.colorAllTrees();
     } catch (error) {
         console.error('Error saving mapper config:', error);
-        showMapperSaveStatus(error.message, 'error');
+        showToast(error.message, 'error');
     }
 }
 
@@ -835,7 +834,7 @@ function onSaveAsNew() {
     trackEvent('mapper_save_as_new'); 
 
     if (maxMappersLimit > 0 && mapperConfig.versions.length >= maxMappersLimit) {
-        alert(`Cannot save new version. You have reached the maximum limit of ${maxMappersLimit} saved mapper versions.\nPlease ask an administrator to clean up old versions.`); 
+        showToast(`Cannot save new version. You have reached the maximum limit of ${maxMappersLimit} saved mapper versions.\nPlease ask an administrator to clean up old versions.`, "warning"); 
         return; 
     }
 
@@ -861,15 +860,13 @@ function onSaveAsNew() {
     .then(res => res.json())
     .then(data => {
         if(data.success) {
-            alert(data.message || "Version saved successfully.");
+            showToast(data.message || "Version saved successfully.", "success");
             state.mapperUnsaved = false;
-            // We could reload config here, but typically user might want to switch to it
-            // A full reload of config might be best. For simplicity, just alert success.
         } else {
-            alert("Error: " + data.error);
+            showToast("Error: " + data.error, "error");
         }
     })
-    .catch(err => alert("Request failed: " + err.message));
+    .catch(err => showToast("Request failed: " + err.message, "error"));
 }
 
 function onVersionChange() {
@@ -884,18 +881,6 @@ function onVersionChange() {
         mapperTransformForm.style.display = 'none';
     }
     appCallbacks.colorAllTrees();
-}
-
-function showMapperSaveStatus(message, type = 'success') {
-    if (!mapperSaveStatus) return;
-    mapperSaveStatus.textContent = message;
-    mapperSaveStatus.className = type;
-    
-    clearTimeout(mapperSaveTimer);
-    mapperSaveTimer = setTimeout(() => {
-        mapperSaveStatus.textContent = '';
-        mapperSaveStatus.className = '';
-    }, 3000);
 }
 
 // --- Delete Modal Logic ---
@@ -957,7 +942,7 @@ async function onDeleteAndPrune() {
     appCallbacks.addPruneIgnorePattern(topicPattern);
 
     modalBtnDeletePrune.disabled = true;
-    showMapperSaveStatus('Purging history...', 'info');
+    showToast('Purging history...', 'info');
 
     try {
         const targetBrokerId = target.targetBrokerId || brokerId;
@@ -1005,12 +990,12 @@ async function onDeleteAndPrune() {
         } else {
             renderTransformEditor(brokerId, topic); 
         }
-        showMapperSaveStatus(`Rule deleted & ${result.count} entries pruned.`, 'success');
+        showToast(`Rule deleted & ${result.count} entries pruned.`, 'success');
         hidePruneModal();
 
     } catch (err) {
         console.error('Error during prune operation:', err);
-        showMapperSaveStatus(`Prune failed: ${err.message}`, 'error');
+        showToast(`Prune failed: ${err.message}`, 'error');
         hidePruneModal();
     } finally {
             modalBtnDeletePrune.disabled = false;

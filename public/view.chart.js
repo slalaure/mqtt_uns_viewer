@@ -15,7 +15,7 @@
 
 // Import shared utilities and state
 import { state, subscribe } from './state.js';
-import { formatTimestampForLabel, trackEvent, confirmModal } from './utils.js'; 
+import { formatTimestampForLabel, trackEvent, confirmModal, showToast } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 import { createDualTimeSlider }from './time-slider.js';
 
@@ -35,7 +35,6 @@ const chartSmartAxis = document.getElementById('chart-smart-axis-toggle');
 const btnChartSaveCurrent = document.getElementById('btn-chart-save-current');
 const btnChartSaveAs = document.getElementById('btn-chart-save-as');
 const btnChartDeleteConfig = document.getElementById('btn-chart-delete-config');
-const chartSaveStatus = document.getElementById('chart-save-status');
 const chartStartDateInput = document.getElementById('chart-start-date');
 const chartEndDateInput = document.getElementById('chart-end-date');
 const chartRangeButtonsContainer = document.getElementById('chart-range-buttons');
@@ -56,7 +55,6 @@ let maxTimestamp = 0;
 let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
 let isChartLive = true; 
-let chartSaveTimer = null;
 let allChartConfigs = { configurations: [] }; 
 let currentConfigId = null; 
 let maxChartsLimit = 0; 
@@ -824,7 +822,10 @@ function toggleChartFullscreen() {
 
 function onExportPNG() {
     trackEvent('chart_export_png'); 
-    if (!chartInstance) { alert("Please generate a chart first."); return; }
+    if (!chartInstance) { 
+        showToast("Please generate a chart first.", "warning"); 
+        return; 
+    }
     const a = document.createElement('a');
     a.href = chartInstance.toBase64Image();
     a.download = `multi_topic_chart.png`;
@@ -834,7 +835,7 @@ function onExportPNG() {
 function onExportCSV() {
     trackEvent('chart_export_csv'); 
     if (!chartInstance || !chartInstance.data.datasets || chartInstance.data.datasets.length === 0) {
-        alert("Please generate a chart first.");
+        showToast("Please generate a chart first.", "warning");
         return;
     }
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -868,17 +869,6 @@ function onExportCSV() {
     a.click();
 }
 
-function showChartSaveStatus(message, type = 'success') {
-    if (!chartSaveStatus) return;
-    chartSaveStatus.textContent = message;
-    chartSaveStatus.className = type;
-    clearTimeout(chartSaveTimer);
-    chartSaveTimer = setTimeout(() => {
-        chartSaveStatus.textContent = '';
-        chartSaveStatus.className = '';
-    }, 3000);
-}
-
 async function loadChartConfig() {
     try {
         const response = await fetch('api/chart/config');
@@ -900,7 +890,7 @@ async function loadChartConfig() {
             onClearAll(); 
         }
     } catch (error) {
-        showChartSaveStatus('Load failed', 'error');
+        showToast("Load failed", "error");
     }
 }
 
@@ -970,11 +960,11 @@ function onChartConfigChange() {
         const node = document.querySelector(`.node-container[data-topic="${selectedChartTopic}"][data-broker-id="${selectedChartBrokerId}"]`);
         if(node) populateChartVariables(node.dataset.payload);
     }
-    showChartSaveStatus(`Loaded '${config.name}'`, 'success');
+    showToast(`Loaded '${config.name}'`, 'success');
 }
 
-async function saveAllChartConfigs(configObject, showStatus = true) {
-    if (showStatus) showChartSaveStatus('Saving...', 'success');
+async function saveAllChartConfigs(configObject, notify = true) {
+    if (notify) showToast('Saving...', 'info');
     try {
         const response = await fetch('api/chart/config', {
             method: 'POST',
@@ -983,15 +973,10 @@ async function saveAllChartConfigs(configObject, showStatus = true) {
         });
         if (!response.ok) throw new Error('Failed to save');
         
-        // IMPORTANT: We do not update allChartConfigs with the response, 
-        // because the backend might have split them. We trust our local state until next reload
-        // OR we should reload. 
-        // For simplicity in this edit: we trust the save succeeded.
-        
-        if (showStatus) showChartSaveStatus('Saved!', 'success');
+        if (notify) showToast('Saved!', 'success');
         return true;
     } catch (error) {
-        if (showStatus) showChartSaveStatus(`Error: ${error.message}`, 'error');
+        if (notify) showToast(`Error: ${error.message}`, 'error');
         return false;
     }
 }
@@ -1001,7 +986,7 @@ async function onSaveCurrent() {
     if (!currentConfigId) { onSaveAsNew(); return; }
     
     const config = allChartConfigs.configurations.find(c => c.id === currentConfigId);
-    if (!config) { showChartSaveStatus('Error: Config not found', 'error'); return; }
+    if (!config) { showToast('Error: Config not found', 'error'); return; }
     
     config.name = chartConfigSelect.options[chartConfigSelect.selectedIndex].text; 
     config.chartType = chartTypeSelect.value;
@@ -1017,7 +1002,7 @@ async function onSaveCurrent() {
 async function onSaveAsNew() {
     trackEvent('chart_save_as_new'); 
     if (maxChartsLimit > 0 && allChartConfigs.configurations.length >= maxChartsLimit) {
-        alert(`Limit reached (${maxChartsLimit}). Delete a chart first.`);
+        showToast(`Limit reached (${maxChartsLimit}). Delete a chart first.`, 'warning');
         return; 
     }
     
@@ -1052,7 +1037,10 @@ async function onSaveAsNew() {
 
 async function onDeleteConfig() {
     trackEvent('chart_delete_config'); 
-    if (!currentConfigId) { alert("No chart selected."); return; }
+    if (!currentConfigId) { 
+        showToast("No chart selected.", "warning"); 
+        return; 
+    }
     
     const chartName = chartConfigSelect.options[chartConfigSelect.selectedIndex].text;
     const isConfirmed = await confirmModal('Delete Chart', `Are you sure you want to delete the chart '${chartName}'?\nThis action cannot be undone.`, 'Delete', true);

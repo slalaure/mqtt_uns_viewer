@@ -14,7 +14,7 @@
  */
 
 import { state, subscribe } from './state.js';
-import { formatTimestampForLabel, highlightText, trackEvent } from './utils.js'; 
+import { formatTimestampForLabel, highlightText, trackEvent, showToast } from './utils.js'; 
 import { createDualTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
@@ -76,7 +76,7 @@ function showLoader() {
 function exportHistoryToJSON() {
     trackEvent('history_export_json');
     if (!allHistoryEntries || allHistoryEntries.length === 0) {
-        alert("No data to export.");
+        showToast("No data to export.", "warning");
         return;
     }
 
@@ -97,7 +97,7 @@ function exportHistoryToJSON() {
     });
 
     if (entriesToExport.length === 0) {
-        alert("Current filters result in no data.");
+        showToast("Current filters result in no data.", "warning");
         return;
     }
 
@@ -125,7 +125,7 @@ function exportHistoryToJSON() {
 function exportHistoryToCSV() {
     trackEvent('history_export_csv');
     if (!allHistoryEntries || allHistoryEntries.length === 0) {
-        alert("No data to export.");
+        showToast("No data to export.", "warning");
         return;
     }
 
@@ -146,7 +146,7 @@ function exportHistoryToCSV() {
     });
 
     if (entriesToExport.length === 0) {
-        alert("Current filters result in no data.");
+        showToast("Current filters result in no data.", "warning");
         return;
     }
 

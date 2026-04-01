@@ -11,24 +11,24 @@
  * Configuration Page Script
  * Manages System Infrastructure: Certificates, UNS Model, and Environment Variables.
  * [UPDATED] Operational tasks (DB, Alerts) moved to Admin View.
+ * [UPDATED] Replaced native alerts with centralized showToast and confirmModal system.
  */
+import { showToast, confirmModal } from './utils.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('config-form');
     const saveButton = document.getElementById('save-config-button');
-    const statusMessage = document.getElementById('status-message');
 
     // Cert Manager Elements
     const certList = document.getElementById('cert-list');
     const uploadInput = document.getElementById('cert-upload-input');
     const btnUpload = document.getElementById('btn-upload-cert');
-    const uploadStatus = document.getElementById('cert-upload-status');
 
     // Model Manager Elements
     const modelEditor = document.getElementById('uns-model-editor');
     const btnSaveModel = document.getElementById('btn-save-model');
     const modelUploadInput = document.getElementById('model-upload-input');
     const btnUploadModel = document.getElementById('btn-upload-model');
-    const modelUploadStatus = document.getElementById('model-upload-status');
 
     // --- UNS Model Manager Logic ---
     async function loadUnsModel() {
@@ -65,10 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const err = await response.json();
                 throw new Error(err.error || "Failed to save model.");
             }
-            alert("UNS Model saved successfully!");
+            
+            showToast("UNS Model saved successfully!", "success");
             loadUnsModel(); // Reload to formatting
         } catch (e) {
-            alert(`Error saving model: ${e.message}`);
+            showToast(`Error saving model: ${e.message}`, "error");
         } finally {
             btnSaveModel.disabled = false;
             btnSaveModel.textContent = "Save Model";
@@ -84,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnUploadModel.addEventListener('click', () => {
         const file = modelUploadInput.files[0];
         if (!file) {
-            alert("Please select a JSON file first.");
+            showToast("Please select a JSON file first.", "warning");
             return;
         }
         const reader = new FileReader();
@@ -93,12 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const json = JSON.parse(e.target.result);
                 // We save immediately upon upload
                 saveUnsModel(json);
-                modelUploadStatus.textContent = "✅ Uploaded & Saved!";
-                modelUploadStatus.style.color = 'var(--color-success)';
+                showToast("Uploaded & Saved!", "success");
                 modelUploadInput.value = '';
-                setTimeout(() => { modelUploadStatus.textContent = ''; }, 3000);
             } catch (err) {
-                alert("Invalid JSON file: " + err.message);
+                showToast("Invalid JSON file: " + err.message, "error");
             }
         };
         reader.readAsText(file);
@@ -143,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnUpload.addEventListener('click', async () => {
         const file = uploadInput.files[0];
         if (!file) {
-            alert("Please select a file first.");
+            showToast("Please select a file first.", "warning");
             return;
         }
         
@@ -152,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         btnUpload.disabled = true;
         btnUpload.textContent = 'Uploading...';
-        uploadStatus.textContent = '';
 
         try {
             const response = await fetch('api/env/certs', {
@@ -162,17 +160,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Upload failed');
             
-            uploadStatus.textContent = '✅ Uploaded!';
-            uploadStatus.style.color = 'var(--color-success)';
+            showToast("Certificate uploaded successfully!", "success");
             uploadInput.value = ''; // Clear input
             loadCertificates(); // Refresh list
         } catch (e) {
-            uploadStatus.textContent = `❌ ${e.message}`;
-            uploadStatus.style.color = 'var(--color-danger)';
+            showToast(`Upload error: ${e.message}`, "error");
         } finally {
             btnUpload.disabled = false;
             btnUpload.textContent = 'Upload';
-            setTimeout(() => { uploadStatus.textContent = ''; }, 3000);
         }
     });
 
@@ -235,8 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 form.appendChild(group);
             }
         } catch (error) {
-            statusMessage.textContent = error.message;
-            statusMessage.className = 'status-message error';
+            showToast(error.message, "error");
         }
     }
 
@@ -245,8 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         saveButton.disabled = true;
         saveButton.textContent = 'Saving...';
-        statusMessage.textContent = '';
-        statusMessage.className = 'status-message';
 
         const formData = new FormData(form);
         const configData = Object.fromEntries(formData.entries());
@@ -259,8 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Minify to single line for .env compatibility
                 configData['MQTT_BROKERS'] = JSON.stringify(parsed);
             } catch (e) {
-                statusMessage.textContent = 'Error: Invalid JSON in MQTT_BROKERS field.';
-                statusMessage.className = 'status-message error';
+                showToast('Error: Invalid JSON in MQTT_BROKERS field.', 'error');
                 saveButton.disabled = false;
                 saveButton.textContent = 'Save Configuration';
                 return; // Stop submission
@@ -280,23 +271,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to save configuration.');
             }
-
-            statusMessage.textContent = 'Configuration saved! Please restart the server for changes to take effect.';
-            statusMessage.className = 'status-message success';
             
-            const restart = confirm("Configuration saved!\nA server restart is required for changes to take effect.\n\nRestart now?");
+            const restart = await confirmModal(
+                "Restart Required", 
+                "Configuration saved!\nA server restart is required for changes to take effect.\n\nRestart now?", 
+                "Restart Now", 
+                false
+            );
+            
             if (restart) {
-                statusMessage.textContent = 'Restarting server...';
-                statusMessage.className = 'status-message success';
+                showToast('Restarting server...', 'info');
                 fetch('api/env/restart', { method: 'POST' });
             } else {
-                statusMessage.textContent = 'Configuration saved! Restart the server later to apply changes.';
-                statusMessage.className = 'status-message success';
+                showToast('Configuration saved! Restart the server later to apply changes.', 'success');
             }
 
         } catch (error) {
-            statusMessage.textContent = error.message;
-            statusMessage.className = 'status-message error';
+            showToast(error.message, "error");
         } finally {
             saveButton.disabled = false;
             saveButton.textContent = 'Save Configuration';

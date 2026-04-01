@@ -207,3 +207,47 @@ export function confirmModal(title, message, confirmText = 'Confirm', isDanger =
         };
     });
 }
+
+/**
+ * Displays a unified, non-blocking toast notification.
+ * @param {string} message - The message to display.
+ * @param {string} type - 'success', 'error', 'warning', or 'info'.
+ * @param {number} duration - How long to show the toast in milliseconds.
+ */
+export function showToast(message, type = 'info', duration = 4000) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `korelate-toast ${type}`;
+
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+    if (type === 'warning') icon = '⚠️';
+
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-content">${message}</div>
+    `;
+
+    container.appendChild(toast);
+
+    // Trigger reflow for animation
+    void toast.offsetWidth;
+    toast.classList.add('visible');
+
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => {
+            if (container.contains(toast)) {
+                container.removeChild(toast);
+            }
+        }, 300); // Wait for transition out
+    }, duration);
+}

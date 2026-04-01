@@ -15,7 +15,7 @@
 
 // --- Imports ---
 import { state, subscribe } from './state.js';
-import { trackEvent, confirmModal } from './utils.js';
+import { trackEvent, confirmModal, showToast } from './utils.js';
 
 // --- DOM Elements ---
 let container = null;
@@ -322,10 +322,13 @@ async function saveRule() {
 
         if (!res.ok) throw new Error((await res.json()).error);
         
+        showToast("Rule saved successfully.", "success");
         state.ruleUnsaved = false;
         hideRuleEditor();
         loadRules();
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { 
+        showToast("Error: " + e.message, "error"); 
+    }
 }
 
 async function deleteRule(id) {
@@ -334,8 +337,11 @@ async function deleteRule(id) {
 
     try {
         await fetch(`api/alerts/rules/${id}`, { method: 'DELETE' });
+        showToast("Rule deleted.", "success");
         loadRules();
-    } catch (e) { alert("Delete failed."); }
+    } catch (e) { 
+        showToast("Delete failed.", "error"); 
+    }
 }
 
 // --- Logic: Alerts ---
