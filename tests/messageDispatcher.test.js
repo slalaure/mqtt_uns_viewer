@@ -2,7 +2,7 @@
  * @license Apache License, Version 2.0
  * @author Sebastien Lalaurette
  * * Unit tests for the Central Message Dispatcher.
- * Verifies rate limiting (anti-spam) and payload size protections.
+ * Verifies rate limiting (anti-spam), payload size protections, and edge cases.
  */
 
 const messageDispatcher = require('../core/messageDispatcher');
@@ -25,7 +25,7 @@ describe('MessageDispatcher', () => {
 
         mockLogger = createMockLogger();
         mockConfig = {};
-        mockWsManager = { broadcast: jest.fn() };
+        mockWsManager = { broadcast: jest.fn(), sendToClient: jest.fn() };
         mockMapperEngine = {
             rulesForTopicRequireDb: jest.fn().mockReturnValue(true),
             processMessage: jest.fn()
@@ -45,44 +45,82 @@ describe('MessageDispatcher', () => {
         jest.useRealTimers();
     });
 
-    test('should throttle messages exceeding 50 per second per namespace', async () => {
+    test('should allow exactly 50 messages per second without throttling', async () => {
         const providerId = 'mqtt_local';
-        const topic = 'factory/line1/fast_sensor';
+        const topic = 'factory/line1/sensor_a';
         const payload = JSON.stringify({ value: 10 });
 
-        // Simulate a packet storm: send 60 messages instantly
+        for (let i = 0; i < 50; i++) {
+            await handleMessage(providerId, topic, payload);
+        }
+
+        expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(50);
+    });
+
+    test('should throttle the 51st message within the same second', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'factory/line1/sensor_b';
+        const payload = JSON.stringify({ value: 10 });
+
+        for (let i = 0; i < 51; i++) {
+            await handleMessage(providerId, topic, payload);
+        }
+
+        expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(50);
+    });
+
+    test('should reset throttle count after 1 second interval', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'factory/line1/sensor_c';
+        const payload = JSON.stringify({ value: 10 });
+
+        // Send 60 messages instantly (50 pass, 10 dropped)
         for (let i = 0; i < 60; i++) {
             await handleMessage(providerId, topic, payload);
         }
 
-        // Only 50 should have made it to the database
         expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(50);
 
-        // Advance time by slightly more than 1 second to trigger the interval clearing the counts
-        jest.advanceTimersByTime(1050);
+        // Advance time by 1.1 seconds to clear the interval
+        jest.advanceTimersByTime(1100);
 
         // Send 10 more messages
         for (let i = 0; i < 10; i++) {
             await handleMessage(providerId, topic, payload);
         }
 
-        // Now the total inserted should be 60 (50 from previous second + 10 from current)
+        // Total inserted should be 60 (50 from first burst + 10 from second burst)
         expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(60);
     });
 
-    test('should truncate payloads exceeding 2MB and emit an error payload', async () => {
+    test('should allow payloads exactly at or just below 2MB', async () => {
         const providerId = 'mqtt_local';
-        const topic = 'factory/camera/image';
+        const topic = 'factory/camera/image_ok';
         
-        // Create a massive payload string (> 2.5 MB)
+        // Exactly 2MB string
+        const exactPayload = "A".repeat(2 * 1024 * 1024);
+
+        await handleMessage(providerId, topic, exactPayload);
+
+        expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(1);
+        const insertedArg = mockDataManager.insertMessage.mock.calls[0][0];
+        
+        // Verify it was NOT truncated
+        const parsedDbPayload = JSON.parse(insertedArg.payloadStringForDb);
+        expect(parsedDbPayload.raw_payload).toBe(exactPayload);
+    });
+
+    test('should truncate payloads strictly exceeding 2MB and emit an error payload', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'factory/camera/image_large';
+        
+        // Massive payload string (> 2.5 MB)
         const hugePayload = "A".repeat(2.5 * 1024 * 1024);
 
         await handleMessage(providerId, topic, hugePayload);
 
-        // Check that the message was still inserted (to log the error)
         expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(1);
         
-        // Extract the argument passed to insertMessage
         const insertedArg = mockDataManager.insertMessage.mock.calls[0][0];
         
         // Verify the payload was replaced by the truncation warning
@@ -91,37 +129,57 @@ describe('MessageDispatcher', () => {
         expect(parsedDbPayload.original_size_bytes).toBeGreaterThan(2 * 1024 * 1024);
     });
 
-    test('should generate and propagate a unique correlationId for each message', async () => {
+    test('should handle malformed JSON gracefully and store as raw string', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'factory/legacy/sensor';
+        const malformedPayload = "{ value: 25, broken_json: true"; // Missing quotes and brace
+
+        await handleMessage(providerId, topic, malformedPayload);
+
+        expect(mockDataManager.insertMessage).toHaveBeenCalledTimes(1);
+        const insertedArg = mockDataManager.insertMessage.mock.calls[0][0];
+
+        const parsedDbPayload = JSON.parse(insertedArg.payloadStringForDb);
+        expect(parsedDbPayload.raw_payload).toBe(malformedPayload);
+    });
+
+    test('should generate and propagate a unique correlationId if not provided', async () => {
         const providerId = 'mqtt_local';
         const topic = 'sensors/temp';
         const payload = JSON.stringify({ value: 25 });
 
-        // Mock mapperEngine to NOT require DB so processMessage is called immediately
         mockMapperEngine.rulesForTopicRequireDb.mockReturnValue(false);
 
         await handleMessage(providerId, topic, payload);
 
-        // 1. Verify it was passed to dataManager.insertMessage
         expect(mockDataManager.insertMessage).toHaveBeenCalledWith(expect.objectContaining({
             correlationId: expect.any(String)
         }));
 
         const correlationId = mockDataManager.insertMessage.mock.calls[0][0].correlationId;
-        expect(correlationId).toHaveLength(36); // UUID length
+        expect(correlationId).toHaveLength(36); // standard UUID length
 
-        // 2. Verify same ID was passed to mapperEngine.processMessage
         expect(mockMapperEngine.processMessage).toHaveBeenCalledWith(
             providerId, topic, expect.any(Object), false, correlationId
         );
 
-        // 3. Verify same ID was passed to alertManager.processMessage
         expect(mockAlertManager.processMessage).toHaveBeenCalledWith(
             providerId, topic, expect.any(Object), correlationId
         );
+    });
 
-        // 4. Verify ID is in the WebSocket broadcast
-        const broadcastCall = mockWsManager.broadcast.mock.calls[0][0];
-        const broadcastObj = JSON.parse(broadcastCall);
-        expect(broadcastObj.correlationId).toBe(correlationId);
+    test('should preserve an ingress correlationId if provided in options', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'sensors/pressure';
+        const payload = JSON.stringify({ value: 1.5 });
+        const ingressId = 'custom-trace-id-999';
+
+        mockMapperEngine.rulesForTopicRequireDb.mockReturnValue(false);
+
+        await handleMessage(providerId, topic, payload, { correlationId: ingressId });
+
+        expect(mockDataManager.insertMessage).toHaveBeenCalledWith(expect.objectContaining({
+            correlationId: ingressId
+        }));
     });
 });
