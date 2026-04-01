@@ -12,8 +12,10 @@
  * Manages the manual publish form, Ace Editor, and simulator controls.
  * [UPDATED] Protocol-agnostic data providers support (MQTT, OPC UA, etc.).
  * [UPDATED] Dynamic injection of new Data Providers (like CSV streams).
+ * [UPDATED] Subscribes to Proxy-based reactive state for auto-filling and theming.
  */
 
+import { state, subscribe } from './state.js';
 import { trackEvent, mqttPatternToRegex } from './utils.js'; 
 
 // --- DOM Element Querying ---
@@ -32,7 +34,7 @@ const simulatorControlTemplate = document.getElementById('simulator-control-temp
 
 // --- Module-level State ---
 let aceEditor = null;
-let isDarkTheme = localStorage.getItem('theme') === 'dark';
+let isDarkTheme = state.isDarkMode; // Read from global state
 let publishStatusTimer = null;
 let subscribedTopics = []; 
 let simControlsContainer = null; 
@@ -161,18 +163,42 @@ export function initPublishView(options) {
         publishTopicInput.setAttribute('list', datalist.id);
     }
 
+    // --- Reactive State Subscriptions ---
+    subscribe('isDarkMode', (isDark) => {
+        isDarkTheme = isDark;
+        if (aceEditor) {
+            aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+        }
+    });
+
+    subscribe('currentTopic', (topic) => {
+        // Only auto-fill if we aren't actively modifying the publish view
+        if (topic && publishTopicInput && state.activeView !== 'publish') {
+            publishTopicInput.value = topic;
+            validatePublishPermissions();
+        }
+    });
+
+    subscribe('currentBrokerId', (brokerId) => {
+        if (brokerId && providerSelectElement && state.activeView !== 'publish') {
+            const exists = Array.from(providerSelectElement.options).some(opt => opt.value === brokerId);
+            if (exists) {
+                providerSelectElement.value = brokerId;
+                validatePublishPermissions();
+            }
+        }
+    });
+
     // Initial validation run
     validatePublishPermissions();
 }
 
 /**
- * Updates the theme for the Ace editor instance.
+ * Legacy wrapper: kept to avoid crashing app.js before we fully migrate it.
+ * Real toggling is now handled by the state subscription.
  */
 export function setPublishTheme(isDark) {
-    isDarkTheme = isDark;
-    if (aceEditor) {
-        aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-    }
+    // No-op, managed by state now.
 }
 
 /**

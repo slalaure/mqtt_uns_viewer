@@ -10,9 +10,11 @@
  *
  * View module for the Chart tab.
  * Handles configuration, data extraction (including primitives), and rendering.
+ * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
  */
 
-// Import shared utilities
+// Import shared utilities and state
+import { state, subscribe } from './state.js';
 import { formatTimestampForLabel, trackEvent, confirmModal } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 import { createDualTimeSlider }from './time-slider.js';
@@ -63,7 +65,6 @@ let chartSlider = null;
 let chartRefreshTimer = null; 
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
-let hasUnsavedChanges = false; // State for UI feedback
 
 // Configuration for Chart
 const MAX_POINTS_PER_SERIES = 500; 
@@ -92,21 +93,6 @@ let appCallbacks = {
     colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"), 
 };
 
-// --- Unsaved Changes Feedback ---
-function markUnsaved() {
-    if (!hasUnsavedChanges && btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
-        hasUnsavedChanges = true;
-        btnChartSaveCurrent.classList.add('btn-unsaved');
-    }
-}
-
-function clearUnsaved() {
-    hasUnsavedChanges = false;
-    if (btnChartSaveCurrent) {
-        btnChartSaveCurrent.classList.remove('btn-unsaved');
-    }
-}
-
 export function refreshChart() {
     onGenerateChart(false); 
 }
@@ -122,7 +108,7 @@ export function pruneChartedVariables(regex) {
         }
     }
     if (wasPruned) {
-        markUnsaved();
+        state.chartUnsaved = true;
         onGenerateChart(); 
         appCallbacks.colorChartTreeCallback(); 
         if (selectedChartTopic && regex.test(selectedChartTopic)) populateChartVariables(null);
@@ -180,6 +166,19 @@ export function initChartView(callbacks) {
     maxChartsLimit = maxSavedChartConfigs || 0; 
     isMultiBroker = multiBrokerState || false; 
 
+    // --- Reactive State Subscriptions ---
+    subscribe('chartUnsaved', (isUnsaved) => {
+        if (isUnsaved) {
+            if (btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
+                btnChartSaveCurrent.classList.add('btn-unsaved');
+            }
+        } else {
+            if (btnChartSaveCurrent) {
+                btnChartSaveCurrent.classList.remove('btn-unsaved');
+            }
+        }
+    });
+
     // Convert Fullscreen button to Maximize style
     if (btnChartFullscreen) {
         btnChartFullscreen.innerHTML = '⛶ Maximize';
@@ -214,7 +213,7 @@ export function initChartView(callbacks) {
         `;
         typeGroup.parentNode.insertBefore(aggGroup, typeGroup);
         document.getElementById('chart-aggregation-select').addEventListener('change', () => {
-            markUnsaved();
+            state.chartUnsaved = true;
             onGenerateChart(true);
         });
     }
@@ -222,7 +221,7 @@ export function initChartView(callbacks) {
     payloadViewer = createPayloadViewer({
         topicEl: document.getElementById('chart-payload-topic'),
         contentEl: document.getElementById('chart-payload-content'),
-        isMultiBroker: isMultiBroker
+        isMultiBroker: false 
     });
 
     btnChartFullscreen?.addEventListener('click', toggleChartFullscreen);
@@ -234,9 +233,9 @@ export function initChartView(callbacks) {
     btnChartSaveAs?.addEventListener('click', onSaveAsNew);
     btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
     
-    chartTypeSelect?.addEventListener('change', () => { markUnsaved(); onGenerateChart(true); });
-    chartConnectNulls?.addEventListener('change', () => { markUnsaved(); onGenerateChart(true); });
-    chartSmartAxis?.addEventListener('change', () => { markUnsaved(); onGenerateChart(true); }); 
+    chartTypeSelect?.addEventListener('change', () => { state.chartUnsaved = true; onGenerateChart(true); });
+    chartConnectNulls?.addEventListener('change', () => { state.chartUnsaved = true; onGenerateChart(true); });
+    chartSmartAxis?.addEventListener('change', () => { state.chartUnsaved = true; onGenerateChart(true); }); 
 
     if (chartRangeButtonsContainer) {
         const createRangeBtn = (text, hours) => {
@@ -495,7 +494,7 @@ function onClearAll() {
     chartConnectNulls.checked = false;
     currentConfigId = null;
     chartConfigSelect.value = ""; 
-    clearUnsaved();
+    state.chartUnsaved = false;
     onGenerateChart(true); 
     appCallbacks.colorChartTreeCallback(); 
 }
@@ -503,7 +502,7 @@ function onClearAll() {
 function onChartVariableToggle(event) {
     const checkbox = event.target;
     const varId = checkbox.value; 
-    markUnsaved();
+    state.chartUnsaved = true;
 
     if (checkbox.checked) {
         chartedVariables.set(varId, {
@@ -963,7 +962,7 @@ function onChartConfigChange() {
         });
     }
     
-    clearUnsaved();
+    state.chartUnsaved = false;
     onGenerateChart(true);
     appCallbacks.colorChartTreeCallback();
     
@@ -1011,7 +1010,7 @@ async function onSaveCurrent() {
     
     const success = await saveAllChartConfigs(allChartConfigs);
     if (success) {
-        clearUnsaved();
+        state.chartUnsaved = false;
     }
 }
 
@@ -1047,7 +1046,7 @@ async function onSaveAsNew() {
         btnChartSaveCurrent.disabled = false;
         btnChartSaveCurrent.textContent = "Save";
         btnChartDeleteConfig.disabled = false;
-        clearUnsaved();
+        state.chartUnsaved = false;
     }
 }
 

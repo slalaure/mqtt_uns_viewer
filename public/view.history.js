@@ -10,8 +10,10 @@
  *
  * View module for the History tab.
  * [UPDATED] Protocol-agnostic provider selection with Dynamic Addition for Parsers.
+ * [UPDATED] Integrated Proxy-based reactive state for auto-filtering based on tree selection.
  */
 
+import { state, subscribe } from './state.js';
 import { formatTimestampForLabel, highlightText, trackEvent } from './utils.js'; 
 import { createDualTimeSlider } from './time-slider.js';
 
@@ -41,7 +43,6 @@ let isMultiProvider = false;
 let providerFilterSelect = null; 
 let availableProviders = [];
 
-let isRealTimeMode = true; 
 let visibleCount = 1000; 
 
 // UI Elements for Dates
@@ -343,7 +344,7 @@ export function initHistoryView(options = {}) {
         const end = endDateInput.value ? new Date(endDateInput.value).getTime() : Date.now();
         if (start && end && start < end) {
             const isNow = Math.abs(end - Date.now()) < 60000;
-            isRealTimeMode = isNow; 
+            state.isLivePayload = isNow; 
             triggerDataFetch(start, end);
         }
     };
@@ -376,7 +377,27 @@ export function initHistoryView(options = {}) {
         historyControls.prepend(providerFilterSelect);
     }
 
-    // --- 3. Slider Init ---
+    // --- 3. Reactive Subscriptions for Auto-Sync ---
+    subscribe('currentTopic', (topic) => {
+        if (topic && historySearchInput && state.activeView !== 'history') {
+            historySearchInput.value = topic;
+            visibleCount = 1000;
+            renderFilteredHistory();
+        }
+    });
+
+    subscribe('currentBrokerId', (brokerId) => {
+        if (brokerId && providerFilterSelect && state.activeView !== 'history') {
+            const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === brokerId);
+            if (exists) {
+                providerFilterSelect.value = brokerId;
+                visibleCount = 1000;
+                renderFilteredHistory();
+            }
+        }
+    });
+
+    // --- 4. Slider Init ---
     if (handleMin && handleMax) {
         historySlider = createDualTimeSlider({
             containerEl: timeRangeSliderContainer,
@@ -390,7 +411,7 @@ export function initHistoryView(options = {}) {
                 currentMaxTimestamp = newMax;
                 const range = globalMaxTimestamp - globalMinTimestamp;
                 const threshold = globalMinTimestamp + (range * 0.999); 
-                isRealTimeMode = (newMax >= threshold);
+                state.isLivePayload = (newMax >= threshold);
                 updateSliderUI();
             },
             onDragEnd: (newMin, newMax) => {
@@ -402,7 +423,7 @@ export function initHistoryView(options = {}) {
 
 function setRelativeRange(hours) {
     if (hours === 'FULL') {
-        isRealTimeMode = true;
+        state.isLivePayload = true;
         triggerDataFetch(globalMinTimestamp, Date.now());
         return;
     }
@@ -412,7 +433,7 @@ function setRelativeRange(hours) {
         start = globalMinTimestamp;
     }
     
-    isRealTimeMode = true;
+    state.isLivePayload = true;
     triggerDataFetch(start, end);
 }
 
@@ -435,7 +456,7 @@ export function setDbBounds(min, max) {
     globalMaxTimestamp = new Date(max).getTime();
     currentMinTimestamp = globalMinTimestamp;
     currentMaxTimestamp = globalMaxTimestamp;
-    isRealTimeMode = true;
+    state.isLivePayload = true;
     updateSliderUI();
 }
 
@@ -448,7 +469,7 @@ export function setHistoryData(entries, isInitialLoad, isUpdate = false) {
         const newMax = entries[0].timestampMs;
         if (newMax > globalMaxTimestamp) globalMaxTimestamp = newMax;
         
-        if (isRealTimeMode) {
+        if (state.isLivePayload) {
             currentMaxTimestamp = globalMaxTimestamp;
         }
     } else {

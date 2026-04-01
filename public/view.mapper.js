@@ -11,9 +11,11 @@
  * View module for the Mapper tab.
  * [UPDATED] Protocol-agnostic data providers support (MQTT, OPC UA, FILE, etc.).
  * [UPDATED] Dynamic injection of new Data Providers to support loopback streams.
+ * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
  */
 
-// Import shared utilities
+// Import shared utilities and state
+import { state, subscribe } from './state.js';
 import { mqttPatternToClientRegex, trackEvent } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 
@@ -73,8 +75,6 @@ let availableProviders = []; // Store combined provider configs
 let aceEditors = new Map(); 
 let isDarkTheme = localStorage.getItem('theme') === 'dark'; 
 
-let hasUnsavedChanges = false; // Tracks if modifications require saving
-
 let payloadViewer = createPayloadViewer({
     topicEl: document.getElementById('mapper-payload-topic'),
     contentEl: document.getElementById('mapper-payload-content'),
@@ -100,34 +100,6 @@ export function setMapperTheme(isDark) {
 }
 
 /**
- * Marks the UI to show unsaved changes.
- */
-function markUnsaved() {
-    if (!hasUnsavedChanges) {
-        hasUnsavedChanges = true;
-        if (mapperSaveButton && !mapperSaveButton.disabled) {
-            mapperSaveButton.classList.add('btn-unsaved');
-        }
-        document.querySelectorAll('.target-save-maximized').forEach(btn => {
-            if (!btn.disabled) btn.classList.add('btn-unsaved');
-        });
-    }
-}
-
-/**
- * Clears the unsaved UI indicators.
- */
-function clearUnsaved() {
-    hasUnsavedChanges = false;
-    if (mapperSaveButton) {
-        mapperSaveButton.classList.remove('btn-unsaved');
-    }
-    document.querySelectorAll('.target-save-maximized').forEach(btn => {
-        btn.classList.remove('btn-unsaved');
-    });
-}
-
-/**
  * Initializes the Mapper View functionality.
  */
 export function initMapperView(callbacks) {
@@ -146,6 +118,21 @@ export function initMapperView(callbacks) {
     });
 
     loadMapperConfig(); 
+
+    // --- Reactive State Subscriptions ---
+    subscribe('mapperUnsaved', (isUnsaved) => {
+        if (isUnsaved) {
+            if (mapperSaveButton && !mapperSaveButton.disabled) mapperSaveButton.classList.add('btn-unsaved');
+            document.querySelectorAll('.target-save-maximized').forEach(btn => {
+                if (!btn.disabled) btn.classList.add('btn-unsaved');
+            });
+        } else {
+            if (mapperSaveButton) mapperSaveButton.classList.remove('btn-unsaved');
+            document.querySelectorAll('.target-save-maximized').forEach(btn => {
+                btn.classList.remove('btn-unsaved');
+            });
+        }
+    });
 
     // --- Role-Based UI Adjustments ---
     const userRole = window.currentUser ? window.currentUser.role : 'user';
@@ -292,7 +279,7 @@ function getRuleForTopic(sourceTopic, createIfMissing = false) {
             targets: []
         };
         activeVersion.rules.push(rule);
-        markUnsaved();
+        state.mapperUnsaved = true;
     }
     return rule;
 }
@@ -406,7 +393,7 @@ function createTargetEditor(rule, target) {
         }
         
         target.name = newName;
-        markUnsaved();
+        state.mapperUnsaved = true;
     });
 
     const enabledToggle = editorDiv.querySelector('.target-enabled-toggle');
@@ -414,7 +401,7 @@ function createTargetEditor(rule, target) {
     enabledToggle.addEventListener('change', () => {
         target.enabled = enabledToggle.checked;
         trackEvent('mapper_target_toggle'); 
-        markUnsaved();
+        state.mapperUnsaved = true;
     });
 
     const deleteButton = editorDiv.querySelector('.target-delete-button');
@@ -464,7 +451,7 @@ function createTargetEditor(rule, target) {
                 }
             }
         }
-        markUnsaved();
+        state.mapperUnsaved = true;
     });
 
     const validateTopic = () => {
@@ -505,7 +492,7 @@ function createTargetEditor(rule, target) {
 
     outputTopicInput.addEventListener('input', () => {
         validateTopic();
-        markUnsaved();
+        state.mapperUnsaved = true;
     });
     
     // Apply initial state
@@ -556,7 +543,7 @@ function createTargetEditor(rule, target) {
         
         select.addEventListener('change', () => {
             target.targetBrokerId = select.value || null; 
-            markUnsaved();
+            state.mapperUnsaved = true;
         });
 
         brokerGroup.appendChild(label);
@@ -589,7 +576,7 @@ function createTargetEditor(rule, target) {
 
     editor.session.on('change', () => {
         target.code = editor.session.getValue();
-        markUnsaved();
+        state.mapperUnsaved = true;
     });
 
     aceEditors.set(target.id, editor);
@@ -632,7 +619,7 @@ function createTargetEditor(rule, target) {
         saveMaximizedBtn.style.display = 'none'; // Completely hidden for standard users
     } else {
         // Sync unsaved class if already unsaved
-        if (hasUnsavedChanges) saveMaximizedBtn.classList.add('btn-unsaved');
+        if (state.mapperUnsaved) saveMaximizedBtn.classList.add('btn-unsaved');
     }
 
     updateMetricsForTarget(editorDiv, rule.sourceTopic, target.id);
@@ -675,7 +662,7 @@ function onAddTarget() {
     };
 
     rule.targets.push(newTarget);
-    markUnsaved(); // Flag as unsaved
+    state.mapperUnsaved = true; // Flag as unsaved
     renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic); 
 
     // Expand the newly added target automatically
@@ -835,7 +822,7 @@ async function onSave() {
             throw new Error(errData.error || 'Failed to save');
         }
         
-        clearUnsaved(); // Reset visual state after success
+        state.mapperUnsaved = false; // Reset visual state after success
         showMapperSaveStatus('Live Deployed!', 'success');
         appCallbacks.colorAllTrees();
     } catch (error) {
@@ -875,7 +862,7 @@ function onSaveAsNew() {
     .then(data => {
         if(data.success) {
             alert(data.message || "Version saved successfully.");
-            clearUnsaved();
+            state.mapperUnsaved = false;
             // We could reload config here, but typically user might want to switch to it
             // A full reload of config might be best. For simplicity, just alert success.
         } else {
@@ -888,7 +875,7 @@ function onSaveAsNew() {
 function onVersionChange() {
     trackEvent('mapper_version_change'); 
     mapperConfig.activeVersionId = mapperVersionSelect.value;
-    clearUnsaved(); // Clear unsaved state on version switch
+    state.mapperUnsaved = false; // Clear unsaved state on version switch
     
     if (currentEditingSourceTopic) {
         renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic);

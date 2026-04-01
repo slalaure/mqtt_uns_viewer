@@ -12,9 +12,11 @@
  * [UPDATED] Fixed real-time queue flushing to prevent older messages from overwriting newer ones in the UI.
  * [UPDATED] Replaced explicit I3X UI Toggle with continuous, native I3X model integration inside trees.
  * [UPDATED] Dynamically registers new Data Providers (like CSV parsers) across UI views when they connect.
+ * [UPDATED] Integrated Vanilla JS Proxy state manager for reactive UI updates and data-driven routing.
  */
 
 // ---  Module Imports ---
+import { state, subscribe } from './state.js';
 import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js';
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
@@ -44,7 +46,6 @@ async function reportFrontendError(eventData) {
             credentials: 'same-origin'
         });
     } catch (err) {
-        // avoid throwing second-level error from error handler
         console.warn('Failed to report frontend error', err);
     } finally {
         isSendingFrontendLog = false;
@@ -79,6 +80,7 @@ window.onunhandledrejection = function(event) {
     };
     reportFrontendError(payload);
 };
+
 import { 
     initHistoryView, 
     setHistoryData, 
@@ -113,7 +115,7 @@ import { initAdminView, onAdminViewShow } from './view.admin.js';
 import { initAlertsView, onAlertsViewShow, onAlertsViewHide, openCreateRuleModal, refreshAlerts } from './view.alerts.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Variables must be initialized before being used
+    // Global Elements
     const datetimeContainer = document.getElementById('current-datetime');
     const darkModeToggle = document.getElementById('dark-mode-toggle');
     const btnConfigView = document.getElementById('btn-config-view'); 
@@ -128,40 +130,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCollapseAll = document.getElementById('btn-collapse-all');
     const btnCreateAlert = document.getElementById('btn-create-alert-from-tree');
 
-    // View Buttons
-    const btnTreeView = document.getElementById('btn-tree-view');
-    const btnHmiView = document.getElementById('btn-hmi-view');
-    const btnHistoryView = document.getElementById('btn-history-view');
-    const btnModelerView = document.getElementById('btn-modeler-view'); 
-    const btnMapperView = document.getElementById('btn-mapper-view');
-    const btnChartView = document.getElementById('btn-chart-view');
-    const btnPublishView = document.getElementById('btn-publish-view'); 
-    const btnAdminView = document.getElementById('btn-admin-view'); 
-    const btnAlertsView = document.getElementById('btn-alerts-view');
-
-    // Views
-    const treeView = document.getElementById('tree-view');
-    const hmiView = document.getElementById('hmi-view');
-    const historyView = document.getElementById('history-view');
-    const modelerView = document.getElementById('modeler-view'); 
-    const mapperView = document.getElementById('mapper-view');
-    const chartView = document.getElementById('chart-view');
-    const publishView = document.getElementById('publish-view'); 
-    const adminView = document.getElementById('admin-view'); 
-    const alertsView = document.getElementById('alerts-view');
-
     // Other Elements
     const historyTotalMessages = document.getElementById('history-total-messages');
     const historyDbSize = document.getElementById('history-db-size');
     const historyDbLimit = document.getElementById('history-db-limit');
     const pruningIndicator = document.getElementById('pruning-indicator');
-    
     const simulatorControls = document.getElementById('simulator-list-container'); 
-    
     const mapperFilterInput = document.getElementById('mapper-filter-input');
     const btnMapperExpandAll = document.getElementById('btn-mapper-expand-all');
     const btnMapperCollapseAll = document.getElementById('btn-mapper-collapse-all');
-
     const chartFilterInput = document.getElementById('chart-filter-input');
     const btnChartExpandAll = document.getElementById('btn-chart-expand-all');
     const btnChartCollapseAll = document.getElementById('btn-chart-collapse-all');
@@ -192,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
             userDiv.style.justifyContent = 'space-between';
         }
 
-        // Generate a local SVG avatar data URI instead of using an external API
         function generateLocalAvatar(name) {
             const initial = (name || 'U').charAt(0).toUpperCase();
             let hash = 0;
@@ -249,7 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("✅ Logged in as:", currentUser.username || currentUser.displayName);
     injectUserMenu(currentUser);
 
-    // If admin, show the admin tab button
+    // If admin, ensure the admin tab button exists and is visible
+    const btnAdminView = document.getElementById('btn-admin-view');
     if (currentUser.role === 'admin' && btnAdminView) {
         btnAdminView.style.display = 'block';
     }
@@ -279,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Global Providers Map ---
     const providersMap = {};
 
-    // --- Helper to infer provider types dynamically ---
     function guessProviderType(brokerId) {
         if (!brokerId) return 'mqtt';
         const lower = brokerId.toLowerCase();
@@ -293,7 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let isFlushingRealtimeQueue = false;
     const REALTIME_QUEUE_LIMIT = 5000;
 
-    // Fetch and sync Semantic Models
     async function refreshSemanticTrees() {
         try {
             const safeBasePath = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
@@ -309,108 +284,111 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Callbacks for global events ---
     window.appCallbacks = {
         ...window.appCallbacks,
         refreshSemanticTrees
     };
 
-    // --- Dark Theme Logic ---
-    const enableDarkMode = () => {
-        document.body.classList.add('dark-mode');
-        localStorage.setItem('theme', 'dark');
-        if (darkModeToggle) darkModeToggle.checked = true;
-        setMapperTheme(true);
-    };
+    // --- Dark Theme Logic (State Driven) ---
+    subscribe('isDarkMode', (isDark) => {
+        if (isDark) {
+            document.body.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+            if (darkModeToggle) darkModeToggle.checked = true;
+            setMapperTheme(true);
+            if (typeof setPublishTheme === 'function') setPublishTheme(true);
+        } else {
+            document.body.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+            if (darkModeToggle) darkModeToggle.checked = false;
+            setMapperTheme(false);
+            if (typeof setPublishTheme === 'function') setPublishTheme(false);
+        }
+    }, true); 
 
-    const disableDarkMode = () => {
-        document.body.classList.remove('dark-mode');
-        localStorage.setItem('theme', 'light');
-        if (darkModeToggle) darkModeToggle.checked = false;
-        setMapperTheme(false);
-    };
-
-    if (localStorage.getItem('theme') === 'dark') {
-        enableDarkMode();
-    }
-    darkModeToggle?.addEventListener('change', () => {
-        darkModeToggle.checked ? enableDarkMode() : disableDarkMode();
+    darkModeToggle?.addEventListener('change', (e) => {
+        state.isDarkMode = e.target.checked;
     });
 
-    // --- Tab Switching Logic ---
-    function switchView(viewToShow, updateHistory = true) {
-        const views = [treeView, hmiView, historyView, modelerView, mapperView, chartView, publishView, adminView, alertsView];
-        const buttons = [btnTreeView, btnHmiView, btnHistoryView, btnModelerView, btnMapperView, btnChartView, btnPublishView, btnAdminView, btnAlertsView];
+    // ============================================================================
+    // --- Data-Driven Routing & View Management ---
+    // ============================================================================
 
-        let targetView, targetButton;
-        let slug = 'tree'; 
+    // 1. Subscribe to state.activeView to handle generic DOM toggling & lifecycle
+    subscribe('activeView', (newView, oldView) => {
+        if (newView === oldView) return;
 
-        if (viewToShow === 'hmi') { targetView = hmiView; targetButton = btnHmiView; slug = 'hmi'; } 
-        else if (viewToShow === 'history') { targetView = historyView; targetButton = btnHistoryView; slug = 'history'; }
-        else if (viewToShow === 'modeler') { targetView = modelerView; targetButton = btnModelerView; slug = 'modeler'; } 
-        else if (viewToShow === 'mapper') { targetView = mapperView; targetButton = btnMapperView; slug = 'mapper'; }
-        else if (viewToShow === 'chart') { targetView = chartView; targetButton = btnChartView; slug = 'chart'; }
-        else if (viewToShow === 'publish') { targetView = publishView; targetButton = btnPublishView; slug = 'publish'; } 
-        else if (viewToShow === 'admin') { targetView = adminView; targetButton = btnAdminView; slug = 'admin'; } 
-        else if (viewToShow === 'alerts') { targetView = alertsView; targetButton = btnAlertsView; slug = 'alerts'; }
-        else { targetView = treeView; targetButton = btnTreeView; slug = 'tree'; }
+        // Reset DOM visually
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
 
-        // Safety checks
-        if (viewToShow === 'admin' && currentUser.role !== 'admin') {
-            console.warn("Unauthorized access to admin view.");
-            switchView('tree');
-            return;
+        const targetView = document.getElementById(`${newView}-view`);
+        const targetBtn = document.getElementById(`btn-${newView}-view`);
+
+        if (targetView) targetView.classList.add('active');
+        if (targetBtn) targetBtn.classList.add('active');
+
+        trackEvent(`view_switch_${newView}`);
+
+        // Handle specific view lifecycle hooks
+        switch (newView) {
+            case 'history':
+                renderFilteredHistory();
+                break;
+            case 'admin':
+                onAdminViewShow();
+                break;
+            case 'modeler':
+                onModelerViewShow();
+                break;
+            case 'alerts':
+                onAlertsViewShow();
+                break;
+            case 'hmi':
+                onHmiViewShow();
+                refreshHmiLiveState();
+                break;
         }
 
-        // --- UPDATED SAFETY CHECK FOR MODELER ---
-        if (viewToShow === 'modeler' && (!window.viewModelerEnabled || currentUser.role !== 'admin')) {
-            console.warn("Unauthorized access to modeler view or view is disabled via .env.");
-            switchView('tree');
-            return;
-        }
+        // Cleanup hooks for leaving views
+        if (oldView === 'alerts') onAlertsViewHide();
+        if (oldView === 'hmi') onHmiViewHide();
 
-        views.forEach(v => v?.classList.remove('active'));
-        buttons.forEach(b => b?.classList.remove('active'));
+        // Manage URL History API
+        const base = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
+        const newUrl = `${base}${newView}/`;
+        if (window.location.pathname !== newUrl && window.location.pathname !== newUrl.slice(0, -1)) {
+            window.history.pushState({ view: newView }, '', newUrl);
+        }
+    });
 
-        targetView?.classList.add('active');
-        targetButton?.classList.add('active');
+    // 2. Bind all navigation buttons dynamically
+    const routeNames = ['tree', 'hmi', 'history', 'modeler', 'mapper', 'chart', 'publish', 'admin', 'alerts'];
+    routeNames.forEach(route => {
+        const btn = document.getElementById(`btn-${route}-view`);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                // Safety Checks
+                if (route === 'admin' && currentUser.role !== 'admin') {
+                    console.warn("Unauthorized access to admin view.");
+                    state.activeView = 'tree';
+                    return;
+                }
+                if (route === 'modeler' && (!window.viewModelerEnabled || currentUser.role !== 'admin')) {
+                    console.warn("Unauthorized access to modeler view or view is disabled.");
+                    state.activeView = 'tree';
+                    return;
+                }
+                // Update Reactive State
+                state.activeView = route;
+            });
+        }
+    });
 
-        trackEvent(`view_switch_${viewToShow || 'tree'}`);
-
-        // View Specific Callbacks
-        if (viewToShow === 'history') {
-            renderFilteredHistory();
-        }
-        if (viewToShow === 'admin') {
-            onAdminViewShow();
-        }
-        if (viewToShow === 'modeler') {
-            onModelerViewShow();
-        }
-        if (viewToShow === 'alerts') {
-            onAlertsViewShow();
-        } else {
-            onAlertsViewHide(); // Stop polling when hidden
-        }
-        if (viewToShow === 'hmi') {
-            onHmiViewShow();
-            refreshHmiLiveState();
-        } else {
-            onHmiViewHide();
-        }
-
-        if (updateHistory) {
-            const base = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
-            const newUrl = `${base}${slug}/`;
-            if (window.location.pathname !== newUrl && window.location.pathname !== newUrl.slice(0, -1)) {
-                window.history.pushState({ view: viewToShow }, '', newUrl);
-            }
-        }
-    }
-
+    // 3. Handle browser back/forward buttons
     window.addEventListener('popstate', (event) => {
         if (event.state && event.state.view) {
-            switchView(event.state.view, false);
+            state.activeView = event.state.view;
         } else {
             handleRoutingFromUrl();
         }
@@ -418,7 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleRoutingFromUrl() {
         const path = window.location.pathname;
-        let viewToLoad = 'tree'; 
         const normalizedBase = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
         let relativePath = path;
         
@@ -427,28 +404,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const cleanPath = relativePath.replace(/^\/|\/$/g, '');
 
-        if (cleanPath === 'hmi' || cleanPath === 'map' || cleanPath === 'svg') viewToLoad = 'hmi';
-        else if (cleanPath === 'history') viewToLoad = 'history';
-        else if (cleanPath === 'modeler') viewToLoad = 'modeler';
-        else if (cleanPath === 'mapper') viewToLoad = 'mapper';
-        else if (cleanPath === 'chart') viewToLoad = 'chart';
-        else if (cleanPath === 'publish') viewToLoad = 'publish';
-        else if (cleanPath === 'admin') viewToLoad = 'admin';
-        else if (cleanPath === 'alerts') viewToLoad = 'alerts';
-        else viewToLoad = 'tree';
-
-        switchView(viewToLoad, false); 
+        // Map URL aliases
+        if (cleanPath === 'map' || cleanPath === 'svg') state.activeView = 'hmi';
+        else if (routeNames.includes(cleanPath)) state.activeView = cleanPath;
+        else state.activeView = 'tree'; // Default fallback
     }
 
-    btnTreeView?.addEventListener('click', () => switchView('tree'));
-    btnHmiView?.addEventListener('click', () => switchView('hmi'));
-    btnHistoryView?.addEventListener('click', () => switchView('history'));
-    btnModelerView?.addEventListener('click', () => switchView('modeler')); 
-    btnMapperView?.addEventListener('click', () => switchView('mapper'));
-    btnChartView?.addEventListener('click', () => switchView('chart'));
-    btnPublishView?.addEventListener('click', () => switchView('publish')); 
-    btnAdminView?.addEventListener('click', () => switchView('admin')); 
-    btnAlertsView?.addEventListener('click', () => switchView('alerts'));
+    // ============================================================================
 
     function updateClock() {
         if (!datetimeContainer) return;
@@ -467,7 +429,12 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedMainTreeNode = nodeContainer;
         selectedMainTreeNode.classList.add('selected');
         
+        // Update reactive state
+        state.currentTopic = topic;
+        state.currentBrokerId = brokerId;
+        
         if (livePayloadToggle && livePayloadToggle.checked) {
+            state.isLivePayload = false; 
             livePayloadToggle.checked = false;
             livePayloadToggle.dispatchEvent(new Event('change'));
         } else {
@@ -503,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return; 
         }
 
-        // Structural Nodes (like 'mqtt', 'opcua' or the 'brokerId' folder) don't have payload data
+        // Structural Nodes don't have payload data
         if (!topic) {
             li.classList.toggle('collapsed');
             mainPayloadViewer.display(brokerId, topic || "Folder", "Structural node, no payload.");
@@ -515,13 +482,13 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPayloadViewer.display(brokerId, topic, payload);
         
         if (btnCreateAlert) {
-            if (btnAlertsView.style.display !== 'none') {
+            if (document.getElementById('btn-alerts-view').style.display !== 'none') {
                 btnCreateAlert.style.display = 'block';
                 btnCreateAlert.onclick = () => {
                     let parsed = null;
                     try { parsed = JSON.parse(payload); } catch(e) {}
                     openCreateRuleModal(topic, parsed); 
-                    switchView('alerts');
+                    state.activeView = 'alerts';
                 };
             }
         }
@@ -654,7 +621,6 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = batch.length - 1; i >= 0; i--) {
             const msg = batch[i];
             
-            // Only update map and uniqueTopics for the NEWEST message of each topic in this batch
             const topicKey = `${msg.brokerId}|${msg.topic}`;
             if (!uniqueTopics.has(topicKey)) {
                 uniqueTopics.set(topicKey, msg); 
@@ -686,8 +652,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 mapperTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp);
                 chartTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp);
                 
-                // Live Payload Viewer update (Any incoming message that is checked/visible in the tree)
-                if (livePayloadToggle?.checked && node && mainTree?.isTopicVisible(node)) {
+                // Live Payload Viewer update
+                if (state.isLivePayload && node && mainTree?.isTopicVisible(node)) {
                     mainPayloadViewer.display(msg.brokerId, msg.topic, msg.payload);
                 }
             }
@@ -699,36 +665,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function processWsMessage(message) {
         try {
             switch(message.type) {
-                // --- Handshake & Chat Stream ---
                 case 'welcome':
                     console.log(`[WS] Handshake successful. Client ID: ${message.clientId}`);
-                    // Store the Client ID globally so view.chat.js can access it
                     window.wsClientId = message.clientId;
                     break;
                 case 'chat-stream':
-                    // Route chat stream chunks to the chat view module
                     onChatStreamMessage(message);
                     break;
-
-                // --- Global Alert Trigger ---
                 case 'alert-triggered':
                     if (alertsEnabled) {
                         showGlobalAlert(message.alert);
-                        refreshAlerts(); // Update table if visible
+                        refreshAlerts(); 
                     }
                     break;
-
-                // ---  Alert Updated (e.g. Analysis Complete) ---
                 case 'alert-updated':
-                    if (alertsEnabled) {
-                        // Triggers table refresh to show status change (e.g. Analyzing -> Open) and results
-                        refreshAlerts();
-                    }
+                    if (alertsEnabled) refreshAlerts();
                     break;
                 case 'mqtt-message':
-                    // Backpressure & Batching for Frontend Rendering
                     if (realtimeMessageQueue.length > REALTIME_QUEUE_LIMIT) {
-                        // Drop oldest messages in queue if browser is lagging heavily
                         realtimeMessageQueue.splice(0, realtimeMessageQueue.length - (REALTIME_QUEUE_LIMIT / 2));
                     }
                     realtimeMessageQueue.push(message);
@@ -751,7 +705,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     populateTreesFromHistory();
                     break;
                 case 'history-range-data':
-                    console.log(`[App Debug] Received history-range-data: ${message.data.length} entries.`);
                     const rangeEntries = message.data.map(entry => ({ ...entry, brokerId: entry.broker_id || entry.brokerId || 'default_broker', timestampMs: new Date(entry.timestamp).getTime() }));
                     allHistoryEntries = rangeEntries;
                     setHmiHistoryData(allHistoryEntries);
@@ -783,7 +736,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'mapper-metrics-update': updateMapperMetrics(message.metrics); break;
                 
                 case 'broker-status-all': 
-                    // Ensure all running brokers from the backend state are registered in the UI
                     for (const brokerId of Object.keys(message.data)) {
                         if (!providersMap[brokerId]) {
                             const guessedType = guessProviderType(brokerId);
@@ -805,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 case 'broker-status': 
                     import('./view.mapper.js').then(m => {
-                        if (m.addAvailableMapperProvider) m.addAvailableMapperProvider(brokerId, guessedType);
+                        if (m.addAvailableMapperProvider) m.addAvailableMapperProvider(message.brokerId, guessProviderType(message.brokerId));
                     }).catch(err => { /* ignore */ });
                     updateSingleBrokerStatus(message.brokerId, message.status, message.error); 
                     break;
@@ -824,7 +776,6 @@ document.addEventListener('DOMContentLoaded', () => {
         globalAlertBanner.style.backgroundColor = alertData.severity === 'critical' ? 'var(--color-danger)' : '#ff9800';
         globalAlertBanner.classList.add('visible');
         
-        // Hide after 5 seconds
         setTimeout(() => {
             globalAlertBanner.classList.remove('visible');
         }, 5000);
@@ -853,17 +804,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item) { 
             createBrokerStatusElement(brokerId, status, error); 
             
-            // It's a new dynamic provider (like a CSV parser just launched)
             if (!providersMap[brokerId]) {
                 const guessedType = guessProviderType(brokerId);
                 providersMap[brokerId] = guessedType; 
                 
-                // Inject into History dropdown
                 if (typeof addAvailableHistoryProvider === 'function') {
                     addAvailableHistoryProvider(brokerId, guessedType);
                 }
                 
-                // Try to inject into Publish dropdown if available
                 import('./view.publish.js').then(m => {
                     if (m.addAvailablePublishProvider) {
                         m.addAvailablePublishProvider(brokerId, guessedType);
@@ -889,33 +837,27 @@ document.addEventListener('DOMContentLoaded', () => {
             subscribedTopicPatterns = [...new Set(allTopics)];
         }
         
-        // --- Setup Provider Maps for unified trees ---
         (appConfig.brokerConfigs || []).forEach(b => { providersMap[b.id] = b.type || 'mqtt'; });
         (appConfig.dataProviders || []).forEach(p => { providersMap[p.id] = p.type || 'file'; });
 
-        btnTreeView?.classList.remove('active');
-        treeView?.classList.remove('active');
-
-        // Allow modeler only for admins AND if enabled in env
-        const views = [
-            { enabled: appConfig.viewTreeEnabled, btn: btnTreeView, view: 'tree' },
-            { enabled: appConfig.viewHmiEnabled, btn: btnHmiView, view: 'hmi' },
-            { enabled: appConfig.viewHistoryEnabled, btn: btnHistoryView, view: 'history' },
-            { enabled: appConfig.viewModelerEnabled && currentUser.role === 'admin', btn: btnModelerView, view: 'modeler' }, 
-            { enabled: appConfig.viewMapperEnabled, btn: btnMapperView, view: 'mapper' },
-            { enabled: appConfig.viewChartEnabled, btn: btnChartView, view: 'chart' },
-            { enabled: appConfig.viewPublishEnabled, btn: btnPublishView, view: 'publish' },
-            { enabled: appConfig.viewAlertsEnabled, btn: btnAlertsView, view: 'alerts' },
+        // Set visibility of navigation buttons based on config
+        const viewsConfig = [
+            { enabled: appConfig.viewTreeEnabled, id: 'btn-tree-view' },
+            { enabled: appConfig.viewHmiEnabled, id: 'btn-hmi-view' },
+            { enabled: appConfig.viewHistoryEnabled, id: 'btn-history-view' },
+            { enabled: appConfig.viewModelerEnabled && currentUser.role === 'admin', id: 'btn-modeler-view' }, 
+            { enabled: appConfig.viewMapperEnabled, id: 'btn-mapper-view' },
+            { enabled: appConfig.viewChartEnabled, id: 'btn-chart-view' },
+            { enabled: appConfig.viewPublishEnabled, id: 'btn-publish-view' },
+            { enabled: appConfig.viewAlertsEnabled, id: 'btn-alerts-view' },
         ];
 
-        views.forEach(v => {
-            if (v.enabled && v.btn) {
-                v.btn.style.display = 'block';
-            } else if (v.btn) {
-                v.btn.style.display = 'none';
-            }
+        viewsConfig.forEach(v => {
+            const btn = document.getElementById(v.id);
+            if (btn) btn.style.display = v.enabled ? 'block' : 'none';
         });
 
+        // Use URL to set initial state, triggering routing automatically
         handleRoutingFromUrl();
 
         if (btnConfigView) {
@@ -1064,12 +1006,14 @@ document.addEventListener('DOMContentLoaded', () => {
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-publish'), direction: 'vertical', panelA: document.querySelector('.publish-panel-wrapper') });
 
         livePayloadToggle?.addEventListener('change', (event) => {
-            if (event.target.checked && selectedMainTreeNode) {
+            state.isLivePayload = event.target.checked;
+            if (state.isLivePayload && selectedMainTreeNode) {
                 selectedMainTreeNode.classList.remove('selected');
                 selectedMainTreeNode = null;
             }
             toggleRecentHistoryVisibility();
         });
+        
         toggleRecentHistoryVisibility();
 
         btnExpandAll?.addEventListener('click', () => mainTree.toggleAllFolders(false));
@@ -1091,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleRecentHistoryVisibility() {
         if (!topicHistoryContainer) return;
-        const isLive = livePayloadToggle.checked;
+        const isLive = state.isLivePayload;
         topicHistoryContainer.style.display = isLive ? 'none' : 'flex';
         document.getElementById('drag-handle-horizontal').style.display = isLive ? 'none' : 'flex';
     }

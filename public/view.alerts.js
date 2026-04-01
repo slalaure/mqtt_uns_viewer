@@ -10,9 +10,11 @@
  *
  * View Module for Alerts Management.
  * [UPDATED] Protocol-agnostic data providers support.
+ * [UPDATED] Subscribes to Proxy-based reactive state for unsaved tracking and theming.
  */
 
 // --- Imports ---
+import { state, subscribe } from './state.js';
 import { trackEvent, confirmModal } from './utils.js';
 
 // --- DOM Elements ---
@@ -37,7 +39,6 @@ let isViewInitialized = false;
 let allActiveAlerts = []; 
 let isMultiProvider = false;
 let availableProviders = [];
-let hasUnsavedRuleChanges = false;
 
 /**
  * Initialize the Alerts View.
@@ -80,6 +81,22 @@ export async function initAlertsView(options = {}) {
         btnFullscreen.innerHTML = '⛶ Maximize';
         btnFullscreen.style.fontSize = '0.85em';
     }
+
+    // --- Reactive State Subscriptions ---
+    subscribe('isDarkMode', (isDark) => {
+        if (aceEditor) {
+            aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+        }
+    });
+
+    subscribe('ruleUnsaved', (isUnsaved) => {
+        const btnSave = ruleForm?.querySelector('button[type="submit"]');
+        if (isUnsaved) {
+            btnSave?.classList.add('btn-unsaved');
+        } else {
+            btnSave?.classList.remove('btn-unsaved');
+        }
+    });
 
     // --- Event Listeners ---
     container.querySelectorAll('.sub-tab-button').forEach(btn => {
@@ -143,15 +160,15 @@ export async function initAlertsView(options = {}) {
     });
 
     // Unsaved Changes Tracking
-    ruleForm.addEventListener('input', markRuleUnsaved);
+    ruleForm.addEventListener('input', () => { state.ruleUnsaved = true; });
 
     // --- Init Ace ---
     if (window.ace) {
         aceEditor = ace.edit("rule-condition-editor");
-        aceEditor.setTheme(document.body.classList.contains('dark-mode') ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+        aceEditor.setTheme(state.isDarkMode ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
         aceEditor.session.setMode("ace/mode/javascript");
         aceEditor.setValue("return msg.payload.value > 50;", -1);
-        aceEditor.session.on('change', markRuleUnsaved);
+        aceEditor.session.on('change', () => { state.ruleUnsaved = true; });
     }
 
     isViewInitialized = true;
@@ -204,21 +221,6 @@ export function openCreateRuleModal(topic, examplePayload) {
     if (aceEditor) aceEditor.setValue(condition, -1);
 }
 
-// --- Logic ---
-function markRuleUnsaved() {
-    if (!hasUnsavedRuleChanges) {
-        hasUnsavedRuleChanges = true;
-        const btnSave = ruleForm.querySelector('button[type="submit"]');
-        if (btnSave) btnSave.classList.add('btn-unsaved');
-    }
-}
-
-function clearRuleUnsaved() {
-    hasUnsavedRuleChanges = false;
-    const btnSave = ruleForm.querySelector('button[type="submit"]');
-    if (btnSave) btnSave.classList.remove('btn-unsaved');
-}
-
 function toggleFullscreen() {
     const panel = document.getElementById('active-alerts-panel');
     if (!document.fullscreenElement) {
@@ -233,7 +235,7 @@ function toggleFullscreen() {
 }
 
 function showRuleEditor(ruleToEdit = null) {
-    clearRuleUnsaved();
+    state.ruleUnsaved = false;
     rulesListContainer.style.display = 'none';
     ruleEditorContainer.style.display = 'block';
 
@@ -252,14 +254,14 @@ function showRuleEditor(ruleToEdit = null) {
         ruleForm.reset();
         if (aceEditor) aceEditor.setValue("return msg.payload.value > 50;", -1);
     }
-    clearRuleUnsaved(); // Ensure initial state is clean
+    state.ruleUnsaved = false; // Ensure initial state is clean
 }
 
 function hideRuleEditor() {
     rulesListContainer.style.display = 'block';
     ruleEditorContainer.style.display = 'none';
     editingRuleId = null;
-    clearRuleUnsaved();
+    state.ruleUnsaved = false;
 }
 
 async function loadRules() {
@@ -320,7 +322,7 @@ async function saveRule() {
 
         if (!res.ok) throw new Error((await res.json()).error);
         
-        clearRuleUnsaved();
+        state.ruleUnsaved = false;
         hideRuleEditor();
         loadRules();
     } catch (e) { alert("Error: " + e.message); }

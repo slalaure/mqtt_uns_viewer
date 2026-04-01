@@ -11,7 +11,9 @@
  * View module for the Floating AI Chat Assistant.
  * Includes Continuous Voice Input and Language-Aware Output.
  * Optimized for Chrome "Google" Voices & Safari compatibility.
+ * [UPDATED] Uses Proxy-based state manager to inject current UI context (topic/broker) into AI prompts.
  */
+import { state } from './state.js';
 import { trackEvent, confirmModal } from './utils.js';
 
 // --- DOM Elements ---
@@ -857,6 +859,17 @@ async function sendMessage(fromVoice = false, isResuming = false) {
                 messageContent = [{ type: "text", text: text }, { type: "image_url", image_url: { url: pendingAttachment.content } }];
             } else {
                 messageContent = `${text}\n\n--- FILE: ${pendingAttachment.name} ---\n${pendingAttachment.content}`;
+            }
+        }
+        
+        // --- REACTIVE CONTEXT INJECTION ---
+        // Secretly provide the AI with the exact topic the user is looking at
+        if (state.currentTopic) {
+            const contextBlurb = `\n\n[SYSTEM CONTEXT: The user is currently inspecting the topic '${state.currentTopic}' on broker '${state.currentBrokerId}'. Use this if they refer to "this" or "here".]`;
+            if (typeof messageContent === 'string') {
+                messageContent += contextBlurb;
+            } else if (Array.isArray(messageContent) && messageContent[0] && messageContent[0].type === 'text') {
+                messageContent[0].text += contextBlurb;
             }
         }
 
