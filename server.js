@@ -9,6 +9,7 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Server Entry Point
+ * [UPDATED] Staggered simulator auto-start to prevent CPU spikes and event loop blocking.
  */
 
 // --- Imports ---
@@ -451,15 +452,16 @@ simulatorManager.init(logger, (topic, payload) => {
 }, config.IS_SPARKPLUG_ENABLED);
 
 if (config.IS_SIMULATOR_ENABLED) {
-    setTimeout(() => {
-        ['stark', 'deathstar', 'paris_metro', 'hydrochem'].forEach(simName => {
+    // Stagger the start of each simulator by 2 seconds to avoid CPU/Event Loop spikes
+    ['stark', 'deathstar', 'paris_metro', 'hydrochem'].forEach((simName, index) => {
+        setTimeout(() => {
             try {
                 simulatorManager.startSimulator(simName);
             } catch (err) {
                 logger.error({ err }, `Error auto-starting simulator ${simName}`);
             }
-        });
-    }, 5000);
+        }, 5000 + (index * 2000));
+    });
 }
 
 // --- Server Start ---

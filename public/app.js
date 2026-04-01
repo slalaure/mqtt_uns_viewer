@@ -8,16 +8,77 @@
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
  *
+ * [UPDATED] Fixed "Live Update" logic to properly tail incoming messages without requiring node selection.
+ * [UPDATED] Fixed real-time queue flushing to prevent older messages from overwriting newer ones in the UI.
  * [UPDATED] Replaced explicit I3X UI Toggle with continuous, native I3X model integration inside trees.
  * [UPDATED] Dynamically registers new Data Providers (like CSV parsers) across UI views when they connect.
- * [UPDATED] Ensures dynamically added providers appear under the correct technology branch in trees.
  */
 
 // ---  Module Imports ---
 import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js';
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
-import { initHmiView, updateMap, updateHmiTimelineUI, setHmiHistoryData, refreshHmiList, refreshHmiLiveState } from './view.hmi.js';
+import { 
+    initHmiView, 
+    updateMap, 
+    updateHmiTimelineUI, 
+    setHmiHistoryData, 
+    refreshHmiList, 
+    refreshHmiLiveState,
+    onHmiViewHide,
+    onHmiViewShow
+} from './view.hmi.js';
+
+// --- Frontend error tracking ---
+const FRONTEND_LOG_ENDPOINT = '/api/logs/frontend';
+let isSendingFrontendLog = false;
+
+async function reportFrontendError(eventData) {
+    if (isSendingFrontendLog) return;
+    isSendingFrontendLog = true;
+    try {
+        await fetch(FRONTEND_LOG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(eventData),
+            credentials: 'same-origin'
+        });
+    } catch (err) {
+        // avoid throwing second-level error from error handler
+        console.warn('Failed to report frontend error', err);
+    } finally {
+        isSendingFrontendLog = false;
+    }
+}
+
+window.onerror = function(message, source, line, column, error) {
+    const payload = {
+        type: 'error',
+        message: message?.toString(),
+        source: source || null,
+        line: line || null,
+        column: column || null,
+        stack: (error && error.stack) ? error.stack.toString() : null,
+        user: window.currentUser ? window.currentUser.username || window.currentUser.id : null,
+        location: window.location.href,
+        timestamp: new Date().toISOString()
+    };
+    reportFrontendError(payload);
+};
+
+window.onunhandledrejection = function(event) {
+    const reason = event?.reason;
+    const payload = {
+        type: 'unhandledrejection',
+        message: (reason && reason.message) ? reason.message : (reason ? reason.toString() : 'Unknown'),
+        stack: (reason && reason.stack) ? reason.stack.toString() : null,
+        user: window.currentUser ? window.currentUser.username || window.currentUser.id : null,
+        location: window.location.href,
+        timestamp: new Date().toISOString(),
+        reason
+    };
+    reportFrontendError(payload);
+};
 import { 
     initHistoryView, 
     setHistoryData, 
@@ -331,7 +392,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             onAlertsViewHide(); // Stop polling when hidden
         }
-        if (viewToShow === 'hmi') refreshHmiLiveState();
+        if (viewToShow === 'hmi') {
+            onHmiViewShow();
+            refreshHmiLiveState();
+        } else {
+            onHmiViewHide();
+        }
 
         if (updateHistory) {
             const base = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
@@ -588,8 +654,12 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = batch.length - 1; i >= 0; i--) {
             const msg = batch[i];
             
-            uniqueTopics.set(`${msg.brokerId}|${msg.topic}`, msg); 
-            updateMap(msg.brokerId, msg.topic, msg.payload);
+            // Only update map and uniqueTopics for the NEWEST message of each topic in this batch
+            const topicKey = `${msg.brokerId}|${msg.topic}`;
+            if (!uniqueTopics.has(topicKey)) {
+                uniqueTopics.set(topicKey, msg); 
+                updateMap(msg.brokerId, msg.topic, msg.payload);
+            }
             
             const timestampMs = new Date(msg.timestamp).getTime();
             if (timestampMs > localMax) localMax = timestampMs;
@@ -616,11 +686,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 mapperTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp);
                 chartTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp);
                 
-                // Live Payload Viewer update (Only if THIS node is currently selected)
+                // Live Payload Viewer update (Any incoming message that is checked/visible in the tree)
                 if (livePayloadToggle?.checked && node && mainTree?.isTopicVisible(node)) {
-                    if (selectedMainTreeNode && selectedMainTreeNode.dataset.topic === msg.topic && selectedMainTreeNode.dataset.brokerId === msg.brokerId) {
-                        mainPayloadViewer.display(msg.brokerId, msg.topic, msg.payload);
-                    }
+                    mainPayloadViewer.display(msg.brokerId, msg.topic, msg.payload);
                 }
             }
         }

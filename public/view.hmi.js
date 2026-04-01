@@ -10,6 +10,10 @@ import { createSingleTimeSlider } from './time-slider.js';
 
 // --- DOM Element Querying ---
 const hmiContent = document.getElementById('hmi-content'); 
+if (hmiContent && !hmiContent.getElementById) {
+    // Compatibility shim for older scripts expecting getElementById on the root element
+    hmiContent.getElementById = (id) => hmiContent.querySelector(`[id="${id}"]`);
+}
 const hmiHistoryToggle = document.getElementById('hmi-history-toggle');
 const hmiTimelineSlider = document.getElementById('hmi-timeline-slider-container');
 const hmiHandle = document.getElementById('hmi-handle');
@@ -35,8 +39,64 @@ let animationFrameRequested = false;
 let highlightTimers = new Map(); 
 let embeddedChartInstances = new Map(); 
 
+/**
+ * Controlled Execution Context for HMI scripts.
+ * Automatically tracks and cleans up timers and animation frames.
+ */
+class HmiLifecycleContext {
+    constructor() {
+        this.intervals = [];
+        this.timeouts = [];
+        this.animationFrames = [];
+        this.eventListeners = [];
+        this.isDestroyed = false;
+    }
+
+    setInterval(fn, ms) {
+        if (this.isDestroyed) return null;
+        const id = window.setInterval(fn, ms);
+        this.intervals.push(id);
+        return id;
+    }
+
+    setTimeout(fn, ms) {
+        if (this.isDestroyed) return null;
+        const id = window.setTimeout(fn, ms);
+        this.timeouts.push(id);
+        return id;
+    }
+
+    requestAnimationFrame(fn) {
+        if (this.isDestroyed) return null;
+        const id = window.requestAnimationFrame((t) => {
+            if (!this.isDestroyed) fn(t);
+        });
+        this.animationFrames.push(id);
+        return id;
+    }
+
+    addEventListener(target, type, listener, options) {
+        if (this.isDestroyed) return;
+        target.addEventListener(type, listener, options);
+        this.eventListeners.push({ target, type, listener, options });
+    }
+
+    destroy() {
+        this.isDestroyed = true;
+        this.intervals.forEach(id => window.clearInterval(id));
+        this.timeouts.forEach(id => window.clearTimeout(id));
+        this.animationFrames.forEach(id => window.cancelAnimationFrame(id));
+        this.eventListeners.forEach(l => l.target.removeEventListener(l.type, l.listener, l.options));
+        this.intervals = [];
+        this.timeouts = [];
+        this.animationFrames = [];
+        this.eventListeners = [];
+    }
+}
+
 // --- Tableau des bindings actifs ---
 let activeBindings = [];
+let currentHmiContext = null;
 const BINDINGS_SCRIPT_ID = 'custom-hmi-bindings-script';
 
 /**
@@ -46,6 +106,33 @@ window.registerHmiBindings = window.registerSvgBindings = function(bindings) {
     if (!bindings) return;
     activeBindings.push(bindings);
     console.log(`Custom HMI bindings registered. Total active scripts: ${activeBindings.length}`);
+}
+
+export function onHmiViewHide() {
+    console.log("[HMI] View hidden. Suspending lifecycle context...");
+    if (currentHmiContext) {
+        currentHmiContext.destroy();
+        currentHmiContext = null;
+    }
+    // Also clear the update queue and animation frame request to stop core updates
+    updateQueue.clear();
+    animationFrameRequested = false;
+}
+
+export function onHmiViewShow() {
+    console.log("[HMI] View shown. Resuming HMI lifecycle...");
+    if (activeBindings.length > 0 && hmiContent) {
+        // If we have active bindings, re-initialize them with a fresh context
+        if (currentHmiContext) currentHmiContext.destroy();
+        currentHmiContext = new HmiLifecycleContext();
+        activeBindings.forEach(binding => {
+            try { 
+                if (typeof binding.initialize === 'function') {
+                    binding.initialize(hmiContent, currentHmiContext); 
+                }
+            } catch(e) { console.error(e); }
+        });
+    }
 }
 
 export function initHmiView(appConfig) {
@@ -342,6 +429,11 @@ async function loadHmiPlan(filename) {
     activeBindings.forEach(b => { try { b.reset(hmiContent); } catch(e){} });
     activeBindings = []; 
 
+    if (currentHmiContext) {
+        currentHmiContext.destroy();
+        currentHmiContext = null;
+    }
+
     try {
         const response = await fetch(`api/hmi/file?name=${encodeURIComponent(filename)}&t=${Date.now()}`); 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -359,8 +451,9 @@ async function loadHmiPlan(filename) {
             const bindingFilename = filename + '.js'; 
             await loadCustomBindingsScript(bindingFilename);
 
+            currentHmiContext = new HmiLifecycleContext();
             activeBindings.forEach(binding => {
-                try { binding.initialize(hmiContent); } catch(e) { console.error(e); }
+                try { binding.initialize(hmiContent, currentHmiContext); } catch(e) { console.error(e); }
             });
             
             scanForDataKeys();
@@ -479,7 +572,7 @@ function flushUpdateQueue() {
             const { brokerId, topic, payloadObject, isJson } = data;
             
             activeBindings.forEach(binding => {
-                try { binding.update(brokerId, topic, payloadObject, root); } 
+                try { binding.update(brokerId, topic, payloadObject, root, currentHmiContext); } 
                 catch (err) { console.error(`[HMI Script Error] Topic ${topic}:`, err); }
             });
             
@@ -602,7 +695,7 @@ async function fetchLastKnownState(timestamp) {
             try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
             
             activeBindings.forEach(binding => {
-                try { binding.update(brokerId, topic, payloadObject, hmiContent); } catch (err) {}
+                try { binding.update(brokerId, topic, payloadObject, hmiContent, currentHmiContext); } catch (err) {}
             });
 
             if (isJson) {

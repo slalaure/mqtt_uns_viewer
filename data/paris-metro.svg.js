@@ -35,8 +35,9 @@ function findAll(svgRoot, selector) {
  * Called once when the SVG file is first loaded.
  * Used to scan the SVG and cache important element references or coordinates.
  * @param {SVGElement} svgRoot - The root <svg> element.
+ * @param {object} context - HMI Lifecycle Context
  */
-function initialize(svgRoot) {
+function initialize(svgRoot, context) {
     console.log("[Bindings] Initializing Paris Métro Logic...");
     
     // 1. Scan for station coordinates from the <path> elements
@@ -120,8 +121,9 @@ function reset(svgRoot) {
  * @param {string} topic - The MQTT topic.
  * @param {object} payload - The parsed JSON payload.
  * @param {SVGElement} svgRoot - The root <svg> element.
+ * @param {object} context - HMI Lifecycle Context
  */
-function update(brokerId, topic, payload, svgRoot) {
+function update(brokerId, topic, payload, svgRoot, context) {
     // This binding only cares about RATP topics and JSON payloads
     if (typeof payload !== 'object' || !topic.startsWith('ratp/uns/')) return;
 

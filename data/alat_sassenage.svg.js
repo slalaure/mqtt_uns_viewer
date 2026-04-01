@@ -9,7 +9,7 @@ function getEl(root, id) {
 const activeAlarms = new Map();
 const activePermits = new Map();
 window.registerSvgBindings({
-  initialize: (svgRoot) => {
+  initialize: (svgRoot, context) => {
     console.log("ALAT Sassenage (Optimized V2) Initialized");
     domCache.clear();
     svgRoot.querySelectorAll('use[id^="icon_"]').forEach(el => el.style.display = 'none');
@@ -18,7 +18,7 @@ window.registerSvgBindings({
     renderAlarmList(svgRoot);
     renderPermitList(svgRoot);
   },
-  update: (brokerId, topic, payload, svgRoot) => {
+  update: (brokerId, topic, payload, svgRoot, context) => {
     let data;
     try { data = (typeof payload === 'string') ? JSON.parse(payload) : payload; } catch (e) { return; }
     // GLOBAL KPIs
@@ -90,9 +90,7 @@ window.registerSvgBindings({
             const icon = getEl(svgRoot, `icon_access_${targetBldg}`);
             if (icon) {
                 icon.style.display = 'block';
-                // Timeout clean
-                if (icon.hideTimeout) clearTimeout(icon.hideTimeout);
-                icon.hideTimeout = setTimeout(() => icon.style.display = 'none', 3000);
+                context.setTimeout(() => icon.style.display = 'none', 3000);
             }
         }
     }

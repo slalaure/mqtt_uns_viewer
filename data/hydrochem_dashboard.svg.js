@@ -5,14 +5,14 @@
  */
 
 window.registerSvgBindings({
-    initialize: (svgRoot) => {
+    initialize: (svgRoot, context) => {
         console.log("[HyDroChem-AG] Dashboard Initialized.");
         // Utilisation de querySelector, beaucoup plus fiable sur les SVG injectés
         const alertBox = svgRoot.querySelector('#g_alert_box');
         if (alertBox) alertBox.style.display = 'none';
     },
 
-    update: (brokerId, topic, payload, svgRoot) => {
+    update: (brokerId, topic, payload, svgRoot, context) => {
         // Safe Parse Payload
         const data = (typeof payload === 'string') ? JSON.parse(payload) : payload;
         const vars = data.variables || data;
@@ -141,7 +141,7 @@ window.registerSvgBindings({
             if (vars.supply_temp_c !== undefined) {
                 updateText('val_chiller_temp', `${parseFloat(vars.supply_temp_c).toFixed(1)} °C`);
                 const chillerStatus = svgRoot.querySelector('#val_chiller_status');
-                if (chillerStatus) {
+                if ( chillerStatus) {
                     if (vars.supply_temp_c > 7.5) {
                         chillerStatus.textContent = `Status: WARNING`;
                         chillerStatus.setAttribute('fill', '#f85149');

@@ -1,9 +1,9 @@
 
 window.registerSvgBindings({
-  initialize: (svgRoot) => {
+  initialize: (svgRoot, context) => {
     console.log("Biopomeria View Initialized");
   },
-  update: (brokerId, topic, payload, svgRoot) => {
+  update: (brokerId, topic, payload, svgRoot, context) => {
     if (!topic.includes('france/fonroche/biopomeria/data')) return;
 
     // Helper to safe update text

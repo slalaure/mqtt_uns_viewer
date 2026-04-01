@@ -10,6 +10,7 @@
  *
  * Reusable Tree View Manager Module
  * Encapsulates all logic for creating, updating, and interacting with one tree.
+ * [UPDATED] Added dblclick event listener to toggle folder collapse/expand correctly.
  * [UPDATED] Protocol-agnostic hierarchy grouping & integrated I3X Semantic Mode with graph relationships.
  * [UPDATED] Smart fallback for dynamically created providers (e.g., CSV Parsers).
  */
@@ -170,6 +171,16 @@ export function createTreeManager(rootElement, options = {}) {
                 if (onNodeClick) {
                     nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
                 }
+
+                // Add double-click to toggle folders
+                nodeContainer.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    const parentLi = nodeContainer.closest('li');
+                    if (parentLi && parentLi.classList.contains('is-folder')) {
+                        parentLi.classList.toggle('collapsed');
+                    }
+                });
+
                 if (showCheckboxes && onCheckboxClick) {
                      nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
                 }
@@ -321,6 +332,13 @@ export function createTreeManager(rootElement, options = {}) {
             if (onNodeClick) {
                 nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', ''));
             }
+
+            nodeContainer.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                if (i3xRootLi.classList.contains('is-folder')) {
+                    i3xRootLi.classList.toggle('collapsed');
+                }
+            });
         }
         
         const i3xUl = i3xRootLi.querySelector(':scope > ul');
@@ -369,6 +387,14 @@ export function createTreeManager(rootElement, options = {}) {
             if (onNodeClick) {
                 nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', obj.elementId));
             }
+
+            nodeContainer.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                if (li.classList.contains('is-folder')) {
+                    li.classList.toggle('collapsed');
+                }
+            });
+
             if (showCheckboxes && onCheckboxClick) {
                 const cb = nodeContainer.querySelector('.node-filter-checkbox');
                 if (cb) cb.addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, 'i3x', obj.elementId));

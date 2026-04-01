@@ -70,7 +70,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     const router = express.Router();
 
     // [UPDATED] Adjusted relative paths for new location in interfaces/mcp/
-    const ROOT_PATH = path.join(__dirname, '..', '..');
+    const ROOT_PATH = path.join(__dirname, '..', '..'); 
     const DATA_PATH = path.join(ROOT_PATH, 'data');
     const PUBLIC_PATH = path.join(ROOT_PATH, 'public');
     const MANIFEST_PATH = path.join(PUBLIC_PATH, 'ai_tools_manifest.json');

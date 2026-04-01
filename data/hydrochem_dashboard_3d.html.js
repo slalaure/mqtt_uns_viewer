@@ -33,7 +33,7 @@ function createWebTexture() {
 }
 
 window.registerHmiBindings({
-    initialize: (hmiRoot) => {
+    initialize: (hmiRoot, context) => {
         console.log("[HyDroChem-AG HMI] Initialized.");
         
         hmiRoot.dataset.fanSpeed = 0;
@@ -51,7 +51,7 @@ window.registerHmiBindings({
                             mesh.material.needsUpdate = true;
                         }
                     } else {
-                        setTimeout(applyTexture, 100);
+                        context.setTimeout(applyTexture, 100);
                     }
                 } catch (e) {}
             };
@@ -59,7 +59,7 @@ window.registerHmiBindings({
             if (webPlane.hasLoaded) {
                 applyTexture();
             } else {
-                webPlane.addEventListener('loaded', applyTexture);
+                context.addEventListener(webPlane, 'loaded', applyTexture);
             }
         }
 
@@ -99,13 +99,13 @@ window.registerHmiBindings({
             } catch (e) {
             }
 
-            animationFrameId = requestAnimationFrame(renderLoop);
+            context.requestAnimationFrame(renderLoop);
         };
         
-        renderLoop();
+        context.requestAnimationFrame(renderLoop);
     },
 
-    update: (brokerId, topic, payload, hmiRoot) => {
+    update: (brokerId, topic, payload, hmiRoot, context) => {
         let data;
         try { data = (typeof payload === 'string') ? JSON.parse(payload) : payload; } 
         catch (e) { return; }

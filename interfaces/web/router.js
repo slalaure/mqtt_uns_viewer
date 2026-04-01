@@ -131,6 +131,12 @@ function createRouter(deps) {
     // --- [NEW] I3X API Standard Routes ---
     router.use('/api/i3x', ipFilterMiddleware, require('../i3x/i3xRouter')(db, semanticManager, logger, i3xEvents));
 
+    // --- [NEW] Frontend Error Logs ---
+    router.post('/api/logs/frontend', ipFilterMiddleware, (req, res) => {
+        logger.error({ frontend: req.body }, `[Frontend Error] ${req.body.type}: ${req.body.message}`);
+        res.status(200).json({ success: true });
+    });
+
     // --- API Routes for HMI ---
     router.get('/api/hmi/file', (req, res) => {
         const filename = path.basename(req.query.name || '');
