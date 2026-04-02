@@ -10,6 +10,7 @@
  *
  * Server Entry Point
  * [UPDATED] Staggered simulator auto-start to prevent CPU spikes and event loop blocking.
+ * [UPDATED] Configured Pino logger to write to both stdout and data/korelate.log for Admin UI.
  */
 
 // --- Imports ---
@@ -46,6 +47,11 @@ const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
 
+// Ensure data directory exists early for the logger
+if (!fs.existsSync(DATA_PATH)) {
+    try { fs.mkdirSync(DATA_PATH, { recursive: true }); } catch (e) {}
+}
+
 // Ensure sessions directory exists
 if (!fs.existsSync(SESSIONS_PATH)) {
     try { fs.mkdirSync(SESSIONS_PATH, { recursive: true }); } catch (e) {}
@@ -63,12 +69,24 @@ const ANALYTICS_SCRIPT = `
 `;
 
 // --- Logger Setup ---
-const logger = pino({
-    transport: {
-        target: 'pino-pretty',
-        options: { colorize: true }
-    }
-});
+const logFilePath = path.join(DATA_PATH, 'korelate.log');
+const logger = pino(pino.transport({
+    targets: [
+        {
+            target: 'pino-pretty',
+            options: { colorize: true }
+        },
+        {
+            target: 'pino-pretty',
+            options: { 
+                colorize: false,
+                destination: logFilePath,
+                mkdir: true,
+                append: true
+            }
+        }
+    ]
+}));
 
 // --- Initial .env File Setup ---
 if (!fs.existsSync(ENV_PATH)) {
@@ -344,7 +362,7 @@ db = new duckdb.Database(dbFile, (err) => {
             logger.error({ err: createErr }, "❌ FATAL: Failed to ensure tables exist.");
             return; 
         }
-        // [NEW] Schema Migration: Add correlation_id if missing
+        // Schema Migration: Add correlation_id if missing
         db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
             if (columns && !columns.some(col => col.name === 'correlation_id')) {
                 logger.warn("⚠️ Migrating 'mqtt_events': Adding 'correlation_id' column...");

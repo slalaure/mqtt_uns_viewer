@@ -9,8 +9,9 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin API
- * Protected routes for User Management, System Maintenance, HMI Asset Management, Simulators and Parsers.
+ * Protected routes for User Management, System Maintenance, HMI Asset Management, Simulators, Data Parsers and System Logs.
  * [UPDATED] Corrected simulator paths to /data/simulators subfolder.
+ * [UPDATED] Added /logs endpoint to fetch recent backend and frontend logs.
  */
 const express = require('express');
 const userManager = require('../../storage/userManager');
@@ -20,6 +21,7 @@ const path = require('path');
 const multer = require('multer');
 const connectorManager = require('../../connectors/connectorManager');
 const webhookManager = require('../../core/webhookManager');
+const { exec } = require('child_process');
 
 module.exports = (logger, db, dataManager, dataPath) => {
     const router = express.Router();
@@ -76,7 +78,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // --- [UPDATED] Multer Configuration for Simulators ---
+    // --- Multer Configuration for Simulators ---
     const storageSim = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, simulatorsPath); 
@@ -97,7 +99,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // --- [NEW] Multer Configuration for Data Parsers (CSV) ---
+    // --- Multer Configuration for Data Parsers (CSV) ---
     const storageCsv = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, dataPath);
@@ -268,6 +270,12 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
+    // --- Alerts Maintenance Functions ---
+    router.get('/admin/stats', async (req, res, next) => {
+        // Handled by alertApi natively now, but keeping proxy route for safety
+        res.status(501).json({ error: "Use /api/alerts/admin/stats instead" });
+    });
+
     // --- HMI Assets Management ---
 
     router.get('/hmi-assets', (req, res, next) => {
@@ -313,7 +321,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // --- [UPDATED] Simulators Management ---
+    // --- Simulators Management ---
 
     router.get('/simulators', (req, res, next) => {
         try {
@@ -357,7 +365,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
-    // --- [NEW] Data Parsers Management (CSV) ---
+    // --- Data Parsers Management (CSV) ---
     router.post('/data-parsers/csv', uploadCsv.single('csv_file'), async (req, res, next) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No CSV file uploaded.' });
@@ -431,6 +439,32 @@ module.exports = (logger, db, dataManager, dataPath) => {
         } catch (err) {
             next(err);
         }
+    });
+
+    // --- System Logs ---
+    router.get('/logs', (req, res, next) => {
+        const logPath = path.join(dataPath, 'korelate.log');
+        
+        if (!fs.existsSync(logPath)) {
+            return res.json({ 
+                logs: `Log file not found at: ${logPath}\n\nTo enable this feature, configure your Pino logger in server.js or your container environment to persist logs to this file path.` 
+            });
+        }
+        
+        exec(`tail -n 500 "${logPath}"`, { maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
+            if (error) {
+                // Safe Fallback to native Node.js reading if tail is unavailable (e.g., Windows/certain Alpine builds)
+                try {
+                    const content = fs.readFileSync(logPath, 'utf8');
+                    const lines = content.split('\n');
+                    const last500 = lines.slice(-500).join('\n');
+                    return res.json({ logs: last500 });
+                } catch (fallbackErr) {
+                    return next(fallbackErr);
+                }
+            }
+            res.json({ logs: stdout });
+        });
     });
 
     return router;

@@ -275,10 +275,10 @@ Define sophisticated detection rules using JavaScript conditions.
 
 ### 9. I3X Standard API (RFC 001)
 Korelate provides a native, northbound implementation of the **I3X (Industrial Information Interface eXchange)** standard.
-* [cite_start]**Full Compliance:** Implements RFC 001 exploratory, value, and subscription methods[cite: 1, 2].
-* [cite_start]**Engineering Units (EngUnit):** Automatically extracts and attaches measurement units to VQT (Value-Quality-Timestamp) responses from both static metadata and dynamic MQTT payloads.
-* [cite_start]**Recursive Context:** Supports `maxDepth` recursion in both Last Known Value and Historical queries, allowing clients to fetch entire equipment hierarchies in a single call.
-* [cite_start]**Write-Back Capability:** Supports RFC 4.2.2.1, enabling authenticated clients to send command values back to the factory floor via the standardized interface.
+* **Full Compliance:** Implements RFC 001 exploratory, value, and subscription methods.
+* **Engineering Units (EngUnit):** Automatically extracts and attaches measurement units to VQT (Value-Quality-Timestamp) responses from both static metadata and dynamic MQTT payloads.
+* **Recursive Context:** Supports `maxDepth` recursion in both Last Known Value and Historical queries, allowing clients to fetch entire equipment hierarchies in a single call.
+* **Write-Back Capability:** Supports RFC 4.2.2.1, enabling authenticated clients to send command values back to the factory floor via the standardized interface.
 
 ### 10. CDM Modeler (Core Data Model)
 Korelate includes a powerful graphical editor to define your plant's semantic hierarchy and metadata.

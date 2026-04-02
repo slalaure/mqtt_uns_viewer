@@ -9,10 +9,12 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Admin View Module
- * Handles User Management, Database Maintenance, Alerts Maintenance, HMI Assets, Simulators, and Data Parsers.
+ * Handles User Management, Database Maintenance, Alerts Maintenance, HMI Assets, Simulators, Data Parsers and System Logs.
  * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
+ * [UPDATED] Added support for fetching and displaying System Logs.
  */
 import { confirmModal, showToast } from './utils.js';
+
 let usersTableBody = null;
 // --- Elements for Tabs ---
 let subNavButtons = null;
@@ -39,20 +41,24 @@ let simTableBody = null;
 let btnUploadSim = null;
 let simUploadInput = null;
 let btnSimRefresh = null;
+// --- Elements for Webhooks ---
 let webhooksTableBody = null;
 let webhookRegisterForm = null;
 let btnWebhooksRefresh = null;
 let btnWebhooksClear = null;
 let csvForm = null;
+// --- Elements for AI History & Logs ---
 let btnAdminRefresh = null;
 let btnAiHistoryRefresh = null;
+let btnLogsRefresh = null;
+let logsContent = null;
+// --- Elements for HMI/Simulator Code Editor ---
 let btnAdminEditorCancel = null;
 let btnAdminEditorSave = null;
 let btnAdminEditorDelete = null;
 
 let isViewInitialized = false;
 let isMounted = false; // Lifecycle flag
-// --- Elements for HMI/Simulator Code Editor ---
 let adminAceEditor = null;
 let currentEditingFilename = null;
 
@@ -110,6 +116,8 @@ function initializeElements(container) {
     btnWebhooksClear = document.getElementById('btn-webhooks-clear');
     csvForm = document.getElementById('csv-parser-form');
     btnAiHistoryRefresh = document.getElementById('btn-ai-history-refresh');
+    btnLogsRefresh = document.getElementById('btn-logs-refresh');
+    logsContent = document.getElementById('admin-logs-content');
     btnAdminEditorCancel = document.getElementById('btn-admin-editor-cancel');
     btnAdminEditorSave = document.getElementById('btn-admin-editor-save');
     btnAdminEditorDelete = document.getElementById('btn-admin-editor-delete');
@@ -138,6 +146,7 @@ const onSubTabClick = (e) => {
     if (targetId === 'admin-simulators-panel') loadSimulators();
     if (targetId === 'admin-webhooks-panel') loadWebhooks();
     if (targetId === 'admin-ai-panel') loadAiHistory();
+    if (targetId === 'admin-logs-panel') loadSystemLogs();
 };
 
 const onAssetDeleteClick = async () => {
@@ -159,6 +168,7 @@ export function mountAdminView() {
     btnAdminRefresh?.addEventListener('click', loadUsers);
     subNavButtons?.forEach(btn => btn.addEventListener('click', onSubTabClick));
     btnAiHistoryRefresh?.addEventListener('click', loadAiHistory);
+    btnLogsRefresh?.addEventListener('click', loadSystemLogs);
     btnImportDb?.addEventListener('click', onImportDB);
     btnResetDb?.addEventListener('click', onResetDB);
     btnReplayDlq?.addEventListener('click', onReplayDlq);
@@ -182,6 +192,7 @@ export function mountAdminView() {
     else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') loadHmiAssets();
     else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') loadSimulators();
     else if (activeTab && activeTab.dataset.target === 'admin-webhooks-panel') loadWebhooks();
+    else if (activeTab && activeTab.dataset.target === 'admin-logs-panel') loadSystemLogs();
     else if (activeTab && activeTab.dataset.target === 'admin-parsers-panel') {} // No immediate fetch needed
     else loadUsers();
 
@@ -212,6 +223,7 @@ export function unmountAdminView() {
     btnAdminRefresh?.removeEventListener('click', loadUsers);
     subNavButtons?.forEach(btn => btn.removeEventListener('click', onSubTabClick));
     btnAiHistoryRefresh?.removeEventListener('click', loadAiHistory);
+    btnLogsRefresh?.removeEventListener('click', loadSystemLogs);
     btnImportDb?.removeEventListener('click', onImportDB);
     btnResetDb?.removeEventListener('click', onResetDB);
     btnReplayDlq?.removeEventListener('click', onReplayDlq);
@@ -990,4 +1002,21 @@ function renderAiHistory(history, tbody) {
             }
         });
     });
+}
+
+// --- System Logs Logic ---
+async function loadSystemLogs() {
+    if (!logsContent) return;
+    logsContent.textContent = 'Loading logs...';
+    try {
+        const res = await fetch('api/admin/logs');
+        if (!res.ok) throw new Error('Failed to fetch logs.');
+        const data = await res.json();
+        logsContent.textContent = data.logs || 'No logs available.';
+        // Auto-scroll to the bottom of the logs
+        logsContent.scrollTop = logsContent.scrollHeight;
+    } catch (e) {
+        console.error("Logs Load Error:", e);
+        logsContent.textContent = `Error: ${e.message}`;
+    }
 }

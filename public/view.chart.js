@@ -12,6 +12,7 @@
  * Handles configuration, data extraction (including primitives), and rendering.
  * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
  * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
+ * [UPDATED] Chart Rendering Optimization: Update datasets directly without destroying chart instance.
  */
 
 // Import shared utilities and state
@@ -764,27 +765,27 @@ async function processChartData() {
 
         const axisMap = new Map(); 
 
-            // Dataset Construction Loop
+        // Dataset Construction Loop
         for (const [varId, { brokerId, topic, path }] of chartedVariables.entries()) {
             const rawPoints = rawPointsMap.get(varId) || [];
             const topicParts = topic.split('/');
             const cleanPath = path.replace(/\[|\]/g, '');
             const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
             
-                // Sort by time
+            // Sort by time
             rawPoints.sort((a, b) => a.x - b.x);
             
-                // Determine Axis
+            // Determine Axis
             const axisKey = useSmartAxis ? guessGroupKey(topic, cleanPath) : varId;
             if (!axisMap.has(axisKey)) axisMap.set(axisKey, `y${axisMap.size}`);
             const yAxisId = axisMap.get(axisKey);
             
-                // Determine Color
+            // Determine Color
             const axisIndex = distinctAxes.indexOf(axisKey);
             const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
             const color = `hsl(${hue}, 85%, 60%)`;
             
-                // Create Dataset (No local downsampling needed)
+            // Create Dataset (No local downsampling needed)
             datasets.push({
                 label: label,
                 data: rawPoints,
@@ -797,7 +798,7 @@ async function processChartData() {
                 pointRadius: rawPoints.length > 200 ? 0 : 3 
             });
 
-                // Config Scale
+            // Config Scale
             if (!dynamicScales[yAxisId]) {
                 const position = (Array.from(axisMap.values()).indexOf(yAxisId) % 2 === 0) ? 'left' : 'right';
                 dynamicScales[yAxisId] = {
@@ -815,7 +816,7 @@ async function processChartData() {
             }
         }
 
-            // Prolong last value for live chart logic
+        // Prolong last value for live chart logic
         if (connectNulls && datasets.length > 0 && isChartLive) {
              const prolongTarget = currentMaxTimestamp;
              datasets.forEach(ds => {
@@ -828,42 +829,47 @@ async function processChartData() {
              });
         }
 
-        if (chartInstance) {
-            // Unlink current chart safely
-            chartInstance.destroy();
-        }
-
-        chartCanvas.style.display = 'block';
-        chartInstance = new Chart(chartCanvas, {
-            type: chartType,
-            data: { datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: dynamicScales,
-                plugins: {
-                    legend: { labels: { color: textColor } },
-                    zoom: {
+        if (chartInstance && chartInstance.config.type === chartType) {
+            // Re-use chart instance to avoid UI flicker
+            chartInstance.data.datasets = datasets;
+            chartInstance.options.scales = dynamicScales;
+            chartInstance.update('none'); // 'none' prevents animation recalculation
+            chartCanvas.style.display = 'block';
+        } else {
+            // Destroy and rebuild if type changes
+            if (chartInstance) chartInstance.destroy();
+            chartCanvas.style.display = 'block';
+            chartInstance = new Chart(chartCanvas, {
+                type: chartType,
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: dynamicScales,
+                    plugins: {
+                        legend: { labels: { color: textColor } },
                         zoom: {
-                            drag: { enabled: true, backgroundColor: 'rgba(54, 162, 235, 0.3)' },
-                            mode: 'x',
-                            onZoomComplete: ({chart}) => {
-                                const {min, max} = chart.scales.x;
-                                currentMinTimestamp = min;
-                                currentMaxTimestamp = max;
-                                isUserInteracting = false; // Fix infinite load
-                                isChartLive = false;
-                                updateChartSliderUI(min, max, false, true);
-                                setTimeout(() => triggerDataFetch(), 0); 
+                            zoom: {
+                                drag: { enabled: true, backgroundColor: 'rgba(54, 162, 235, 0.3)' },
+                                mode: 'x',
+                                onZoomComplete: ({chart}) => {
+                                    const {min, max} = chart.scales.x;
+                                    currentMinTimestamp = min;
+                                    currentMaxTimestamp = max;
+                                    isUserInteracting = false; // Fix infinite load
+                                    isChartLive = false;
+                                    updateChartSliderUI(min, max, false, true);
+                                    setTimeout(() => triggerDataFetch(), 0); 
+                                }
                             }
                         }
-                    }
-                },
-                animation: false,
-                parsing: false,
-                normalized: true
-            }
-        });
+                    },
+                    animation: false,
+                    parsing: false,
+                    normalized: true
+                }
+            });
+        }
         hideChartLoader();
     } catch (err) {
         console.error("Chart aggregation error:", err);
