@@ -5,6 +5,7 @@
  * I3X Router (RFC 001 Compliant)
  * [UPDATED] Refactored POST /objects/related to dynamically use the Graph Relationship Index.
  * [UPDATED] Supports bi-directional navigation for any custom relationship type (e.g. SuppliesTo).
+ * [UPDATED] Eradicated silent catches to log JSON parsing/structuring failures correctly.
  */
 
 const express = require('express');
@@ -13,12 +14,16 @@ const express = require('express');
  * Helper to format a single DuckDB row into an I3X VQT object.
  * Extracts EngUnit from metadata or payload.
  */
-function formatVQT(row, instanceMetadata = {}) {
+function formatVQT(row, instanceMetadata = {}, logger = console) {
     if (!row) return null;
     let payload = row.payload;
     try { 
         payload = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload; 
-    } catch(e) {}
+    } catch(e) {
+        if (logger.debug) {
+            logger.debug({ err: e, topic: row.topic }, "I3X: Failed to parse payload as JSON, keeping as raw string.");
+        }
+    }
     
     // Clean up internal tags
     if (payload && payload._i3x) delete payload._i3x;
@@ -66,7 +71,7 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
                     db.all(query, ...params, (err, rows) => err ? reject(err) : resolve(rows));
                 });
                 if (rows && rows.length > 0) {
-                    result.data = rows.map(r => formatVQT(r, instance));
+                    result.data = rows.map(r => formatVQT(r, instance, i3xLogger));
                 }
             } catch(e) {
                 i3xLogger.error({ err: e }, `I3X: Failed to fetch values for ${elementId}`);
@@ -301,8 +306,10 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             // Format VQT
             let val = payloadObject;
             if (val && val._i3x) { val = { ...val }; delete val._i3x; }
-            const vqt = formatVQT({ payload: val, timestamp: new Date(), quality: "Good" }, instance);
+            
+            const vqt = formatVQT({ payload: val, timestamp: new Date(), quality: "Good" }, instance, i3xLogger);
             const updateObj = { [elementId]: { data: [vqt] } };
+            
             for (const [subId, sub] of subscriptions.entries()) {
                 if (sub.items.includes(elementId)) {
                     if (sub.res) {

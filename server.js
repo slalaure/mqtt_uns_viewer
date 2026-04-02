@@ -11,6 +11,7 @@
  * Server Entry Point
  * [UPDATED] Staggered simulator auto-start to prevent CPU spikes and event loop blocking.
  * [UPDATED] Configured Pino logger to write to both stdout and data/korelate.log for Admin UI.
+ * [UPDATED] Eradicated silent catches on filesystem and websocket broadcasting logic.
  */
 
 // --- Imports ---
@@ -49,12 +50,20 @@ const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
 
 // Ensure data directory exists early for the logger
 if (!fs.existsSync(DATA_PATH)) {
-    try { fs.mkdirSync(DATA_PATH, { recursive: true }); } catch (e) {}
+    try { 
+        fs.mkdirSync(DATA_PATH, { recursive: true }); 
+    } catch (e) {
+        console.error("Failed to create DATA_PATH directory during initialization:", e);
+    }
 }
 
 // Ensure sessions directory exists
 if (!fs.existsSync(SESSIONS_PATH)) {
-    try { fs.mkdirSync(SESSIONS_PATH, { recursive: true }); } catch (e) {}
+    try { 
+        fs.mkdirSync(SESSIONS_PATH, { recursive: true }); 
+    } catch (e) {
+        console.error("Failed to create SESSIONS_PATH directory during initialization:", e);
+    }
 }
 
 // --- Analytics Script ---
@@ -105,7 +114,9 @@ require('dotenv').config({ path: ENV_PATH });
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
     try {
         fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2));
-    } catch (err) { /* ignore */ }
+    } catch (err) { 
+        logger.error({ err }, "Failed to create default charts.json configuration file."); 
+    }
 }
 
 // --- Helper Function for Sparkplug (handles BigInt) ---
@@ -388,10 +399,16 @@ db = new duckdb.Database(dbFile, (err) => {
             const msg = JSON.parse(msgStr);
             if (msg.type === 'mqtt-message') {
                 let payloadObj = msg.payload;
-                try { payloadObj = JSON.parse(msg.payload); } catch(e){}
+                try { 
+                    payloadObj = JSON.parse(msg.payload); 
+                } catch(e){
+                    logger.debug({ err: e, topic: msg.topic }, "I3X broadcast interceptor: Payload is not standard JSON, forwarding raw.");
+                }
                 i3xEvents.emit('data', { topic: msg.topic, payloadObject: payloadObj });
             }
-        } catch (e) {}
+        } catch (e) {
+            logger.error({ err: e }, "I3X broadcast interceptor: Failed to parse WebSocket envelope message");
+        }
     };
     
     // 6. Maintenance & Connectors

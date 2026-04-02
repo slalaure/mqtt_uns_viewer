@@ -13,6 +13,7 @@
  * [UPDATED] File path adjusted for new location in core/engine/
  * [UPDATED] isPublishAllowed now supports dynamic DATA_PROVIDERS (e.g. CSV stream).
  * [UPDATED] Implemented V8 Script caching and Event Loop yielding for extreme high-throughput.
+ * [UPDATED] Eradicated UI-silent catches by ensuring all sandbox/encoding errors pipe to updateMetrics.
  */
 
 const fs = require('fs');
@@ -267,6 +268,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                         msgForSandbox = JSON.parse(JSON.stringify(originalMsg));
                     } catch(copyErr) {
                         engineLogger.error({ err: copyErr, topic: topic, correlationId }, "Mapper Engine: Failed to deep copy message for sandbox.");
+                        updateMetrics(rule, target, topic, null, null, `Failed to deep copy message: ${copyErr.message}`, null, correlationId);
                         return; 
                     }
 
@@ -332,6 +334,7 @@ const processMessage = async (brokerId, topic, payloadObject, isSparkplugOrigin 
                                         outputPayloadForMetrics = JSON.stringify(res.payload, payloadReplacer);
                                     } catch (encodeErr) {
                                         engineLogger.error({ err: encodeErr, rule: rule.sourceTopic, target: target.id, payload: res.payload, correlationId }, "❌ Mapper Engine: Failed to re-encode payload as Sparkplug Protobuf.");
+                                        updateMetrics(rule, target, topic, null, null, `Sparkplug Encoding Error: ${encodeErr.message}`, null, correlationId);
                                         continue; 
                                     }
                                 } else {

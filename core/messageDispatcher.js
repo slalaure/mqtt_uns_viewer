@@ -10,6 +10,7 @@
  * * * Central Message Dispatcher
  * Orchestrates the processing of a new message from ANY data provider (MQTT, OPC UA, File, etc.).
  * [UPDATED] Handles ingress Correlation IDs or generates them if missing.
+ * [UPDATED] Eradicated silent catches: Added logger tracking for deep JSON parsing failures.
  */
 
 const crypto = require('crypto');
@@ -22,10 +23,13 @@ function longReplacer(key, value) {
     return value;
 }
 
-function safeJsonParse(str) {
+function safeJsonParse(str, reqLogger) {
     try {
         return JSON.parse(str);
     } catch (e) {
+        if (reqLogger) {
+            reqLogger.debug({ err: e }, "safeJsonParse failed, falling back to raw string");
+        }
         return { raw_payload: str };
     }
 }
@@ -103,7 +107,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                 // The provider tried to decode it (e.g. Protobuf) but failed
                 payloadStringForWs = rawBuffer ? rawBuffer.toString('hex') : "unknown_hex";
                 payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeError });
-                payloadObjectForMapper = safeJsonParse(payloadStringForDb);
+                payloadObjectForMapper = safeJsonParse(payloadStringForDb, handlerLogger);
 
             } else if (typeof payload === 'object' && !Buffer.isBuffer(payload)) {
                 // The Provider ALREADY decoded the payload into a JS Object (e.g. Sparkplug)
@@ -119,7 +123,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                     payloadObjectForMapper = JSON.parse(tempPayloadString);
                     payloadStringForDb = tempPayloadString;
                 } catch (parseError) {
-                     handlerLogger.warn(`Received non-JSON payload on topic ${topic}. Storing as raw string.`);
+                     handlerLogger.debug({ err: parseError, topic }, `Received non-JSON payload. Storing as raw string.`);
                      payloadObjectForMapper = { raw_payload: tempPayloadString };
                      payloadStringForDb = JSON.stringify(payloadObjectForMapper);
                 }
@@ -134,9 +138,13 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                     typeId: semanticMatch.typeId,
                     isComposition: semanticMatch.isComposition
                 };
-                // Re-stringify so DuckDB and WebSockets receive the enriched payload
-                payloadStringForDb = JSON.stringify(payloadObjectForMapper, longReplacer);
-                payloadStringForWs = JSON.stringify(payloadObjectForMapper, longReplacer, 2);
+                try {
+                    // Re-stringify so DuckDB and WebSockets receive the enriched payload
+                    payloadStringForDb = JSON.stringify(payloadObjectForMapper, longReplacer);
+                    payloadStringForWs = JSON.stringify(payloadObjectForMapper, longReplacer, 2);
+                } catch (stringifyErr) {
+                    handlerLogger.error({ err: stringifyErr }, "Failed to stringify enriched I3X payload");
+                }
             }
         }
 

@@ -15,6 +15,7 @@
  * [MODIFIED] Added 'startDate' and 'endDate' support for time filtering.
  * [MODIFIED] Added Admin check for Prune Topic.
  * [NEW] Added /aggregate endpoint for optimized time-bucketed charting.
+ * [UPDATED] Eradicated silent catches on JSON.stringify failures to ensure API serialization issues are logged.
  */
 const express = require('express');
 
@@ -45,6 +46,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     // Helper for logging
     const log = (msg) => console.log(`[ContextAPI] ${msg}`);
+    const logError = (msg, err) => console.error(`[ContextAPI] ❌ ${msg}`, err ? err.message : '');
 
     router.get('/status', (req, res) => {
         getDbStatus(statusData => {
@@ -131,7 +133,11 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                 const results = rows.map(row => {
                     if (typeof row.payload === 'object' && row.payload !== null) {
-                        try { row.payload = JSON.stringify(row.payload); } catch (e) {}
+                        try { 
+                            row.payload = JSON.stringify(row.payload); 
+                        } catch (e) {
+                            logError(`Failed to stringify payload for topic ${row.topic}`, e);
+                        }
                     }
                     return row;
                 });
@@ -264,7 +270,11 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                 const results = rows.map(row => {
                     if (typeof row.payload === 'object' && row.payload !== null) {
-                        try { row.payload = JSON.stringify(row.payload); } catch (e) {}
+                        try { 
+                            row.payload = JSON.stringify(row.payload); 
+                        } catch (e) {
+                            logError(`Failed to stringify payload for topic ${row.topic} during search`, e);
+                        }
                     } else if (row.payload === null) {
                         row.payload = 'null';
                     }
@@ -327,7 +337,11 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                 const results = rows.map(row => {
                     if (typeof row.payload === 'object' && row.payload !== null) {
-                         try { row.payload = JSON.stringify(row.payload); } catch (e) {}
+                         try { 
+                             row.payload = JSON.stringify(row.payload); 
+                         } catch (e) {
+                             logError(`Failed to stringify payload for topic ${row.topic} during model search`, e);
+                         }
                     }
                     return row;
                 });
@@ -394,7 +408,11 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                 const result = rows[0];
                  if (typeof result.payload === 'object' && result.payload !== null) {
-                     try { result.payload = JSON.stringify(result.payload); } catch (e) {}
+                     try { 
+                         result.payload = JSON.stringify(result.payload); 
+                     } catch (e) {
+                         logError(`Failed to stringify payload for requested topic ${topic}`, e);
+                     }
                 }
                 res.json(result);
             });
@@ -438,7 +456,11 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                 const results = rows.map(row => {
                      if (typeof row.payload === 'object' && row.payload !== null) {
-                         try { row.payload = JSON.stringify(row.payload); } catch (e) {}
+                         try { 
+                             row.payload = JSON.stringify(row.payload); 
+                         } catch (e) {
+                             logError(`Failed to stringify payload history for topic ${row.topic}`, e);
+                         }
                     }
                     return row;
                 });

@@ -13,6 +13,7 @@
  * Integrated with Autonomous AI Agent Workflow.
  * [UPDATED] Implemented V8 Script/Regex caching and Event Loop yielding for extreme high-throughput.
  * [UPDATED] Prompt engineering delegated to the internal llmEngine.
+ * [UPDATED] Eradicated silent catches to surface rule execution and JSON parsing errors.
  */
 const crypto = require('crypto');
 const vm = require('vm');
@@ -184,7 +185,12 @@ function getRules(userId) {
         db.all(query, ...params, (err, rows) => {
             if (err) return reject(err);
             const rules = rows.map(r => {
-                try { r.notifications = JSON.parse(r.notifications); } catch(e) { r.notifications = {}; }
+                try { 
+                    r.notifications = JSON.parse(r.notifications); 
+                } catch(e) { 
+                    logger.debug({ err: e, ruleId: r.id }, "Failed to parse notifications JSON for rule");
+                    r.notifications = {}; 
+                }
                 return r;
             });
             resolve(rules);
@@ -302,7 +308,9 @@ async function processMessage(brokerId, topic, payload, correlationId = null) {
                     if (isTriggered === true) {
                         triggerAlert(rule, msgContext);
                     }
-                } catch (evalErr) { }
+                } catch (evalErr) { 
+                    logger.error({ err: evalErr, ruleId: rule.id, topic }, "Alert Manager: Failed to evaluate alert rule condition script.");
+                }
             }
         }
     });
@@ -369,7 +377,11 @@ async function executeWorkflow(alertId, rule, msgContext) {
     
     // 2. Send Notifications (Webhook) with Analysis
     let notifications = {};
-    try { notifications = JSON.parse(rule.notifications); } catch(e){}
+    try { 
+        notifications = JSON.parse(rule.notifications); 
+    } catch(e){
+        logger.warn({ err: e, ruleId: rule.id }, "Alert Manager: Failed to parse rule notifications JSON in workflow.");
+    }
     
     if (notifications.webhook) {
         try {
