@@ -10,6 +10,7 @@
  *
  * Admin View Module
  * Handles User Management, Database Maintenance, Alerts Maintenance, HMI Assets, Simulators, and Data Parsers.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 import { confirmModal, showToast } from './utils.js';
 let usersTableBody = null;
@@ -42,7 +43,15 @@ let webhooksTableBody = null;
 let webhookRegisterForm = null;
 let btnWebhooksRefresh = null;
 let btnWebhooksClear = null;
+let csvForm = null;
+let btnAdminRefresh = null;
+let btnAiHistoryRefresh = null;
+let btnAdminEditorCancel = null;
+let btnAdminEditorSave = null;
+let btnAdminEditorDelete = null;
+
 let isViewInitialized = false;
+let isMounted = false; // Lifecycle flag
 // --- Elements for HMI/Simulator Code Editor ---
 let adminAceEditor = null;
 let currentEditingFilename = null;
@@ -60,7 +69,7 @@ export async function initAdminView() {
         if (!response.ok) throw new Error(`Failed to load admin template: ${response.statusText}`);
         const htmlContent = await response.text();
         container.innerHTML = htmlContent;
-        // 2. Initialize DOM References & Listeners AFTER injection
+        // 2. Initialize DOM References AFTER injection
         initializeElements(container);
         isViewInitialized = true;
         console.log("✅ Admin View Initialized (Async HTML Load)");
@@ -69,169 +78,161 @@ export async function initAdminView() {
         container.innerHTML = `<div style="padding:20px; color:red;">Error loading Admin Interface. Check console.</div>`;
     }
 }
+
 /**
- * Helper to attach listeners once HTML is in DOM.
+ * Helper to get references to DOM elements.
  */
 function initializeElements(container) {
-    // 1. User Management Elements
     usersTableBody = document.getElementById('admin-users-table-body');
-    const refreshBtn = document.getElementById('btn-admin-refresh');
-    if (refreshBtn) {
-        refreshBtn.className = 'tool-button';
-        refreshBtn.addEventListener('click', loadUsers);
-    }
-    // 2. Tab Navigation Logic
+    btnAdminRefresh = document.getElementById('btn-admin-refresh');
     subNavButtons = container.querySelectorAll('.sub-tab-button');
-    const panelClass = 'alerts-content-container';
-    subNavButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Remove active from all buttons
-            subNavButtons.forEach(b => b.classList.remove('active'));
-            // Hide all panels
-            container.querySelectorAll(`.${panelClass}`).forEach(p => p.classList.remove('active'));
-            // Activate clicked
-            btn.classList.add('active');
-            const targetId = btn.dataset.target;
-            const targetPanel = document.getElementById(targetId);
-            if (targetPanel) targetPanel.classList.add('active');
-            // Load data based on tab
-            if (targetId === 'admin-users-panel') loadUsers();
-            if (targetId === 'admin-db-panel') loadDlqStatus();
-            if (targetId === 'admin-alerts-panel') loadResolvedStats();
-            if (targetId === 'admin-assets-panel') loadHmiAssets();
-            if (targetId === 'admin-simulators-panel') loadSimulators();
-            if (targetId === 'admin-webhooks-panel') loadWebhooks();
-            if (targetId === 'admin-ai-panel') loadAiHistory();
-            // Data parsers panel doesn't require immediate fetch on load currently
-        });
-    });
-
-    document.getElementById('btn-ai-history-refresh')?.addEventListener('click', loadAiHistory);
-    // 3. Database Maintenance Logic
     btnImportDb = document.getElementById('btn-import-db');
     importInput = document.getElementById('db-import-input');
     importStatus = document.getElementById('db-import-status');
     btnResetDb = document.getElementById('btn-reset-db');
-    if (btnImportDb && importInput) {
-        btnImportDb.className = 'tool-button button-primary';
-        btnImportDb.addEventListener('click', onImportDB);
-    }
-    if (btnResetDb) {
-        btnResetDb.className = 'tool-button button-danger';
-        btnResetDb.addEventListener('click', onResetDB);
-    }
-
     dlqCountEl = document.getElementById('stats-dlq-count');
     btnReplayDlq = document.getElementById('btn-replay-dlq');
     btnClearDlq = document.getElementById('btn-clear-dlq');
-
-    if (btnReplayDlq) {
-        btnReplayDlq.addEventListener('click', onReplayDlq);
-    }
-    if (btnClearDlq) {
-        btnClearDlq.addEventListener('click', onClearDlq);
-    }
-
-    // 4. Alerts Maintenance Logic
     resolvedCountEl = document.getElementById('stats-resolved-count');
     resolvedSizeEl = document.getElementById('stats-resolved-size');
     btnPurgeAlerts = document.getElementById('btn-purge-alerts');
-    if (btnPurgeAlerts) {
-        btnPurgeAlerts.className = 'tool-button button-danger';
-        btnPurgeAlerts.addEventListener('click', onPurgeAlerts);
-    }
-    // 5. HMI Assets Maintenance Logic
     hmiAssetsTableBody = document.getElementById('admin-hmi-table-body');
     btnUploadHmi = document.getElementById('btn-upload-hmi');
     hmiUploadInput = document.getElementById('hmi-upload-input');
     btnHmiRefresh = document.getElementById('btn-hmi-refresh');
-    if (btnUploadHmi && hmiUploadInput) {
-        btnUploadHmi.addEventListener('click', onUploadHmiAssets);
-    }
-    if (btnHmiRefresh) {
-        btnHmiRefresh.addEventListener('click', loadHmiAssets);
-    }
-    // 6. Simulators Maintenance Logic
     simTableBody = document.getElementById('admin-sim-table-body');
     btnUploadSim = document.getElementById('btn-upload-sim');
     simUploadInput = document.getElementById('sim-upload-input');
     btnSimRefresh = document.getElementById('btn-sim-refresh');
-    if (btnUploadSim && simUploadInput) {
-        btnUploadSim.addEventListener('click', onUploadSimulators);
-    }
-    if (btnSimRefresh) {
-        btnSimRefresh.addEventListener('click', loadSimulators);
-    }
-
-    // 7. Webhooks Logic
     webhooksTableBody = document.getElementById('admin-webhooks-table-body');
     webhookRegisterForm = document.getElementById('webhook-register-form');
     btnWebhooksRefresh = document.getElementById('btn-webhooks-refresh');
     btnWebhooksClear = document.getElementById('btn-webhooks-clear');
-    if (webhookRegisterForm) {
-        webhookRegisterForm.addEventListener('submit', onRegisterWebhook);
-    }
-    if (btnWebhooksRefresh) {
-        btnWebhooksRefresh.addEventListener('click', loadWebhooks);
-    }
-    if (btnWebhooksClear) {
-        btnWebhooksClear.addEventListener('click', onClearWebhooks);
-    }
+    csvForm = document.getElementById('csv-parser-form');
+    btnAiHistoryRefresh = document.getElementById('btn-ai-history-refresh');
+    btnAdminEditorCancel = document.getElementById('btn-admin-editor-cancel');
+    btnAdminEditorSave = document.getElementById('btn-admin-editor-save');
+    btnAdminEditorDelete = document.getElementById('btn-admin-editor-delete');
 
-    // 8. Data Parsers Logic (CSV)
-    const csvForm = document.getElementById('csv-parser-form');
-    if (csvForm) {
-        csvForm.addEventListener('submit', onStartCsvParser);
-    }
-
-    // 8. Ace Editor Initialization for HMI & Simulator files
-    if (window.ace && !adminAceEditor) {
-        adminAceEditor = ace.edit("admin-hmi-code-editor");
-        adminAceEditor.setTheme(document.body.classList.contains('dark-mode') ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-        adminAceEditor.setOptions({
-            fontSize: "14px",
-            fontFamily: "monospace",
-            enableBasicAutocompletion: true,
-            enableLiveAutocompletion: true,
-            useWorker: false // Disables heavy web workers to avoid 404s on air-gapped instances
-        });
-    }
-    document.getElementById('btn-admin-editor-cancel')?.addEventListener('click', closeAssetEditor);
-    document.getElementById('btn-admin-editor-save')?.addEventListener('click', saveAssetEditor);
-    document.getElementById('btn-admin-editor-delete')?.addEventListener('click', async () => {
-        if (currentEditingFilename) {
-            const isSimulator = currentEditingFilename.toLowerCase().startsWith('simulator-');
-            const deleted = isSimulator
-                ? await deleteSimulator(currentEditingFilename)
-                : await deleteHmiAsset(currentEditingFilename);
-            if (deleted) closeAssetEditor();
-        }
-    });
+    if (btnAdminRefresh) btnAdminRefresh.className = 'tool-button';
+    if (btnImportDb) btnImportDb.className = 'tool-button button-primary';
+    if (btnResetDb) btnResetDb.className = 'tool-button button-danger';
+    if (btnPurgeAlerts) btnPurgeAlerts.className = 'tool-button button-danger';
 }
+
+// --- Named Event Handlers ---
+const onSubTabClick = (e) => {
+    const btn = e.currentTarget;
+    const container = document.getElementById('admin-view');
+    subNavButtons.forEach(b => b.classList.remove('active'));
+    container.querySelectorAll('.alerts-content-container').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const targetId = btn.dataset.target;
+    const targetPanel = document.getElementById(targetId);
+    if (targetPanel) targetPanel.classList.add('active');
+    
+    if (targetId === 'admin-users-panel') loadUsers();
+    if (targetId === 'admin-db-panel') loadDlqStatus();
+    if (targetId === 'admin-alerts-panel') loadResolvedStats();
+    if (targetId === 'admin-assets-panel') loadHmiAssets();
+    if (targetId === 'admin-simulators-panel') loadSimulators();
+    if (targetId === 'admin-webhooks-panel') loadWebhooks();
+    if (targetId === 'admin-ai-panel') loadAiHistory();
+};
+
+const onAssetDeleteClick = async () => {
+    if (currentEditingFilename) {
+        const isSimulator = currentEditingFilename.toLowerCase().startsWith('simulator-');
+        const deleted = isSimulator
+            ? await deleteSimulator(currentEditingFilename)
+            : await deleteHmiAsset(currentEditingFilename);
+        if (deleted) closeAssetEditor();
+    }
+};
+
 /**
- * Called when the Admin tab is activated.
+ * Mounts the view (attaches event listeners, initializes editors).
+ */
+export function mountAdminView() {
+    if (isMounted || !isViewInitialized) return;
+
+    btnAdminRefresh?.addEventListener('click', loadUsers);
+    subNavButtons?.forEach(btn => btn.addEventListener('click', onSubTabClick));
+    btnAiHistoryRefresh?.addEventListener('click', loadAiHistory);
+    btnImportDb?.addEventListener('click', onImportDB);
+    btnResetDb?.addEventListener('click', onResetDB);
+    btnReplayDlq?.addEventListener('click', onReplayDlq);
+    btnClearDlq?.addEventListener('click', onClearDlq);
+    btnPurgeAlerts?.addEventListener('click', onPurgeAlerts);
+    btnUploadHmi?.addEventListener('click', onUploadHmiAssets);
+    btnHmiRefresh?.addEventListener('click', loadHmiAssets);
+    btnUploadSim?.addEventListener('click', onUploadSimulators);
+    btnSimRefresh?.addEventListener('click', loadSimulators);
+    webhookRegisterForm?.addEventListener('submit', onRegisterWebhook);
+    btnWebhooksRefresh?.addEventListener('click', loadWebhooks);
+    btnWebhooksClear?.addEventListener('click', onClearWebhooks);
+    csvForm?.addEventListener('submit', onStartCsvParser);
+    btnAdminEditorCancel?.addEventListener('click', closeAssetEditor);
+    btnAdminEditorSave?.addEventListener('click', saveAssetEditor);
+    btnAdminEditorDelete?.addEventListener('click', onAssetDeleteClick);
+
+    const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
+    if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') loadResolvedStats();
+    else if (activeTab && activeTab.dataset.target === 'admin-db-panel') loadDlqStatus();
+    else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') loadHmiAssets();
+    else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') loadSimulators();
+    else if (activeTab && activeTab.dataset.target === 'admin-webhooks-panel') loadWebhooks();
+    else if (activeTab && activeTab.dataset.target === 'admin-parsers-panel') {} // No immediate fetch needed
+    else loadUsers();
+
+    isMounted = true;
+    console.log("[Admin View] Mounted.");
+}
+
+/**
+ * Legacy wrapper for router compatibility.
  */
 export function onAdminViewShow() {
-    if (!isViewInitialized) {
-        return;
-    }
-    const activeTab = document.querySelector('#admin-view .sub-tab-button.active');
-    if (activeTab && activeTab.dataset.target === 'admin-alerts-panel') {
-        loadResolvedStats();
-    } else if (activeTab && activeTab.dataset.target === 'admin-db-panel') {
-        loadDlqStatus();
-    } else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') {
-        loadHmiAssets();
-    } else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') {
-        loadSimulators();
-    } else if (activeTab && activeTab.dataset.target === 'admin-webhooks-panel') {
-        loadWebhooks();
-    } else if (activeTab && activeTab.dataset.target === 'admin-parsers-panel') {
-        // Data parsers panel is active
-    } else {
-        loadUsers();
-    }
+    mountAdminView();
 }
+
+/**
+ * Unmounts the view (removes listeners, destroys editors).
+ */
+export function unmountAdminView() {
+    if (!isMounted) return;
+
+    // Destroy Ace Editor
+    if (adminAceEditor) {
+        adminAceEditor.destroy();
+        adminAceEditor = null;
+    }
+    closeAssetEditor(); // Hide modal
+
+    btnAdminRefresh?.removeEventListener('click', loadUsers);
+    subNavButtons?.forEach(btn => btn.removeEventListener('click', onSubTabClick));
+    btnAiHistoryRefresh?.removeEventListener('click', loadAiHistory);
+    btnImportDb?.removeEventListener('click', onImportDB);
+    btnResetDb?.removeEventListener('click', onResetDB);
+    btnReplayDlq?.removeEventListener('click', onReplayDlq);
+    btnClearDlq?.removeEventListener('click', onClearDlq);
+    btnPurgeAlerts?.removeEventListener('click', onPurgeAlerts);
+    btnUploadHmi?.removeEventListener('click', onUploadHmiAssets);
+    btnHmiRefresh?.removeEventListener('click', loadHmiAssets);
+    btnUploadSim?.removeEventListener('click', onUploadSimulators);
+    btnSimRefresh?.removeEventListener('click', loadSimulators);
+    webhookRegisterForm?.removeEventListener('submit', onRegisterWebhook);
+    btnWebhooksRefresh?.removeEventListener('click', loadWebhooks);
+    btnWebhooksClear?.removeEventListener('click', onClearWebhooks);
+    csvForm?.removeEventListener('submit', onStartCsvParser);
+    btnAdminEditorCancel?.removeEventListener('click', closeAssetEditor);
+    btnAdminEditorSave?.removeEventListener('click', saveAssetEditor);
+    btnAdminEditorDelete?.removeEventListener('click', onAssetDeleteClick);
+
+    isMounted = false;
+    console.log("[Admin View] Unmounted & Cleaned up.");
+}
+
 /**
  * Fetches users from the API and renders them.
  */
@@ -743,6 +744,17 @@ async function onStartCsvParser(e) {
 
 // --- HMI & Simulator Shared Code Editor Logic ---
 async function openAssetEditor(filename) {
+    if (!adminAceEditor) {
+        adminAceEditor = ace.edit("admin-hmi-code-editor");
+        adminAceEditor.setOptions({
+            fontSize: "14px",
+            fontFamily: "monospace",
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true,
+            useWorker: false 
+        });
+    }
+
     try {
         const res = await fetch(`api/hmi/file?name=${encodeURIComponent(filename)}`);
         if (!res.ok) throw new Error("Failed to load file content.");
@@ -767,11 +779,12 @@ async function openAssetEditor(filename) {
     }
 }
 function closeAssetEditor() {
-    document.getElementById('admin-hmi-editor-modal').style.display = 'none';
+    const modal = document.getElementById('admin-hmi-editor-modal');
+    if (modal) modal.style.display = 'none';
     currentEditingFilename = null;
 }
 async function saveAssetEditor() {
-    if (!currentEditingFilename) return;
+    if (!currentEditingFilename || !adminAceEditor) return;
     const btnSave = document.getElementById('btn-admin-editor-save');
     const originalText = btnSave.textContent;
     btnSave.textContent = "Saving...";

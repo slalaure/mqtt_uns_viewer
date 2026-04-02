@@ -12,10 +12,11 @@
  * [UPDATED] Protocol-agnostic data providers support (MQTT, OPC UA, FILE, etc.).
  * [UPDATED] Dynamic injection of new Data Providers to support loopback streams.
  * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
 // Import shared utilities and state
-import { state, subscribe } from './state.js';
+import { state, subscribe, unsubscribe } from './state.js';
 import { mqttPatternToClientRegex, trackEvent, showToast } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 
@@ -73,6 +74,7 @@ let availableProviders = []; // Store combined provider configs
 
 let aceEditors = new Map(); 
 let isDarkTheme = localStorage.getItem('theme') === 'dark'; 
+let isMounted = false;
 
 let payloadViewer = createPayloadViewer({
     topicEl: document.getElementById('mapper-payload-topic'),
@@ -98,8 +100,23 @@ export function setMapperTheme(isDark) {
     });
 }
 
+// --- Named Event Handlers (For clean unmounting) ---
+const onMapperUnsavedChange = (isUnsaved) => {
+    if (isUnsaved) {
+        if (mapperSaveButton && !mapperSaveButton.disabled) mapperSaveButton.classList.add('btn-unsaved');
+        document.querySelectorAll('.target-save-maximized').forEach(btn => {
+            if (!btn.disabled) btn.classList.add('btn-unsaved');
+        });
+    } else {
+        if (mapperSaveButton) mapperSaveButton.classList.remove('btn-unsaved');
+        document.querySelectorAll('.target-save-maximized').forEach(btn => {
+            btn.classList.remove('btn-unsaved');
+        });
+    }
+};
+
 /**
- * Initializes the Mapper View functionality.
+ * Initializes the Mapper View configuration (Called once on app start).
  */
 export function initMapperView(callbacks) {
     const { displayPayload, maxSavedMapperVersions, isMultiBroker: multiBrokerState, brokerConfigs: bConfigs, dataProviders: pConfigs, ...otherCallbacks } = callbacks;
@@ -117,21 +134,16 @@ export function initMapperView(callbacks) {
     });
 
     loadMapperConfig(); 
+}
+
+/**
+ * Mounts the view (attaches event listeners and state subscriptions).
+ */
+export function mountMapperView() {
+    if (isMounted) return;
 
     // --- Reactive State Subscriptions ---
-    subscribe('mapperUnsaved', (isUnsaved) => {
-        if (isUnsaved) {
-            if (mapperSaveButton && !mapperSaveButton.disabled) mapperSaveButton.classList.add('btn-unsaved');
-            document.querySelectorAll('.target-save-maximized').forEach(btn => {
-                if (!btn.disabled) btn.classList.add('btn-unsaved');
-            });
-        } else {
-            if (mapperSaveButton) mapperSaveButton.classList.remove('btn-unsaved');
-            document.querySelectorAll('.target-save-maximized').forEach(btn => {
-                btn.classList.remove('btn-unsaved');
-            });
-        }
-    });
+    subscribe('mapperUnsaved', onMapperUnsavedChange);
 
     // --- Role-Based UI Adjustments ---
     const userRole = window.currentUser ? window.currentUser.role : 'user';
@@ -153,6 +165,45 @@ export function initMapperView(callbacks) {
     modalBtnCancel?.addEventListener('click', hidePruneModal);
     modalBtnDeleteRule?.addEventListener('click', onDeleteRule);
     modalBtnDeletePrune?.addEventListener('click', onDeleteAndPrune);
+
+    // Re-render current selection if returning to the view
+    if (currentEditingSourceTopic && currentEditingBrokerId) {
+        renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic);
+    }
+
+    isMounted = true;
+    console.log("[Mapper View] Mounted.");
+}
+
+/**
+ * Unmounts the view (removes listeners, destroys heavy instances).
+ */
+export function unmountMapperView() {
+    if (!isMounted) return;
+
+    // Destroy Ace editors to free memory and avoid DOM reference leaks
+    aceEditors.forEach(editor => editor.destroy());
+    aceEditors.clear();
+
+    // Clear the UI so it cleanly rebuilds on next mount
+    if (mapperTargetsList) mapperTargetsList.innerHTML = '';
+    if (mapperTransformPlaceholder) mapperTransformPlaceholder.style.display = 'block';
+    if (mapperTransformForm) mapperTransformForm.style.display = 'none';
+
+    // Remove Event Listeners
+    mapperSaveButton?.removeEventListener('click', onSave);
+    mapperSaveAsNewButton?.removeEventListener('click', onSaveAsNew);
+    mapperVersionSelect?.removeEventListener('change', onVersionChange);
+    mapperAddTargetButton?.removeEventListener('click', onAddTarget);
+    modalBtnCancel?.removeEventListener('click', hidePruneModal);
+    modalBtnDeleteRule?.removeEventListener('click', onDeleteRule);
+    modalBtnDeletePrune?.removeEventListener('click', onDeleteAndPrune);
+
+    // Clean up subscriptions
+    unsubscribe('mapperUnsaved', onMapperUnsavedChange);
+
+    isMounted = false;
+    console.log("[Mapper View] Unmounted & Cleaned up.");
 }
 
 export function updateMapperMetrics(newMetrics) {
@@ -188,7 +239,10 @@ export function handleMapperNodeClick(event, nodeContainer, brokerId, topic) {
     // Enable editor for leaf node only
     currentEditingBrokerId = brokerId;
     currentEditingSourceTopic = topic;
-    renderTransformEditor(brokerId, topic);
+    
+    if (isMounted) {
+        renderTransformEditor(brokerId, topic);
+    }
 }
 
 export function getMapperConfig() {

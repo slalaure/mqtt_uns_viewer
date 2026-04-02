@@ -11,9 +11,10 @@
  * View module for the History tab.
  * [UPDATED] Protocol-agnostic provider selection with Dynamic Addition for Parsers.
  * [UPDATED] Integrated Proxy-based reactive state for auto-filtering based on tree selection.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
-import { state, subscribe } from './state.js';
+import { state, subscribe, unsubscribe } from './state.js';
 import { formatTimestampForLabel, highlightText, trackEvent, showToast } from './utils.js'; 
 import { createDualTimeSlider } from './time-slider.js';
 
@@ -49,6 +50,7 @@ let visibleCount = 1000;
 let startDateInput = null;
 let endDateInput = null;
 let fetchTimer = null;
+let isMounted = false;
 
 let requestRangeCallback = null; 
 
@@ -242,8 +244,53 @@ export function addAvailableHistoryProvider(providerId, type = 'dynamic') {
     providerFilterSelect.appendChild(option);
 }
 
+// --- Named Event Handlers (for clean unmounting) ---
+
+const onSearchInput = () => {
+    visibleCount = 1000; 
+    renderFilteredHistory(); 
+    clearTimeout(fetchTimer);
+    fetchTimer = setTimeout(() => {
+        triggerDataFetch(currentMinTimestamp, currentMaxTimestamp);
+    }, 800);
+};
+
+const onDateChange = () => {
+    const start = startDateInput.value ? new Date(startDateInput.value).getTime() : 0;
+    const end = endDateInput.value ? new Date(endDateInput.value).getTime() : Date.now();
+    if (start && end && start < end) {
+        const isNow = Math.abs(end - Date.now()) < 60000;
+        state.isLivePayload = isNow; 
+        triggerDataFetch(start, end);
+    }
+};
+
+const onProviderChange = () => {
+    visibleCount = 1000; 
+    renderFilteredHistory();
+};
+
+const onTopicStateChange = (topic) => {
+    if (topic && historySearchInput && state.activeView !== 'history') {
+        historySearchInput.value = topic;
+        visibleCount = 1000;
+        renderFilteredHistory();
+    }
+};
+
+const onBrokerStateChange = (brokerId) => {
+    if (brokerId && providerFilterSelect && state.activeView !== 'history') {
+        const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === brokerId);
+        if (exists) {
+            providerFilterSelect.value = brokerId;
+            visibleCount = 1000;
+            renderFilteredHistory();
+        }
+    }
+};
+
 /**
- * Initializes the History View functionality.
+ * Initializes the History View DOM (Called once).
  */
 export function initHistoryView(options = {}) {
     isMultiProvider = options.isMultiBroker || false;
@@ -253,15 +300,6 @@ export function initHistoryView(options = {}) {
     const bConfigs = options.brokerConfigs || [];
     const pConfigs = options.dataProviders || [];
     availableProviders = [...bConfigs, ...pConfigs];
-
-    historySearchInput?.addEventListener('input', () => {
-        visibleCount = 1000; 
-        renderFilteredHistory(); 
-        clearTimeout(fetchTimer);
-        fetchTimer = setTimeout(() => {
-            triggerDataFetch(currentMinTimestamp, currentMaxTimestamp);
-        }, 800);
-    });
 
     // --- 1. Create Date Picker UI Controls ---
     const dateControlsDiv = document.createElement('div');
@@ -339,18 +377,6 @@ export function initHistoryView(options = {}) {
         timeRangeSliderContainer.parentNode.insertBefore(dateControlsDiv, timeRangeSliderContainer);
     }
 
-    const onDateChange = () => {
-        const start = startDateInput.value ? new Date(startDateInput.value).getTime() : 0;
-        const end = endDateInput.value ? new Date(endDateInput.value).getTime() : Date.now();
-        if (start && end && start < end) {
-            const isNow = Math.abs(end - Date.now()) < 60000;
-            state.isLivePayload = isNow; 
-            triggerDataFetch(start, end);
-        }
-    };
-    startDateInput.addEventListener('change', onDateChange);
-    endDateInput.addEventListener('change', onDateChange);
-
     // --- 2. Provider Filter ---
     if (isMultiProvider && historyControls) {
         providerFilterSelect = document.createElement('select');
@@ -369,35 +395,10 @@ export function initHistoryView(options = {}) {
             providerFilterSelect.appendChild(option);
         });
 
-        providerFilterSelect.addEventListener('change', () => {
-            visibleCount = 1000; 
-            renderFilteredHistory();
-        });
-
         historyControls.prepend(providerFilterSelect);
     }
 
-    // --- 3. Reactive Subscriptions for Auto-Sync ---
-    subscribe('currentTopic', (topic) => {
-        if (topic && historySearchInput && state.activeView !== 'history') {
-            historySearchInput.value = topic;
-            visibleCount = 1000;
-            renderFilteredHistory();
-        }
-    });
-
-    subscribe('currentBrokerId', (brokerId) => {
-        if (brokerId && providerFilterSelect && state.activeView !== 'history') {
-            const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === brokerId);
-            if (exists) {
-                providerFilterSelect.value = brokerId;
-                visibleCount = 1000;
-                renderFilteredHistory();
-            }
-        }
-    });
-
-    // --- 4. Slider Init ---
+    // --- 3. Slider Init ---
     if (handleMin && handleMax) {
         historySlider = createDualTimeSlider({
             containerEl: timeRangeSliderContainer,
@@ -419,6 +420,45 @@ export function initHistoryView(options = {}) {
             }
         });
     }
+}
+
+/**
+ * Mounts the History View (Attaches event listeners and subscriptions).
+ */
+export function mountHistoryView() {
+    if (isMounted) return;
+
+    historySearchInput?.addEventListener('input', onSearchInput);
+    startDateInput?.addEventListener('change', onDateChange);
+    endDateInput?.addEventListener('change', onDateChange);
+    providerFilterSelect?.addEventListener('change', onProviderChange);
+
+    subscribe('currentTopic', onTopicStateChange);
+    subscribe('currentBrokerId', onBrokerStateChange);
+
+    // Initial render trigger
+    renderFilteredHistory();
+
+    isMounted = true;
+    console.log("[History View] Mounted.");
+}
+
+/**
+ * Unmounts the History View (Detaches event listeners).
+ */
+export function unmountHistoryView() {
+    if (!isMounted) return;
+
+    historySearchInput?.removeEventListener('input', onSearchInput);
+    startDateInput?.removeEventListener('change', onDateChange);
+    endDateInput?.removeEventListener('change', onDateChange);
+    providerFilterSelect?.removeEventListener('change', onProviderChange);
+
+    unsubscribe('currentTopic', onTopicStateChange);
+    unsubscribe('currentBrokerId', onBrokerStateChange);
+
+    isMounted = false;
+    console.log("[History View] Unmounted & Cleaned up.");
 }
 
 function setRelativeRange(hours) {
@@ -460,7 +500,7 @@ export function setDbBounds(min, max) {
     updateSliderUI();
 }
 
-export function setHistoryData(entries, isInitialLoad, isUpdate = false) { 
+export function setHistoryData(entries, isInitialLoad, isUpdate = false, startOverride = null, endOverride = null) { 
     if (isUpdate) {
         allHistoryEntries.unshift(...entries);
         if (allHistoryEntries.length > MAX_CLIENT_ENTRIES) {
@@ -478,12 +518,18 @@ export function setHistoryData(entries, isInitialLoad, isUpdate = false) {
         if (entries.length > 2000) {
              if(!isInitialLoad) console.log("Notice: The selected range returned a large number of results.");
         }
+        // Update current bounds to match request if available
+        if (startOverride) currentMinTimestamp = startOverride;
+        if (endOverride) currentMaxTimestamp = endOverride;
     }
     
     if (startDateInput) startDateInput.value = toDateTimeLocal(currentMinTimestamp);
     if (endDateInput) endDateInput.value = toDateTimeLocal(currentMaxTimestamp);
     
-    renderFilteredHistory(); 
+    // Only re-render if the view is active/mounted
+    if (isMounted) {
+        renderFilteredHistory(); 
+    }
     updateSliderUI();
     
     return { min: currentMinTimestamp, max: currentMaxTimestamp };

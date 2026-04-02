@@ -14,6 +14,8 @@
  * [UPDATED] Dynamically registers new Data Providers (like CSV parsers) across UI views when they connect.
  * [UPDATED] Integrated Vanilla JS Proxy state manager for reactive UI updates and data-driven routing.
  * [UPDATED] Implemented WebSocket Backpressure UI Feedback for high data rates.
+ * [UPDATED] Decoupled WebSocket and Routing logic into dedicated modules.
+ * [UPDATED] Integrated Unmount Lifecycle Hooks to prevent memory leaks on view changes.
  */
 
 // ---  Module Imports ---
@@ -21,6 +23,8 @@ import { state, subscribe } from './state.js';
 import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js';
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
+import { connectWebSocket, getWebSocket, sendWebSocketMessage } from './ws-client.js';
+import { initRouter, handleRoutingFromUrl } from './router.js';
 import { 
     initHmiView, 
     updateMap, 
@@ -103,6 +107,8 @@ import {
 } from './view.mapper.js';
 import { 
     initChartView, 
+    mountChartView,
+    unmountChartView,
     handleChartNodeClick, 
     updateChartSliderUI, 
     getChartedTopics,
@@ -262,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let brokerConfigs = [];
     let dataProviders = [];
     let appBasePath = '/';
-    let ws; 
     let subscribedTopicPatterns = ['#'];
     let isAppInitialized = false;
     let messageBuffer = [];
@@ -332,108 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
     darkModeToggle?.addEventListener('change', (e) => {
         state.isDarkMode = e.target.checked;
     });
-
-    // ============================================================================
-    // --- Data-Driven Routing & View Management ---
-    // ============================================================================
-
-    // 1. Subscribe to state.activeView to handle generic DOM toggling & lifecycle
-    subscribe('activeView', (newView, oldView) => {
-        if (newView === oldView) return;
-
-        // Reset DOM visually
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-
-        const targetView = document.getElementById(`${newView}-view`);
-        const targetBtn = document.getElementById(`btn-${newView}-view`);
-
-        if (targetView) targetView.classList.add('active');
-        if (targetBtn) targetBtn.classList.add('active');
-
-        trackEvent(`view_switch_${newView}`);
-
-        // Handle specific view lifecycle hooks
-        switch (newView) {
-            case 'history':
-                renderFilteredHistory();
-                break;
-            case 'admin':
-                onAdminViewShow();
-                break;
-            case 'modeler':
-                onModelerViewShow();
-                break;
-            case 'alerts':
-                onAlertsViewShow();
-                break;
-            case 'hmi':
-                onHmiViewShow();
-                refreshHmiLiveState();
-                break;
-        }
-
-        // Cleanup hooks for leaving views
-        if (oldView === 'alerts') onAlertsViewHide();
-        if (oldView === 'hmi') onHmiViewHide();
-
-        // Manage URL History API
-        const base = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
-        const newUrl = `${base}${newView}/`;
-        if (window.location.pathname !== newUrl && window.location.pathname !== newUrl.slice(0, -1)) {
-            window.history.pushState({ view: newView }, '', newUrl);
-        }
-    });
-
-    // 2. Bind all navigation buttons dynamically
-    const routeNames = ['tree', 'hmi', 'history', 'modeler', 'mapper', 'chart', 'publish', 'admin', 'alerts'];
-    routeNames.forEach(route => {
-        const btn = document.getElementById(`btn-${route}-view`);
-        if (btn) {
-            btn.addEventListener('click', () => {
-                // Safety Checks
-                if (route === 'admin' && currentUser.role !== 'admin') {
-                    console.warn("Unauthorized access to admin view.");
-                    state.activeView = 'tree';
-                    return;
-                }
-                if (route === 'modeler' && (!window.viewModelerEnabled || currentUser.role !== 'admin')) {
-                    console.warn("Unauthorized access to modeler view or view is disabled.");
-                    state.activeView = 'tree';
-                    return;
-                }
-                // Update Reactive State
-                state.activeView = route;
-            });
-        }
-    });
-
-    // 3. Handle browser back/forward buttons
-    window.addEventListener('popstate', (event) => {
-        if (event.state && event.state.view) {
-            state.activeView = event.state.view;
-        } else {
-            handleRoutingFromUrl();
-        }
-    });
-
-    function handleRoutingFromUrl() {
-        const path = window.location.pathname;
-        const normalizedBase = appBasePath.endsWith('/') ? appBasePath.slice(0, -1) : appBasePath;
-        let relativePath = path;
-        
-        if (path.startsWith(normalizedBase)) {
-            relativePath = path.substring(normalizedBase.length);
-        }
-        const cleanPath = relativePath.replace(/^\/|\/$/g, '');
-
-        // Map URL aliases
-        if (cleanPath === 'map' || cleanPath === 'svg') state.activeView = 'hmi';
-        else if (routeNames.includes(cleanPath)) state.activeView = cleanPath;
-        else state.activeView = 'tree'; // Default fallback
-    }
-
-    // ============================================================================
 
     function updateClock() {
         if (!datetimeContainer) return;
@@ -516,9 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'get-topic-history', brokerId: brokerId, topic: topic }));
-        }
+        sendWebSocketMessage({ type: 'get-topic-history', brokerId: brokerId, topic: topic });
     }
 
     function handleMainTreeCheckboxClick(event, nodeContainer, brokerId, topic) {
@@ -571,10 +472,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function requestHistoryRange(start, end, filter) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            console.log(`[App] Requesting History Range: ${new Date(start).toISOString()} -> ${new Date(end).toISOString()}`);
-            ws.send(JSON.stringify({ type: 'get-history-range', start: start, end: end, filter: filter }));
-        }
+        console.log(`[App] Requesting History Range: ${new Date(start).toISOString()} -> ${new Date(end).toISOString()}`);
+        sendWebSocketMessage({ type: 'get-history-range', start: start, end: end, filter: filter });
     }
 
     // --- WebSocket Connection & Logic ---
@@ -601,25 +500,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
             
-            console.log("Connecting WebSocket to:", wsUrl); 
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = () => finishInitialization(appConfig);
-            
-            ws.onmessage = async (event) => {
-                const dataText = event.data instanceof Blob ? await event.data.text() : event.data;
-                const message = JSON.parse(dataText);
-                
-                if (isAppInitialized) processWsMessage(message);
-                else messageBuffer.push(message);
-            };
-            
-            ws.onerror = (err) => console.error("WebSocket Error:", err);
-            ws.onclose = (event) => { 
-                console.warn(`WebSocket closed (code: ${event.code}). Reconnecting in 3s...`);
-                isAppInitialized = false; 
-                setTimeout(startApp, 3000); 
-            };
+            connectWebSocket(wsUrl, {
+                onOpen: () => finishInitialization(appConfig),
+                onMessage: (message) => {
+                    if (isAppInitialized) processWsMessage(message);
+                    else messageBuffer.push(message);
+                },
+                onError: (err) => console.error("WebSocket Error:", err),
+                onClose: (event) => {
+                    isAppInitialized = false;
+                },
+                onReconnect: () => startApp()
+            });
 
         } catch (error) {
             console.error("Failed to fetch initial app configuration:", error);
@@ -881,9 +773,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btn) btn.style.display = v.enabled ? 'block' : 'none';
         });
 
-        // Use URL to set initial state, triggering routing automatically
-        handleRoutingFromUrl();
-
         if (btnConfigView) {
             if (appConfig.viewConfigEnabled && currentUser.role === 'admin') {
                 const safeBase = appBasePath.endsWith('/') ? appBasePath : appBasePath + '/';
@@ -1051,6 +940,24 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChartExpandAll?.addEventListener('click', () => chartTree.toggleAllFolders(false));
         btnChartCollapseAll?.addEventListener('click', () => chartTree.toggleAllFolders(true));
         chartFilterInput?.addEventListener('input', () => chartTree.applyFilter(chartFilterInput.value));
+
+        const routeNames = ['tree', 'hmi', 'history', 'modeler', 'mapper', 'chart', 'publish', 'admin', 'alerts'];
+        const viewCallbacks = {
+            history: renderFilteredHistory,
+            admin: onAdminViewShow,
+            modeler: onModelerViewShow,
+            alerts: onAlertsViewShow,
+            hmi: () => {
+                onHmiViewShow();
+                refreshHmiLiveState();
+            },
+            chart: mountChartView,
+            alertsHide: onAlertsViewHide,
+            hmiHide: onHmiViewHide,
+            chartHide: unmountChartView
+        };
+        initRouter(appBasePath, routeNames, currentUser, viewCallbacks);
+        handleRoutingFromUrl(appBasePath, routeNames);
 
         isAppInitialized = true;
         messageBuffer.forEach(msg => processWsMessage(msg));

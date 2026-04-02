@@ -12,8 +12,7 @@
  * Provides an advanced, dynamic GUI to explore and edit the uns_model.json
  * according to I3X specifications. 
  * Integrates vis-network for interactive Relationship Graphs.
- * [UPDATED] Graph engine now renders custom relationships (SuppliesTo, etc.) with specific styling.
- * [UPDATED] Replaced native alerts and inline status text with centralized showToast system.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
 import { confirmModal, trackEvent, makeResizable, showToast } from './utils.js';
@@ -22,12 +21,14 @@ import { confirmModal, trackEvent, makeResizable, showToast } from './utils.js';
 let currentModel = null;
 let currentSelection = { type: null, id: null, ref: null }; 
 let isModelerInitialized = false;
+let isMounted = false; // Lifecycle flag
 let expandedNodes = new Set(); 
 let networkGraph = null; 
 
 // --- DOM Elements ---
 let treeContainer, graphContainer, btnRefresh, btnSave, statusMsg;
 let formContainer, welcomeScreen, mainContent, formTitle, formSubtitle, dynamicFields, btnDelete;
+let btnAddNamespace, btnAddType, btnAddInstance;
 
 /**
  * Robust loader for vis-network with CDN fallback.
@@ -68,6 +69,9 @@ function loadVisNetwork() {
     });
 }
 
+/**
+ * Initializes the Modeler View DOM elements (Called once).
+ */
 export async function initModelerView() {
     const container = document.getElementById('modeler-view');
     if (!container || isModelerInitialized) return;
@@ -90,6 +94,9 @@ export async function initModelerView() {
         formSubtitle = document.getElementById('modeler-form-subtitle');
         dynamicFields = document.getElementById('modeler-dynamic-fields');
         btnDelete = document.getElementById('btn-modeler-delete');
+        btnAddNamespace = document.getElementById('btn-add-namespace');
+        btnAddType = document.getElementById('btn-add-type');
+        btnAddInstance = document.getElementById('btn-add-instance');
 
         // Initialize Resizers
         makeResizable({
@@ -107,31 +114,70 @@ export async function initModelerView() {
 
         await loadVisNetwork();
 
-        // Event Listeners
-        btnRefresh.addEventListener('click', loadModel);
-        btnSave.addEventListener('click', saveModelToServer);
-        document.getElementById('btn-add-namespace').addEventListener('click', () => createNewItem('namespace'));
-        document.getElementById('btn-add-type').addEventListener('click', () => createNewItem('objectType'));
-        document.getElementById('btn-add-instance').addEventListener('click', () => createNewItem('instance'));
-        formContainer.addEventListener('submit', handleFormSubmit);
-        btnDelete.addEventListener('click', handleDeleteItem);
-
-        window.addEventListener('resize', () => {
-            if (networkGraph) networkGraph.fit();
-        });
-
         isModelerInitialized = true;
         console.log("✅ Semantic Modeler V3 (Vis-Network) Initialized");
     } catch (err) {
-        console.error("Error initializing Admin View:", err);
+        console.error("Error initializing Modeler View:", err);
         container.innerHTML = `<div style="padding:20px; color:var(--color-danger);">Error loading Modeler Interface. Check console.</div>`;
     }
 }
 
+// --- Named Event Handlers ---
+const onAddNamespace = () => createNewItem('namespace');
+const onAddType = () => createNewItem('objectType');
+const onAddInstance = () => createNewItem('instance');
+const onWindowResize = () => { if (networkGraph) networkGraph.fit(); };
+
+/**
+ * Mounts the view (attaches event listeners, loads data).
+ */
+export function mountModelerView() {
+    if (isMounted || !isModelerInitialized) return;
+
+    btnRefresh?.addEventListener('click', loadModel);
+    btnSave?.addEventListener('click', saveModelToServer);
+    btnAddNamespace?.addEventListener('click', onAddNamespace);
+    btnAddType?.addEventListener('click', onAddType);
+    btnAddInstance?.addEventListener('click', onAddInstance);
+    formContainer?.addEventListener('submit', handleFormSubmit);
+    btnDelete?.addEventListener('click', handleDeleteItem);
+    window.addEventListener('resize', onWindowResize);
+
+    loadModel();
+    isMounted = true;
+    console.log("[Modeler View] Mounted.");
+}
+
+/**
+ * Legacy wrapper for router compatibility.
+ */
 export function onModelerViewShow() {
-    if (isModelerInitialized) {
-        loadModel();
+    mountModelerView();
+}
+
+/**
+ * Unmounts the view (removes listeners, destroys vis-network).
+ */
+export function unmountModelerView() {
+    if (!isMounted) return;
+
+    // Clean up vis-network instance
+    if (networkGraph) {
+        networkGraph.destroy();
+        networkGraph = null;
     }
+
+    btnRefresh?.removeEventListener('click', loadModel);
+    btnSave?.removeEventListener('click', saveModelToServer);
+    btnAddNamespace?.removeEventListener('click', onAddNamespace);
+    btnAddType?.removeEventListener('click', onAddType);
+    btnAddInstance?.removeEventListener('click', onAddInstance);
+    formContainer?.removeEventListener('submit', handleFormSubmit);
+    btnDelete?.removeEventListener('click', handleDeleteItem);
+    window.removeEventListener('resize', onWindowResize);
+
+    isMounted = false;
+    console.log("[Modeler View] Unmounted & Cleaned up.");
 }
 
 // --- 1. Model Loading & Tree Building ---
@@ -311,7 +357,6 @@ function selectItem(type, id) {
 
 /**
  * Draws an interactive Relationship Graph using vis-network.
- * [UPDATED] Added support for custom graph relationships (SuppliesTo, etc.)
  */
 function drawRelationshipGraph() {
     if (!window.vis || !graphContainer) return;
@@ -394,7 +439,7 @@ function drawRelationshipGraph() {
             addEdge(centerId, c.elementId, 'HasChildren');
         });
 
-        // 4. [NEW] Graph Relationships
+        // 4. Graph Relationships
         if (item.relationships) {
             for (const [relType, targets] of Object.entries(item.relationships)) {
                 // Skip hierarchical keys already handled
@@ -411,7 +456,7 @@ function drawRelationshipGraph() {
             }
         }
         
-        // 5. [NEW] Find incoming relationships (Reverse Lookup)
+        // 5. Find incoming relationships (Reverse Lookup)
         currentModel.instances.forEach(other => {
             if (other.elementId === item.elementId || !other.relationships) return;
             for (const [relType, targets] of Object.entries(other.relationships)) {
@@ -674,8 +719,8 @@ async function handleDeleteItem() {
 
 function clearEditor() {
     currentSelection = { type: null, id: null, ref: null };
-    welcomeScreen.style.display = 'flex';
-    mainContent.style.display = 'none';
+    if (welcomeScreen) welcomeScreen.style.display = 'flex';
+    if (mainContent) mainContent.style.display = 'none';
     document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
     if (networkGraph) {
         networkGraph.destroy();

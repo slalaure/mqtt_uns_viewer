@@ -11,10 +11,11 @@
  * View module for the Chart tab.
  * Handles configuration, data extraction (including primitives), and rendering.
  * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
 // Import shared utilities and state
-import { state, subscribe } from './state.js';
+import { state, subscribe, unsubscribe } from './state.js';
 import { formatTimestampForLabel, trackEvent, confirmModal, showToast } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
 import { createDualTimeSlider }from './time-slider.js';
@@ -63,6 +64,7 @@ let chartSlider = null;
 let chartRefreshTimer = null; 
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
+let isMounted = false; // Lifecycle flag
 
 // Configuration for Chart
 const MAX_POINTS_PER_SERIES = 500; 
@@ -158,24 +160,53 @@ function hideChartLoader() {
     }
 }
 
+// --- Named Event Handlers (For easy removal on unmount) ---
+
+const onChartUnsavedChange = (isUnsaved) => {
+    if (isUnsaved) {
+        if (btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
+            btnChartSaveCurrent.classList.add('btn-unsaved');
+        }
+    } else {
+        if (btnChartSaveCurrent) {
+            btnChartSaveCurrent.classList.remove('btn-unsaved');
+        }
+    }
+};
+
+const onTypeSelectChange = () => { state.chartUnsaved = true; onGenerateChart(true); };
+const onConnectNullsChange = () => { state.chartUnsaved = true; onGenerateChart(true); };
+const onSmartAxisChange = () => { state.chartUnsaved = true; onGenerateChart(true); };
+const onAggSelectChange = () => { state.chartUnsaved = true; onGenerateChart(true); };
+
+const onDateChange = () => {
+    const start = chartStartDateInput.value ? new Date(chartStartDateInput.value).getTime() : 0;
+    const end = chartEndDateInput.value ? new Date(chartEndDateInput.value).getTime() : Date.now();
+    if (start && end && start < end) {
+        isChartLive = (Math.abs(end - Date.now()) < 60000);
+        currentMinTimestamp = start;
+        currentMaxTimestamp = end;
+        updateChartSliderUI(minTimestamp, maxTimestamp, false, true); 
+        triggerDataFetch();
+    }
+};
+
+const onCurrentTopicChange = (topic) => {
+    // Optional topic sync
+};
+
+const onCurrentBrokerIdChange = (brokerId) => {
+    // Optional broker sync
+};
+
+/**
+ * Initializes the Chart View DOM structure (Called once on app start).
+ */
 export function initChartView(callbacks) {
     const { displayPayload, maxSavedChartConfigs, isMultiBroker: multiBrokerState, requestRangeCallback, getHistory, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
     maxChartsLimit = maxSavedChartConfigs || 0; 
     isMultiBroker = multiBrokerState || false; 
-
-    // --- Reactive State Subscriptions ---
-    subscribe('chartUnsaved', (isUnsaved) => {
-        if (isUnsaved) {
-            if (btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
-                btnChartSaveCurrent.classList.add('btn-unsaved');
-            }
-        } else {
-            if (btnChartSaveCurrent) {
-                btnChartSaveCurrent.classList.remove('btn-unsaved');
-            }
-        }
-    });
 
     // Convert Fullscreen button to Maximize style
     if (btnChartFullscreen) {
@@ -210,10 +241,6 @@ export function initChartView(callbacks) {
             </select>
         `;
         typeGroup.parentNode.insertBefore(aggGroup, typeGroup);
-        document.getElementById('chart-aggregation-select').addEventListener('change', () => {
-            state.chartUnsaved = true;
-            onGenerateChart(true);
-        });
     }
 
     payloadViewer = createPayloadViewer({
@@ -221,19 +248,6 @@ export function initChartView(callbacks) {
         contentEl: document.getElementById('chart-payload-content'),
         isMultiBroker: false 
     });
-
-    btnChartFullscreen?.addEventListener('click', toggleChartFullscreen);
-    btnChartExportPNG?.addEventListener('click', onExportPNG);
-    btnChartExportCSV?.addEventListener('click', onExportCSV);
-    btnChartClear?.addEventListener('click', onClearAll); 
-    chartConfigSelect?.addEventListener('change', onChartConfigChange);
-    btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
-    btnChartSaveAs?.addEventListener('click', onSaveAsNew);
-    btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
-    
-    chartTypeSelect?.addEventListener('change', () => { state.chartUnsaved = true; onGenerateChart(true); });
-    chartConnectNulls?.addEventListener('change', () => { state.chartUnsaved = true; onGenerateChart(true); });
-    chartSmartAxis?.addEventListener('change', () => { state.chartUnsaved = true; onGenerateChart(true); }); 
 
     if (chartRangeButtonsContainer) {
         const createRangeBtn = (text, hours) => {
@@ -255,20 +269,6 @@ export function initChartView(callbacks) {
         chartRangeButtonsContainer.appendChild(createRangeBtn('1Y', 24*365));
         chartRangeButtonsContainer.appendChild(createRangeBtn('Full', 'FULL'));
     }
-
-    const onDateChange = () => {
-        const start = chartStartDateInput.value ? new Date(chartStartDateInput.value).getTime() : 0;
-        const end = chartEndDateInput.value ? new Date(chartEndDateInput.value).getTime() : Date.now();
-        if (start && end && start < end) {
-            isChartLive = (Math.abs(end - Date.now()) < 60000);
-            currentMinTimestamp = start;
-            currentMaxTimestamp = end;
-            updateChartSliderUI(minTimestamp, maxTimestamp, false, true); 
-            triggerDataFetch();
-        }
-    };
-    chartStartDateInput?.addEventListener('change', onDateChange);
-    chartEndDateInput?.addEventListener('change', onDateChange);
 
     if (chartHandleMin && chartHandleMax) {
         chartSlider = createDualTimeSlider({
@@ -305,6 +305,87 @@ export function initChartView(callbacks) {
     }
 
     loadChartConfig(); 
+}
+
+/**
+ * Mounts the view (attaches event listeners).
+ * Called by the router when navigating to this view.
+ */
+export function mountChartView() {
+    if (isMounted) return;
+
+    btnChartFullscreen?.addEventListener('click', toggleChartFullscreen);
+    btnChartExportPNG?.addEventListener('click', onExportPNG);
+    btnChartExportCSV?.addEventListener('click', onExportCSV);
+    btnChartClear?.addEventListener('click', onClearAll); 
+    chartConfigSelect?.addEventListener('change', onChartConfigChange);
+    btnChartSaveCurrent?.addEventListener('click', onSaveCurrent);
+    btnChartSaveAs?.addEventListener('click', onSaveAsNew);
+    btnChartDeleteConfig?.addEventListener('click', onDeleteConfig);
+    
+    chartTypeSelect?.addEventListener('change', onTypeSelectChange);
+    chartConnectNulls?.addEventListener('change', onConnectNullsChange);
+    chartSmartAxis?.addEventListener('change', onSmartAxisChange); 
+    
+    chartStartDateInput?.addEventListener('change', onDateChange);
+    chartEndDateInput?.addEventListener('change', onDateChange);
+
+    const aggSelect = document.getElementById('chart-aggregation-select');
+    aggSelect?.addEventListener('change', onAggSelectChange);
+
+    // Subscriptions
+    subscribe('chartUnsaved', onChartUnsavedChange);
+    subscribe('currentTopic', onCurrentTopicChange);
+    subscribe('currentBrokerId', onCurrentBrokerIdChange);
+
+    // If the chart needs to be drawn immediately upon mounting
+    if (chartedVariables.size > 0 && !chartInstance) {
+        onGenerateChart();
+    }
+
+    isMounted = true;
+    console.log("[Chart View] Mounted.");
+}
+
+/**
+ * Unmounts the view (removes listeners, destroys heavy objects).
+ * Called by the router when navigating away from this view.
+ */
+export function unmountChartView() {
+    if (!isMounted) return;
+
+    // Destroy Chart.js instance to free memory
+    if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+    }
+
+    btnChartFullscreen?.removeEventListener('click', toggleChartFullscreen);
+    btnChartExportPNG?.removeEventListener('click', onExportPNG);
+    btnChartExportCSV?.removeEventListener('click', onExportCSV);
+    btnChartClear?.removeEventListener('click', onClearAll); 
+    chartConfigSelect?.removeEventListener('change', onChartConfigChange);
+    btnChartSaveCurrent?.removeEventListener('click', onSaveCurrent);
+    btnChartSaveAs?.removeEventListener('click', onSaveAsNew);
+    btnChartDeleteConfig?.removeEventListener('click', onDeleteConfig);
+    
+    chartTypeSelect?.removeEventListener('change', onTypeSelectChange);
+    chartConnectNulls?.removeEventListener('change', onConnectNullsChange);
+    chartSmartAxis?.removeEventListener('change', onSmartAxisChange); 
+    
+    chartStartDateInput?.removeEventListener('change', onDateChange);
+    chartEndDateInput?.removeEventListener('change', onDateChange);
+
+    const aggSelect = document.getElementById('chart-aggregation-select');
+    aggSelect?.removeEventListener('change', onAggSelectChange);
+
+    // Clean up subscriptions
+    unsubscribe('chartUnsaved', onChartUnsavedChange);
+    unsubscribe('currentTopic', onCurrentTopicChange);
+    unsubscribe('currentBrokerId', onCurrentBrokerIdChange);
+
+    isMounted = false;
+    console.log("[Chart View] Unmounted & Cleaned up.");
 }
 
 function triggerDataFetch() {
@@ -690,8 +771,6 @@ async function processChartData() {
             const cleanPath = path.replace(/\[|\]/g, '');
             const label = `${topicParts.slice(-2).join('/')} | ${cleanPath}`;
             
-                console.log(`[Chart Debug] Variable '${label}': Found ${rawPoints.length} points.`);
-                
                 // Sort by time
             rawPoints.sort((a, b) => a.x - b.x);
             

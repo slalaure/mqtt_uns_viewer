@@ -4,6 +4,7 @@
  * HMI View Module (Formerly SVG View)
  * Handles HTML pages, dynamic A-Frame, generic HTML data binding, 
  * embedded live charts, AND Embedded SVGs with their own JS logic.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 import { formatTimestampForLabel, trackEvent, confirmModal, showToast } from './utils.js';
 import { createSingleTimeSlider } from './time-slider.js';
@@ -21,6 +22,7 @@ const hmiLabel = document.getElementById('hmi-label');
 const btnHmiFullscreen = document.getElementById('btn-hmi-fullscreen');
 const hmiView = document.getElementById('hmi-view');
 const hmiSelectDropdown = document.getElementById('hmi-select-dropdown');
+let btnDeleteHmi = null; // Dynamically created
 
 // --- Module-level State ---
 let hmiInitialStates = new Map();
@@ -31,6 +33,7 @@ let currentMaxTimestamp = 0;
 let hmiSlider = null;
 let appBasePath = '/'; 
 let isMultiBroker = false;
+let isMounted = false; // Lifecycle flag
 
 // --- Performance Optimization & Chart State ---
 let elementCache = new Map(); 
@@ -108,8 +111,42 @@ window.registerHmiBindings = window.registerSvgBindings = function(bindings) {
     console.log(`Custom HMI bindings registered. Total active scripts: ${activeBindings.length}`);
 }
 
+// --- Named Event Handlers (for clean unmounting) ---
+
+const onFullscreenChange = () => {
+    if (btnHmiFullscreen) {
+        if (document.fullscreenElement === hmiView) {
+            btnHmiFullscreen.innerHTML = '✖ Minimize';
+        } else {
+            btnHmiFullscreen.innerHTML = '⛶ Maximize';
+        }
+    }
+};
+
+const onHistoryToggleChange = (e) => {
+    isHmiHistoryMode = e.target.checked;
+    if (hmiTimelineSlider) hmiTimelineSlider.style.display = isHmiHistoryMode ? 'flex' : 'none';
+    trackEvent(isHmiHistoryMode ? 'hmi_history_on' : 'hmi_history_off');
+    if (isHmiHistoryMode) {
+        const replayTime = parseFloat(hmiHandle.dataset.timestamp || currentMaxTimestamp);
+        fetchLastKnownState(replayTime);
+    } else {
+        fetchLastKnownState(Date.now());
+    }
+    if (hmiSlider) {
+        hmiSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
+    }
+};
+
+/**
+ * Unmounts the HMI view (Removes listeners, pauses logic).
+ * Aliased to onHmiViewHide to maintain router compatibility.
+ */
 export function onHmiViewHide() {
-    console.log("[HMI] View hidden. Suspending lifecycle context...");
+    if (!isMounted) return;
+
+    console.log("[HMI View] View hidden. Suspending lifecycle context & unmounting...");
+    
     if (currentHmiContext) {
         currentHmiContext.destroy();
         currentHmiContext = null;
@@ -117,10 +154,33 @@ export function onHmiViewHide() {
     // Also clear the update queue and animation frame request to stop core updates
     updateQueue.clear();
     animationFrameRequested = false;
+
+    // Remove DOM listeners
+    btnHmiFullscreen?.removeEventListener('click', toggleFullscreen);
+    document.removeEventListener('fullscreenchange', onFullscreenChange);
+    hmiSelectDropdown?.removeEventListener('change', onHmiFileChange);
+    hmiHistoryToggle?.removeEventListener('change', onHistoryToggleChange);
+    btnDeleteHmi?.removeEventListener('click', deleteCurrentHmi);
+
+    isMounted = false;
 }
 
+/**
+ * Mounts the HMI view (Attaches listeners, resumes logic).
+ * Aliased to onHmiViewShow to maintain router compatibility.
+ */
 export function onHmiViewShow() {
-    console.log("[HMI] View shown. Resuming HMI lifecycle...");
+    if (isMounted) return;
+
+    console.log("[HMI View] View shown. Resuming HMI lifecycle & mounting...");
+    
+    // Attach DOM listeners
+    btnHmiFullscreen?.addEventListener('click', toggleFullscreen);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    hmiSelectDropdown?.addEventListener('change', onHmiFileChange);
+    hmiHistoryToggle?.addEventListener('change', onHistoryToggleChange);
+    btnDeleteHmi?.addEventListener('click', deleteCurrentHmi);
+
     if (activeBindings.length > 0 && hmiContent) {
         // If we have active bindings, re-initialize them with a fresh context
         if (currentHmiContext) currentHmiContext.destroy();
@@ -133,8 +193,13 @@ export function onHmiViewShow() {
             } catch(e) { console.error(e); }
         });
     }
+
+    isMounted = true;
 }
 
+/**
+ * Initializes the HMI View DOM Structure (Called once).
+ */
 export function initHmiView(appConfig) {
     appBasePath = appConfig.basePath; 
     isMultiBroker = appConfig.isMultiBroker; 
@@ -146,33 +211,6 @@ export function initHmiView(appConfig) {
     }
 
     refreshHmiList(appConfig.hmiFilePath || appConfig.svgFilePath);
-    
-    btnHmiFullscreen?.addEventListener('click', toggleFullscreen);
-    document.addEventListener('fullscreenchange', () => {
-        if (btnHmiFullscreen) {
-            if (document.fullscreenElement === hmiView) {
-                btnHmiFullscreen.innerHTML = '✖ Minimize';
-            } else {
-                btnHmiFullscreen.innerHTML = '⛶ Maximize';
-            }
-        }
-    });
-
-    hmiSelectDropdown?.addEventListener('change', onHmiFileChange);
-    hmiHistoryToggle?.addEventListener('change', (e) => {
-        isHmiHistoryMode = e.target.checked;
-        if (hmiTimelineSlider) hmiTimelineSlider.style.display = isHmiHistoryMode ? 'flex' : 'none';
-        trackEvent(isHmiHistoryMode ? 'hmi_history_on' : 'hmi_history_off');
-        if (isHmiHistoryMode) {
-            const replayTime = parseFloat(hmiHandle.dataset.timestamp || currentMaxTimestamp);
-            fetchLastKnownState(replayTime);
-        } else {
-            fetchLastKnownState(Date.now());
-        }
-        if (hmiSlider) {
-            hmiSlider.updateUI(currentMinTimestamp, currentMaxTimestamp, currentMaxTimestamp);
-        }
-    });
 
     if (hmiHandle) {
         hmiSlider = createSingleTimeSlider({
@@ -191,14 +229,13 @@ export function initHmiView(appConfig) {
 
     const controlsContainer = document.querySelector('.hmi-view-controls') || document.querySelector('.map-view-controls');
     if (controlsContainer && !document.getElementById('btn-delete-hmi')) {
-        const btnDelete = document.createElement('button');
-        btnDelete.id = 'btn-delete-hmi';
-        btnDelete.className = 'tool-button button-danger'; 
-        btnDelete.textContent = 'Delete'; 
-        btnDelete.title = "Delete current view";
-        btnDelete.style.marginLeft = "10px";
-        btnDelete.onclick = deleteCurrentHmi;
-        controlsContainer.insertBefore(btnDelete, btnHmiFullscreen);
+        btnDeleteHmi = document.createElement('button');
+        btnDeleteHmi.id = 'btn-delete-hmi';
+        btnDeleteHmi.className = 'tool-button button-danger'; 
+        btnDeleteHmi.textContent = 'Delete'; 
+        btnDeleteHmi.title = "Delete current view";
+        btnDeleteHmi.style.marginLeft = "10px";
+        controlsContainer.insertBefore(btnDeleteHmi, btnHmiFullscreen);
     }
 }
 

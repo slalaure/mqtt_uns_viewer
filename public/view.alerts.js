@@ -11,10 +11,11 @@
  * View Module for Alerts Management.
  * [UPDATED] Protocol-agnostic data providers support.
  * [UPDATED] Subscribes to Proxy-based reactive state for unsaved tracking and theming.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
 // --- Imports ---
-import { state, subscribe } from './state.js';
+import { state, subscribe, unsubscribe } from './state.js';
 import { trackEvent, confirmModal, showToast } from './utils.js';
 
 // --- DOM Elements ---
@@ -39,9 +40,63 @@ let isViewInitialized = false;
 let allActiveAlerts = []; 
 let isMultiProvider = false;
 let availableProviders = [];
+let isMounted = false;
+
+// --- Named Event Handlers (For clean unmounting) ---
+const onSubTabClick = (e) => {
+    const btn = e.currentTarget;
+    container.querySelectorAll('.sub-tab-button').forEach(b => b.classList.remove('active'));
+    container.querySelectorAll('.alerts-content-container').forEach(c => c.classList.remove('active'));
+    
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+
+    if (btn.dataset.target === 'active-alerts-panel') loadActiveAlerts();
+    if (btn.dataset.target === 'alert-rules-panel') loadRules();
+};
+
+const onHideResolvedChange = () => renderActiveAlerts();
+const onSearchInput = () => renderActiveAlerts();
+const onProviderChange = () => renderActiveAlerts();
+const onFullscreenClick = () => toggleFullscreen();
+const onFullscreenChange = () => {
+    const panel = document.getElementById('active-alerts-panel');
+    if (btnFullscreen) {
+        if (document.fullscreenElement === panel) {
+            btnFullscreen.innerHTML = '✖ Minimize';
+        } else {
+            btnFullscreen.innerHTML = '⛶ Maximize';
+            panel?.classList.remove('fullscreen-mode');
+        }
+    }
+};
+const onNewRuleClick = () => showRuleEditor();
+const onCancelRuleClick = () => hideRuleEditor();
+const onJsHelpClick = () => { if (helpModal) helpModal.style.display = 'flex'; };
+const onCloseHelpClick = () => { if (helpModal) helpModal.style.display = 'none'; };
+const onCloseAnalysisClick = () => { if (analysisModal) analysisModal.style.display = 'none'; };
+const onRuleFormSubmit = async (e) => {
+    e.preventDefault();
+    await saveRule();
+};
+const onRuleFormInput = () => { state.ruleUnsaved = true; };
+
+const onDarkModeChange = (isDark) => {
+    if (aceEditor) {
+        aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+    }
+};
+const onRuleUnsavedChange = (isUnsaved) => {
+    const btnSave = ruleForm?.querySelector('button[type="submit"]');
+    if (isUnsaved) {
+        btnSave?.classList.add('btn-unsaved');
+    } else {
+        btnSave?.classList.remove('btn-unsaved');
+    }
+};
 
 /**
- * Initialize the Alerts View.
+ * Initializes the Alerts View DOM structure (Called once).
  */
 export async function initAlertsView(options = {}) {
     isMultiProvider = options.isMultiBroker || false;
@@ -82,39 +137,6 @@ export async function initAlertsView(options = {}) {
         btnFullscreen.style.fontSize = '0.85em';
     }
 
-    // --- Reactive State Subscriptions ---
-    subscribe('isDarkMode', (isDark) => {
-        if (aceEditor) {
-            aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-        }
-    });
-
-    subscribe('ruleUnsaved', (isUnsaved) => {
-        const btnSave = ruleForm?.querySelector('button[type="submit"]');
-        if (isUnsaved) {
-            btnSave?.classList.add('btn-unsaved');
-        } else {
-            btnSave?.classList.remove('btn-unsaved');
-        }
-    });
-
-    // --- Event Listeners ---
-    container.querySelectorAll('.sub-tab-button').forEach(btn => {
-        btn.addEventListener('click', () => {
-            container.querySelectorAll('.sub-tab-button').forEach(b => b.classList.remove('active'));
-            container.querySelectorAll('.alerts-content-container').forEach(c => c.classList.remove('active'));
-            
-            btn.classList.add('active');
-            document.getElementById(btn.dataset.target).classList.add('active');
-
-            if (btn.dataset.target === 'active-alerts-panel') loadActiveAlerts();
-            if (btn.dataset.target === 'alert-rules-panel') loadRules();
-        });
-    });
-
-    document.getElementById('chk-hide-resolved').addEventListener('change', renderActiveAlerts);
-    searchInput?.addEventListener('input', renderActiveAlerts);
-
     if (isMultiProvider && providerFilterSelect) {
         providerFilterSelect.style.display = 'block';
         availableProviders.forEach(p => {
@@ -124,55 +146,49 @@ export async function initAlertsView(options = {}) {
             opt.textContent = `${p.id} ${typeLabel}`;
             providerFilterSelect.appendChild(opt);
         });
-        providerFilterSelect.addEventListener('change', renderActiveAlerts);
     }
 
-    // Fullscreen
-    btnFullscreen?.addEventListener('click', toggleFullscreen);
+    isViewInitialized = true;
+    console.log("✅ Alerts View Initialized");
+}
+
+/**
+ * Mounts the view (attaches event listeners, initializes Ace Editor).
+ */
+export function mountAlertsView() {
+    if (isMounted || !isViewInitialized) return;
+
+    container.querySelectorAll('.sub-tab-button').forEach(btn => btn.addEventListener('click', onSubTabClick));
+    document.getElementById('chk-hide-resolved')?.addEventListener('change', onHideResolvedChange);
+    searchInput?.addEventListener('input', onSearchInput);
+    providerFilterSelect?.addEventListener('change', onProviderChange);
+
+    btnFullscreen?.addEventListener('click', onFullscreenClick);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    btnNewRule?.addEventListener('click', onNewRuleClick);
+    document.getElementById('btn-cancel-rule')?.addEventListener('click', onCancelRuleClick);
     
-    // Track native fullscreen changes (sync button state on ESC)
-    document.addEventListener('fullscreenchange', () => {
-        const panel = document.getElementById('active-alerts-panel');
-        if (btnFullscreen) {
-            if (document.fullscreenElement === panel) {
-                btnFullscreen.innerHTML = '✖ Minimize';
-            } else {
-                btnFullscreen.innerHTML = '⛶ Maximize';
-                panel?.classList.remove('fullscreen-mode');
-            }
-        }
-    });
-
-    // Rule & Modal Controls
-    btnNewRule.addEventListener('click', () => showRuleEditor());
-    document.getElementById('btn-cancel-rule').addEventListener('click', hideRuleEditor);
+    document.getElementById('btn-js-help')?.addEventListener('click', onJsHelpClick);
+    document.getElementById('btn-close-help')?.addEventListener('click', onCloseHelpClick);
+    document.getElementById('btn-close-help-2')?.addEventListener('click', onCloseHelpClick);
     
-    document.getElementById('btn-js-help').addEventListener('click', () => helpModal.style.display = 'flex');
-    document.getElementById('btn-close-help').addEventListener('click', () => helpModal.style.display = 'none');
-    document.getElementById('btn-close-help-2').addEventListener('click', () => helpModal.style.display = 'none');
-    
-    document.getElementById('btn-close-analysis').addEventListener('click', () => analysisModal.style.display = 'none');
-    document.getElementById('btn-close-analysis-2').addEventListener('click', () => analysisModal.style.display = 'none');
+    document.getElementById('btn-close-analysis')?.addEventListener('click', onCloseAnalysisClick);
+    document.getElementById('btn-close-analysis-2')?.addEventListener('click', onCloseAnalysisClick);
 
-    ruleForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveRule();
-    });
+    ruleForm?.addEventListener('submit', onRuleFormSubmit);
+    ruleForm?.addEventListener('input', onRuleFormInput);
 
-    // Unsaved Changes Tracking
-    ruleForm.addEventListener('input', () => { state.ruleUnsaved = true; });
+    subscribe('isDarkMode', onDarkModeChange);
+    subscribe('ruleUnsaved', onRuleUnsavedChange);
 
-    // --- Init Ace ---
-    if (window.ace) {
+    if (window.ace && !aceEditor) {
         aceEditor = ace.edit("rule-condition-editor");
         aceEditor.setTheme(state.isDarkMode ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
         aceEditor.session.setMode("ace/mode/javascript");
         aceEditor.setValue("return msg.payload.value > 50;", -1);
         aceEditor.session.on('change', () => { state.ruleUnsaved = true; });
     }
-
-    isViewInitialized = true;
-    console.log("✅ Alerts View Initialized");
 
     if (container.classList.contains('active')) {
         const activeSubTab = container.querySelector('.sub-tab-button.active');
@@ -182,19 +198,57 @@ export async function initAlertsView(options = {}) {
             loadActiveAlerts();
         }
     }
+
+    isMounted = true;
+    console.log("[Alerts View] Mounted.");
 }
 
-// --- Lifecycle ---
-export function onAlertsViewShow() {
-    if (isViewInitialized) {
-        loadActiveAlerts();
+/**
+ * Unmounts the view (removes event listeners, destroys Ace Editor).
+ */
+export function unmountAlertsView() {
+    if (!isMounted) return;
+
+    if (aceEditor) {
+        aceEditor.destroy();
+        aceEditor = null;
     }
+
+    container.querySelectorAll('.sub-tab-button').forEach(btn => btn.removeEventListener('click', onSubTabClick));
+    document.getElementById('chk-hide-resolved')?.removeEventListener('change', onHideResolvedChange);
+    searchInput?.removeEventListener('input', onSearchInput);
+    providerFilterSelect?.removeEventListener('change', onProviderChange);
+
+    btnFullscreen?.removeEventListener('click', onFullscreenClick);
+    document.removeEventListener('fullscreenchange', onFullscreenChange);
+
+    btnNewRule?.removeEventListener('click', onNewRuleClick);
+    document.getElementById('btn-cancel-rule')?.removeEventListener('click', onCancelRuleClick);
+    
+    document.getElementById('btn-js-help')?.removeEventListener('click', onJsHelpClick);
+    document.getElementById('btn-close-help')?.removeEventListener('click', onCloseHelpClick);
+    document.getElementById('btn-close-help-2')?.removeEventListener('click', onCloseHelpClick);
+    
+    document.getElementById('btn-close-analysis')?.removeEventListener('click', onCloseAnalysisClick);
+    document.getElementById('btn-close-analysis-2')?.removeEventListener('click', onCloseAnalysisClick);
+
+    ruleForm?.removeEventListener('submit', onRuleFormSubmit);
+    ruleForm?.removeEventListener('input', onRuleFormInput);
+
+    unsubscribe('isDarkMode', onDarkModeChange);
+    unsubscribe('ruleUnsaved', onRuleUnsavedChange);
+
+    isMounted = false;
+    console.log("[Alerts View] Unmounted & Cleaned up.");
 }
 
-export function onAlertsViewHide() { }
+// Aliases for router compatibility
+export const onAlertsViewShow = mountAlertsView;
+export const onAlertsViewHide = unmountAlertsView;
+
 
 export function refreshAlerts() {
-    if (isViewInitialized && container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
+    if (isMounted && container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
         loadActiveAlerts();
     }
 }

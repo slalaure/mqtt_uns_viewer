@@ -13,6 +13,7 @@
  * Optimized for Chrome "Google" Voices & Safari compatibility.
  * [UPDATED] Uses Proxy-based state manager to inject current UI context (topic/broker) into AI prompts.
  * [UPDATED] Integrated showToast system to replace native alerts for camera/mic issues.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 import { state } from './state.js';
 import { trackEvent, confirmModal, showToast } from './utils.js';
@@ -50,6 +51,7 @@ let isProcessing = false;
 let isWidgetOpen = false;
 let pendingAttachment = null;
 let currentSessionId = 'default';
+let isMounted = false;
 
 // --- Storage & Path State ---
 let appBasePath = ''; // Store base path for API calls
@@ -76,10 +78,45 @@ let pendingApproval = null; // Store pending approval chunk
 // --- Deduplication Set ---
 let processedChunkIds = new Set();
 
+// --- Named Event Handlers ---
+const onFabClick = () => toggleChatWidget(true);
+const onMinimizeClick = () => toggleChatWidget(false);
+const onSendClick = () => sendMessage(false);
+const onStopClick = () => stopGeneration();
+const onInputKeydown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage(false);
+    }
+    autoResizeInput();
+};
+const onClearClick = async () => {
+    const isConfirmed = await confirmModal('Delete Session', 'Are you sure you want to delete this chat session?', 'Delete', true);
+    if (isConfirmed) {
+        await deleteSession(currentSessionId);
+        const remaining = await loadSessionsList();
+        if (remaining.length > 0) {
+            switchSession(remaining[0].id);
+        } else {
+            createNewSession();
+        }
+    }
+};
+const onFullscreenChange = () => {
+    const fsElement = document.fullscreenElement;
+    if (fsElement && fsElement !== document.body) {
+        fsElement.appendChild(chatContainer);
+        if (fabButton) fsElement.appendChild(fabButton);
+        if (cameraModal) fsElement.appendChild(cameraModal);
+    } else {
+        document.body.appendChild(chatContainer);
+        if (fabButton) document.body.appendChild(fabButton);
+        if (cameraModal) document.body.appendChild(cameraModal);
+    }
+};
+
 /**
- * Initializes the Chat View.
- * @param {string} basePath - The base path of the application.
- * @param {function} onFileCreated - Optional callback when AI creates a file.
+ * Initializes the Chat View (Called once).
  */
 export function initChatView(basePath, onFileCreated) {
     // 1. Store and normalize base path for API calls
@@ -117,47 +154,52 @@ export function initChatView(basePath, onFileCreated) {
         // Chrome fires this when voices are ready
         window.speechSynthesis.onvoiceschanged = loadVoices;
     }
+}
 
-    fabButton?.addEventListener('click', () => toggleChatWidget(true));
-    btnMinimize?.addEventListener('click', () => toggleChatWidget(false));
-    btnSend?.addEventListener('click', () => sendMessage(false));
-    btnStop?.addEventListener('click', stopGeneration);
+/**
+ * Mounts the view (attaches event listeners).
+ */
+export function mountChatView() {
+    if (isMounted) return;
+    
+    fabButton?.addEventListener('click', onFabClick);
+    btnMinimize?.addEventListener('click', onMinimizeClick);
+    btnSend?.addEventListener('click', onSendClick);
+    btnStop?.addEventListener('click', onStopClick);
+    chatInput?.addEventListener('keydown', onInputKeydown);
+    btnClear?.addEventListener('click', onClearClick);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
 
-    chatInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage(false);
-        }
-        autoResizeInput();
-    });
+    isMounted = true;
+    console.log("[Chat View] Mounted.");
+}
 
-    btnClear?.addEventListener('click', async () => {
-        const isConfirmed = await confirmModal('Delete Session', 'Are you sure you want to delete this chat session?', 'Delete', true);
-        if (isConfirmed) {
-            await deleteSession(currentSessionId);
-            const remaining = await loadSessionsList();
-            if (remaining.length > 0) {
-                switchSession(remaining[0].id);
-            } else {
-                createNewSession();
-            }
-        }
-    });
+/**
+ * Unmounts the view (removes event listeners and cleans up APIs).
+ */
+export function unmountChatView() {
+    if (!isMounted) return;
 
-    // --- Fullscreen Support ---
-    // Move chat widget inside the fullscreen element so it remains visible
-    document.addEventListener('fullscreenchange', () => {
-        const fsElement = document.fullscreenElement;
-        if (fsElement && fsElement !== document.body) {
-            fsElement.appendChild(chatContainer);
-            if (fabButton) fsElement.appendChild(fabButton);
-            if (cameraModal) fsElement.appendChild(cameraModal);
-        } else {
-            document.body.appendChild(chatContainer);
-            if (fabButton) document.body.appendChild(fabButton);
-            if (cameraModal) document.body.appendChild(cameraModal);
-        }
-    });
+    fabButton?.removeEventListener('click', onFabClick);
+    btnMinimize?.removeEventListener('click', onMinimizeClick);
+    btnSend?.removeEventListener('click', onSendClick);
+    btnStop?.removeEventListener('click', onStopClick);
+    chatInput?.removeEventListener('keydown', onInputKeydown);
+    btnClear?.removeEventListener('click', onClearClick);
+    document.removeEventListener('fullscreenchange', onFullscreenChange);
+
+    // Stop active speech recognition or synthesis
+    if (recognition && isListening) {
+        userWantMicActive = false;
+        try { recognition.stop(); } catch(e){}
+    }
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+    closeCamera(); // Ensure camera is released
+
+    isMounted = false;
+    console.log("[Chat View] Unmounted & Cleaned up.");
 }
 
 /**
@@ -604,7 +646,11 @@ export function toggleChatWidget(show) {
     isWidgetOpen = show;
     chatContainer.classList.toggle('active', show);
     fabButton.style.display = show ? 'none' : 'flex';
-    if(show) setTimeout(() => { scrollToBottom(); chatInput.focus(); }, 300);
+    if(show) {
+        // Mount logic (if called from external button)
+        if (!isMounted) mountChatView();
+        setTimeout(() => { scrollToBottom(); chatInput.focus(); }, 300);
+    }
 }
 
 // --- History Persistence ---

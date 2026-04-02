@@ -13,9 +13,10 @@
  * [UPDATED] Protocol-agnostic data providers support (MQTT, OPC UA, etc.).
  * [UPDATED] Dynamic injection of new Data Providers (like CSV streams).
  * [UPDATED] Subscribes to Proxy-based reactive state for auto-filling and theming.
+ * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
-import { state, subscribe } from './state.js';
+import { state, subscribe, unsubscribe } from './state.js';
 import { trackEvent, mqttPatternToRegex, showToast } from './utils.js'; 
 
 // --- DOM Element Querying ---
@@ -39,6 +40,7 @@ let simControlsContainer = null;
 let providerSelectElement = null; 
 let isMultiProvider = false; 
 let availableProviders = []; // Store full provider configs (MQTT + others)
+let isMounted = false; // Lifecycle flag
 
 // --- Payload Templates ---
 const PAYLOAD_TEMPLATES = {
@@ -59,8 +61,38 @@ const PAYLOAD_TEMPLATES = {
     }, null, 2)
 };
 
+// --- Named Event Handlers (For clean unmounting) ---
+const onFormatSelectChange = () => onFormatChange();
+const onTopicInput = () => validatePublishPermissions();
+const onProviderSelectChange = () => validatePublishPermissions();
+
+const onDarkModeChange = (isDark) => {
+    isDarkTheme = isDark;
+    if (aceEditor) {
+        aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+    }
+};
+
+const onCurrentTopicChange = (topic) => {
+    // Only auto-fill if we aren't actively modifying the publish view
+    if (topic && publishTopicInput && state.activeView !== 'publish') {
+        publishTopicInput.value = topic;
+        validatePublishPermissions();
+    }
+};
+
+const onCurrentBrokerIdChange = (brokerId) => {
+    if (brokerId && providerSelectElement && state.activeView !== 'publish') {
+        const exists = Array.from(providerSelectElement.options).some(opt => opt.value === brokerId);
+        if (exists) {
+            providerSelectElement.value = brokerId;
+            validatePublishPermissions();
+        }
+    }
+};
+
 /**
- * Initializes the Publish View functionality.
+ * Initializes the Publish View configuration (Called once on app start).
  * @param {object} options
  * @param {string[]} options.subscribedTopics - List of subscribed topic patterns (fallback).
  * @param {HTMLElement} options.simulatorListContainer - The container for dynamic sim controls.
@@ -77,34 +109,9 @@ export function initPublishView(options) {
     const pConfigs = options.dataProviders || [];
     availableProviders = [...bConfigs, ...pConfigs];
 
-    if (payloadEditorDiv) {
-        // --- Initialize Ace Editor ---
-        aceEditor = ace.edit(payloadEditorDiv);
-        aceEditor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-        aceEditor.session.setMode('ace/mode/json'); // Default to JSON
-        aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); 
-        aceEditor.setOptions({
-            fontSize: "14px",
-            fontFamily: "monospace",
-            enableBasicAutocompletion: true, 
-            enableLiveAutocompletion: true,  
-            enableSnippets: true,            
-            useWorker: true
-        });
-
-        // --- Add Event Listeners ---
-        publishForm.addEventListener('submit', onPublishSubmit);
-        publishFormatSelect.addEventListener('change', onFormatChange);
-        
-        // Live validation on topic input
-        publishTopicInput.addEventListener('input', () => {
-            validatePublishPermissions();
-        });
-    }
-
-    // ---  Multi-Provider Selector ---
+    // ---  Multi-Provider Selector (Build DOM once) ---
     if (isMultiProvider && availableProviders.length > 0) {
-        const firstFormGroup = publishForm.querySelector('.form-group');
+        const firstFormGroup = publishForm?.querySelector('.form-group');
         
         const providerGroup = document.createElement('div');
         providerGroup.className = 'form-group';
@@ -135,21 +142,20 @@ export function initPublishView(options) {
             providerSelectElement.appendChild(option);
         });
 
-        // Re-validate when provider changes
-        providerSelectElement.addEventListener('change', validatePublishPermissions);
-
         providerGroup.appendChild(label);
         providerGroup.appendChild(providerSelectElement);
 
-        if (firstFormGroup) {
-            publishForm.insertBefore(providerGroup, firstFormGroup);
-        } else {
-            publishForm.prepend(providerGroup);
+        if (publishForm) {
+            if (firstFormGroup) {
+                publishForm.insertBefore(providerGroup, firstFormGroup);
+            } else {
+                publishForm.prepend(providerGroup);
+            }
         }
     }
 
     // --- Populate Topic Datalist ---
-    if (options.subscribedTopics) {
+    if (options.subscribedTopics && publishTopicInput) {
         const datalist = document.createElement('datalist');
         datalist.id = 'subscribed-topics-list';
         options.subscribedTopics.forEach(topic => {
@@ -160,35 +166,70 @@ export function initPublishView(options) {
         document.body.appendChild(datalist); 
         publishTopicInput.setAttribute('list', datalist.id);
     }
+}
+
+/**
+ * Mounts the view (attaches event listeners, initializes heavy components).
+ */
+export function mountPublishView() {
+    if (isMounted) return;
+
+    if (payloadEditorDiv && !aceEditor) {
+        // --- Initialize Ace Editor ---
+        aceEditor = ace.edit(payloadEditorDiv);
+        aceEditor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
+        aceEditor.session.setMode('ace/mode/json'); // Default to JSON
+        aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); 
+        aceEditor.setOptions({
+            fontSize: "14px",
+            fontFamily: "monospace",
+            enableBasicAutocompletion: true, 
+            enableLiveAutocompletion: true,  
+            enableSnippets: true,            
+            useWorker: true
+        });
+    }
+
+    // --- Add Event Listeners ---
+    publishForm?.addEventListener('submit', onPublishSubmit);
+    publishFormatSelect?.addEventListener('change', onFormatSelectChange);
+    publishTopicInput?.addEventListener('input', onTopicInput);
+    providerSelectElement?.addEventListener('change', onProviderSelectChange);
 
     // --- Reactive State Subscriptions ---
-    subscribe('isDarkMode', (isDark) => {
-        isDarkTheme = isDark;
-        if (aceEditor) {
-            aceEditor.setTheme(isDark ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-        }
-    });
-
-    subscribe('currentTopic', (topic) => {
-        // Only auto-fill if we aren't actively modifying the publish view
-        if (topic && publishTopicInput && state.activeView !== 'publish') {
-            publishTopicInput.value = topic;
-            validatePublishPermissions();
-        }
-    });
-
-    subscribe('currentBrokerId', (brokerId) => {
-        if (brokerId && providerSelectElement && state.activeView !== 'publish') {
-            const exists = Array.from(providerSelectElement.options).some(opt => opt.value === brokerId);
-            if (exists) {
-                providerSelectElement.value = brokerId;
-                validatePublishPermissions();
-            }
-        }
-    });
+    subscribe('isDarkMode', onDarkModeChange);
+    subscribe('currentTopic', onCurrentTopicChange);
+    subscribe('currentBrokerId', onCurrentBrokerIdChange);
 
     // Initial validation run
     validatePublishPermissions();
+
+    isMounted = true;
+    console.log("[Publish View] Mounted.");
+}
+
+/**
+ * Unmounts the view (removes listeners, destroys Ace editor to free memory).
+ */
+export function unmountPublishView() {
+    if (!isMounted) return;
+
+    if (aceEditor) {
+        aceEditor.destroy();
+        aceEditor = null;
+    }
+
+    publishForm?.removeEventListener('submit', onPublishSubmit);
+    publishFormatSelect?.removeEventListener('change', onFormatSelectChange);
+    publishTopicInput?.removeEventListener('input', onTopicInput);
+    providerSelectElement?.removeEventListener('change', onProviderSelectChange);
+
+    unsubscribe('isDarkMode', onDarkModeChange);
+    unsubscribe('currentTopic', onCurrentTopicChange);
+    unsubscribe('currentBrokerId', onCurrentBrokerIdChange);
+
+    isMounted = false;
+    console.log("[Publish View] Unmounted & Cleaned up.");
 }
 
 /**
@@ -283,6 +324,8 @@ function validatePublishPermissions() {
  */
 function onFormatChange() {
     const format = publishFormatSelect.value;
+    if (!aceEditor) return;
+    
     if (format === 'json' || format === 'sparkplugb') {
         aceEditor.session.setMode('ace/mode/json');
     } else {
@@ -301,7 +344,7 @@ async function onPublishSubmit(event) {
     trackEvent('publish_manual_submit'); 
 
     const topic = publishTopicInput.value.trim(); 
-    const payload = aceEditor.getValue();
+    const payload = aceEditor ? aceEditor.getValue() : '';
     const format = publishFormatSelect.value;
     const qos = parseInt(publishQosSelect.value, 10);
     const retain = publishRetainCheckbox.checked;
