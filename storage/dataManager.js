@@ -15,7 +15,7 @@
  * away the underlying storage, fanning out messages to one or more
  * repositories (e.g., DuckDB, TimescaleDB).
  * [UPDATED] Uses camelCase repository filenames.
- * [UPDATED] stop() is now async to properly await TimescaleDB flush.
+ * [UPDATED] Refactored to fully abstract repositories into a dynamic registry for easier testing and extension.
  */
 // Import repository modules
 const duckDbRepo = require('./duckdbRepository');
@@ -25,7 +25,7 @@ const dlqManager = require('./dlqManager');
 // --- Module-level State ---
 let logger = null;
 let config = null;
-let isTimescaleEnabled = false;
+let activeRepositories = [];
 
 /**
  * Initializes the Data Manager and all configured repositories.
@@ -42,46 +42,76 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
     // 0. Initialize the DLQ (Dead Letter Queue) manager
     dlqManager.init(appLogger, appConfig);
 
+    // Clear any previously registered repos (useful for testing re-initialization)
+    activeRepositories = [];
+
     // 1. Initialize the DuckDB repository (always enabled for the UI)
     // We pass the active DB connection to it.
     duckDbRepo.init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine, dlqManager);
+    registerRepository(duckDbRepo);
 
     // 2. Check and initialize the perennial repository (e.g., Timescale)
-    isTimescaleEnabled = config.PERENNIAL_DRIVER === 'timescale';
-    if (isTimescaleEnabled) {
+    if (config.PERENNIAL_DRIVER === 'timescale') {
         logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
         timescaleRepo.init(appLogger, appConfig, dlqManager);
+        registerRepository(timescaleRepo);
     } else {
-        logger.info("Perennial storage driver is set to 'none'. Only writing to DuckDB.");
+        logger.info(`Perennial storage driver is set to '${config.PERENNIAL_DRIVER || 'none'}'. Only writing to default repositories.`);
     }
 
     logger.info("✅ Data Manager initialized.");
 }
 
 /**
+ * Registers a new storage repository dynamically.
+ * @param {object} repo - The repository module (must expose at least a push() method).
+ */
+function registerRepository(repo) {
+    if (repo && typeof repo.push === 'function') {
+        activeRepositories.push(repo);
+    } else if (logger) {
+        logger.warn("Attempted to register an invalid repository. It must implement a push() method.");
+    }
+}
+
+/**
+ * Clears all active repositories. Useful for teardown in unit tests.
+ */
+function clearRepositories() {
+    activeRepositories = [];
+}
+
+/**
  * Inserts a message into all configured storage repositories.
- * This is a non-blocking, "fire-and-forget" function.
+ * This is a non-blocking, "fire-and-forget" function fanning out to the registry.
  * @param {object} message - The message object from mqtt-handler.
  */
 function insertMessage(message) {
-    // 1. Always push to DuckDB for the UI
-    duckDbRepo.push(message);
-
-    // 2. Push to perennial storage if enabled
-    if (isTimescaleEnabled) {
-        timescaleRepo.push(message);
+    for (const repo of activeRepositories) {
+        try {
+            repo.push(message);
+        } catch (err) {
+            if (logger) logger.error({ err, repoName: repo.name || 'unknown' }, "Error pushing message to repository.");
+        }
     }
 }
 
 /**
  * Signals all repositories to stop their batch timers and process remaining queues.
+ * @returns {Promise<void>}
  */
 async function stop() {
     logger.info("Stopping all repository batch processors...");
-    duckDbRepo.stop(); // DuckDB processDbQueue is synchronous
-    if (isTimescaleEnabled) {
-        await timescaleRepo.stop(); // TimescaleDB process is async, must be awaited
-    }
+    const stopPromises = activeRepositories.map(repo => {
+        if (typeof repo.stop === 'function') {
+            const result = repo.stop();
+            // Handle both sync and async stop methods gracefully
+            return result instanceof Promise ? result : Promise.resolve(result);
+        }
+        return Promise.resolve();
+    });
+
+    await Promise.all(stopPromises);
 }
 
 /**
@@ -91,21 +121,17 @@ async function stop() {
 async function close() {
     logger.info("Closing all database connections...");
 
-    // Create promises for each closing operation
-    const duckDbClosePromise = new Promise((resolve) => {
-        duckDbRepo.close(resolve);
+    const closePromises = activeRepositories.map(repo => {
+        return new Promise((resolve) => {
+            if (typeof repo.close === 'function') {
+                repo.close(resolve);
+            } else {
+                resolve(); // Resolve immediately if the repo has no close method
+            }
+        });
     });
 
-    const timescaleClosePromise = new Promise((resolve) => {
-        if (isTimescaleEnabled) {
-            timescaleRepo.close(resolve);
-        } else {
-            resolve(); // Resolve immediately if not enabled
-        }
-    });
-
-    // Wait for both to complete
-    await Promise.all([duckDbClosePromise, timescaleClosePromise]);
+    await Promise.all(closePromises);
     logger.info("All database connections closed.");
 }
 
@@ -113,5 +139,7 @@ module.exports = {
     init,
     insertMessage,
     stop,
-    close
+    close,
+    registerRepository,
+    clearRepositories
 };
