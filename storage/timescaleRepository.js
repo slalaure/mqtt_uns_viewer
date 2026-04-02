@@ -13,10 +13,14 @@
  * Manages all WRITE operations for the perennial TimescaleDB database.
  * This is designed for high-throughput, non-blocking, fire-and-forget ingestion.
  * [UPDATED] Refactored to extend BaseRepository, inheriting batch queue logic.
+ * [UPDATED] Hardened queue with MAX_QUEUE_SIZE and DLQ offloading to prevent OOM.
  */
 
 const { Pool } = require('pg');
 const BaseRepository = require('./baseRepository');
+
+const MAX_QUEUE_SIZE = 20000;
+const FLUSH_CHUNK_SIZE = 5000;
 
 class TimescaleRepository extends BaseRepository {
     constructor() {
@@ -125,6 +129,24 @@ class TimescaleRepository extends BaseRepository {
         } catch (err) {
             this.logger.error({ err }, `❌ Failed to create table '${tableName}'.`);
             throw err;
+        }
+    }
+
+    /**
+     * Pushes a new message object into the TimescaleDB write queue.
+     * Prevents OOM by offloading excess messages to the DLQ.
+     */
+    push(message) {
+        super.push(message);
+
+        if (this.writeQueue.length > MAX_QUEUE_SIZE) {
+            this.logger.warn(`⚠️ TimescaleDB write queue exceeded ${MAX_QUEUE_SIZE}. Flushing ${FLUSH_CHUNK_SIZE} oldest messages to DLQ to prevent OOM.`);
+            
+            // Extract the oldest messages and push them to disk
+            const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
+            if (this.dlqManager) {
+                this.dlqManager.push(excessMessages);
+            }
         }
     }
 
