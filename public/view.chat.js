@@ -14,6 +14,7 @@
  * [UPDATED] Uses Proxy-based state manager to inject current UI context (topic/broker) into AI prompts.
  * [UPDATED] Integrated showToast system to replace native alerts for camera/mic issues.
  * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
+ * [UPDATED] Fixed Catch-22 where FAB listener was never bound by mounting globally on init.
  */
 import { state } from './state.js';
 import { trackEvent, confirmModal, showToast } from './utils.js';
@@ -154,6 +155,10 @@ export function initChatView(basePath, onFileCreated) {
         // Chrome fires this when voices are ready
         window.speechSynthesis.onvoiceschanged = loadVoices;
     }
+
+    // Mount the view immediately since the Chat is a global widget
+    // This ensures the FAB (Floating Action Button) event listener is registered
+    mountChatView();
 }
 
 /**
