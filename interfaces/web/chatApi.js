@@ -10,6 +10,7 @@
  *
  * Chat API (LLM Agent Endpoint)
  * [UPDATED] Extracted LLM API calls and Prompt generation to llmEngine.
+ * [UPDATED] Implemented exponential backoff for 429 Rate Limit errors.
  */
 const express = require('express');
 const mqttMatch = require('mqtt-match'); 
@@ -23,6 +24,7 @@ const llmEngine = require('../../core/engine/llmEngine');
 
 // --- Constants ---
 const MAX_AGENT_TURNS = 30; // Limit recursion to 30 turns
+const MAX_RETRIES_429 = 5;  // Max retries for rate limits
 
 // --- State for Abort Control ---
 // Map<clientId, { abortController: AbortController, res: Response }>
@@ -33,6 +35,9 @@ const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/'/g, "''");
 };
+
+// Helper for Exponential Backoff delay
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper to parse natural language time expression into SQL bounds
 const parseTimeWindow = (timeExpression) => {
@@ -934,13 +939,27 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     }
                 }
 
-                if (!message) {
-                    message = await llmEngine.fetchChatCompletion(
-                        conversation,
-                        config,
-                        enabledTools,
-                        abortController.signal
-                    );
+                // Wrap LLM Call in Exponential Backoff Retry Loop
+                let retryCount = 0;
+                while (!message) {
+                    try {
+                        message = await llmEngine.fetchChatCompletion(
+                            conversation,
+                            config,
+                            enabledTools,
+                            abortController.signal
+                        );
+                    } catch (err) {
+                        if (err.response && err.response.status === 429 && retryCount < MAX_RETRIES_429) {
+                            retryCount++;
+                            const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
+                            logger.warn(`[ChatAPI] 429 Rate Limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`);
+                            sendChunk(res, 'status', `Rate limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`, clientId);
+                            await sleep(delay);
+                        } else {
+                            throw err; // Re-throw if not 429 or max retries exceeded
+                        }
+                    }
                 }
 
                 // Case 1: The model wants to call tools

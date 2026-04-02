@@ -11,6 +11,7 @@
  * MCP Server
  * Controls the Korelate via Model Context Protocol.
  * [UPDATED] Relocated to interfaces/mcp/ and updated relative paths.
+ * [UPDATED] Added global Axios interceptor with Exponential Backoff for 429 Rate Limits.
  */
 // --- Imports (ESM) ---
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -46,6 +47,26 @@ if (HTTP_USER && HTTP_PASSWORD) {
     axiosConfig.auth = { username: HTTP_USER, password: HTTP_PASSWORD };
     console.error(`🔐 MCP Server will use Basic Auth to contact Main API (${HTTP_USER}:***)`);
 }
+
+// --- Axios Interceptor for 429 Rate Limits (Exponential Backoff) ---
+axios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const config = error.config;
+        if (error.response && error.response.status === 429) {
+            config.retryCount = config.retryCount || 0;
+            if (config.retryCount < 5) {
+                config.retryCount += 1;
+                // Exponential backoff: 2^retry * 1000 + random jitter
+                const delay = Math.pow(2, config.retryCount) * 1000 + Math.random() * 500;
+                console.error(`[MCP] 429 Rate Limit hit on ${config.url}. Retrying in ${(delay/1000).toFixed(1)}s...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return axios(config);
+            }
+        }
+        return Promise.reject(error);
+    }
+);
 
 // --- Paths & Manifest Loading ---
 const __filename = fileURLToPath(import.meta.url);
