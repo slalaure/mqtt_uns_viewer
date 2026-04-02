@@ -15,7 +15,7 @@
  * [UPDATED] Integrated Vanilla JS Proxy state manager for reactive UI updates and data-driven routing.
  * [UPDATED] Implemented WebSocket Backpressure UI Feedback for high data rates.
  * [UPDATED] Decoupled WebSocket and Routing logic into dedicated modules.
- * [UPDATED] Integrated Unmount Lifecycle Hooks to prevent memory leaks on view changes.
+ * [UPDATED] Fixed Router ViewCallbacks mapping for Mapper and Publish views.
  */
 
 // ---  Module Imports ---
@@ -91,9 +91,11 @@ import {
     setHistoryData, 
     renderFilteredHistory, 
     setDbBounds,
-    addAvailableHistoryProvider
+    addAvailableHistoryProvider,
+    mountHistoryView,
+    unmountHistoryView
 } from './view.history.js';
-import { initModelerView, onModelerViewShow } from './view.modeler.js'; 
+import { initModelerView, onModelerViewShow, unmountModelerView } from './view.modeler.js'; 
 import {
     initMapperView,
     updateMapperMetrics,
@@ -103,7 +105,9 @@ import {
     getMappedTargetTopics,
     getTopicMappingStatus,
     addMappedTargetTopic,
-    setMapperTheme
+    setMapperTheme,
+    mountMapperView,
+    unmountMapperView
 } from './view.mapper.js';
 import { 
     initChartView, 
@@ -115,10 +119,16 @@ import {
     pruneChartedVariables,
     refreshChart 
 } from './view.chart.js';
-import { initPublishView, setPublishTheme, updateSimulatorStatuses } from './view.publish.js';
+import { 
+    initPublishView, 
+    setPublishTheme, 
+    updateSimulatorStatuses,
+    mountPublishView,
+    unmountPublishView
+} from './view.publish.js';
 import { initChatView, toggleChatWidget, onChatStreamMessage } from './view.chat.js'; 
 import { initLoginStyles, showLoginOverlay } from './view.login.js';
-import { initAdminView, onAdminViewShow } from './view.admin.js';
+import { initAdminView, onAdminViewShow, unmountAdminView } from './view.admin.js';
 import { initAlertsView, onAlertsViewShow, onAlertsViewHide, openCreateRuleModal, refreshAlerts } from './view.alerts.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -943,7 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const routeNames = ['tree', 'hmi', 'history', 'modeler', 'mapper', 'chart', 'publish', 'admin', 'alerts'];
         const viewCallbacks = {
-            history: renderFilteredHistory,
+            history: mountHistoryView,
             admin: onAdminViewShow,
             modeler: onModelerViewShow,
             alerts: onAlertsViewShow,
@@ -952,9 +962,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 refreshHmiLiveState();
             },
             chart: mountChartView,
+            mapper: mountMapperView,
+            publish: mountPublishView,
+            
+            historyHide: unmountHistoryView,
             alertsHide: onAlertsViewHide,
             hmiHide: onHmiViewHide,
-            chartHide: unmountChartView
+            chartHide: unmountChartView,
+            mapperHide: unmountMapperView,
+            publishHide: unmountPublishView,
+            adminHide: unmountAdminView,
+            modelerHide: unmountModelerView
         };
         initRouter(appBasePath, routeNames, currentUser, viewCallbacks);
         handleRoutingFromUrl(appBasePath, routeNames);

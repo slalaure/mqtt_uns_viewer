@@ -14,6 +14,7 @@
  * [UPDATED] Dynamic injection of new Data Providers (like CSV streams).
  * [UPDATED] Subscribes to Proxy-based reactive state for auto-filling and theming.
  * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
+ * [UPDATED] Fixed Ace Editor remounting bug by clearing DOM on destroy.
  */
 
 import { state, subscribe, unsubscribe } from './state.js';
@@ -175,11 +176,18 @@ export function mountPublishView() {
     if (isMounted) return;
 
     if (payloadEditorDiv && !aceEditor) {
+        // Clean up any lingering Ace DOM elements before re-initializing to prevent breaking
+        payloadEditorDiv.innerHTML = '';
+        
         // --- Initialize Ace Editor ---
         aceEditor = ace.edit(payloadEditorDiv);
         aceEditor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
         aceEditor.session.setMode('ace/mode/json'); // Default to JSON
-        aceEditor.setValue(PAYLOAD_TEMPLATES.json, 1); 
+        
+        // Re-apply format template based on current select value
+        const currentFormat = publishFormatSelect ? publishFormatSelect.value : 'json';
+        aceEditor.setValue(PAYLOAD_TEMPLATES[currentFormat] || PAYLOAD_TEMPLATES.json, 1); 
+        
         aceEditor.setOptions({
             fontSize: "14px",
             fontFamily: "monospace",
@@ -217,6 +225,7 @@ export function unmountPublishView() {
     if (aceEditor) {
         aceEditor.destroy();
         aceEditor = null;
+        if (payloadEditorDiv) payloadEditorDiv.innerHTML = ''; // Clear DOM for future mounts
     }
 
     publishForm?.removeEventListener('submit', onPublishSubmit);

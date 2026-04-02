@@ -13,6 +13,7 @@
  * [UPDATED] Dynamic injection of new Data Providers to support loopback streams.
  * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
  * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
+ * [UPDATED] Removed aggressive 'is-folder' check that prevented creating mapping rules on parent nodes.
  */
 
 // Import shared utilities and state
@@ -222,21 +223,17 @@ export function updateMapperConfig(newConfig) {
 
 /**
  * Handle click on mapper tree node.
- * Now explicitly ignores folders/parent topics for mapping.
+ * Restored capability to click on folder nodes to create wildcard rules.
  */
 export function handleMapperNodeClick(event, nodeContainer, brokerId, topic) {
     const li = nodeContainer.closest('li');
 
-    //  Ignore folders for mapping logic
-    if (li.classList.contains('is-folder')) {
-        return; 
-    }
-
+    // Display payload info (folders usually won't have a payload, but that's fine)
     const payload = nodeContainer.dataset.payload; 
     payloadViewer.display(brokerId, topic, payload);
     currentEditingPayload = payload; // Save for maximized editor reference
 
-    // Enable editor for leaf node only
+    // Enable editor for the node
     currentEditingBrokerId = brokerId;
     currentEditingSourceTopic = topic;
     
