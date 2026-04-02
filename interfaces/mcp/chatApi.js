@@ -6,31 +6,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
+ * @copyright (c) 2025-2026 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
  * [UPDATED] Relocated to interfaces/mcp/ and updated relative paths.
- * [UPDATED] Publish Tool and Context now explicitly support DATA_PROVIDERS (files/CSV streams).
- * [UPDATED] Extracted LLM API calls and Prompt generation to llmEngine.
- * [UPDATED] Implemented exponential backoff for 429 Rate Limit errors.
+ * [UPDATED] Added Perennial Storage querying capabilities for LLM.
  */
 const express = require('express');
 const mqttMatch = require('mqtt-match'); 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto'); // For UUIDs
+const crypto = require('crypto');
 const chrono = require('chrono-node');
 
-// Import Alert Manager and LLM Engine from ROOT
+// Import Alert Manager, LLM Engine and Data Manager from ROOT
 const alertManager = require('../../core/engine/alertManager');
 const llmEngine = require('../../core/engine/llmEngine');
+const dataManager = require('../../storage/dataManager'); // [NEW] Added DataManager for Perennial Queries
 
 // --- Constants ---
-const MAX_AGENT_TURNS = 30; // Limit recursion to 30 turns
-const MAX_RETRIES_429 = 5;  // Max retries for rate limits
+const MAX_AGENT_TURNS = 30;
+const MAX_RETRIES_429 = 5;
 
 // --- State for Abort Control ---
-// Map<clientId, { abortController: AbortController, res: Response }>
 const activeStreams = new Map();
 
 // Helper to escape SQL string
@@ -39,10 +37,8 @@ const escapeSQL = (str) => {
     return str.replace(/'/g, "''");
 };
 
-// Helper for Exponential Backoff delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper to parse natural language time expression into SQL bounds
 const parseTimeWindow = (timeExpression) => {
     if (!timeExpression || typeof timeExpression !== 'string') return null;
     const results = chrono.parse(timeExpression);
@@ -53,7 +49,6 @@ const parseTimeWindow = (timeExpression) => {
     return { start, end };
 };
 
-// Helper to infer schema
 function _inferSchema(messages) {
     const schema = {};
     let count = 0;
@@ -74,7 +69,6 @@ function _inferSchema(messages) {
 module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
     const router = express.Router();
 
-    // Adjusted relative paths for new location in interfaces/mcp/
     const ROOT_PATH = path.join(__dirname, '..', '..'); 
     const DATA_PATH = path.join(ROOT_PATH, 'data');
     const PUBLIC_PATH = path.join(ROOT_PATH, 'public');
@@ -82,7 +76,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     const MODEL_MANIFEST_PATH = path.join(DATA_PATH, 'uns_model.json');
     const SESSIONS_DIR = path.join(DATA_PATH, 'sessions');
 
-    // --- Load Tools Manifest ---
     let toolsManifest = { system_prompt_template: "", tools: [] };
     const loadManifest = () => {
         try {
@@ -97,25 +90,20 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             logger.error({ err: e }, "❌ [ChatAPI] Error loading AI Tools Manifest.");
         }
     };
-    loadManifest(); // Initial load
+    loadManifest(); 
 
-    // --- Helper to send chunks via HTTP AND WebSocket ---
     const sendChunk = (res, type, content, clientId) => {
-        // Check if stream was aborted before sending
         if (clientId && !activeStreams.has(clientId)) return;
 
-        // Generate a unique ID for this chunk to allow frontend deduplication
         const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         const chunkData = { type, content, id: chunkId };
 
-        // 1. HTTP Streaming
         if (res && !res.writableEnded && res.writable) {
             const jsonStr = JSON.stringify(chunkData);
             res.write(jsonStr + '\n');
             if (res.flush) res.flush();
         }
         
-        // 2. WebSocket Unicast
         if (clientId) {
             wsManager.sendToClient(clientId, {
                 type: 'chat-stream',
@@ -126,7 +114,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     };
 
-    // Helper to load model
     let unsModel = [];
     const loadUnsModel = () => {
         try {
@@ -142,7 +129,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
     loadUnsModel();
 
-    // --- User Scoped Session Directory Helper ---
     const getUserChatsDir = (req) => {
         let basePath;
         if (req.user && req.user.id) {
@@ -158,8 +144,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
 
     // --- Session Management Routes ---
-    
-    // LIST Sessions
     router.get('/sessions', (req, res) => {
         const chatsDir = getUserChatsDir(req);
         try {
@@ -187,7 +171,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 };
             });
             
-            // Sort by newest first
             sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
             res.json(sessions);
         } catch (e) {
@@ -196,12 +179,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     });
 
-    // LOAD Session History
     router.get('/session/:id', (req, res) => {
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         
-        // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
 
         if (fs.existsSync(filePath)) {
@@ -212,11 +193,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 res.json([]);
             }
         } else {
-            res.json([]); // New empty session
+            res.json([]); 
         }
     });
 
-    // SAVE Session History
     router.post('/session/:id', (req, res) => {
         const history = req.body;
         if (!Array.isArray(history)) {
@@ -237,12 +217,10 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         });
     });
 
-    // DELETE Session
     router.delete('/session/:id', (req, res) => {
         const chatsDir = getUserChatsDir(req);
         const filePath = path.join(chatsDir, `${req.params.id}.json`);
         
-        // Security check
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
 
         if (fs.existsSync(filePath)) {
@@ -251,7 +229,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         res.json({ success: true });
     });
 
-    // STOP Generation Endpoint
     router.post('/stop', (req, res) => {
         const { clientId } = req.body;
         if (clientId && activeStreams.has(clientId)) {
@@ -267,19 +244,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         }
     });
 
-    // --- Legacy /history Route ---
-    router.get('/history', (req, res) => {
-        req.params.id = 'default';
-        const chatsDir = getUserChatsDir(req);
-        const filePath = path.join(chatsDir, `default.json`);
-        if (fs.existsSync(filePath)) {
-            try { res.json(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } 
-            catch (e) { res.json([]); }
-        } else { res.json([]); }
-    });
-
-    // --- 1. Prepare Tools for OpenAI ---
-    // Filter enabled tools based on config AND get descriptions for system prompt
     const getEnabledToolsInfo = () => {
         const enabledTools = [];
         const descriptions = [];
@@ -296,14 +260,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                     parameters: toolDef.inputSchema
                 }
             });
-            // Add to Prompt Context
             descriptions.push(`- **${toolDef.name}**: ${toolDef.description}`);
         });
 
         return { tools: enabledTools, context: descriptions.join('\n') };
     };
 
-    // --- Action Manager ---
     const AiActionManager = require('./aiActionManager');
     const aiActionManager = new AiActionManager(DATA_PATH);
 
@@ -318,8 +280,48 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         'delete_alert_rule'
     ];
 
-    // --- Tool Implementations ---
     const toolImplementations = {
+        // --- [NEW] Perennial Storage Tools ---
+        describe_perennial_storage: async () => {
+            if (!dataManager || typeof dataManager.getPerennialSchema !== 'function') {
+                return { error: "Perennial storage schema inspection is not implemented or no perennial storage is currently active." };
+            }
+            try {
+                const schemaInfo = await dataManager.getPerennialSchema();
+                return { content: [{ type: "text", text: JSON.stringify(schemaInfo, null, 2) }] };
+            } catch (e) {
+                return { error: `Failed to describe storage: ${e.message}` };
+            }
+        },
+        
+        query_perennial_storage: async ({ query }) => {
+            if (!dataManager || typeof dataManager.queryPerennial !== 'function') {
+                return { error: "Perennial storage querying is not implemented or no perennial storage is currently active." };
+            }
+            try {
+                const results = await dataManager.queryPerennial(query);
+                // Limit results to prevent context window explosion
+                const limit = 100;
+                const isTruncated = results.length > limit;
+                const safeResults = isTruncated ? results.slice(0, limit) : results;
+                
+                return { 
+                    content: [{ 
+                        type: "text", 
+                        text: JSON.stringify({ 
+                            query_executed: query, 
+                            count: results.length, 
+                            results_truncated: isTruncated, 
+                            data: safeResults 
+                        }, null, 2) 
+                    }] 
+                };
+            } catch (e) {
+                return { error: `Query execution failed: ${e.message}` };
+            }
+        },
+        // ------------------------------------
+
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
                 db.serialize(() => {
@@ -898,8 +900,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     };
 
     //  INTERNAL AGENT RUNNER 
-    // Executes the agent loop autonomously (no HTTP res needed)
-    // Returns Promise<String> with the final response
     const runInternalAgent = async (systemPrompt, userPrompt) => {
         const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
         const brokerContext = allProviders.map(b => {
@@ -929,7 +929,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         );
     };
 
-    // --- Inject the Runner into Alert Manager ---
     if (alertManager && alertManager.registerAgentRunner) {
         alertManager.registerAgentRunner(runInternalAgent);
         logger.info("✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.");
@@ -942,13 +941,11 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         if (!messages) return res.status(400).json({ error: "Missing messages." });
         if (!config.LLM_API_KEY) return res.status(500).json({ error: "LLM_API_KEY is not configured." });
 
-        // Setup Abort Controller for this request
         const abortController = new AbortController();
         if (clientId) {
             activeStreams.set(clientId, { abortController, res });
         }
 
-        // Set Headers for Streaming Response
         res.setHeader('Content-Type', 'application/x-ndjson');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
@@ -956,14 +953,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         res.setHeader('X-Content-Type-Options', 'nosniff');
         if (res.flushHeaders) res.flushHeaders();
 
-        // Padding to force Proxy buffer flush
         const padding = " ".repeat(4096); 
         res.write(`{"type":"ping","content":"padding_ignored"}${padding}\n`);
         if (res.flush) res.flush();
 
         sendChunk(res, 'status', 'Processing request...', clientId);
 
-        // --- SECURITY: Build Broker Context ---
         const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
         const brokerContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
@@ -971,7 +966,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
         }).join('\n');
 
-        // --- PREPARE TOOLS & CONTEXT ---
         const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
 
         const systemPromptText = llmEngine.generateChatSystemPrompt(
@@ -985,7 +979,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         
         let conversation = [systemMessage, ...safeUserMessages];
 
-        // --- AGENT LOOP ---
         let turnCount = 0;
         let finalMessageSent = false;
 
@@ -1000,16 +993,14 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
                 let message = null;
                 
-                // Check if we are resuming an interrupted session (awaiting approval)
                 if (turnCount === 1 && conversation.length > 0) {
                     const lastMsg = conversation[conversation.length - 1];
                     if (lastMsg.role === 'assistant' && lastMsg.tool_calls) {
-                        message = conversation.pop(); // Pop it so it acts like it just came from the LLM
+                        message = conversation.pop(); 
                         sendChunk(res, 'status', 'Resuming tool execution...', clientId);
                     }
                 }
 
-                // Wrap LLM Call in Exponential Backoff Retry Loop
                 let retryCount = 0;
                 while (!message) {
                     try {
@@ -1027,14 +1018,12 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             sendChunk(res, 'status', `Rate limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`, clientId);
                             await sleep(delay);
                         } else {
-                            throw err; // Re-throw if not 429 or max retries exceeded
+                            throw err; 
                         }
                     }
                 }
 
-                // Case 1: The model wants to call tools
                 if (message.tool_calls && message.tool_calls.length > 0) {
-                    // --- VALIDATION / APPROVAL CHECK ---
                     let requiresApproval = false;
                     let pendingSensitiveCalls = [];
                     if (!req.body.autoApproveSession) {
@@ -1090,9 +1079,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                             content: result
                         });
                     }
-                } 
-                // Case 2: The model generated a final text response
-                else {
+                } else {
                     sendChunk(res, 'message', message, clientId);
                     finalMessageSent = true;
                 }
@@ -1103,7 +1090,6 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             }
 
         } catch (error) {
-            // Added logger.error to track upstream LLM API errors on backend
             if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
                 logger.error({ 
                     err: error.message, 

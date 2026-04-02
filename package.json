@@ -23,6 +23,10 @@
   "author": "Sebastien Lalaurette",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1022.0",
+    "@aws-sdk/util-dynamodb": "^3.996.2",
+    "@azure/data-tables": "^13.3.2",
+    "@google-cloud/bigquery": "^8.1.1",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "aws-crt": "^1.27.3",
     "aws-iot-device-sdk-v2": "^1.23.0",

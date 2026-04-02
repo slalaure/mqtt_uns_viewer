@@ -650,6 +650,33 @@
                     "action_id"
                 ]
             }
+        },
+        {
+            "name": "describe_perennial_storage",
+            "description": "Returns the active perennial storage engine (Timescale, BigQuery, Azure, DynamoDB, AVEVA) and its schema/table structures. Use this BEFORE querying to understand the query dialect and table names.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "query_perennial_storage",
+            "description": "Executes a native query against the long-term perennial storage. Use the dialect specified by 'describe_perennial_storage' (e.g., SQL for BigQuery/Postgres, PartiQL for DynamoDB).",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The native query string (SQL, PartiQL, OData, etc.)."
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
         }
     ]
 }

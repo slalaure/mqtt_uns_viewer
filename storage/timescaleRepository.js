@@ -6,7 +6,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
+ * @copyright (c) 2025-2026 Sebastien Lalaurette
  *
  * TimescaleDB/PostgreSQL Repository
  *
@@ -14,6 +14,7 @@
  * This is designed for high-throughput, non-blocking, fire-and-forget ingestion.
  * [UPDATED] Refactored to extend BaseRepository, inheriting batch queue logic.
  * [UPDATED] Hardened queue with MAX_QUEUE_SIZE and DLQ offloading to prevent OOM.
+ * [UPDATED] Added getSchema() and query() to expose data to the AI Agent.
  */
 
 const { Pool } = require('pg');
@@ -42,7 +43,7 @@ class TimescaleRepository extends BaseRepository {
         this.batchSize = this.config.PG_INSERT_BATCH_SIZE || 1000;
         this.batchIntervalMs = this.config.PG_BATCH_INTERVAL_MS || 5000;
 
-        this.logger.info("Initializing TimescaleDB repository...");
+        this.logger.info("Initializing TimescaleDB/PostgreSQL repository...");
         await this.connect();
         this.startBatchProcessor();
     }
@@ -133,6 +134,48 @@ class TimescaleRepository extends BaseRepository {
     }
 
     /**
+     * Returns the table schema and dialect info for the AI Agent.
+     */
+    async getSchema() {
+        if (!this.isConnected) await this.connect();
+        const tableName = this.config.PG_TABLE_NAME || 'mqtt_events';
+        
+        const query = `
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = $1
+        `;
+
+        try {
+            const result = await this.pool.query(query, [tableName]);
+            return {
+                engine: 'TimescaleDB / PostgreSQL',
+                tableName: tableName,
+                dialect: 'PostgreSQL',
+                schema: result.rows
+            };
+        } catch (err) {
+            this.logger.error({ err: err.message }, "Failed to get PostgreSQL schema for AI Agent");
+            throw err;
+        }
+    }
+
+    /**
+     * Executes a native SQL query against PostgreSQL.
+     */
+    async query(sql) {
+        if (!this.isConnected) await this.connect();
+        try {
+            // NOTE: In a real production scenario, you should restrict the AI's database user to READ-ONLY permissions.
+            const result = await this.pool.query(sql);
+            return result.rows;
+        } catch (err) {
+            this.logger.error({ err: err.message, sql }, "PostgreSQL AI query execution failed");
+            throw err;
+        }
+    }
+
+    /**
      * Pushes a new message object into the TimescaleDB write queue.
      * Prevents OOM by offloading excess messages to the DLQ.
      */
@@ -142,7 +185,6 @@ class TimescaleRepository extends BaseRepository {
         if (this.writeQueue.length > MAX_QUEUE_SIZE) {
             this.logger.warn(`⚠️ TimescaleDB write queue exceeded ${MAX_QUEUE_SIZE}. Flushing ${FLUSH_CHUNK_SIZE} oldest messages to DLQ to prevent OOM.`);
             
-            // Extract the oldest messages and push them to disk
             const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             if (this.dlqManager) {
                 this.dlqManager.push(excessMessages);
@@ -192,7 +234,6 @@ class TimescaleRepository extends BaseRepository {
             await this.pool.query(query, values);
             this.logger.info(`✅ 🐘 Batch inserted ${batch.length} messages into TimescaleDB. (Queue: ${this.writeQueue.length})`);
         } catch (err) {
-            // Distinguish between transient connection errors and non-recoverable errors
             const isTransient = err.code && (err.code.startsWith('08') || err.code.startsWith('57') || err.code === 'ECONNRESET');
             
             if (isTransient) {

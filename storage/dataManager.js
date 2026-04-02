@@ -6,26 +6,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
+ * @copyright (c) 2025-2026 Sebastien Lalaurette
  *
  * Data Manager
  *
  * Orchestrates all data write operations.
  * It acts as a single entry point for the mqtt-handler and abstracts
  * away the underlying storage, fanning out messages to one or more
- * repositories (e.g., DuckDB, TimescaleDB).
+ * repositories (e.g., DuckDB, TimescaleDB, Azure Tables, DynamoDB, AVEVA PI, BigQuery).
  * [UPDATED] Uses camelCase repository filenames.
  * [UPDATED] Refactored to fully abstract repositories into a dynamic registry for easier testing and extension.
+ * [UPDATED] Added getPerennialSchema and queryPerennial to expose long-term storage to the LLM agent.
  */
 // Import repository modules
 const duckDbRepo = require('./duckdbRepository');
 const timescaleRepo = require('./timescaleRepository');
+const azureTableRepo = require('./azureTableRepository');
+const dynamoDbRepo = require('./dynamoDbRepository');
+const piSystemRepo = require('./piSystemRepository');
+const bigQueryRepo = require('./bigQueryRepository');
 const dlqManager = require('./dlqManager');
 
 // --- Module-level State ---
 let logger = null;
 let config = null;
 let activeRepositories = [];
+let perennialRepository = null; // [NEW] Stores the active perennial driver for querying
 
 /**
  * Initializes the Data Manager and all configured repositories.
@@ -38,6 +44,7 @@ let activeRepositories = [];
 function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastDbStatus) {
     logger = appLogger.child({ component: 'DataManager' });
     config = appConfig;
+    perennialRepository = null;
 
     // 0. Initialize the DLQ (Dead Letter Queue) manager
     dlqManager.init(appLogger, appConfig);
@@ -50,11 +57,32 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
     duckDbRepo.init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine, dlqManager);
     registerRepository(duckDbRepo);
 
-    // 2. Check and initialize the perennial repository (e.g., Timescale)
+    // 2. Check and initialize the perennial repository
     if (config.PERENNIAL_DRIVER === 'timescale') {
         logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
         timescaleRepo.init(appLogger, appConfig, dlqManager);
         registerRepository(timescaleRepo);
+        perennialRepository = timescaleRepo;
+    } else if (config.PERENNIAL_DRIVER === 'azure_table') {
+        logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
+        azureTableRepo.init(appLogger, appConfig, dlqManager);
+        registerRepository(azureTableRepo);
+        perennialRepository = azureTableRepo;
+    } else if (config.PERENNIAL_DRIVER === 'dynamodb') {
+        logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
+        dynamoDbRepo.init(appLogger, appConfig, dlqManager);
+        registerRepository(dynamoDbRepo);
+        perennialRepository = dynamoDbRepo;
+    } else if (config.PERENNIAL_DRIVER === 'aveva_pi') {
+        logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
+        piSystemRepo.init(appLogger, appConfig, dlqManager);
+        registerRepository(piSystemRepo);
+        perennialRepository = piSystemRepo;
+    } else if (config.PERENNIAL_DRIVER === 'bigquery') {
+        logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
+        bigQueryRepo.init(appLogger, appConfig, dlqManager);
+        registerRepository(bigQueryRepo);
+        perennialRepository = bigQueryRepo;
     } else {
         logger.info(`Perennial storage driver is set to '${config.PERENNIAL_DRIVER || 'none'}'. Only writing to default repositories.`);
     }
@@ -79,6 +107,7 @@ function registerRepository(repo) {
  */
 function clearRepositories() {
     activeRepositories = [];
+    perennialRepository = null;
 }
 
 /**
@@ -94,6 +123,35 @@ function insertMessage(message) {
             if (logger) logger.error({ err, repoName: repo.name || 'unknown' }, "Error pushing message to repository.");
         }
     }
+}
+
+/**
+ * Retrieves the schema/dialect of the active perennial storage.
+ * @returns {Promise<Object>}
+ */
+async function getPerennialSchema() {
+    if (!perennialRepository) {
+        throw new Error("No perennial storage driver is currently enabled.");
+    }
+    if (typeof perennialRepository.getSchema !== 'function') {
+        throw new Error(`The active perennial driver '${config.PERENNIAL_DRIVER}' does not support schema inspection yet.`);
+    }
+    return await perennialRepository.getSchema();
+}
+
+/**
+ * Executes a native query against the active perennial storage.
+ * @param {string} query - The native query (SQL, PartiQL, etc.)
+ * @returns {Promise<Array>}
+ */
+async function queryPerennial(query) {
+    if (!perennialRepository) {
+        throw new Error("No perennial storage driver is currently enabled.");
+    }
+    if (typeof perennialRepository.query !== 'function') {
+        throw new Error(`The active perennial driver '${config.PERENNIAL_DRIVER}' does not support direct querying yet.`);
+    }
+    return await perennialRepository.query(query);
 }
 
 /**
@@ -138,6 +196,8 @@ async function close() {
 module.exports = {
     init,
     insertMessage,
+    getPerennialSchema,
+    queryPerennial,
     stop,
     close,
     registerRepository,

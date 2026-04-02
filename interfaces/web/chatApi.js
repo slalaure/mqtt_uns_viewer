@@ -6,11 +6,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
+ * @copyright (c) 2025-2026 Sebastien Lalaurette
  *
  * Chat API (LLM Agent Endpoint)
  * [UPDATED] Extracted LLM API calls and Prompt generation to llmEngine.
  * [UPDATED] Implemented exponential backoff for 429 Rate Limit errors.
+ * [UPDATED] Added Perennial Storage querying capabilities for internal UI LLM.
  */
 const express = require('express');
 const mqttMatch = require('mqtt-match'); 
@@ -21,6 +22,7 @@ const chrono = require('chrono-node');
 
 const alertManager = require('../../core/engine/alertManager');
 const llmEngine = require('../../core/engine/llmEngine');
+const dataManager = require('../../storage/dataManager'); // [NEW] Added DataManager for Perennial Queries
 
 // --- Constants ---
 const MAX_AGENT_TURNS = 30; // Limit recursion to 30 turns
@@ -283,6 +285,47 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- Tool Implementations ---
     const toolImplementations = {
+        // --- [NEW] Perennial Storage Tools ---
+        describe_perennial_storage: async () => {
+            if (!dataManager || typeof dataManager.getPerennialSchema !== 'function') {
+                return { error: "Perennial storage schema inspection is not implemented or no perennial storage is currently active." };
+            }
+            try {
+                const schemaInfo = await dataManager.getPerennialSchema();
+                return { content: [{ type: "text", text: JSON.stringify(schemaInfo, null, 2) }] };
+            } catch (e) {
+                return { error: `Failed to describe storage: ${e.message}` };
+            }
+        },
+        
+        query_perennial_storage: async ({ query }) => {
+            if (!dataManager || typeof dataManager.queryPerennial !== 'function') {
+                return { error: "Perennial storage querying is not implemented or no perennial storage is currently active." };
+            }
+            try {
+                const results = await dataManager.queryPerennial(query);
+                // Limit results to prevent context window explosion
+                const limit = 100;
+                const isTruncated = results.length > limit;
+                const safeResults = isTruncated ? results.slice(0, limit) : results;
+                
+                return { 
+                    content: [{ 
+                        type: "text", 
+                        text: JSON.stringify({ 
+                            query_executed: query, 
+                            count: results.length, 
+                            results_truncated: isTruncated, 
+                            data: safeResults 
+                        }, null, 2) 
+                    }] 
+                };
+            } catch (e) {
+                return { error: `Query execution failed: ${e.message}` };
+            }
+        },
+        // ------------------------------------
+
         get_application_status: async () => {
             return new Promise((resolve, reject) => {
                 db.serialize(() => {
@@ -660,10 +703,9 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
                 mode: "js",
                 code: sanitizedCode
             });
-
+            const res = await mapperEngine.saveMappings(config);
             aiActionManager.logAction(user, 'update_mapper_rule', { sourceTopic, targetTopic }, { activeVersionId: config.activeVersionId, ruleBackup });
-            const result = mapperEngine.saveMappings(config);
-            return result.success ? { success: true, message: "Rule updated" } : { error: result.error };
+            return { content: [{ type: "text", text: JSON.stringify(res) }] };
         },
         prune_topic_history: async ({ topic_pattern, broker_id }) => {
             return new Promise((resolve) => {
