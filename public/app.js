@@ -13,6 +13,7 @@
  * [UPDATED] Replaced explicit I3X UI Toggle with continuous, native I3X model integration inside trees.
  * [UPDATED] Dynamically registers new Data Providers (like CSV parsers) across UI views when they connect.
  * [UPDATED] Integrated Vanilla JS Proxy state manager for reactive UI updates and data-driven routing.
+ * [UPDATED] Implemented WebSocket Backpressure UI Feedback for high data rates.
  */
 
 // ---  Module Imports ---
@@ -147,6 +148,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const globalAlertBanner = document.createElement('div');
     globalAlertBanner.className = 'global-alert-banner';
     document.body.appendChild(globalAlertBanner);
+
+    // --- Sampling Warning Badge (Backpressure UI) ---
+    let samplingWarningTimer = null;
+    const samplingBadge = document.createElement('div');
+    samplingBadge.id = 'sampling-warning-badge';
+    samplingBadge.style.cssText = 'display: none; align-items: center; gap: 6px; font-size: 0.75em; font-weight: bold; background-color: rgba(255, 193, 7, 0.2); color: #ffc107; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255, 193, 7, 0.5);';
+    samplingBadge.innerHTML = '⚠️ Data rate too high. Displaying sampled data.';
+    
+    const headerSubRow = document.querySelector('.header-sub-row');
+    if (headerSubRow && brokerStatusContainer) {
+        headerSubRow.insertBefore(samplingBadge, brokerStatusContainer);
+    }
+
+    function showSamplingWarning() {
+        if (samplingBadge) {
+            samplingBadge.style.display = 'flex';
+            clearTimeout(samplingWarningTimer);
+            samplingWarningTimer = setTimeout(() => {
+                samplingBadge.style.display = 'none';
+            }, 3000);
+        }
+    }
 
     // --- Helper: Inject User Menu in Header ---
     function injectUserMenu(user) {
@@ -684,6 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'mqtt-message':
                     if (realtimeMessageQueue.length > REALTIME_QUEUE_LIMIT) {
                         realtimeMessageQueue.splice(0, realtimeMessageQueue.length - (REALTIME_QUEUE_LIMIT / 2));
+                        showSamplingWarning();
                     }
                     realtimeMessageQueue.push(message);
                     if (!isFlushingRealtimeQueue) {
