@@ -193,7 +193,23 @@ const onDateChange = () => {
 };
 
 const onCurrentTopicChange = (topic) => {
-    // Optional topic sync
+    if (topic && state.currentBrokerId) {
+        const node = document.querySelector(`#chart-tree .node-container[data-topic="${topic}"][data-broker-id="${state.currentBrokerId}"]`);
+        if (node) {
+            document.querySelectorAll('#chart-tree .selected').forEach(n => n.classList.remove('selected'));
+            node.classList.add('selected');
+            
+            // Expand parents
+            let parentLi = node.closest('li').parentElement.closest('li');
+            while (parentLi) {
+                parentLi.classList.remove('collapsed');
+                parentLi = parentLi.parentElement.closest('li');
+            }
+
+            // TRIGGER BUSINESS LOGIC: Populate variables and payload viewer
+            handleChartNodeClick(null, node, state.currentBrokerId, topic);
+        }
+    }
 };
 
 const onCurrentBrokerIdChange = (brokerId) => {
@@ -336,7 +352,7 @@ export function mountChartView() {
 
     // Subscriptions
     subscribe('chartUnsaved', onChartUnsavedChange);
-    subscribe('currentTopic', onCurrentTopicChange);
+    subscribe('currentTopic', onCurrentTopicChange, true);
     subscribe('currentBrokerId', onCurrentBrokerIdChange);
 
     // If the chart needs to be drawn immediately upon mounting
@@ -382,7 +398,7 @@ export function unmountChartView() {
 
     // Clean up subscriptions
     unsubscribe('chartUnsaved', onChartUnsavedChange);
-    unsubscribe('currentTopic', onCurrentTopicChange);
+    unsubscribe('currentTopic', onCurrentTopicChange, true);
     unsubscribe('currentBrokerId', onCurrentBrokerIdChange);
 
     isMounted = false;

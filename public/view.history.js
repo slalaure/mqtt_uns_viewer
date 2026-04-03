@@ -271,7 +271,7 @@ const onProviderChange = () => {
 };
 
 const onTopicStateChange = (topic) => {
-    if (topic && historySearchInput && state.activeView !== 'history') {
+    if (topic && historySearchInput) {
         historySearchInput.value = topic;
         visibleCount = 1000;
         renderFilteredHistory();
@@ -279,7 +279,7 @@ const onTopicStateChange = (topic) => {
 };
 
 const onBrokerStateChange = (brokerId) => {
-    if (brokerId && providerFilterSelect && state.activeView !== 'history') {
+    if (brokerId && providerFilterSelect) {
         const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === brokerId);
         if (exists) {
             providerFilterSelect.value = brokerId;
@@ -433,7 +433,7 @@ export function mountHistoryView() {
     endDateInput?.addEventListener('change', onDateChange);
     providerFilterSelect?.addEventListener('change', onProviderChange);
 
-    subscribe('currentTopic', onTopicStateChange);
+    subscribe('currentTopic', onTopicStateChange, true);
     subscribe('currentBrokerId', onBrokerStateChange);
 
     // Initial render trigger
@@ -454,7 +454,7 @@ export function unmountHistoryView() {
     endDateInput?.removeEventListener('change', onDateChange);
     providerFilterSelect?.removeEventListener('change', onProviderChange);
 
-    unsubscribe('currentTopic', onTopicStateChange);
+    unsubscribe('currentTopic', onTopicStateChange, true);
     unsubscribe('currentBrokerId', onBrokerStateChange);
 
     isMounted = false;

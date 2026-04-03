@@ -206,7 +206,7 @@ export function mountPublishView() {
 
     // --- Reactive State Subscriptions ---
     subscribe('isDarkMode', onDarkModeChange);
-    subscribe('currentTopic', onCurrentTopicChange);
+    subscribe('currentTopic', onCurrentTopicChange, true);
     subscribe('currentBrokerId', onCurrentBrokerIdChange);
 
     // Initial validation run
@@ -234,7 +234,7 @@ export function unmountPublishView() {
     providerSelectElement?.removeEventListener('change', onProviderSelectChange);
 
     unsubscribe('isDarkMode', onDarkModeChange);
-    unsubscribe('currentTopic', onCurrentTopicChange);
+    unsubscribe('currentTopic', onCurrentTopicChange, true);
     unsubscribe('currentBrokerId', onCurrentBrokerIdChange);
 
     isMounted = false;

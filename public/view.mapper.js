@@ -140,11 +140,33 @@ export function initMapperView(callbacks) {
 /**
  * Mounts the view (attaches event listeners and state subscriptions).
  */
+
+const onCurrentTopicChange = (topic) => {
+    if (topic && state.currentBrokerId) {
+        const node = document.querySelector(`#mapper-tree .node-container[data-topic="${topic}"][data-broker-id="${state.currentBrokerId}"]`);
+        if (node) {
+            document.querySelectorAll('#mapper-tree .selected').forEach(n => n.classList.remove('selected'));
+            node.classList.add('selected');
+            
+            // Expand parents
+            let parentLi = node.closest('li').parentElement.closest('li');
+            while (parentLi) {
+                parentLi.classList.remove('collapsed');
+                parentLi = parentLi.parentElement.closest('li');
+            }
+
+            // TRIGGER BUSINESS LOGIC: Hydrate payload viewer and transform editor
+            handleMapperNodeClick(null, node, state.currentBrokerId, topic);
+        }
+    }
+};
+
 export function mountMapperView() {
     if (isMounted) return;
 
     // --- Reactive State Subscriptions ---
     subscribe('mapperUnsaved', onMapperUnsavedChange);
+    subscribe('currentTopic', onCurrentTopicChange, true);
 
     // --- Role-Based UI Adjustments ---
     const userRole = window.currentUser ? window.currentUser.role : 'user';
@@ -202,6 +224,7 @@ export function unmountMapperView() {
 
     // Clean up subscriptions
     unsubscribe('mapperUnsaved', onMapperUnsavedChange);
+    unsubscribe('currentTopic', onCurrentTopicChange);
 
     isMounted = false;
     console.log("[Mapper View] Unmounted & Cleaned up.");

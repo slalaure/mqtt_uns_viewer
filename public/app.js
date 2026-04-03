@@ -367,8 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedMainTreeNode.classList.add('selected');
         
         // Update reactive state
-        state.currentTopic = topic;
         state.currentBrokerId = brokerId;
+        state.currentTopic = topic;
         
         if (livePayloadToggle && livePayloadToggle.checked) {
             state.isLivePayload = false; 
