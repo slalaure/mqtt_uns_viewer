@@ -16,6 +16,7 @@
  * [UPDATED] Implemented WebSocket Backpressure UI Feedback for high data rates.
  * [UPDATED] Decoupled WebSocket and Routing logic into dedicated modules.
  * [UPDATED] Fixed Router ViewCallbacks mapping for Mapper and Publish views.
+ * [UPDATED] Strongly guarded view initialization and dynamic route generation based on config.
  */
 
 // ---  Module Imports ---
@@ -854,49 +855,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
         refreshSemanticTrees();
 
-        initHmiView(appConfig);
+        // Dynamically initialize the configured views to prevent background loading of disabled modules
+        if (appConfig.viewHmiEnabled) {
+            initHmiView(appConfig);
+        }
 
-        initHistoryView({ 
-            isMultiBroker: isMultiBroker,
-            brokerConfigs: brokerConfigs,
-            dataProviders: dataProviders,
-            requestRangeCallback: requestHistoryRange 
-        }); 
+        if (appConfig.viewHistoryEnabled) {
+            initHistoryView({ 
+                isMultiBroker: isMultiBroker,
+                brokerConfigs: brokerConfigs,
+                dataProviders: dataProviders,
+                requestRangeCallback: requestHistoryRange 
+            }); 
+        }
 
         // Initialize Modeler
-        initModelerView();
+        if (appConfig.viewModelerEnabled && currentUser.role === 'admin') {
+            initModelerView();
+        }
 
-        initMapperView({
-            pruneTopicFromFrontend: pruneTopicFromFrontend,
-            getSubscribedTopics: () => subscribedTopicPatterns, 
-            colorAllTrees: colorAllMapperTrees,
-            addPruneIgnorePattern: (pattern) => {
-                recentlyPrunedPatterns.add(pattern);
-                setTimeout(() => recentlyPrunedPatterns.delete(pattern), PRUNE_IGNORE_DURATION_MS);
-            },
-            maxSavedMapperVersions: appConfig.maxSavedMapperVersions || 0,
-            isMultiBroker: isMultiBroker,
-            brokerConfigs: brokerConfigs,
-            dataProviders: dataProviders
-        });
+        if (appConfig.viewMapperEnabled) {
+            initMapperView({
+                pruneTopicFromFrontend: pruneTopicFromFrontend,
+                getSubscribedTopics: () => subscribedTopicPatterns, 
+                colorAllTrees: colorAllMapperTrees,
+                addPruneIgnorePattern: (pattern) => {
+                    recentlyPrunedPatterns.add(pattern);
+                    setTimeout(() => recentlyPrunedPatterns.delete(pattern), PRUNE_IGNORE_DURATION_MS);
+                },
+                maxSavedMapperVersions: appConfig.maxSavedMapperVersions || 0,
+                isMultiBroker: isMultiBroker,
+                brokerConfigs: brokerConfigs,
+                dataProviders: dataProviders
+            });
+        }
 
-        initChartView({
-            getHistory: () => allHistoryEntries,
-            requestRangeCallback: requestHistoryRange, 
-            colorChartTreeCallback: colorChartTree,
-            maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
-            isMultiBroker: isMultiBroker 
-        });
+        if (appConfig.viewChartEnabled) {
+            initChartView({
+                getHistory: () => allHistoryEntries,
+                requestRangeCallback: requestHistoryRange, 
+                colorChartTreeCallback: colorChartTree,
+                maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
+                isMultiBroker: isMultiBroker 
+            });
+        }
 
-        initPublishView({
-            subscribedTopics: subscribedTopicPatterns, 
-            simulatorListContainer: simulatorControls,
-            isMultiBroker: isMultiBroker, 
-            brokerConfigs: brokerConfigs,
-            dataProviders: dataProviders
-        });
+        if (appConfig.viewPublishEnabled) {
+            initPublishView({
+                subscribedTopics: subscribedTopicPatterns, 
+                simulatorListContainer: simulatorControls,
+                isMultiBroker: isMultiBroker, 
+                brokerConfigs: brokerConfigs,
+                dataProviders: dataProviders
+            });
+        }
 
-        initAdminView();
+        if (currentUser.role === 'admin') {
+            initAdminView();
+        }
 
         if (appConfig.viewAlertsEnabled) {
             initAlertsView({
@@ -951,7 +967,17 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChartCollapseAll?.addEventListener('click', () => chartTree.toggleAllFolders(true));
         chartFilterInput?.addEventListener('input', () => chartTree.applyFilter(chartFilterInput.value));
 
-        const routeNames = ['tree', 'hmi', 'history', 'modeler', 'mapper', 'chart', 'publish', 'admin', 'alerts'];
+        // Dynamically build the allowed route names
+        const routeNames = ['tree'];
+        if (appConfig.viewHmiEnabled) routeNames.push('hmi');
+        if (appConfig.viewHistoryEnabled) routeNames.push('history');
+        if (appConfig.viewModelerEnabled && currentUser.role === 'admin') routeNames.push('modeler');
+        if (appConfig.viewMapperEnabled) routeNames.push('mapper');
+        if (appConfig.viewChartEnabled) routeNames.push('chart');
+        if (appConfig.viewPublishEnabled) routeNames.push('publish');
+        if (currentUser.role === 'admin') routeNames.push('admin');
+        if (appConfig.viewAlertsEnabled) routeNames.push('alerts');
+
         const viewCallbacks = {
             history: mountHistoryView,
             admin: onAdminViewShow,
