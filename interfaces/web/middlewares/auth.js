@@ -1,7 +1,6 @@
 const basicAuth = require('basic-auth');
 const path = require('path');
 const session = require('express-session');
-const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
@@ -23,13 +22,11 @@ function configureAuth(app, appConfig, appLogger, userManager, sessionsPath, bas
     config = appConfig;
     logger = appLogger;
 
-    // 1. Session Middleware
+    // 1. Session Middleware using embedded DuckDB Store
+    const sessionStore = userManager.createSessionStore(session);
+
     app.use(session({
-        store: new FileStore({ 
-            path: sessionsPath, 
-            ttl: 30 * 86400, // 30 days persistence (in seconds)
-            logFn: function(){} // Optional: suppresses repetitive file store logs
-        }), 
+        store: sessionStore, 
         secret: config.SESSION_SECRET,
         resave: false,
         rolling: true,

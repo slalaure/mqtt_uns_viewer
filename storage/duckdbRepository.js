@@ -12,12 +12,13 @@
  *
  * Manages all WRITE operations for the embedded DuckDB database.
  * [UPDATED] Refactored to extend BaseRepository, inheriting batch queue logic.
- * [UPDATED] Implemented Smart Queue Compaction to prevent OOM without losing rare events.
+ * [UPDATED] Replaced lossy Queue Compaction with strict Spill-to-Disk (DLQ) to guarantee OT state integrity.
  */
 
 const BaseRepository = require('./baseRepository');
 
 const MAX_QUEUE_SIZE = 20000;
+const FLUSH_CHUNK_SIZE = 5000;
 
 class DuckDBRepository extends BaseRepository {
     constructor() {
@@ -48,31 +49,21 @@ class DuckDBRepository extends BaseRepository {
 
     /**
      * Pushes a new message object into the DuckDB write queue.
-     * Includes Smart Compaction to prevent OOM.
+     * Prevents OOM and ensures state integrity by spilling to DLQ rather than compacting.
      */
     push(message) {
         super.push(message);
 
-        // Smart Compaction: Protect against OOM by deduplicating high-frequency spam
-        // while perfectly preserving rare/low-frequency events (like alarms).
         if (this.writeQueue.length > MAX_QUEUE_SIZE) {
-            this.logger.warn(`⚠️ DuckDB write queue reached ${MAX_QUEUE_SIZE}. Triggering Smart Compaction...`);
-            const compactedMap = new Map();
+            this.logger.warn(`⚠️ DuckDB write queue reached ${MAX_QUEUE_SIZE}. Spilling oldest messages to DLQ to prevent OOM and data loss.`);
             
-            // Loop through the queue. Map.set will overwrite older messages 
-            // with the same topic, keeping only the latest state per topic.
-            for (const msg of this.writeQueue) {
-                compactedMap.set(msg.brokerId + '|' + msg.topic, msg);
-            }
+            const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             
-            const oldLength = this.writeQueue.length;
-            this.writeQueue = Array.from(compactedMap.values());
-            this.logger.info(`✅ Queue compacted from ${oldLength} to ${this.writeQueue.length} unique topics.`);
-            
-            // Fallback: If there are legitimately > 20000 unique topics bursting at once
-            if (this.writeQueue.length > MAX_QUEUE_SIZE) {
-                 this.writeQueue.splice(0, this.writeQueue.length - 15000);
-                 this.logger.warn(`⚠️ Hard limit applied. Dropped oldest messages.`);
+            if (this.dlqManager) {
+                this.dlqManager.push(excessMessages);
+                this.logger.info(`✅ Spilled ${FLUSH_CHUNK_SIZE} messages to DLQ.`);
+            } else {
+                this.logger.error("❌ DLQ Manager not available. Dropped messages to prevent OOM!");
             }
         }
 

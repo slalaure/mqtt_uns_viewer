@@ -10,6 +10,7 @@
  *
  * Reusable Payload Viewer Module
  * Manages a payload display panel and its associated history log.
+ * [UPDATED] Removed innerHTML usage in favor of safe DOM Element creation to prevent XSS.
  */
 
 /**
@@ -62,7 +63,7 @@ export function createPayloadViewer(elements) {
      */
     function updateHistory(brokerId, topic, data) {
         if (!historyLogEl) return;
-        historyLogEl.innerHTML = '';
+        historyLogEl.innerHTML = ''; // Clear existing children safely
         
         if (placeholderEl) {
              placeholderEl.style.display = 'none';
@@ -76,7 +77,10 @@ export function createPayloadViewer(elements) {
                 placeholderEl.textContent = `No recent history for ${displayTopic}.`;
                 placeholderEl.style.display = 'block';
             } else {
-                 historyLogEl.innerHTML = `<p class="history-placeholder">No recent history for ${displayTopic}.</p>`;
+                 const p = document.createElement('p');
+                 p.className = 'history-placeholder';
+                 p.textContent = `No recent history for ${displayTopic}.`;
+                 historyLogEl.appendChild(p);
             }
             return;
         }
@@ -85,21 +89,30 @@ export function createPayloadViewer(elements) {
             const div = document.createElement('div');
             div.className = 'topic-history-entry';
             
-            //  Add brokerId to history entry if multi-broker
-            const brokerHtml = isMultiBroker ? `<span class="history-entry-broker">[${entry.broker_id}]</span>` : '';
+            // XSS Safe DOM Construction
+            const tsSpan = document.createElement('span');
+            tsSpan.className = 'history-entry-timestamp';
+            tsSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
+            div.appendChild(tsSpan);
+
+            // Add brokerId to history entry if multi-broker
+            if (isMultiBroker) {
+                const brokerSpan = document.createElement('span');
+                brokerSpan.className = 'history-entry-broker';
+                brokerSpan.textContent = `[${entry.broker_id}]`;
+                div.appendChild(brokerSpan);
+            }
             
-            div.innerHTML = `
-                <span class="history-entry-timestamp">${new Date(entry.timestamp).toLocaleTimeString('en-GB')}</span>
-                ${brokerHtml}
-                <pre class="history-entry-payload"></pre>
-            `;
-            const pre = div.querySelector('.history-entry-payload');
+            const pre = document.createElement('pre');
+            pre.className = 'history-entry-payload';
             try {
                 // entry.payload is a string from the server
                 pre.textContent = JSON.stringify(JSON.parse(entry.payload), null, 2);
             } catch (e) {
                 pre.textContent = entry.payload; // It's a raw string
             }
+            div.appendChild(pre);
+
             historyLogEl.appendChild(div);
         });
     }

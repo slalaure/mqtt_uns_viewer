@@ -15,6 +15,7 @@
  * [UPDATED] Integrated showToast system to replace native alerts for camera/mic issues.
  * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  * [UPDATED] Fixed Catch-22 where FAB listener was never bound by mounting globally on init.
+ * [UPDATED] Implemented strict DOMPurify HTML sanitization to prevent XSS payloads from malicious models/messages.
  */
 import { state } from './state.js';
 import { trackEvent, confirmModal, showToast } from './utils.js';
@@ -78,6 +79,11 @@ let pendingApproval = null; // Store pending approval chunk
 
 // --- Deduplication Set ---
 let processedChunkIds = new Set();
+
+// --- Safe HTML Sanitization Wrapper ---
+const sanitizeHtml = (dirtyHtml) => {
+    return window.DOMPurify ? window.DOMPurify.sanitize(dirtyHtml) : dirtyHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+};
 
 // --- Named Event Handlers ---
 const onFabClick = () => toggleChatWidget(true);
@@ -643,7 +649,7 @@ function handleFileSelect(e) {
 function renderPreview() {
     if(!pendingAttachment) { previewContainer.style.display='none'; return; }
     previewContainer.style.display='flex';
-    previewContainer.innerHTML = `<div class="preview-item"><img src="${pendingAttachment.type==='image'?pendingAttachment.content:''}">${pendingAttachment.type==='image'?'':`<div class="file-icon">📄</div>`}<span class="file-name">${pendingAttachment.name}</span><button class="btn-remove-attachment">×</button></div>`;
+    previewContainer.innerHTML = `<div class="preview-item"><img src="${pendingAttachment.type==='image'?sanitizeHtml(pendingAttachment.content):''}">${pendingAttachment.type==='image'?'':`<div class="file-icon">📄</div>`}<span class="file-name">${sanitizeHtml(pendingAttachment.name)}</span><button class="btn-remove-attachment">×</button></div>`;
     previewContainer.querySelector('.btn-remove-attachment').onclick = () => { pendingAttachment=null; fileInput.value=''; renderPreview(); };
 }
 
@@ -716,21 +722,21 @@ function appendMessageToUI(msg) {
         let htmlParts = '';
         msg.content.forEach(part => {
             if (part.type === 'text') htmlParts += formatMessageContent(part.text);
-            else if (part.type === 'image_url') htmlParts += `<div class="chat-image-container"><img src="${part.image_url.url}" class="chat-image"></div>`;
+            else if (part.type === 'image_url') htmlParts += `<div class="chat-image-container"><img src="${sanitizeHtml(part.image_url.url)}" class="chat-image"></div>`;
         });
-        div.innerHTML = htmlParts;
+        div.innerHTML = sanitizeHtml(htmlParts);
     } else {
         let htmlContent = formatMessageContent(msg.content || '');
 
         if (msg.tool_calls) {
-            msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${t.function.name}</div>`);
+            msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${sanitizeHtml(t.function.name)}</div>`);
         }
 
         if (msg.role === 'tool') {
             div.classList.add('system');
-            div.innerHTML = `<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`;
+            div.innerHTML = sanitizeHtml(`<div class="tool-usage-header">Output (${msg.name}):</div><small>${htmlContent.substring(0,150)}...</small>`);
         } else {
-            div.innerHTML = htmlContent;
+            div.innerHTML = sanitizeHtml(htmlContent);
         }
     }
 
@@ -748,14 +754,21 @@ function appendMessageToUI(msg) {
 
 function formatMessageContent(text) {
     if (!text) return '';
+    let rawHtml = '';
     if (window.marked) {
         try {
-            return window.marked.parse(text);
+            rawHtml = window.marked.parse(text);
         } catch (e) {
             console.warn("Markdown parsing failed, falling back to basic formatting.", e);
+            rawHtml = basicFormat(text);
         }
+    } else {
+        rawHtml = basicFormat(text);
     }
-    // Basic Fallback (original logic)
+    return rawHtml;
+}
+
+function basicFormat(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
                .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -779,6 +792,7 @@ function appendToLog(container, text, type = 'info') {
     if (!container) return;
 
     const line = document.createElement('div');
+    const safeText = sanitizeHtml(text);
 
     // Legacy Deduplication (Keep it for safety)
     if (container.lastChild && container.lastChild.textContent.includes(text)) {
@@ -786,15 +800,15 @@ function appendToLog(container, text, type = 'info') {
     }
 
     if (type === 'tool_start') {
-        line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${text}`;
+        line.innerHTML = `<span class="typing-dot" style="width:6px;height:6px;margin-right:5px;display:inline-block;animation:typing-blink 1s infinite"></span> ${safeText}`;
     } else if (type === 'tool_result') {
-        line.innerHTML = `✅ ${text}`;
+        line.innerHTML = `✅ ${safeText}`;
         line.style.color = 'var(--color-success)';
     } else if (type === 'error') {
-        line.innerHTML = `⚠️ ${text}`;
+        line.innerHTML = `⚠️ ${safeText}`;
         line.style.color = 'var(--color-danger)';
     } else {
-        line.innerHTML = `<small style="opacity:0.8">${text}</small>`;
+        line.innerHTML = `<small style="opacity:0.8">${safeText}</small>`;
     }
 
     container.appendChild(line);
@@ -840,7 +854,7 @@ function renderApprovalUI(approvalData) {
     
     approvalData.toolCalls.forEach(tc => {
         html += `<div style="font-family:monospace; font-size:0.85em; background:var(--color-bg-secondary); padding:5px; border-radius:4px; margin-bottom:5px;">
-            > ${tc.function.name}(...)
+            > ${sanitizeHtml(tc.function.name)}(...)
         </div>`;
     });
 
@@ -850,7 +864,7 @@ function renderApprovalUI(approvalData) {
         <button class="tool-button button-danger btn-deny" style="flex:1;">Deny</button>
     </div>`;
 
-    div.innerHTML = html;
+    div.innerHTML = sanitizeHtml(html); // Ensure overall DOM is clean
     chatHistory.appendChild(div);
     scrollToBottom();
 

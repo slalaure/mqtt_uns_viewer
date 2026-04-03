@@ -11,9 +11,12 @@
  * Orchestrates the processing of a new message from ANY data provider (MQTT, OPC UA, File, etc.).
  * [UPDATED] Handles ingress Correlation IDs or generates them if missing.
  * [UPDATED] Eradicated silent catches: Added logger tracking for deep JSON parsing failures.
+ * [UPDATED] Delegated heavy JSON parsing and Sparkplug B decoding to a pool of Worker Threads to unblock Event Loop.
  */
 
 const crypto = require('crypto');
+const { Worker } = require('worker_threads');
+const os = require('os');
 
 // --- Helper Functions ---
 function longReplacer(key, value) {
@@ -33,6 +36,67 @@ function safeJsonParse(str, reqLogger) {
         return { raw_payload: str };
     }
 }
+
+// --- Worker Pool Setup for Heavy Payload Parsing ---
+const workerScript = `
+    const { parentPort } = require('worker_threads');
+    let spBv10Codec = null; // Lazy load to save memory if unused
+
+    parentPort.on('message', (task) => {
+        try {
+            if (task.action === 'decode_sparkplug') {
+                if (!spBv10Codec) spBv10Codec = require('sparkplug-payload').get("spBv1.0");
+                const decoded = spBv10Codec.decodePayload(Buffer.from(task.payload));
+                parentPort.postMessage({ id: task.id, result: decoded });
+            } else if (task.action === 'parse_json') {
+                const str = Buffer.isBuffer(task.payload) ? task.payload.toString('utf-8') : task.payload;
+                const parsed = JSON.parse(str);
+                parentPort.postMessage({ id: task.id, result: parsed });
+            } else {
+                throw new Error('Unknown action');
+            }
+        } catch (err) {
+            parentPort.postMessage({ id: task.id, error: err.message });
+        }
+    });
+`;
+
+class PayloadWorkerPool {
+    constructor(size) {
+        this.workers = [];
+        this.nextWorker = 0;
+        this.callbacks = new Map();
+        this.taskId = 0;
+
+        for (let i = 0; i < size; i++) {
+            const worker = new Worker(workerScript, { eval: true });
+            worker.on('message', (msg) => {
+                const cb = this.callbacks.get(msg.id);
+                if (cb) {
+                    this.callbacks.delete(msg.id);
+                    if (msg.error) cb.reject(new Error(msg.error));
+                    else cb.resolve(msg.result);
+                }
+            });
+            worker.on('error', (err) => console.error('[PayloadWorkerPool] Worker Error:', err));
+            this.workers.push(worker);
+        }
+    }
+
+    execute(action, payload) {
+        return new Promise((resolve, reject) => {
+            const id = ++this.taskId;
+            this.callbacks.set(id, { resolve, reject });
+            const worker = this.workers[this.nextWorker];
+            this.nextWorker = (this.nextWorker + 1) % this.workers.length;
+            worker.postMessage({ id, action, payload });
+        });
+    }
+}
+
+// Instantiate pool matching CPU cores (capped at 4 to balance with other I/O tasks)
+const poolSize = Math.max(2, Math.min(os.cpus().length - 1, 4));
+const workerPool = new PayloadWorkerPool(poolSize);
 
 // --- Module-Scoped Variables ---
 let logger;
@@ -62,7 +126,7 @@ let throttleResetTimer = null;
 async function handleMessage(providerId, topic, payload, options = {}) {
     const timestamp = new Date();
     
-    // [UPDATED] Use ingress correlationId if provided, otherwise generate a new one
+    // Use ingress correlationId if provided, otherwise generate a new one
     const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null, correlationId: ingressCorrelationId } = options;
     const correlationId = ingressCorrelationId || crypto.randomUUID(); 
 
@@ -102,15 +166,27 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             payloadStringForDb = payloadStringForWs;
             payloadObjectForMapper = oversizeMsg;
         } else {
-            // --- 3. Payload Formatting & Normalization ---
+            // --- 3. Payload Formatting & Normalization (Worker Pool Offloading) ---
             if (decodeError) {
                 // The provider tried to decode it (e.g. Protobuf) but failed
                 payloadStringForWs = rawBuffer ? rawBuffer.toString('hex') : "unknown_hex";
                 payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: decodeError });
                 payloadObjectForMapper = safeJsonParse(payloadStringForDb, handlerLogger);
 
+            } else if (isSparkplugOrigin && rawBuffer && Buffer.isBuffer(rawBuffer)) {
+                // [NEW] Offloaded Sparkplug decoding to Worker Thread
+                try {
+                    payloadObjectForMapper = await workerPool.execute('decode_sparkplug', rawBuffer);
+                    payloadStringForWs = JSON.stringify(payloadObjectForMapper, longReplacer, 2);
+                    payloadStringForDb = JSON.stringify(payloadObjectForMapper, longReplacer);
+                } catch (err) {
+                    handlerLogger.error({ err, topic }, "❌ Error decoding Sparkplug payload in Worker");
+                    payloadStringForWs = rawBuffer.toString('hex');
+                    payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: err.message });
+                    payloadObjectForMapper = { raw_payload_hex: payloadStringForWs, decode_error: err.message };
+                }
             } else if (typeof payload === 'object' && !Buffer.isBuffer(payload)) {
-                // The Provider ALREADY decoded the payload into a JS Object (e.g. Sparkplug)
+                // The Provider ALREADY decoded the payload into a JS Object (e.g. legacy Sparkplug logic or HTTP ingest)
                 payloadObjectForMapper = payload;
                 payloadStringForWs = JSON.stringify(payload, longReplacer, 2);
                 payloadStringForDb = JSON.stringify(payload, longReplacer);
@@ -120,7 +196,8 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                 payloadStringForWs = tempPayloadString;
                 
                 try {
-                    payloadObjectForMapper = JSON.parse(tempPayloadString);
+                    // [NEW] Offloaded JSON parsing to Worker Thread
+                    payloadObjectForMapper = await workerPool.execute('parse_json', payload);
                     payloadStringForDb = tempPayloadString;
                 } catch (parseError) {
                      handlerLogger.debug({ err: parseError, topic }, `Received non-JSON payload. Storing as raw string.`);
@@ -130,7 +207,6 @@ async function handleMessage(providerId, topic, payload, options = {}) {
             }
 
             // --- 3.5 Semantic Enrichment (I3X) ---
-            // Ask SemanticManager if this raw topic maps to a known I3X Element
             const semanticMatch = semanticManager.resolveTopic(topic);
             if (semanticMatch && payloadObjectForMapper && typeof payloadObjectForMapper === 'object') {
                 payloadObjectForMapper._i3x = {

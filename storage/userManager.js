@@ -11,6 +11,8 @@
  * User Manager
  * Handles User Persistence in DuckDB and Password Hashing.
  * [UPDATED] Adds Admin role support, user deletion logic, and schema migration.
+ * [UPDATED] Implemented custom Express Session Store backed by DuckDB for optimized I/O.
+ * [UPDATED] Fixed DuckDB parameter binding array unpacking bug for prepared statements.
  */
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
@@ -22,7 +24,7 @@ let logger = null;
 let sessionsDir = null; // Path to remove user data
 
 /**
- * Initializes the User Manager and creates the users table.
+ * Initializes the User Manager and creates the users and sessions tables.
  * @param {duckdb.Database} database - The DuckDB connection.
  * @param {pino.Logger} appLogger - The application logger.
  * @param {string} sessionsPath - The directory where user data is stored (for deletion).
@@ -32,7 +34,7 @@ function init(database, appLogger, sessionsPath) {
     logger = appLogger.child({ component: 'UserManager' });
     sessionsDir = sessionsPath;
 
-    // Step 1: Create Table with 'role' column
+    // Step 1: Create Users Table
     const createTableQuery = `
         CREATE TABLE IF NOT EXISTS users (
             id VARCHAR PRIMARY KEY,
@@ -88,6 +90,87 @@ function init(database, appLogger, sessionsPath) {
             });
         }
     });
+
+    // Step 3: Create Sessions Table for express-session
+    const createSessionTableQuery = `
+        CREATE TABLE IF NOT EXISTS sessions (
+            sid VARCHAR PRIMARY KEY,
+            session VARCHAR,
+            expires TIMESTAMPTZ
+        );
+    `;
+    db.run(createSessionTableQuery, (err) => {
+        if (err) {
+            logger.error({ err }, "❌ Failed to create 'sessions' table.");
+        } else {
+            // Clean up expired sessions on startup
+            db.run("DELETE FROM sessions WHERE expires <= current_timestamp;");
+        }
+    });
+}
+
+/**
+ * Creates and returns a DuckDB-backed session store for express-session.
+ * Evaluates db lazily at runtime since middleware mounts before db init.
+ */
+function createSessionStore(sessionModule) {
+    const Store = sessionModule.Store;
+    
+    class DuckDBSessionStore extends Store {
+        constructor(options = {}) {
+            super(options);
+        }
+
+        get(sid, callback) {
+            if (!db) return callback(null, null);
+            db.all("SELECT session FROM sessions WHERE sid = ? AND expires > current_timestamp", sid, (err, rows) => {
+                if (err) return callback(err);
+                if (!rows || rows.length === 0) return callback(null, null);
+                try {
+                    return callback(null, JSON.parse(rows[0].session));
+                } catch (e) {
+                    return callback(e);
+                }
+            });
+        }
+
+        set(sid, sess, callback) {
+            if (!db) return callback && callback(null);
+            const expires = sess.cookie && sess.cookie.expires 
+                ? new Date(sess.cookie.expires).toISOString() 
+                : new Date(Date.now() + 86400000).toISOString();
+            const sessionStr = JSON.stringify(sess);
+            
+            const query = `
+                INSERT INTO sessions (sid, session, expires) 
+                VALUES (?, ?, ?) 
+                ON CONFLICT(sid) DO UPDATE SET session = excluded.session, expires = excluded.expires
+            `;
+            // DuckDB requires parameters to be spread out, not passed as a single array
+            db.run(query, sid, sessionStr, expires, (err) => {
+                if (callback) callback(err);
+            });
+        }
+
+        destroy(sid, callback) {
+            if (!db) return callback && callback(null);
+            db.run("DELETE FROM sessions WHERE sid = ?", sid, (err) => {
+                if (callback) callback(err);
+            });
+        }
+
+        touch(sid, sess, callback) {
+            if (!db) return callback && callback(null);
+            const expires = sess.cookie && sess.cookie.expires 
+                ? new Date(sess.cookie.expires).toISOString() 
+                : new Date(Date.now() + 86400000).toISOString();
+            db.run("UPDATE sessions SET expires = ? WHERE sid = ?", expires, sid, (err) => {
+                if (callback) callback(err);
+            });
+        }
+    }
+    
+    return new DuckDBSessionStore();
 }
 
 /**
@@ -263,6 +346,7 @@ function deleteUser(userId) {
 
 module.exports = {
     init,
+    createSessionStore,
     ensureAdminUser,
     findById,
     findByUsername,
