@@ -23,20 +23,82 @@ const spBv10Codec = require('sparkplug-payload').get("spBv10");
 
 const MAPPINGS_FILE_PATH = path.join(__dirname, '..', '..', 'data', 'mappings.json');
 
+/**
+ * @typedef {Object} MapperTarget
+ * @property {string} id Unique identifier for the target.
+ * @property {boolean} enabled Whether the target is active.
+ * @property {string} [code] Custom JavaScript code for transformation.
+ * @property {string} [outputTopic] Topic template for publishing results.
+ * @property {string} [targetBrokerId] Optional specific broker ID for output.
+ */
+
+/**
+ * @typedef {Object} MapperRule
+ * @property {string} sourceTopic MQTT topic pattern to match.
+ * @property {MapperTarget[]} targets List of transformation targets.
+ */
+
+/**
+ * @typedef {Object} MapperVersion
+ * @property {string} id Version identifier.
+ * @property {string} name Display name of the version.
+ * @property {string} createdAt ISO timestamp.
+ * @property {MapperRule[]} rules Rules associated with this version.
+ */
+
+/**
+ * @typedef {Object} MapperConfig
+ * @property {MapperVersion[]} versions List of all mapper versions.
+ * @property {string} activeVersionId ID of the currently active version.
+ */
+
+/**
+ * @typedef {Object} MapperLogEntry
+ * @property {string} ts ISO timestamp.
+ * @property {string} inTopic Incoming topic.
+ * @property {string} [correlationId] Correlation ID for tracking.
+ * @property {string} [error] Error message if execution failed.
+ * @property {string} [debug] Debug message.
+ * @property {string} [outTopic] Resulting outgoing topic.
+ * @property {string} [outPayload] Truncated output payload string.
+ */
+
+/**
+ * @typedef {Object} MapperMetricsEntry
+ * @property {number} count Total execution count.
+ * @property {MapperLogEntry[]} logs Recent execution logs.
+ */
+
 class MapperEngine {
+    /**
+     * @param {Map<string, import('mqtt').MqttClient>} connectionsMap Map of active MQTT connections.
+     * @param {Function} broadcaster Callback function for broadcasting messages to clients.
+     * @param {Object} logger Logger instance (Pino).
+     * @param {Function} longReplacer Function to handle BigInt/Long serialization in JSON.
+     * @param {Object} appServerConfig Application server configuration object.
+     */
     constructor(connectionsMap, broadcaster, logger, longReplacer, appServerConfig) {
+        /** @type {Map<string, import('mqtt').MqttClient>} */
         this.activeConnections = connectionsMap;
+        /** @type {Function} */
         this.broadcastCallback = broadcaster;
+        /** @type {Object} */
         this.engineLogger = logger.child({ component: 'MapperEngine' });
+        /** @type {Function} */
         this.payloadReplacer = longReplacer;
+        /** @type {Object} */
         this.serverConfig = appServerConfig;
 
+        /** @type {MapperConfig} */
         this.config = { versions: [], activeVersionId: null };
+        /** @type {Map<string, MapperMetricsEntry>} */
         this.metrics = new Map();
+        /** @type {NodeJS.Timeout|null} */
         this.metricsUpdateTimer = null;
+        /** @type {Object|null} */
         this.internalDb = null;
         
-        // Native VM Script Cache
+        /** @type {Map<string, {script: import('vm').Script, rawCode: string}>} */
         this.scriptCache = new Map(); 
 
         this.DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
@@ -58,11 +120,20 @@ return msg;
         this.loadMappings();
     }
 
+    /**
+     * Injects a database connection for use within mapper scripts.
+     * @param {Object} dbConnection Database connection object.
+     */
     setDb(dbConnection) {
         this.internalDb = dbConnection;
         this.engineLogger.info("✅ Database connection injected into Mapper Engine.");
     }
 
+    /**
+     * Creates a new mapper version structure.
+     * @param {string} name Name of the version.
+     * @returns {MapperVersion}
+     */
     createNewVersion(name) {
         const newVersionId = `v_${Date.now()}`;
         return {

@@ -20,6 +20,7 @@
 import { state, subscribe, unsubscribe } from './state.js';
 import { mqttPatternToClientRegex, trackEvent, showToast } from './utils.js'; 
 import { createPayloadViewer } from './payload-viewer.js';
+import './components/mapper-target-editor.js';
 
 // --- DOM Element Querying ---
 const mapperTransformPlaceholder = document.getElementById('mapper-transform-placeholder');
@@ -430,275 +431,72 @@ function generateUniqueTargetName(sourceTopic, rule) {
 
 /**
  * Creates the DOM for a single target editor.
+ * [REFACTORED] Now uses MapperTargetEditor custom Web Component.
  */
 function createTargetEditor(rule, target) {
-    const template = mapperTargetTemplate.content.cloneNode(true);
-    const editorDiv = template.querySelector('.mapper-target-editor');
-    editorDiv.dataset.targetId = target.id;
+    const targetEditor = document.createElement('mapper-target-editor');
     
-    const isSourceSparkplug = rule.sourceTopic.startsWith('spBv1.0/');
-
-    // --- Title & Collapse Logic ---
-    const toggleBtn = editorDiv.querySelector('.target-toggle-collapse');
-    toggleBtn.addEventListener('click', () => {
-        editorDiv.classList.toggle('collapsed');
-        // Give Ace editor a moment to realize it was un-hidden so it can resize
-        setTimeout(() => {
-            const editor = aceEditors.get(target.id);
-            if (editor) editor.resize();
-        }, 50);
-    });
-
-    const titleInput = editorDiv.querySelector('.target-editor-title-input');
-    if (!target.name) {
-        target.name = generateUniqueTargetName(rule.sourceTopic, rule);
-    }
-    titleInput.value = target.name;
-    titleInput.addEventListener('change', (e) => {
-        let newName = e.target.value.trim();
-        if (!newName) newName = "Unnamed Target";
-        
-        // Prevent duplicates
-        const isDuplicate = rule.targets.some(t => t.id !== target.id && t.name === newName);
-        if (isDuplicate) {
-            newName = newName + "_" + Math.floor(Math.random() * 1000);
-            e.target.value = newName;
-        }
-        
-        target.name = newName;
-        state.mapperUnsaved = true;
-    });
-
-    const enabledToggle = editorDiv.querySelector('.target-enabled-toggle');
-    enabledToggle.checked = target.enabled;
-    enabledToggle.addEventListener('change', () => {
-        target.enabled = enabledToggle.checked;
-        trackEvent('mapper_target_toggle'); 
-        state.mapperUnsaved = true;
-    });
-
-    const deleteButton = editorDiv.querySelector('.target-delete-button');
-    deleteButton.addEventListener('click', () => {
-        showPruneModal(rule, target, currentEditingBrokerId, currentEditingSourceTopic); 
-    });
-
-    // --- Routing Mode Logic (UI vs Code) ---
-    if (!target.routingMode) target.routingMode = 'ui'; // Default for old rules
-    const routingModeSelect = editorDiv.querySelector('.routing-mode-select');
-    const topicGroup = editorDiv.querySelector('.target-topic-group');
-    const outputTopicInput = editorDiv.querySelector('.target-output-topic');
-    
-    outputTopicInput.value = target.outputTopic || '';
-    routingModeSelect.value = target.routingMode;
-
-    const applyRoutingModeUI = () => {
-        if (target.routingMode === 'code') {
-            topicGroup.style.display = 'none';
-            outputTopicInput.classList.remove('input-warning', 'input-error');
-            outputTopicInput.title = '';
-        } else {
-            topicGroup.style.display = 'block';
-            validateTopic(); // Revalidate when shown
-        }
-    };
-
-    routingModeSelect.addEventListener('change', (e) => {
-        const oldMode = target.routingMode;
-        target.routingMode = e.target.value;
-        applyRoutingModeUI();
-        
-        // Smart Code Switch
-        const editor = aceEditors.get(target.id);
-        if (editor) {
-            const currentCode = editor.session.getValue().trim();
-            // Switch to Code template if it was default UI template
-            if (target.routingMode === 'code' && oldMode === 'ui') {
-                if (currentCode === DEFAULT_JS_CODE_UI.trim() || currentCode === mapperConfig.DEFAULT_JS_CODE?.trim()) {
-                    editor.session.setValue(DEFAULT_JS_CODE_CODE);
+    targetEditor.init(rule, target, {
+        context: {
+            isMultiProvider,
+            availableProviders
+        },
+        callbacks: {
+            onToggleCollapse: (targetId) => {
+                // Additional logic if needed
+            },
+            onDelete: (rule, target) => {
+                showPruneModal(rule, target, currentEditingBrokerId, currentEditingSourceTopic); 
+            },
+            onValidateTopic: (topicValue, isSourceSparkplug) => {
+                let warning = '';
+                let isError = false;
+                if (topicValue.trim()) {
+                    const topicsList = topicValue.split(',').map(t => t.trim()).filter(Boolean);
+                    for (const singleTopic of topicsList) {
+                        if (!isMultiProvider && !isTopicSubscribed(singleTopic)) {
+                            warning = 'Warning: One or more topics might not be covered by current subscriptions.';
+                        }
+                        if (isSourceSparkplug && singleTopic.startsWith('spBv1.0/')) {
+                            warning += (warning ? '\n' : '') + 'Warning: Republishing Sparkplug data to spBv1.0/ namespace can cause decoding loops.';
+                        }
+                        if (!isSourceSparkplug && singleTopic.startsWith('spBv1.0/')) {
+                            warning = 'ERROR: Cannot map a non-Sparkplug source to the spBv1.0/ namespace.';
+                            isError = true;
+                        }
+                    }
                 }
-            } 
-            // Switch to UI template if it was default Code template
-            else if (target.routingMode === 'ui' && oldMode === 'code') {
-                if (currentCode === DEFAULT_JS_CODE_CODE.trim()) {
-                    editor.session.setValue(DEFAULT_JS_CODE_UI);
+                return { warning, isError, message: warning };
+            },
+            onRoutingModeChange: (targetId, oldMode, newMode) => {
+                const editor = aceEditors.get(targetId);
+                if (editor) {
+                    const currentCode = editor.session.getValue().trim();
+                    if (newMode === 'code' && oldMode === 'ui') {
+                        if (currentCode === DEFAULT_JS_CODE_UI.trim() || currentCode === mapperConfig.DEFAULT_JS_CODE?.trim()) {
+                            editor.session.setValue(DEFAULT_JS_CODE_CODE);
+                        }
+                    } else if (newMode === 'ui' && oldMode === 'code') {
+                        if (currentCode === DEFAULT_JS_CODE_CODE.trim()) {
+                            editor.session.setValue(DEFAULT_JS_CODE_UI);
+                        }
+                    }
                 }
+            },
+            onEditorCreated: (targetId, editor) => {
+                aceEditors.set(targetId, editor);
+            },
+            getPayload: () => currentEditingPayload,
+            onSave: () => onSave(),
+            onRendered: (editorDiv, targetId) => {
+                updateMetricsForTarget(editorDiv, rule.sourceTopic, targetId);
             }
         }
-        state.mapperUnsaved = true;
     });
 
-    const validateTopic = () => {
-        if (target.routingMode === 'code') return; // Skip UI validation if mode is code
-        
-        const topicValue = outputTopicInput.value; 
-        target.outputTopic = topicValue; 
-        let warningMessage = '';
-        let isError = false;
-
-        if (topicValue.trim()) {
-            const topicsList = topicValue.split(',').map(t => t.trim()).filter(Boolean);
-            for (const singleTopic of topicsList) {
-                if (!isMultiProvider && !isTopicSubscribed(singleTopic)) {
-                    warningMessage = 'Warning: One or more topics might not be covered by current subscriptions.';
-                }
-                if (isSourceSparkplug && singleTopic.startsWith('spBv1.0/')) {
-                    warningMessage += (warningMessage ? '\n' : '') + 'Warning: Republishing Sparkplug data to spBv1.0/ namespace can cause decoding loops.';
-                }
-                if (!isSourceSparkplug && singleTopic.startsWith('spBv1.0/')) {
-                    warningMessage = 'ERROR: Cannot map a non-Sparkplug source to the spBv1.0/ namespace.';
-                    isError = true;
-                }
-            }
-        }
-
-        outputTopicInput.classList.remove('input-warning', 'input-error');
-        if (isError) {
-            outputTopicInput.classList.add('input-error');
-            outputTopicInput.title = warningMessage;
-        } else if (warningMessage) {
-            outputTopicInput.classList.add('input-warning');
-            outputTopicInput.title = warningMessage;
-        } else {
-            outputTopicInput.title = '';
-        }
-    };
-
-    outputTopicInput.addEventListener('input', () => {
-        validateTopic();
-        state.mapperUnsaved = true;
-    });
-    
-    // Apply initial state
-    applyRoutingModeUI();
-
-    // --- Provider Target Selector ---
-    if (isMultiProvider) {
-        const brokerGroup = document.createElement('div');
-        brokerGroup.className = 'form-group';
-        brokerGroup.style.margin = "0";
-        brokerGroup.style.flex = "1";
-        brokerGroup.style.minWidth = "200px";
-
-        const label = document.createElement('label');
-        label.textContent = 'Target Provider:';
-        label.style.marginBottom = "5px";
-
-        const select = document.createElement('select');
-        select.className = 'target-broker-select';
-        select.style.width = "100%";
-        
-        const sourceOption = document.createElement('option');
-        sourceOption.value = ""; 
-        sourceOption.textContent = "Same as Source";
-        select.appendChild(sourceOption);
-
-        availableProviders.forEach(provider => {
-            // Implicitly allow dynamic files to act as loopback streams
-            if (!provider.publish && (provider.type === 'file' || provider.type === 'dynamic')) {
-                provider.publish = ['#'];
-            }
-
-            const option = document.createElement('option');
-            option.value = provider.id;
-            const isReadOnly = (!provider.publish || provider.publish.length === 0);
-            const typeLabel = provider.type ? `[${provider.type.toUpperCase()}]` : '[MQTT]';
-            
-            if (isReadOnly) {
-                option.textContent = `🔒 ${provider.id} ${typeLabel} (Read-Only)`;
-                option.disabled = true; 
-            } else {
-                option.textContent = `${provider.id} ${typeLabel}`;
-            }
-            select.appendChild(option);
-        });
-
-        select.value = target.targetBrokerId || ""; 
-        
-        select.addEventListener('change', () => {
-            target.targetBrokerId = select.value || null; 
-            state.mapperUnsaved = true;
-        });
-
-        brokerGroup.appendChild(label);
-        brokerGroup.appendChild(select);
-        
-        const settingsRow = editorDiv.querySelector('.target-settings-row');
-        settingsRow.insertBefore(brokerGroup, editorDiv.querySelector('.routing-mode-group'));
-    }
-
-    // --- Ace Editor & Maximize Logic ---
-    const codeEditorDiv = editorDiv.querySelector('.target-code-editor');
-    
-    if (!target.code) {
-        target.code = DEFAULT_JS_CODE_UI;
-    }
-
-    const editor = ace.edit(codeEditorDiv);
-    editor.setTheme(isDarkTheme ? 'ace/theme/tomorrow_night' : 'ace/theme/chrome');
-    editor.session.setMode('ace/mode/javascript');
-    editor.session.setValue(target.code);
-    
-    editor.setOptions({
-        fontSize: "14px",
-        fontFamily: "monospace",
-        enableBasicAutocompletion: true, 
-        enableLiveAutocompletion: true,  
-        enableSnippets: true,            
-        useWorker: true 
-    });
-
-    editor.session.on('change', () => {
-        target.code = editor.session.getValue();
-        state.mapperUnsaved = true;
-    });
-
-    aceEditors.set(target.id, editor);
-
-    // Maximize/Minimize Button Logic
-    const maximizeBtn = editorDiv.querySelector('.target-maximize-code');
-    const minimizeBtn = editorDiv.querySelector('.target-minimize-button');
-    const saveMaximizedBtn = editorDiv.querySelector('.target-save-maximized');
-    const payloadRefContent = editorDiv.querySelector('.maximized-payload-content');
-
-    const toggleMaximized = () => {
-        const isMaximized = editorDiv.classList.toggle('maximized');
-        
-        if (isMaximized) {
-            // Inject current payload formatting
-            try {
-                if (currentEditingPayload) {
-                    const jsonObj = JSON.parse(currentEditingPayload);
-                    payloadRefContent.textContent = JSON.stringify(jsonObj, null, 2);
-                } else {
-                    payloadRefContent.textContent = "No payload received yet.";
-                }
-            } catch(e) {
-                payloadRefContent.textContent = currentEditingPayload || "No payload received yet.";
-            }
-        } 
-        // Force editor to recalculate its size after CSS change
-        setTimeout(() => editor.resize(), 50);
-    };
-
-    maximizeBtn.addEventListener('click', toggleMaximized);
-    minimizeBtn.addEventListener('click', toggleMaximized);
-    saveMaximizedBtn.addEventListener('click', () => {
-        onSave();
-    });
-
-    // Check Role to disable Save Maximize for standard users
-    const userRole = window.currentUser ? window.currentUser.role : 'user';
-    if (userRole !== 'admin') {
-        saveMaximizedBtn.style.display = 'none'; // Completely hidden for standard users
-    } else {
-        // Sync unsaved class if already unsaved
-        if (state.mapperUnsaved) saveMaximizedBtn.classList.add('btn-unsaved');
-    }
-
-    updateMetricsForTarget(editorDiv, rule.sourceTopic, target.id);
-
-    return editorDiv;
+    return targetEditor;
 }
+
 
 /**
  * Event handler for the "Add Target" button.

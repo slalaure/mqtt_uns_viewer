@@ -12,12 +12,40 @@ const path = require('path');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0"); 
 const BaseProvider = require('../baseProvider');
 
+/**
+ * @typedef {Object} MqttProviderConfig
+ * @extends import('../baseProvider').ProviderConfig
+ * @property {string} host Broker hostname.
+ * @property {number|string} port Broker port.
+ * @property {string} [protocol] Connection protocol ('mqtt', 'mqtts', 'ws', 'wss').
+ * @property {string} clientId MQTT client identifier.
+ * @property {string} [username] Authentication username.
+ * @property {string} [password] Authentication password.
+ * @property {string} [certFilename] Path to client certificate.
+ * @property {string} [keyFilename] Path to client private key.
+ * @property {string} [caFilename] Path to CA certificate.
+ * @property {string} [alpnProtocol] ALPN protocol name.
+ * @property {boolean} [rejectUnauthorized] Whether to reject unauthorized certificates.
+ * @property {string[]} [subscribe] List of topics to subscribe to.
+ * @property {string[]} [topics] Alias for subscribe.
+ * @property {number} [keepalive] Keepalive interval in seconds.
+ * @property {boolean} [clean] Whether to start a clean session.
+ */
+
 class MqttProvider extends BaseProvider {
+    /**
+     * @param {MqttProviderConfig} config 
+     * @param {import('../baseProvider').ProviderContext} context 
+     */
     constructor(config, context) {
         super(config, context);
+        /** @type {import('mqtt').MqttClient|null} */
         this.client = null;
     }
 
+    /**
+     * @returns {Promise<boolean>}
+     */
     async connect() {
         return new Promise((resolve) => {
             const {
@@ -27,6 +55,7 @@ class MqttProvider extends BaseProvider {
                 keepalive, clean
             } = this.config;
 
+            /** @type {import('mqtt').IClientOptions} */
             const options = {
                 host, 
                 port: parseInt(port, 10), 
@@ -155,6 +184,12 @@ class MqttProvider extends BaseProvider {
         this.connected = false;
     }
 
+    /**
+     * @param {string} topic 
+     * @param {Buffer|string} payload 
+     * @param {import('mqtt').IClientPublishOptions} options 
+     * @param {Function} [callback] 
+     */
     publish(topic, payload, options = { qos: 1, retain: false }, callback) {
         if (this.client && this.connected) {
             this.client.publish(topic, payload, options, callback);

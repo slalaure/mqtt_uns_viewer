@@ -18,7 +18,28 @@ const crypto = require('crypto');
 const { Worker } = require('worker_threads');
 const os = require('os');
 
+/**
+ * @typedef {Object} MessageOptions
+ * @property {boolean} [isSparkplugOrigin] Whether the message is a Sparkplug B payload.
+ * @property {Buffer} [rawBuffer] Original binary buffer of the payload.
+ * @property {string} [decodeError] Error message if initial decoding failed.
+ * @property {string} [correlationId] Existing correlation ID for tracking.
+ */
+
+/**
+ * @typedef {Object} WorkerTask
+ * @property {number} id Task identifier.
+ * @property {string} action Action to perform ('decode_sparkplug' | 'parse_json').
+ * @property {any} payload Data to process.
+ */
+
 // --- Helper Functions ---
+/**
+ * JSON replacer to handle BigInt values.
+ * @param {string} key 
+ * @param {any} value 
+ * @returns {any}
+ */
 function longReplacer(key, value) {
     if (typeof value === 'bigint') {
         return value.toString();
@@ -26,6 +47,12 @@ function longReplacer(key, value) {
     return value;
 }
 
+/**
+ * Safely parses a JSON string, falling back to a raw object on failure.
+ * @param {string} str 
+ * @param {Object} [reqLogger] 
+ * @returns {Object}
+ */
 function safeJsonParse(str, reqLogger) {
     try {
         return JSON.parse(str);
@@ -62,10 +89,17 @@ const workerScript = `
 `;
 
 class PayloadWorkerPool {
+    /**
+     * @param {number} size Number of workers in the pool.
+     */
     constructor(size) {
+        /** @type {Worker[]} */
         this.workers = [];
+        /** @type {number} */
         this.nextWorker = 0;
+        /** @type {Map<number, {resolve: Function, reject: Function}>} */
         this.callbacks = new Map();
+        /** @type {number} */
         this.taskId = 0;
 
         for (let i = 0; i < size; i++) {
@@ -83,6 +117,12 @@ class PayloadWorkerPool {
         }
     }
 
+    /**
+     * Executes a task in the worker pool.
+     * @param {'decode_sparkplug' | 'parse_json'} action 
+     * @param {any} payload 
+     * @returns {Promise<any>}
+     */
     execute(action, payload) {
         return new Promise((resolve, reject) => {
             const id = ++this.taskId;
@@ -99,20 +139,29 @@ const poolSize = Math.max(2, Math.min(os.cpus().length - 1, 4));
 const workerPool = new PayloadWorkerPool(poolSize);
 
 // --- Module-Scoped Variables ---
+/** @type {Object} */
 let logger;
+/** @type {Object} */
 let config;
+/** @type {Object} */
 let wsManager;
+/** @type {Object} */
 let mapperEngine;
+/** @type {Object} */
 let dataManager;
+/** @type {Function} */
 let broadcastDbStatus;
+/** @type {Object} */
 let alertManager;
 const semanticManager = require('./semantic/semanticManager'); // Semantic Engine
 
 const MAX_PAYLOAD_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
 
 // --- Smart Throttling State ---
+/** @type {Map<string, number>} */
 const namespaceCounts = new Map();
 const MAX_MSGS_PER_SEC_PER_NAMESPACE = 50; 
+/** @type {NodeJS.Timeout|null} */
 let throttleResetTimer = null;
 
 /**
@@ -121,7 +170,7 @@ let throttleResetTimer = null;
  * @param {string} providerId - The ID of the provider sending the data
  * @param {string} topic - The destination topic/node
  * @param {any} payload - The payload (String, Buffer, or parsed JS Object)
- * @param {Object} options - Metadata injected by the provider (e.g., isSparkplugOrigin, correlationId)
+ * @param {MessageOptions} [options] - Metadata injected by the provider
  */
 async function handleMessage(providerId, topic, payload, options = {}) {
     const timestamp = new Date();
@@ -266,6 +315,14 @@ async function handleMessage(providerId, topic, payload, options = {}) {
 
 /**
  * Initializes the Central Message Dispatcher.
+ * @param {Object} appLogger Pino logger.
+ * @param {Object} appConfig App configuration.
+ * @param {Object} appWsManager WebSocket manager.
+ * @param {import('./engine/mapperEngine')} appMapperEngine Mapper engine.
+ * @param {Object} appDataManager Data manager.
+ * @param {Function} appBroadcastDbStatus Callback for DB status.
+ * @param {import('./engine/alertManager')} appAlertManager Alert manager.
+ * @returns {typeof handleMessage}
  */
 function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManager, appBroadcastDbStatus, appAlertManager) {
     logger = appLogger.child({ component: 'MessageDispatcher' });

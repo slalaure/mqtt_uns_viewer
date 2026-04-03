@@ -25,6 +25,7 @@ import { mqttPatternToRegex, makeResizable, trackEvent } from './utils.js';
 import { createTreeManager } from './tree-manager.js';
 import { createPayloadViewer } from './payload-viewer.js';
 import { connectWebSocket, getWebSocket, sendWebSocketMessage } from './ws-client.js';
+import realtimeService from './services/realtime-service.js';
 import { initRouter, handleRoutingFromUrl } from './router.js';
 import { 
     initHmiView, 
@@ -487,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sendWebSocketMessage({ type: 'get-history-range', start: start, end: end, filter: filter });
     }
 
-    // --- WebSocket Connection & Logic ---
+    // --- WebSocket Connection & Realtime Service Logic ---
     (async () => {
         try {
             const configResponse = await fetch('api/config');
@@ -501,26 +502,145 @@ document.addEventListener('DOMContentLoaded', () => {
             dataProviders = appConfig.dataProviders || [];
             alertsEnabled = appConfig.viewAlertsEnabled; 
             
-            // Store globally for routing logic
             window.viewModelerEnabled = appConfig.viewModelerEnabled;
 
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             let cleanBasePath = appBasePath;
-            if (!cleanBasePath.endsWith('/')) {
-                cleanBasePath += '/';
-            }
+            if (!cleanBasePath.endsWith('/')) cleanBasePath += '/';
             const wsUrl = `${wsProtocol}//${window.location.host}${cleanBasePath}`;
             
-            connectWebSocket(wsUrl, {
+            realtimeService.init(wsUrl, {
                 onOpen: () => finishInitialization(appConfig),
-                onMessage: (message) => {
-                    if (isAppInitialized) processWsMessage(message);
-                    else messageBuffer.push(message);
+                onTopicUpdate: (brokerId, topic, payload) => {
+                    updateMap(brokerId, topic, payload);
                 },
-                onError: (err) => console.error("WebSocket Error:", err),
-                onClose: (event) => {
-                    isAppInitialized = false;
+                onBatchProcessed: (historyEntries) => {
+                    const localEntries = historyEntries.map(msg => ({ ...msg, timestampMs: new Date(msg.timestamp).getTime() }));
+                    setHistoryData(localEntries, false, true);
+                    
+                    let localMax = globalDbMax;
+                    localEntries.forEach(e => { if (e.timestampMs > localMax) localMax = e.timestampMs; });
+                    globalDbMax = localMax;
+
+                    updateHmiTimelineUI(globalDbMin, globalDbMax);
+                    updateChartSliderUI(globalDbMin, globalDbMax, false);
+
+                    // Update trees and payload viewer
+                    const uniqueInBatch = new Map();
+                    localEntries.forEach(e => uniqueInBatch.set(`${e.brokerId}|${e.topic}`, e));
+
+                    uniqueInBatch.forEach(msg => {
+                        let ignore = false;
+                        for (const pattern of recentlyPrunedPatterns) {
+                            try { if (mqttPatternToRegex(pattern).test(msg.topic)) { ignore = true; break; } } catch (e) {}
+                        }
+                        if (!ignore) {
+                            const options = { enableAnimations: true };
+                            const node = mainTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp, options);
+                            mapperTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp);
+                            chartTree?.update(msg.brokerId, msg.topic, msg.payload, msg.timestamp);
+                            
+                            if (state.isLivePayload && node && mainTree?.isTopicVisible(node)) {
+                                mainPayloadViewer.display(msg.brokerId, msg.topic, msg.payload);
+                            }
+                        }
+                    });
                 },
+                onOtherMessage: (message) => {
+                    try {
+                        switch(message.type) {
+                            case 'welcome':
+                                console.log(`[WS] Handshake successful. Client ID: ${message.clientId}`);
+                                window.wsClientId = message.clientId;
+                                break;
+                            case 'chat-stream':
+                                onChatStreamMessage(message);
+                                break;
+                            case 'alert-triggered':
+                                if (alertsEnabled) {
+                                    showGlobalAlert(message.alert);
+                                    refreshAlerts(); 
+                                }
+                                break;
+                            case 'alert-updated':
+                                if (alertsEnabled) refreshAlerts();
+                                break;
+                            case 'simulator-status': updateSimulatorStatuses(message.statuses); break;
+                            case 'db-bounds':
+                                globalDbMin = message.min; globalDbMax = message.max;
+                                setDbBounds(globalDbMin, globalDbMax); 
+                                updateChartSliderUI(globalDbMin, globalDbMax, true);
+                                updateHmiTimelineUI(globalDbMin, globalDbMax);
+                                break;
+                            case 'history-initial-data':
+                                allHistoryEntries = message.data.map(entry => ({ ...entry, brokerId: entry.broker_id || entry.brokerId || 'default_broker', timestampMs: new Date(entry.timestamp).getTime() }));
+                                setHmiHistoryData(allHistoryEntries);
+                                setHistoryData(allHistoryEntries, true, false);
+                                populateTreesFromHistory();
+                                break;
+                            case 'history-range-data':
+                                const rangeEntries = message.data.map(entry => ({ ...entry, brokerId: entry.broker_id || entry.brokerId || 'default_broker', timestampMs: new Date(entry.timestamp).getTime() }));
+                                allHistoryEntries = rangeEntries;
+                                setHmiHistoryData(allHistoryEntries);
+                                setHistoryData(allHistoryEntries, false, false, message.requestStart, message.requestEnd);
+                                updateChartSliderUI(globalDbMin, globalDbMax, false);
+                                refreshChart();
+                                populateTreesFromHistory(); 
+                                break;
+                            case 'tree-initial-state':
+                                if (mainTree) mainTree.rebuild(message.data);
+                                if (mapperTree) mapperTree.rebuild(message.data);
+                                if (chartTree) chartTree.rebuild(message.data);
+                                
+                                mainTree?.buildI3xTree(cachedI3xObjects);
+                                mapperTree?.buildI3xTree(cachedI3xObjects);
+                                chartTree?.buildI3xTree(cachedI3xObjects);
+                                
+                                colorAllMapperTrees(); colorChartTree();
+                                break;
+                            case 'topic-history-data': mainPayloadViewer.updateHistory(message.brokerId, message.topic, message.data); break;
+                            case 'db-status-update':
+                                if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
+                                if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
+                                if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
+                                break;
+                            case 'pruning-status': if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started'); break;
+                            case 'mapper-config-update': updateMapperConfig(message.config); colorAllMapperTrees(); break;
+                            case 'mapped-topic-generated': addMappedTargetTopic(message.brokerId, message.topic); colorAllMapperTrees(); break;
+                            case 'mapper-metrics-update': updateMapperMetrics(message.metrics); break;
+                            
+                            case 'broker-status-all': 
+                                for (const brokerId of Object.keys(message.data)) {
+                                    if (!providersMap[brokerId]) {
+                                        const guessedType = guessProviderType(brokerId);
+                                        providersMap[brokerId] = guessedType;
+                                        
+                                        if (typeof addAvailableHistoryProvider === 'function') {
+                                            addAvailableHistoryProvider(brokerId, guessedType);
+                                        }
+                                        
+                                        import('./view.publish.js').then(m => {
+                                            if (m.addAvailablePublishProvider) {
+                                                m.addAvailablePublishProvider(brokerId, guessedType);
+                                            }
+                                        }).catch(err => { /* ignore */ });
+                                    }
+                                }
+                                renderBrokerStatuses(message.data); 
+                                break;
+
+                            case 'broker-status': 
+                                import('./view.mapper.js').then(m => {
+                                    if (m.addAvailableMapperProvider) m.addAvailableMapperProvider(message.brokerId, guessProviderType(message.brokerId));
+                                }).catch(err => { /* ignore */ });
+                                updateSingleBrokerStatus(message.brokerId, message.status, message.error); 
+                                break;
+                        }
+                    } catch (e) { console.error("Error processing message:", e, message); }
+                },
+                onSamplingWarning: () => showSamplingWarning(),
+                onError: (err) => console.error("Realtime Service Error:", err),
+                onClose: () => { isAppInitialized = false; },
                 onReconnect: () => startApp()
             });
 

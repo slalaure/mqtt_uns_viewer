@@ -9,11 +9,6 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Server Entry Point
- * [UPDATED] Staggered simulator auto-start to prevent CPU spikes and event loop blocking.
- * [UPDATED] Configured Pino logger to write to both stdout and data/korelate.log for Admin UI.
- * [UPDATED] Eradicated silent catches on filesystem and websocket broadcasting logic.
- * [UPDATED] Added SSL/TLS Certificate configuration for PostgreSQL/TimescaleDB connections.
- * [UPDATED] Robust Environment Variable parsing to handle \r (CRLF) artifacts from Docker/Windows.
  */
 
 // --- Imports ---
@@ -22,24 +17,16 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const duckdb = require('duckdb');
 const { EventEmitter } = require('events'); 
 
-// --- Auth Module ---
-const auth = require('./interfaces/web/middlewares/auth');
+// --- Boot Modules ---
+const { loadConfig } = require('./boot/config');
+const { initDatabase } = require('./boot/database');
+const { setupAuth } = require('./boot/auth');
+const { initServices } = require('./boot/services');
 
 // --- Router Module ---
 const { createRouter } = require('./interfaces/web/router');
-
-// --- Module Imports  ---
-const wsManager = require('./core/websocketManager');
-const connectorManager = require('./connectors/connectorManager'); 
-const simulatorManager = require('./core/simulatorManager');
-const dataManager = require('./storage/dataManager'); 
-const userManager = require('./storage/userManager'); 
-const alertManager = require('./core/engine/alertManager'); 
-const semanticManager = require('./core/semantic/semanticManager'); 
-const webhookManager = require('./core/webhookManager');
 
 // --- Constants & Paths ---
 const DATA_PATH = path.join(__dirname, 'data');
@@ -50,513 +37,160 @@ const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
 
-// Ensure data directory exists early for the logger
-if (!fs.existsSync(DATA_PATH)) {
-    try { 
-        fs.mkdirSync(DATA_PATH, { recursive: true }); 
-    } catch (e) {
-        console.error("Failed to create DATA_PATH directory during initialization:", e);
-    }
-}
+const paths = { DATA_PATH, ENV_PATH, ENV_EXAMPLE_PATH, CERTS_PATH, DB_PATH, CHART_CONFIG_PATH, SESSIONS_PATH };
 
-// Ensure sessions directory exists
-if (!fs.existsSync(SESSIONS_PATH)) {
-    try { 
-        fs.mkdirSync(SESSIONS_PATH, { recursive: true }); 
-    } catch (e) {
-        console.error("Failed to create SESSIONS_PATH directory during initialization:", e);
-    }
-}
-
-// --- Analytics Script ---
-const ANALYTICS_SCRIPT = `
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "u3mhr7cn0n");
-    </script>
-`;
+// --- Ensure Directories Exist ---
+[DATA_PATH, SESSIONS_PATH].forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
 
 // --- Logger Setup ---
 const logFilePath = path.join(DATA_PATH, 'korelate.log');
 const logger = pino(pino.transport({
     targets: [
-        {
-            target: 'pino-pretty',
-            options: { colorize: true }
-        },
-        {
-            target: 'pino-pretty',
-            options: { 
-                colorize: false,
-                destination: logFilePath,
-                mkdir: true,
-                append: true
-            }
-        }
+        { target: 'pino-pretty', options: { colorize: true } },
+        { target: 'pino-pretty', options: { colorize: false, destination: logFilePath, mkdir: true, append: true } }
     ]
 }));
 
-// --- Initial .env File Setup ---
+// --- Initial .env Setup ---
 if (!fs.existsSync(ENV_PATH)) {
-    logger.info("✅ No .env file found in 'data' directory. Creating one from project root .env.example...");
     try {
         fs.copyFileSync(ENV_EXAMPLE_PATH, ENV_PATH);
-        logger.info("✅ .env file created successfully in ./data/");
+        logger.info("✅ .env file created in ./data/");
     } catch (err) {
-        logger.error({ err }, "❌ FATAL ERROR: Could not create .env file.");
+        logger.error({ err }, "❌ FATAL: Could not create .env file.");
         process.exit(1);
     }
 }
 require('dotenv').config({ path: ENV_PATH });
 
-// --- Initial charts.json File Setup ---
+// --- Initial charts.json Setup ---
 if (!fs.existsSync(CHART_CONFIG_PATH)) {
-    try {
-        fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2));
-    } catch (err) { 
-        logger.error({ err }, "Failed to create default charts.json configuration file."); 
-    }
+    fs.writeFileSync(CHART_CONFIG_PATH, JSON.stringify({ configurations: [] }, null, 2));
 }
 
-// --- Helper Function for Sparkplug (handles BigInt) ---
+// --- Helper Functions ---
 function longReplacer(key, value) {
-    if (typeof value === 'bigint') {
-        return value.toString();
-    }
-    return value;
+    return (typeof value === 'bigint') ? value.toString() : value;
 }
 
-// --- Helper Function for Robust Environment Variable Parsing ---
-// Safely parses boolean values from .env, stripping whitespace and \r artifacts
-function parseBoolEnv(val, defaultVal) {
-    if (val === undefined || val === null) return defaultVal;
-    return String(val).trim().toLowerCase() !== 'false';
-}
-
-function parseStrictBoolEnv(val, defaultVal) {
-    if (val === undefined || val === null) return defaultVal;
-    return String(val).trim().toLowerCase() === 'true';
-}
-
-// --- Global Variables ---
-let activeConnections = new Map(); 
-let brokerStatuses = new Map(); 
+// --- Global State ---
+let isShuttingDown = false;
 let isPruning = false;
-let apiKeysConfig = { keys: [] };
-let isShuttingDown = false; // Global shutdown flag
-const i3xEvents = new EventEmitter(); // Global Event Bus for I3X SSE
+const activeConnections = new Map(); 
+const brokerStatuses = new Map(); 
+const i3xEvents = new EventEmitter();
 
-// --- Configuration from Environment ---
-const config = {
-    BROKER_CONFIGS: [],
-    DATA_PROVIDERS: [], // Extended generic data providers configuration
-    CERTS_PATH: CERTS_PATH, // Expose to repositories
-    MQTT_BROKER_HOST: process.env.MQTT_BROKER_HOST?.trim() || null,
-    MQTT_TOPIC: process.env.MQTT_TOPIC?.trim() || null,
-    CLIENT_ID: process.env.CLIENT_ID?.trim() || null,
-    IS_SIMULATOR_ENABLED: parseStrictBoolEnv(process.env.SIMULATOR_ENABLED, false),
-    IS_SPARKPLUG_ENABLED: parseStrictBoolEnv(process.env.SPARKPLUG_ENABLED, false),
-    PORT: process.env.PORT || 8080,
-    DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
-    DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
-    DB_INSERT_BATCH_SIZE: process.env.DB_INSERT_BATCH_SIZE ? parseInt(process.env.DB_INSERT_BATCH_SIZE, 10) : 5000,
-    DB_BATCH_INTERVAL_MS: process.env.DB_BATCH_INTERVAL_MS ? parseInt(process.env.DB_BATCH_INTERVAL_MS, 10) : 2000,
-    PERENNIAL_DRIVER: process.env.PERENNIAL_DRIVER?.trim() || 'none',
-    PG_HOST: process.env.PG_HOST?.trim() || 'localhost',
-    PG_PORT: process.env.PG_PORT ? parseInt(process.env.PG_PORT, 10) : 5432,
-    PG_USER: process.env.PG_USER?.trim() || 'postgres',
-    PG_PASSWORD: process.env.PG_PASSWORD?.trim() || 'password',
-    PG_DATABASE: process.env.PG_DATABASE?.trim() || 'korelate',
-    PG_TABLE_NAME: process.env.PG_TABLE_NAME?.trim() || 'mqtt_events',
-    PG_INSERT_BATCH_SIZE: process.env.PG_INSERT_BATCH_SIZE ? parseInt(process.env.PG_INSERT_BATCH_SIZE, 10) : 1000,
-    PG_BATCH_INTERVAL_MS: process.env.PG_BATCH_INTERVAL_MS ? parseInt(process.env.PG_BATCH_INTERVAL_MS, 10) : 5000,
-    PG_SSL: parseStrictBoolEnv(process.env.PG_SSL, false),
-    PG_CA_FILENAME: process.env.PG_CA_FILENAME?.trim() || null,
-    PG_CERT_FILENAME: process.env.PG_CERT_FILENAME?.trim() || null,
-    PG_KEY_FILENAME: process.env.PG_KEY_FILENAME?.trim() || null,
-    PG_REJECT_UNAUTHORIZED: parseBoolEnv(process.env.PG_REJECT_UNAUTHORIZED, true),
-    HTTP_USER: process.env.HTTP_USER?.trim() || null,
-    HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
-    // robust parsing for UI toggles to avoid CRLF \r bugs
-    VIEW_TREE_ENABLED: parseBoolEnv(process.env.VIEW_TREE_ENABLED, true),
-    VIEW_HMI_ENABLED: parseBoolEnv(process.env.VIEW_HMI_ENABLED, true), 
-    VIEW_HISTORY_ENABLED: parseBoolEnv(process.env.VIEW_HISTORY_ENABLED, true),
-    VIEW_MODELER_ENABLED: parseBoolEnv(process.env.VIEW_MODELER_ENABLED, true), 
-    VIEW_MAPPER_ENABLED: parseBoolEnv(process.env.VIEW_MAPPER_ENABLED, true),
-    VIEW_CHART_ENABLED: parseBoolEnv(process.env.VIEW_CHART_ENABLED, true),
-    VIEW_PUBLISH_ENABLED: parseBoolEnv(process.env.VIEW_PUBLISH_ENABLED, true),
-    VIEW_CHAT_ENABLED: parseBoolEnv(process.env.VIEW_CHAT_ENABLED, true),
-    VIEW_ALERTS_ENABLED: parseBoolEnv(process.env.VIEW_ALERTS_ENABLED, true), 
-    VIEW_CONFIG_ENABLED: parseBoolEnv(process.env.VIEW_CONFIG_ENABLED, true),
-    LLM_API_URL: process.env.LLM_API_URL?.trim() || 'https://generativelanguage.googleapis.com/v1beta/openai/',
-    LLM_API_KEY: process.env.LLM_API_KEY?.trim() || '',
-    LLM_MODEL: process.env.LLM_MODEL?.trim() || 'gemini-2.0-flash',
-    HMI_FILE_PATH: process.env.HMI_FILE_PATH?.trim() || process.env.SVG_FILE_PATH?.trim() || 'view.html',
-    BASE_PATH: process.env.BASE_PATH?.trim() || '/',
-    MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
-    MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0,
-    API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null,
-    EXTERNAL_API_ENABLED: parseStrictBoolEnv(process.env.EXTERNAL_API_ENABLED, false),
-    EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json',
-    ANALYTICS_ENABLED: parseStrictBoolEnv(process.env.ANALYTICS_ENABLED, false), 
-    AI_TOOLS: {
-        ENABLE_READ: parseBoolEnv(process.env.LLM_TOOL_ENABLE_READ, true),         
-        ENABLE_SEMANTIC: parseBoolEnv(process.env.LLM_TOOL_ENABLE_SEMANTIC, true), 
-        ENABLE_PUBLISH: parseBoolEnv(process.env.LLM_TOOL_ENABLE_PUBLISH, true),   
-        ENABLE_FILES: parseBoolEnv(process.env.LLM_TOOL_ENABLE_FILES, true),       
-        ENABLE_SIMULATOR: parseBoolEnv(process.env.LLM_TOOL_ENABLE_SIMULATOR, true), 
-        ENABLE_MAPPER: parseBoolEnv(process.env.LLM_TOOL_ENABLE_MAPPER, true),     
-        ENABLE_ADMIN: parseBoolEnv(process.env.LLM_TOOL_ENABLE_ADMIN, true)        
-    },
-    // Auth Config
-    SESSION_SECRET: process.env.SESSION_SECRET || 'dev_secret_key_change_me',
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-    PUBLIC_URL: process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 8080}`,
-    ADMIN_USERNAME: process.env.ADMIN_USERNAME,
-    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD
+const state = {
+    activeConnections,
+    brokerStatuses,
+    i3xEvents,
+    longReplacer,
+    isShuttingDown: () => isShuttingDown,
+    isPruning: false,
+    getPrimaryConnection: () => activeConnections.size > 0 ? activeConnections.values().next().value : null,
+    getBrokerConnection: (id) => id ? activeConnections.get(id) : state.getPrimaryConnection(),
+    updateBrokerStatus: (brokerId, status, error = null) => {
+        const info = { status, error, timestamp: Date.now() };
+        brokerStatuses.set(brokerId, info);
+        if (services.wsManager) services.wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
+    }
 };
 
-// --- Broker Configuration Parsing ---
-try {
-    if (process.env.MQTT_BROKERS) {
-        try {
-            config.BROKER_CONFIGS = JSON.parse(process.env.MQTT_BROKERS);
-            config.BROKER_CONFIGS.forEach(broker => {
-                if (!broker.subscribe) broker.subscribe = broker.topics || ['#'];
-                if (!broker.publish) broker.publish = (broker.canPublish === false) ? [] : ['#'];
-            });
-            logger.info(`✅ Loaded ${config.BROKER_CONFIGS.length} legacy broker configuration(s).`);
-        } catch (jsonErr) {
-            logger.warn({ err: jsonErr }, "⚠️ Invalid JSON in MQTT_BROKERS.");
-            config.BROKER_CONFIGS = [];
-        }
-    } else if (config.MQTT_BROKER_HOST) {
-        logger.warn("Using deprecated single-broker env vars.");
-        config.BROKER_CONFIGS = [{
-            id: "default_broker",
-            host: config.MQTT_BROKER_HOST,
-            port: process.env.MQTT_PORT?.trim() || null,
-            protocol: process.env.MQTT_PROTOCOL?.trim() || 'mqtt',
-            clientId: config.CLIENT_ID,
-            username: process.env.MQTT_USERNAME?.trim() || null,
-            password: process.env.MQTT_PASSWORD?.trim() || null,
-            subscribe: config.MQTT_TOPIC ? config.MQTT_TOPIC.split(',').map(t => t.trim()) : ['#'],
-            publish: ['#'],
-            certFilename: process.env.CERT_FILENAME?.trim() || null,
-            keyFilename: process.env.KEY_FILENAME?.trim() || null,
-            caFilename: process.env.CA_FILENAME?.trim() || null,
-            alpnProtocol: process.env.MQTT_ALPN_PROTOCOL?.trim() || null,
-            rejectUnauthorized: parseBoolEnv(process.env.MQTT_REJECT_UNAUTHORIZED, true)
-        }];
-    }
+// --- Main Bootstrap ---
+let services = {};
 
-    if (config.BROKER_CONFIGS.length === 0 && parseBoolEnv(process.env.ENABLE_LOCAL_MQTT_FALLBACK, true)) {
-        const localBroker = {
-            id: "local_mqtt",
-            host: process.env.LOCAL_MQTT_HOST || "mqtt",
-            port: parseInt(process.env.LOCAL_MQTT_PORT, 10) || 1883,
-            protocol: "mqtt",
-            clientId: "mqtt-uns-viewer-local",
-            username: process.env.LOCAL_MQTT_USERNAME || "",
-            password: process.env.LOCAL_MQTT_PASSWORD || "",
-            subscribe: ["#"],
-            publish: ["#"],
-            certFilename: "",
-            keyFilename: "",
-            caFilename: "",
-            alpnProtocol: "",
-            rejectUnauthorized: false
+(async () => {
+    try {
+        // 1. Load Configuration
+        const config = loadConfig(logger, paths);
+
+        // 2. Load API Keys
+        let apiKeysConfig = { keys: [] };
+        if (config.EXTERNAL_API_ENABLED) {
+            const keysFilePath = path.join(DATA_PATH, config.EXTERNAL_API_KEYS_FILE);
+            if (fs.existsSync(keysFilePath)) {
+                apiKeysConfig = JSON.parse(fs.readFileSync(keysFilePath, 'utf8'));
+            }
+        }
+
+        // 3. Setup Express & HTTP
+        const app = express();
+        const server = http.createServer(app);
+        app.enable('trust proxy');
+
+        // 4. Setup Auth
+        const userManager = require('./storage/userManager');
+        setupAuth(app, config, logger, userManager, paths);
+
+        // 5. Initialize Database
+        const wsManager = require('./core/websocketManager');
+        const db = await initDatabase(logger, config, paths, wsManager);
+
+        // 6. Initialize Services
+        services = initServices(server, app, db, config, logger, paths, state);
+
+        // 7. Initialize Router
+        const router = createRouter({
+            config, logger, db, dbFile: DB_PATH, dbWalFile: DB_PATH + '.wal',
+            dataManager: require('./storage/dataManager'),
+            DATA_PATH, SESSIONS_PATH, basePath: config.BASE_PATH,
+            userManager, alertManager: require('./core/engine/alertManager'),
+            semanticManager: require('./core/semantic/semanticManager'),
+            i3xEvents, getPrimaryConnection: state.getPrimaryConnection,
+            getBrokerConnection: state.getBrokerConnection,
+            simulatorManager: services.simulatorManager,
+            wsManager: services.wsManager,
+            mapperEngine: services.mapperEngine,
+            ENV_PATH, ENV_EXAMPLE_PATH, CHART_CONFIG_PATH, apiKeysConfig,
+            longReplacer, auth: require('./interfaces/web/middlewares/auth'),
+            ANALYTICS_SCRIPT: '', // Add if needed
+            getIsPruning: () => state.isPruning,
+            setIsPruning: (val) => { state.isPruning = val; }
+        });
+
+        app.use(config.BASE_PATH, router);
+        if (config.BASE_PATH !== '/') app.use('/', router);
+
+        app.get('/', (req, res) => {
+            const dest = config.BASE_PATH === '/' ? '/tree/' : config.BASE_PATH + '/tree/';
+            const login = config.BASE_PATH === '/' ? '/login' : config.BASE_PATH + '/login';
+            res.redirect(req.isAuthenticated() ? dest : login);
+        });
+
+        // 9. Start Server
+        server.listen(config.PORT, () => {
+            logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
+        });
+
+        // --- Graceful Shutdown ---
+        const gracefulShutdown = async () => {
+            if (isShuttingDown) return;
+            isShuttingDown = true;
+            logger.info("\n✅ Gracefully shutting down...");
+            setTimeout(() => process.exit(1), 5000).unref();
+            try {
+                const dataManager = require('./storage/dataManager');
+                await dataManager.stop();
+                await new Promise(r => services.wsManager.close(r));
+                await new Promise(r => server.close(r));
+                services.connectorManager.closeAll(); 
+                await dataManager.close();
+                process.exit(0);
+            } catch (err) {
+                logger.error({ err }, "❌ Error during shutdown.");
+                process.exit(1);
+            }
         };
 
-        config.BROKER_CONFIGS.push(localBroker);
-        logger.info(`✅ No MQTT brokers configured; using local fallback ${localBroker.host}:${localBroker.port}`);
-    }
-
-    if (process.env.DATA_PROVIDERS) {
-        try {
-            config.DATA_PROVIDERS = JSON.parse(process.env.DATA_PROVIDERS);
-            logger.info(`✅ Loaded ${config.DATA_PROVIDERS.length} custom data provider(s).`);
-        } catch (jsonErr) {
-            logger.warn({ err: jsonErr }, "⚠️ Invalid JSON in DATA_PROVIDERS.");
-            config.DATA_PROVIDERS = [];
-        }
-    }
-    for (const broker of config.BROKER_CONFIGS) {
-        brokerStatuses.set(broker.id, { status: 'connecting', error: null });
-    }
-    for (const provider of config.DATA_PROVIDERS) {
-        brokerStatuses.set(provider.id, { status: 'connecting', error: null });
-    }
-} catch (err) {
-    logger.error({ err }, "❌ Unexpected error during configuration parsing.");
-    config.BROKER_CONFIGS = [];
-    config.DATA_PROVIDERS = [];
-}
-
-// --- Normalize Base Path ---
-let basePath = config.BASE_PATH;
-if (!basePath.startsWith('/')) basePath = '/' + basePath;
-if (basePath.endsWith('/') && basePath.length > 1) basePath = basePath.slice(0, -1);
-
-// --- Load External API Keys ---
-if (config.EXTERNAL_API_ENABLED) {
-    const keysFilePath = path.join(DATA_PATH, config.EXTERNAL_API_KEYS_FILE);
-    try {
-        if (fs.existsSync(keysFilePath)) {
-            apiKeysConfig = JSON.parse(fs.readFileSync(keysFilePath, 'utf8'));
-            logger.info(`✅ Loaded API keys.`);
-        }
+        process.on('SIGINT', gracefulShutdown);
+        process.on('SIGTERM', gracefulShutdown);
     } catch (err) {
-        logger.error("❌ Failed to load API keys.");
-    }
-}
-
-// --- Helper to get connections ---
-function getPrimaryConnection() {
-    if (activeConnections.size === 0) return null;
-    return activeConnections.values().next().value || null;
-}
-
-function getBrokerConnection(brokerId) {
-    if (!brokerId) return getPrimaryConnection();
-    return activeConnections.get(brokerId) || null;
-}
-
-// --- Helper to update and broadcast broker status ---
-function updateBrokerStatus(brokerId, status, error = null) {
-    const info = { status, error, timestamp: Date.now() };
-    brokerStatuses.set(brokerId, info);
-    wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
-}
-
-// --- Express App & Server Setup ---
-const app = express();
-const server = http.createServer(app);
-app.enable('trust proxy');
-
-// --- Auth Setup ---
-auth.configureAuth(app, config, logger, userManager, SESSIONS_PATH, basePath);
-
-// --- CORS Middleware ---
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type');
-    next();
-});
-
-// --- Mapper Engine Setup ---
-const mapperEngine = require('./core/engine/mapperEngine')( 
-    activeConnections, 
-    wsManager.broadcast, 
-    logger,
-    longReplacer,
-    config 
-);
-
-// --- DuckDB Setup ---
-const dbFile = DB_PATH;
-const dbWalFile = dbFile + '.wal';
-let db; 
-db = new duckdb.Database(dbFile, (err) => {
-    if (err) {
-        logger.error({ err }, "❌ FATAL ERROR: Could not connect to DuckDB.");
+        logger.fatal({ err }, "❌ FATAL: Server failed to start.");
         process.exit(1);
     }
-    logger.info("✅ 🦆 DuckDB database connected.");
-    
-    // 1. Initialize Managers
-    userManager.init(db, logger, SESSIONS_PATH);
-    alertManager.init(db, logger, config, wsManager.broadcast);
-    semanticManager.init({ logger, config });
-    webhookManager.init(db, logger);
-    
-    // 2. Ensure Admin User Exists
-    if (config.ADMIN_USERNAME && config.ADMIN_PASSWORD) {
-        userManager.ensureAdminUser(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
-    }
-    
-    // 3. Ensure tables exist
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS mqtt_events (
-            timestamp TIMESTAMPTZ,
-            topic VARCHAR,
-            payload JSON,
-            broker_id VARCHAR,
-            correlation_id VARCHAR
-        );
-    `, (createErr) => {
-        if (createErr) {
-            logger.error({ err: createErr }, "❌ FATAL: Failed to ensure tables exist.");
-            return; 
-        }
-        // Schema Migration: Add correlation_id if missing
-        db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
-            if (columns && !columns.some(col => col.name === 'correlation_id')) {
-                logger.warn("⚠️ Migrating 'mqtt_events': Adding 'correlation_id' column...");
-                db.run("ALTER TABLE mqtt_events ADD COLUMN correlation_id VARCHAR;");
-            }
-        });
-    });
-    
-    mapperEngine.setDb(db);
-    
-    // 4. Initialize storage components
-    const dbManager = require('./storage/dbManager')(db, dbFile, dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, () => isPruning, (status) => { isPruning = status; }); 
-    dataManager.init(config, logger, mapperEngine, db, dbManager.broadcastDbStatus);
-    
-    // 5. Initialize WebSockets
-    wsManager.initWebSocketManager(server, db, logger, basePath, dbManager.getDbStatus, longReplacer, () => brokerStatuses);
-    
-    // Intercept wsManager.broadcast to feed I3X Event Bus
-    const originalBroadcast = wsManager.broadcast;
-    wsManager.broadcast = (msgStr) => {
-        originalBroadcast(msgStr);
-        try {
-            const msg = JSON.parse(msgStr);
-            if (msg.type === 'mqtt-message') {
-                let payloadObj = msg.payload;
-                try { 
-                    payloadObj = JSON.parse(msg.payload); 
-                } catch(e){
-                    logger.debug({ err: e, topic: msg.topic }, "I3X broadcast interceptor: Payload is not standard JSON, forwarding raw.");
-                }
-                i3xEvents.emit('data', { topic: msg.topic, payloadObject: payloadObj });
-            }
-        } catch (e) {
-            logger.error({ err: e }, "I3X broadcast interceptor: Failed to parse WebSocket envelope message");
-        }
-    };
-    
-    // 6. Maintenance & Connectors
-    setInterval(dbManager.performMaintenance, 15000);
-    connectorManager.init({ 
-        config,
-        logger,
-        app,
-        activeConnections,
-        brokerStatuses,
-        wsManager,
-        mapperEngine,
-        dataManager,
-        alertManager,
-        CERTS_PATH,
-        broadcastDbStatus: dbManager.broadcastDbStatus,
-        updateBrokerStatus,
-        isShuttingDown: () => isShuttingDown
-    });
+})();
 
-    // --- Mount Router ---
-    const router = createRouter({
-        config,
-        logger,
-        db,
-        dbFile,
-        dbWalFile,
-        dataManager,
-        DATA_PATH,
-        SESSIONS_PATH,
-        basePath,
-        userManager,
-        alertManager,
-        semanticManager,
-        i3xEvents,
-        getPrimaryConnection,
-        getBrokerConnection,
-        simulatorManager,
-        wsManager,
-        mapperEngine,
-        ENV_PATH,
-        ENV_EXAMPLE_PATH,
-        CHART_CONFIG_PATH,
-        apiKeysConfig,
-        longReplacer,
-        auth,
-        ANALYTICS_SCRIPT,
-        getIsPruning: () => isPruning,
-        setIsPruning: (val) => { isPruning = val; }
-    });
-
-    // Apply global authentication middleware
-    app.use(auth.authMiddleware);
-
-    app.use(basePath, router);
-    if (basePath !== '/') {
-        logger.info(`✅ Enabling hybrid routing: listening on '${basePath}' AND '/'`);
-        app.use('/', router);
-    }
-
-    app.get('/', (req, res) => {
-        if (req.isAuthenticated()) {
-            res.redirect(basePath === '/' ? '/tree/' : basePath + '/tree/');
-        } else {
-            res.redirect(basePath === '/' ? '/login' : basePath + '/login');
-        }
-    });
-});
-
-// --- Simulators ---
-simulatorManager.init(logger, (topic, payload) => {
-    const conn = getPrimaryConnection();
-    if (conn && conn.connected) {
-        conn.publish(topic, payload, { qos: 1 });
-    }
-}, config.IS_SPARKPLUG_ENABLED);
-
-if (config.IS_SIMULATOR_ENABLED) {
-    // Stagger the start of each simulator by 2 seconds to avoid CPU/Event Loop spikes
-    ['stark', 'deathstar', 'paris_metro', 'hydrochem'].forEach((simName, index) => {
-        setTimeout(() => {
-            try {
-                simulatorManager.startSimulator(simName);
-            } catch (err) {
-                logger.error({ err }, `Error auto-starting simulator ${simName}`);
-            }
-        }, 5000 + (index * 2000));
-    });
-}
-
-// --- Server Start ---
-server.listen(config.PORT, () => {
-    logger.info(`✅ HTTP server started on http://localhost:${config.PORT}`);
-});
-server.timeout = 600000;
-server.keepAliveTimeout = 600000;
-server.headersTimeout = 600005;
-
-// --- Graceful Shutdown ---
-async function gracefulShutdown() {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    logger.info("\n✅ Gracefully shutting down...");
-    setTimeout(() => {
-        logger.error("❌ Shutdown timed out. Forcing exit.");
-        process.exit(1);
-    }, 5000).unref();
-    try {
-        await dataManager.stop();
-        await new Promise(resolve => wsManager.close(resolve));
-        await new Promise(resolve => server.close(resolve));
-        connectorManager.closeAll(); 
-        await dataManager.close();
-        process.exit(0);
-    } catch (err) {
-        logger.error({ err }, "❌ Error during graceful shutdown.");
-        process.exit(1);
-    }
-}
-
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
-process.on('uncaughtException', (err) => {
-    logger.fatal({ err }, "❌ FATAL: Uncaught Exception.");
-    gracefulShutdown();
-});
-process.on('unhandledRejection', (reason) => {
-    logger.fatal({ err: reason }, "❌ FATAL: Unhandled Rejection.");
-    gracefulShutdown();
-});
+process.on('uncaughtException', (err) => { logger.fatal({ err }, "❌ FATAL: Uncaught Exception."); process.exit(1); });
+process.on('unhandledRejection', (reason) => { logger.fatal({ err: reason }, "❌ FATAL: Unhandled Rejection."); process.exit(1); });
