@@ -295,7 +295,9 @@ As the AI Agent gains more autonomy, Korelate provides tools to monitor and cont
 
 ### 12. Configuration Interface (Admin Only)
 Accessible via the Cog icon (`/config.html`) or the Admin Tab.
-* **Environment:** Modify `.env` variables (Brokers, LLM settings, Limits) and restart the server from the UI.
+* **Interactive Wizard & Advanced Editor:** Configure your server step-by-step using the new intuitive wizard, or use the advanced `.env` editor if you prefer raw access.
+* **Import / Export:** Easily backup your entire configuration to a JSON file or restore it with a single click.
+* **Environment:** Modify `.env` variables (Brokers, LLM settings, Limits) and restart the server directly from the UI.
 * **Certificates:** Upload SSL/TLS certificates for secure MQTT MTLS connections.
 * **UNS Model:** Edit the semantic model (`uns_model.json`) used by the AI for structured concept searching.
 * **Database Maintenance:** Execute Full Reset (Truncate/Vacuum), Import data, and manage Users.

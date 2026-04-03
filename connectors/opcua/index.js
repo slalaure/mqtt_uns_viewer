@@ -48,7 +48,15 @@ class OpcUaProvider extends BaseProvider {
                 await this.client.connect(this.endpointUrl);
                 this.logger.info(`✅ Connected to OPC UA server.`);
 
-                this.session = await this.client.createSession();
+                let userIdentity = null;
+                if (this.config.username && this.config.password) {
+                    userIdentity = {
+                        userName: this.config.username,
+                        password: this.config.password
+                    };
+                }
+
+                this.session = await this.client.createSession(userIdentity);
                 this.logger.info(`✅ OPC UA Session created.`);
 
                 this.connected = true;

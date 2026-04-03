@@ -15,8 +15,11 @@
  * [UPDATED] Refactored to extend BaseRepository, inheriting batch queue logic.
  * [UPDATED] Hardened queue with MAX_QUEUE_SIZE and DLQ offloading to prevent OOM.
  * [UPDATED] Added getSchema() and query() to expose data to the AI Agent.
+ * [UPDATED] Implemented PostgreSQL SSL Connection Support with internal Certs resolving.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
 const BaseRepository = require('./baseRepository');
 
@@ -56,7 +59,7 @@ class TimescaleRepository extends BaseRepository {
         this.isConnecting = true;
 
         try {
-            this.pool = new Pool({
+            const poolConfig = {
                 host: this.config.PG_HOST,
                 port: this.config.PG_PORT,
                 user: this.config.PG_USER,
@@ -65,7 +68,33 @@ class TimescaleRepository extends BaseRepository {
                 max: 5, // Max 5 connections in the pool
                 idleTimeoutMillis: 30000,
                 connectionTimeoutMillis: 5000,
-            });
+            };
+
+            // SSL Configuration Injection
+            if (this.config.PG_SSL) {
+                poolConfig.ssl = {
+                    rejectUnauthorized: this.config.PG_REJECT_UNAUTHORIZED
+                };
+                
+                const certsPath = this.config.CERTS_PATH || path.join(process.cwd(), 'data', 'certs');
+
+                try {
+                    if (this.config.PG_CA_FILENAME) {
+                        poolConfig.ssl.ca = fs.readFileSync(path.join(certsPath, this.config.PG_CA_FILENAME)).toString();
+                    }
+                    if (this.config.PG_CERT_FILENAME && this.config.PG_KEY_FILENAME) {
+                        poolConfig.ssl.cert = fs.readFileSync(path.join(certsPath, this.config.PG_CERT_FILENAME)).toString();
+                        poolConfig.ssl.key = fs.readFileSync(path.join(certsPath, this.config.PG_KEY_FILENAME)).toString();
+                    }
+                    this.logger.info("✅ Configured PostgreSQL pool with SSL.");
+                } catch (certErr) {
+                    this.logger.error({ err: certErr }, "❌ Failed to load PostgreSQL SSL certificates.");
+                    this.isConnecting = false;
+                    return;
+                }
+            }
+
+            this.pool = new Pool(poolConfig);
 
             this.pool.on('error', (err, client) => {
                 this.logger.error({ err }, '❌ Unexpected error on idle PostgreSQL client');

@@ -16,7 +16,6 @@ const path = require('path');
 const dotenv = require('dotenv');
 const multer = require('multer');
 
-// [MODIFIED] Added 'dataManager' argument to enable imports to all DBs
 module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) => {
     const router = express.Router();
     const certsPath = path.join(dataPath, 'certs');
@@ -51,8 +50,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
     const uploadCerts = multer({ storage: storageCerts, fileFilter: fileFilterCerts });
 
-    // [NEW] Configure Multer for JSON imports (Model and History)
-    // We store them temporarily in dataPath
+    // Configure Multer for JSON imports (Model and History)
     const storageJson = multer.diskStorage({
         destination: function (req, file, cb) {
             cb(null, dataPath);
@@ -75,7 +73,6 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
     // --- Certificate Routes ---
 
-    // GET /api/env/certs: List available certificates
     router.get('/certs', (req, res, next) => {
         try {
             if (!fs.existsSync(certsPath)) {
@@ -88,7 +85,6 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         }
     });
 
-    // POST /api/env/certs: Upload a certificate
     router.post('/certs', uploadCerts.single('certificate'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded or invalid file type.' });
@@ -99,11 +95,10 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
     // --- UNS Model Routes ---
 
-    // GET /api/env/model: Get the current UNS Model JSON
     router.get('/model', (req, res, next) => {
         try {
             if (!fs.existsSync(modelPath)) {
-                return res.json([]); // Return empty array if no model exists
+                return res.json([]); 
             }
             const content = fs.readFileSync(modelPath, 'utf8');
             const json = JSON.parse(content);
@@ -113,17 +108,14 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         }
     });
 
-    // POST /api/env/model: Update/Upload UNS Model JSON
     router.post('/model', (req, res, next) => {
         try {
             const newModel = req.body;
             
-            // Basic Validation: Must be an array
             if (typeof newModel !== "object" || Array.isArray(newModel)) {
                 return res.status(400).json({ error: "Invalid format. UNS Model must be a JSON Object." });
             }
 
-            // Write to file (pretty print)
             fs.writeFileSync(modelPath, JSON.stringify(newModel, null, 2), 'utf8');
             
             logger.info("✅ UNS Model (uns_model.json) updated via API.");
@@ -133,8 +125,8 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         }
     });
 
-    // --- [NEW] Database Import Route ---
-    // POST /api/env/import-db: Imports a JSON file into configured databases
+    // --- Database Import Route ---
+    
     router.post('/import-db', uploadJson.single('db_import'), async (req, res, next) => {
         if (!req.file) {
             return res.status(400).json({ error: 'No JSON file uploaded.' });
@@ -152,23 +144,20 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             }
 
             if (!dataManager) {
-                // Fallback if dataManager wasn't passed correctly
                 throw new Error("DataManager is not available for import.");
             }
 
             let count = 0;
             for (const entry of entries) {
-                // Map the JSON structure to what DataManager expects
                 const message = {
                     brokerId: entry.brokerId || entry.broker_id || 'default_broker',
                     timestamp: new Date(entry.timestamp || entry.timestampMs || Date.now()),
                     topic: entry.topic,
                     payloadStringForDb: typeof entry.payload === 'string' ? entry.payload : JSON.stringify(entry.payload),
-                    isSparkplugOrigin: false, // Cannot accurately determine from export, assume false
-                    needsDb: true // Force insert
+                    isSparkplugOrigin: false,
+                    needsDb: true 
                 };
 
-                // Validate essential fields
                 if (message.topic) {
                     dataManager.insertMessage(message);
                     count++;
@@ -177,7 +166,6 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
             logger.info(`[ImportDB] Queued ${count} messages for insertion into active databases (DuckDB/TimescaleDB).`);
             
-            // Cleanup temp file
             fs.unlinkSync(filePath);
 
             res.json({ 
@@ -186,7 +174,6 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
             });
 
         } catch (err) {
-            // Try to cleanup
             try { if(fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch(e) {}
             next(err);
         }
@@ -195,7 +182,6 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
     // --- Environment Config Routes ---
 
-    // GET: Reads and parses the .env file
     router.get('/', (req, res, next) => {
         try {
             const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
@@ -206,11 +192,11 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         }
     });
 
-    // POST: Saves the new configuration
     router.post('/', (req, res, next) => {
         const newConfig = req.body;
         const tempPath = path.join(dataPath, '.env.tmp');
         let envFileContent = "";
+        const writtenKeys = new Set(); // Track which keys were found and replaced
 
         try {
             const exampleContent = fs.readFileSync(envExamplePath, { encoding: 'utf8' });
@@ -224,17 +210,34 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
                         const key = line.substring(0, firstEqual);
                         if (newConfig.hasOwnProperty(key)) {
                             let val = newConfig[key];
-                            if (key === 'MQTT_BROKERS') {
+                            if (key === 'MQTT_BROKERS' || key === 'DATA_PROVIDERS') {
                                 envFileContent += `${key}='${val}'\n`;
                             } else {
                                 envFileContent += `${key}=${val}\n`;
                             }
+                            writtenKeys.add(key);
                         } else {
                             envFileContent += line + '\n';
                         }
                     }
                 }
             });
+            
+            // Append any keys present in the payload but missing from the template
+            let hasAppended = false;
+            for (const [key, val] of Object.entries(newConfig)) {
+                if (!writtenKeys.has(key)) {
+                    if (!hasAppended) {
+                        envFileContent += "\n# --- Appended Configuration ---\n";
+                        hasAppended = true;
+                    }
+                    if (key === 'MQTT_BROKERS' || key === 'DATA_PROVIDERS') {
+                        envFileContent += `${key}='${val}'\n`;
+                    } else {
+                        envFileContent += `${key}=${val}\n`;
+                    }
+                }
+            }
             
             fs.writeFileSync(tempPath, envFileContent);
             fs.renameSync(tempPath, envPath);
@@ -245,14 +248,12 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         }
     });
 
-    // POST: Restarts the server
     router.post('/restart', (req, res) => {
         res.json({ message: 'Server is restarting...' });
         logger.info("Restart requested via API. Shutting down...");
         process.exit(0);
     });
 
-    // POST /api/env/reset-db: Resets the DuckDB database
     router.post('/reset-db', (req, res, next) => {
         if (!db) {
             return res.status(503).json({ error: "Database not connected/available." });
@@ -261,13 +262,11 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         logger.warn("⚠️  User initiated full database reset (TRUNCATE).");
 
         db.serialize(() => {
-            // 1. Delete all records
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
                     return next(err);
                 }
 
-                // 2. Vacuum to reclaim disk space
                 db.run("VACUUM;", (vacErr) => {
                     if (vacErr) {
                         logger.error({ err: vacErr }, "Failed to vacuum database after truncate");

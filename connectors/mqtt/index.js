@@ -23,13 +23,21 @@ class MqttProvider extends BaseProvider {
             const {
                 host, port, protocol, clientId, username, password,
                 certFilename, keyFilename, caFilename, alpnProtocol,
-                rejectUnauthorized = true, subscribe, topics
+                rejectUnauthorized = true, subscribe, topics,
+                keepalive, clean
             } = this.config;
 
             const options = {
-                host, port: parseInt(port, 10), protocol: protocol || 'mqtt',
-                clientId, clean: true, reconnectPeriod: 5000, connectTimeout: 10000,
-                servername: host, rejectUnauthorized
+                host, 
+                port: parseInt(port, 10), 
+                protocol: protocol || 'mqtt',
+                clientId, 
+                clean: clean !== false, // Defaults to true if undefined
+                keepalive: keepalive !== undefined ? parseInt(keepalive, 10) : 60,
+                reconnectPeriod: 5000, 
+                connectTimeout: 10000,
+                servername: host, 
+                rejectUnauthorized
             };
 
             if (!rejectUnauthorized) this.logger.warn("SECURITY WARNING: Certificate verification is DISABLED.");
@@ -90,7 +98,6 @@ class MqttProvider extends BaseProvider {
                 resolve(true);
             });
 
-            // [UPDATED] Added packet parameter to extract MQTT v5 properties
             this.client.on('message', (topic, payload, packet) => {
                 let isSparkplugOrigin = false;
                 let processedPayload = payload;
@@ -107,7 +114,7 @@ class MqttProvider extends BaseProvider {
                     }
                 }
 
-                // [NEW] Extract Correlation ID from MQTT v5 properties if available
+                // Extract Correlation ID from MQTT v5 properties if available
                 let correlationId = null;
                 if (packet && packet.properties) {
                     if (packet.properties.userProperties && packet.properties.userProperties.correlationId) {

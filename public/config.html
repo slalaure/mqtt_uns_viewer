@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/config.css">
     <style>
+        /* Shared Styles */
         .cert-manager, .model-manager, .database-manager {
             background-color: var(--color-bg);
             border: 1px solid var(--color-border);
@@ -26,23 +27,113 @@
         }
         .cert-item {
             padding: 6px 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
             border-bottom: 1px solid var(--color-border-secondary);
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.9em;
+            font-family: 'Courier New', Courier, monospace; font-size: 0.9em;
         }
         .cert-item:last-child { border-bottom: none; }
         .btn-copy-cert {
-            padding: 2px 8px;
-            font-size: 0.8em;
-            cursor: pointer;
-            background-color: var(--color-bg-accent);
-            border: 1px solid var(--color-border);
-            border-radius: 3px;
+            padding: 2px 8px; font-size: 0.8em; cursor: pointer;
+            background-color: var(--color-bg-accent); border: 1px solid var(--color-border); border-radius: 3px;
         }
         .btn-copy-cert:hover { background-color: var(--color-primary); color: white; }
+
+        /* Wizard & Tabs Styles */
+        .config-mode-toggle {
+            display: flex; background-color: var(--color-bg-accent);
+            border-radius: 8px; padding: 4px; margin-bottom: 25px;
+        }
+        .mode-btn {
+            flex: 1; padding: 10px; border: none; background: transparent;
+            color: var(--color-text-secondary); font-weight: 600; font-size: 1em;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background-color: var(--color-bg-secondary); color: var(--color-primary);
+            box-shadow: 0 2px 5px var(--color-shadow);
+        }
+
+        .wizard-container {
+            background-color: var(--color-bg-secondary); border: 1px solid var(--color-border);
+            border-radius: 8px; padding: 25px; box-shadow: 0 4px 15px var(--color-shadow);
+        }
+        
+        .wizard-header {
+            display: flex; border-bottom: 2px solid var(--color-bg-accent);
+            margin-bottom: 25px; overflow-x: auto;
+        }
+        .step-indicator {
+            flex: 1; text-align: center; padding: 10px 5px; color: var(--color-text-muted);
+            font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -2px;
+            white-space: nowrap; transition: all 0.3s;
+        }
+        .step-indicator.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+
+        .wizard-step { display: none; animation: fadeIn 0.3s ease-out; }
+        .wizard-step.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .wizard-step h2 { margin-top: 0; color: var(--color-text); font-size: 1.4em; }
+        .wizard-step p.step-desc { color: var(--color-text-secondary); margin-bottom: 20px; font-size: 0.95em; line-height: 1.5; }
+
+        .wiz-form-group { margin-bottom: 20px; }
+        .wiz-form-group label { display: block; font-weight: 600; margin-bottom: 8px; color: var(--color-text); font-size: 0.9em; }
+        .wiz-form-group input[type="text"], .wiz-form-group input[type="number"], .wiz-form-group input[type="password"],
+        .wiz-form-group select, .wiz-form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 6px;
+            background-color: var(--color-bg); color: var(--color-text); font-size: 1em; box-sizing: border-box;
+            transition: border-color 0.2s; font-family: inherit;
+        }
+        .wiz-form-group input:focus, .wiz-form-group select:focus, .wiz-form-group textarea:focus { outline: none; border-color: var(--color-primary); }
+        
+        .wiz-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        .wiz-form-checkbox {
+            display: flex; align-items: center; gap: 10px; background: var(--color-bg-tertiary);
+            padding: 12px; border-radius: 6px; border: 1px solid var(--color-border); cursor: pointer;
+        }
+        .wiz-form-checkbox input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+
+        .wizard-footer {
+            display: flex; justify-content: space-between; margin-top: 30px;
+            padding-top: 20px; border-top: 1px solid var(--color-border-secondary);
+        }
+
+        .import-export-row { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 20px; }
+
+        /* Provider Builder Styles */
+        .provider-card {
+            background: var(--color-bg-tertiary); border: 1px solid var(--color-border);
+            border-radius: 6px; padding: 15px; margin-bottom: 10px; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .provider-info h4 { margin: 0 0 5px 0; color: var(--color-primary); }
+        .provider-info p { margin: 0; font-size: 0.85em; color: var(--color-text-secondary); font-family: monospace; }
+        .provider-actions { display: flex; gap: 5px; }
+
+        /* Modal Builder */
+        .builder-modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6);
+            display: none; justify-content: center; align-items: center; z-index: 10000; backdrop-filter: blur(2px);
+        }
+        .builder-modal {
+            background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px;
+            width: 90%; max-width: 650px; max-height: 90vh; overflow-y: auto; padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .builder-modal h3 { margin-top: 0; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; }
+        
+        .conditional-group { display: none; padding-top: 5px; }
+        .conditional-group.active { display: block; }
+        
+        .storage-box { background: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .wizard-header { flex-wrap: wrap; }
+            .step-indicator { padding: 10px; font-size: 0.85em; flex-basis: 50%; }
+            .wiz-grid-2 { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body class="scrollable-page">
@@ -54,21 +145,297 @@
         <a href="./" class="nav-button">Back to Viewer</a>
     </header>
     <main class="config-page-container">
-        <h1>System Configuration</h1>
-        <p>Modify the application infrastructure settings below. Changes here often require a server restart.</p>
         
-        <div class="cert-manager">
-            <h3>Certificate Manager (Upload .pem, .crt, .key, .ca)</h3>
-            <div class="cert-upload-row">
-                <input type="file" id="cert-upload-input" accept=".pem,.crt,.key,.ca,.cer,.pfx,.p12" />
-                <button id="btn-upload-cert" class="modal-button" type="button">Upload</button>
-                <span id="cert-upload-status" style="font-size: 0.9em; margin-left: 10px;"></span>
-            </div>
-            <div style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 5px;">Available Certificates in <code>/data/certs</code>:</div>
-            <ul id="cert-list" class="cert-list">
-                <li style="padding: 10px; color: #888;">Loading...</li>
-            </ul>
+        <input type="file" id="cert-upload-input" accept=".pem,.crt,.key,.ca,.cer,.pfx,.p12" style="display:none;" />
+        <input type="file" id="import-config-input" accept=".json" style="display:none;">
+
+        <div class="import-export-row">
+            <button type="button" id="btn-export-config" class="tool-button" title="Download current config as JSON">⬇️ Export Config</button>
+            <button type="button" id="btn-import-config" class="tool-button" title="Upload a JSON config file">⬆️ Import Config</button>
         </div>
+
+        <div class="config-mode-toggle">
+            <button type="button" id="btn-mode-wizard" class="mode-btn active">Interactive Wizard</button>
+            <button type="button" id="btn-mode-advanced" class="mode-btn">Advanced (.env Editor)</button>
+        </div>
+
+        <div id="wizard-view" class="wizard-container">
+            <div class="wizard-header">
+                <div class="step-indicator active" data-step="1">1. Core</div>
+                <div class="step-indicator" data-step="2">2. Data Sources</div>
+                <div class="step-indicator" data-step="3">3. Database</div>
+                <div class="step-indicator" data-step="4">4. UI</div>
+                <div class="step-indicator" data-step="5">5. AI Features</div>
+            </div>
+
+            <form id="wizard-form">
+                <div class="wizard-step active" id="wiz-step-1">
+                    <h2>Core Settings</h2>
+                    <p class="step-desc">Basic server configuration and security settings.</p>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group">
+                            <label>Port</label>
+                            <input type="number" id="wiz-PORT" name="PORT" placeholder="8080">
+                        </div>
+                        <div class="wiz-form-group">
+                            <label>Base Path (for Reverse Proxies)</label>
+                            <input type="text" id="wiz-BASE_PATH" name="BASE_PATH" placeholder="/">
+                        </div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group">
+                            <label>Admin Username</label>
+                            <input type="text" id="wiz-ADMIN_USERNAME" name="ADMIN_USERNAME" placeholder="admin">
+                        </div>
+                        <div class="wiz-form-group">
+                            <label>Admin Password</label>
+                            <input type="password" id="wiz-ADMIN_PASSWORD" name="ADMIN_PASSWORD" placeholder="Leave empty to keep current">
+                        </div>
+                    </div>
+                    <div class="wiz-form-group">
+                        <label>Session Secret (Required for security)</label>
+                        <input type="password" id="wiz-SESSION_SECRET" name="SESSION_SECRET" placeholder="super_secret_key">
+                    </div>
+                </div>
+
+                <div class="wizard-step" id="wiz-step-2">
+                    <h2>Data Providers</h2>
+                    <p class="step-desc">Define your connections to MQTT brokers, OPC UA servers, or API webhooks.</p>
+                    
+                    <div id="providers-list-container">
+                        </div>
+                    <button type="button" id="btn-add-provider" class="tool-button button-primary" style="margin-bottom: 20px;">+ Add Data Provider</button>
+
+                    <label class="wiz-form-checkbox" style="margin-top: 20px;">
+                        <input type="checkbox" id="wiz-SPARKPLUG_ENABLED" name="SPARKPLUG_ENABLED">
+                        Enable Sparkplug B Protobuf Decoding natively
+                    </label>
+                </div>
+
+                <div class="wizard-step" id="wiz-step-3">
+                    <h2>Storage & History</h2>
+                    <p class="step-desc">Configure your databases. Korelate uses a dual-write architecture to ensure high performance.</p>
+                    
+                    <div class="storage-box">
+                        <h3 style="color:var(--color-primary); margin-top:0;">🔥 Embedded Hot Storage (DuckDB)</h3>
+                        <p style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:15px;">Always enabled. Used for real-time visualization, charts, and the AI agent. <b>The Prune strategy ONLY affects this local database to prevent disk overflow.</b></p>
+                        <div class="wiz-grid-2">
+                            <div class="wiz-form-group">
+                                <label>Max DB Size (MB)</label>
+                                <input type="number" id="wiz-DUCKDB_MAX_SIZE_MB" name="DUCKDB_MAX_SIZE_MB" placeholder="500">
+                            </div>
+                            <div class="wiz-form-group">
+                                <label>Prune Chunk Size (Rows)</label>
+                                <input type="number" id="wiz-DUCKDB_PRUNE_CHUNK_SIZE" name="DUCKDB_PRUNE_CHUNK_SIZE" placeholder="5000">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="storage-box">
+                        <h3 style="color:var(--color-primary); margin-top:0;">🧊 Long-Term Perennial Storage</h3>
+                        <p style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:15px;">Optional "Fire-and-forget" historical archival. Data sent here is <b>never</b> pruned by Korelate.</p>
+                        
+                        <div class="wiz-form-group">
+                            <label>Perennial Storage Driver</label>
+                            <select id="wiz-PERENNIAL_DRIVER" name="PERENNIAL_DRIVER">
+                                <option value="none">None (DuckDB Only)</option>
+                                <option value="timescale">TimescaleDB / PostgreSQL</option>
+                                <option value="azure_table">Azure Table Storage</option>
+                                <option value="dynamodb">AWS DynamoDB</option>
+                                <option value="bigquery">Google BigQuery</option>
+                                <option value="aveva_pi">AVEVA PI System</option>
+                            </select>
+                        </div>
+
+                        <div id="perennial-config-timescale" class="conditional-group">
+                            <div class="wiz-grid-2">
+                                <div class="wiz-form-group"><label>Host</label><input type="text" name="PG_HOST" placeholder="localhost"></div>
+                                <div class="wiz-form-group"><label>Port</label><input type="number" name="PG_PORT" placeholder="5432"></div>
+                                <div class="wiz-form-group"><label>Database</label><input type="text" name="PG_DATABASE" placeholder="korelate"></div>
+                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="PG_TABLE_NAME" placeholder="mqtt_events"></div>
+                                <div class="wiz-form-group"><label>User</label><input type="text" name="PG_USER" placeholder="postgres"></div>
+                                <div class="wiz-form-group"><label>Password</label><input type="password" name="PG_PASSWORD"></div>
+                            </div>
+                            <h4 style="margin:15px 0 5px 0; color:var(--color-primary);">Certificates & Security (Optional)</h4>
+                            <div class="wiz-form-group">
+                                <label class="wiz-form-checkbox"><input type="checkbox" name="PG_SSL"> Enable SSL Connection</label>
+                            </div>
+                            <div class="wiz-form-group">
+                                <label>Reject Unauthorized</label>
+                                <select name="PG_REJECT_UNAUTHORIZED"><option value="true">True (Secure)</option><option value="false">False (Insecure)</option></select>
+                            </div>
+                            <div class="wiz-grid-2">
+                                <div class="wiz-form-group">
+                                    <label>CA File</label>
+                                    <div style="display:flex; gap:10px;">
+                                        <select name="PG_CA_FILENAME" class="cert-select" style="flex:1;"><option value="">-- None --</option></select>
+                                        <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload...</button>
+                                    </div>
+                                </div>
+                                <div class="wiz-form-group">
+                                    <label>Client Cert</label>
+                                    <div style="display:flex; gap:10px;">
+                                        <select name="PG_CERT_FILENAME" class="cert-select" style="flex:1;"><option value="">-- None --</option></select>
+                                        <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload...</button>
+                                    </div>
+                                </div>
+                                <div class="wiz-form-group">
+                                    <label>Client Key</label>
+                                    <div style="display:flex; gap:10px;">
+                                        <select name="PG_KEY_FILENAME" class="cert-select" style="flex:1;"><option value="">-- None --</option></select>
+                                        <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload...</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="perennial-config-azure_table" class="conditional-group">
+                            <div class="wiz-form-group">
+                                <label>Connection String</label>
+                                <span style="font-size:0.8em; color:var(--color-text-muted); display:block; margin-bottom:5px;">Format: <code>DefaultEndpointsProtocol=https;AccountName=MY_ACC;AccountKey=MY_KEY;EndpointSuffix=core.windows.net</code></span>
+                                <input type="text" name="AZURE_STORAGE_CONNECTION_STRING" placeholder="DefaultEndpointsProtocol=https;...">
+                            </div>
+                            <div class="wiz-form-group"><label>Table Name</label><input type="text" name="AZURE_TABLE_NAME" placeholder="korelateevents"></div>
+                        </div>
+
+                        <div id="perennial-config-dynamodb" class="conditional-group">
+                            <div class="wiz-grid-2">
+                                <div class="wiz-form-group"><label>AWS Region</label><input type="text" name="AWS_REGION" placeholder="eu-west-1"></div>
+                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="DYNAMODB_TABLE_NAME" placeholder="korelate_events"></div>
+                                <div class="wiz-form-group"><label>Access Key ID (Optional)</label><input type="text" name="AWS_ACCESS_KEY_ID"></div>
+                                <div class="wiz-form-group"><label>Secret Key (Optional)</label><input type="password" name="AWS_SECRET_ACCESS_KEY"></div>
+                            </div>
+                        </div>
+
+                        <div id="perennial-config-bigquery" class="conditional-group">
+                            <div class="wiz-grid-2">
+                                <div class="wiz-form-group"><label>Project ID</label><input type="text" name="BQ_PROJECT_ID" placeholder="my-gcp-project"></div>
+                                <div class="wiz-form-group"><label>Dataset ID</label><input type="text" name="BQ_DATASET_ID" placeholder="korelate"></div>
+                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="BQ_TABLE_NAME" placeholder="mqtt_events"></div>
+                                <div class="wiz-form-group"><label>Location</label><input type="text" name="BQ_LOCATION" placeholder="US"></div>
+                            </div>
+                            <div class="wiz-form-group">
+                                <label>Service Account Key File</label>
+                                <span style="font-size:0.8em; color:var(--color-text-muted); display:block; margin-bottom:5px;">Select a credential file from <code>/data/certs</code>. Note: Please rename your <code>.json</code> key file to <code>.key</code> so the uploader accepts it.</span>
+                                <div style="display:flex; gap:10px;">
+                                    <select name="BQ_KEY_FILENAME" class="cert-select" style="flex:1;"><option value="">-- Use Application Default Credentials --</option></select>
+                                    <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload New...</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="perennial-config-aveva_pi" class="conditional-group">
+                            <div class="wiz-form-group"><label>PI Web API URL</label><input type="text" name="PI_WEB_API_URL" placeholder="https://pi-server/piwebapi"></div>
+                            <div class="wiz-grid-2">
+                                <div class="wiz-form-group"><label>Data Archive Name</label><input type="text" name="PI_DATA_ARCHIVE" placeholder="PISERVER"></div>
+                                <div class="wiz-form-group"><label>Username</label><input type="text" name="PI_USERNAME" placeholder="domain\user"></div>
+                                <div class="wiz-form-group"><label>Password</label><input type="password" name="PI_PASSWORD"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wizard-step" id="wiz-step-4">
+                    <h2>UI Features</h2>
+                    <p class="step-desc">Enable or disable specific modules in the left navigation menu.</p>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_TREE_ENABLED" name="VIEW_TREE_ENABLED"> Tree View</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_HMI_ENABLED" name="VIEW_HMI_ENABLED"> HMI Dashboard</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_HISTORY_ENABLED" name="VIEW_HISTORY_ENABLED"> History Table</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_MODELER_ENABLED" name="VIEW_MODELER_ENABLED"> CDM Modeler</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_MAPPER_ENABLED" name="VIEW_MAPPER_ENABLED"> ETL Mapper</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_CHART_ENABLED" name="VIEW_CHART_ENABLED"> Charts</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_PUBLISH_ENABLED" name="VIEW_PUBLISH_ENABLED"> Manual Publish</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-VIEW_ALERTS_ENABLED" name="VIEW_ALERTS_ENABLED"> Alerts Engine</label>
+                        <label class="wiz-form-checkbox" style="grid-column: span 2;"><input type="checkbox" id="wiz-SIMULATOR_ENABLED" name="SIMULATOR_ENABLED"> Simulators Plugin</label>
+                    </div>
+                </div>
+
+                <div class="wizard-step" id="wiz-step-5">
+                    <h2>AI Assistant & LLM</h2>
+                    <p class="step-desc">Configure the AI Agent and its permissions to interact with your data.</p>
+
+                    <label class="wiz-form-checkbox" style="margin-bottom: 20px;">
+                        <input type="checkbox" id="wiz-VIEW_CHAT_ENABLED" name="VIEW_CHAT_ENABLED"> Enable Floating AI Assistant Chat
+                    </label>
+                    
+                    <div class="wiz-form-group">
+                        <label>AI Provider Presets</label>
+                        <select id="llm-provider-preset">
+                            <option value="">-- Select a Provider --</option>
+                            <option value="https://api.openai.com/v1/">OpenAI</option>
+                            <option value="https://generativelanguage.googleapis.com/v1beta/openai/">Google Gemini</option>
+                            <option value="https://api.mistral.ai/v1/">Mistral AI</option>
+                            <option value="https://api.deepseek.com/v1/">DeepSeek</option>
+                            <option value="https://api.groq.com/openai/v1/">Groq (Llama)</option>
+                            <option value="custom">Custom (LM Studio, Ollama, etc.)</option>
+                        </select>
+                    </div>
+
+                    <div class="wiz-form-group">
+                        <label>LLM API URL (OpenAI Compatible Base URL)</label>
+                        <input type="text" id="wiz-LLM_API_URL" name="LLM_API_URL" placeholder="https://api.openai.com/v1/">
+                    </div>
+                    
+                    <div class="wiz-form-group">
+                        <label>API Key</label>
+                        <input type="text" id="wiz-LLM_API_KEY" name="LLM_API_KEY" placeholder="sk-...">
+                    </div>
+                    
+                    <div class="wiz-form-group">
+                        <label>Model Name</label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" id="wiz-LLM_MODEL" name="LLM_MODEL" placeholder="gpt-4o, gemini-2.5-pro..." list="llm-models-list" style="flex:1;">
+                            <button type="button" id="btn-fetch-models" class="tool-button">🔄 Fetch Models</button>
+                        </div>
+                        <datalist id="llm-models-list"></datalist>
+                        <span style="font-size:0.8em; color:var(--color-text-secondary); margin-top:5px; display:block;">Select from list or type a custom model name manually (must support tool calling).</span>
+                    </div>
+
+                    <h4 style="margin-top:20px; margin-bottom:10px; border-bottom: 1px solid var(--color-border); padding-bottom:5px;">AI Capabilities (RBAC)</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_READ" name="LLM_TOOL_ENABLE_READ"> Read DB & History</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_SEMANTIC" name="LLM_TOOL_ENABLE_SEMANTIC"> Semantic Analysis</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_PUBLISH" name="LLM_TOOL_ENABLE_PUBLISH"> Publish to Brokers</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_FILES" name="LLM_TOOL_ENABLE_FILES"> Create HMI/Read Files</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_MAPPER" name="LLM_TOOL_ENABLE_MAPPER"> Deploy ETL Rules</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_SIMULATOR" name="LLM_TOOL_ENABLE_SIMULATOR"> Control Simulators</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_ADMIN" name="LLM_TOOL_ENABLE_ADMIN"> Admin Actions (Prune)</label>
+                    </div>
+                </div>
+
+                <div class="wizard-footer">
+                    <button type="button" id="btn-wiz-prev" class="tool-button" style="visibility: hidden;">Previous</button>
+                    <button type="button" id="btn-wiz-next" class="tool-button button-primary">Next</button>
+                    <button type="submit" id="btn-wiz-save" class="tool-button" style="display: none; background-color: var(--color-success); color: white; border-color: var(--color-success);">Save & Apply Configurations</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="advanced-view" style="display: none;">
+            <p>Direct `.env` file editor. Only use this if you know exactly the variable names you are targeting.</p>
+            
+            <div class="cert-manager" style="margin-bottom: 25px; border-color: var(--color-primary);">
+                <h3 style="color: var(--color-primary);">Certificate Manager</h3>
+                <p style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:10px;">Upload `.pem`, `.crt`, `.key`, or `.ca` files here to use them in the Advanced or Wizard configuration.</p>
+                <div class="cert-upload-row">
+                    <button type="button" class="tool-button button-primary" onclick="document.getElementById('cert-upload-input').click()">Upload New Certificate...</button>
+                </div>
+                <div style="font-size: 0.9em; color: var(--color-text-secondary); margin-bottom: 5px;">Available Certificates in <code>/data/certs</code>:</div>
+                <ul id="cert-list" class="cert-list">
+                    <li style="padding: 10px; color: #888;">Loading...</li>
+                </ul>
+            </div>
+
+            <form id="config-form"></form>
+            <div class="form-actions">
+                <button id="save-config-button" type="submit" form="config-form" class="tool-button button-primary">Save Advanced Config</button>
+                <div id="status-message" class="status-message"></div>
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 30px 0;">
 
         <div class="model-manager">
             <h3>UNS Semantic Model (uns_model.json)</h3>
@@ -81,21 +448,140 @@
                 <span id="model-upload-status" style="font-size: 0.9em; margin-left: 10px;"></span>
             </div>
             <div class="form-group">
-                <textarea id="uns-model-editor" style="min-height: 250px; font-family: 'Courier New', monospace;" spellcheck="false" placeholder="Loading model..."></textarea>
+                <textarea id="uns-model-editor" style="width:100%; min-height: 250px; font-family: 'Courier New', monospace; padding: 10px; background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 4px;" spellcheck="false" placeholder="Loading model..."></textarea>
             </div>
             <div style="display: flex; justify-content: flex-end;">
                 <button id="btn-save-model" class="modal-button button-primary" type="button">Save Model</button>
             </div>
         </div>
 
-        <h3>Environment Variables (.env)</h3>
-        <form id="config-form">
-            </form>
-        <div class="form-actions">
-            <button id="save-config-button" type="submit" form="config-form">Save Configuration</button>
-            <div id="status-message" class="status-message"></div>
-        </div>
     </main>
-    <script src="config.js"></script>
+
+    <div id="provider-builder-modal" class="builder-modal-overlay">
+        <div class="builder-modal">
+            <h3 id="provider-modal-title">Add Data Provider</h3>
+            <form id="provider-builder-form">
+                <div class="wiz-form-group">
+                    <label>Provider ID (Unique Name)</label>
+                    <input type="text" id="prov-id" required placeholder="e.g., factory_mqtt_1">
+                </div>
+                <div class="wiz-form-group">
+                    <label>Type</label>
+                    <select id="prov-type">
+                        <option value="mqtt">MQTT Broker</option>
+                        <option value="opcua">OPC UA Server</option>
+                        <option value="http">HTTP Webhook (Ingest)</option>
+                        <option value="file">File Stream (CSV/JSONL)</option>
+                    </select>
+                </div>
+
+                <div class="wiz-form-group">
+                    <label>Subscribe Topics (Comma separated)</label>
+                    <input type="text" id="prov-subscribe" placeholder="factory/#, alerts/+" value="#">
+                </div>
+                <div class="wiz-form-group">
+                    <label>Publish Allowed Topics (Comma separated - Leave empty for Read-Only)</label>
+                    <input type="text" id="prov-publish" placeholder="commands/#">
+                </div>
+
+                <div id="prov-group-mqtt" class="conditional-group active">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Host</label><input type="text" id="prov-mqtt-host" placeholder="localhost"></div>
+                        <div class="wiz-form-group"><label>Port</label><input type="number" id="prov-mqtt-port" placeholder="1883"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group">
+                            <label>Protocol</label>
+                            <select id="prov-mqtt-protocol">
+                                <option value="mqtt">mqtt://</option>
+                                <option value="mqtts">mqtts:// (TLS)</option>
+                                <option value="ws">ws://</option>
+                                <option value="wss">wss:// (TLS)</option>
+                            </select>
+                        </div>
+                        <div class="wiz-form-group"><label>Client ID</label><input type="text" id="prov-mqtt-client" placeholder="korelate-client"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Username</label><input type="text" id="prov-mqtt-user"></div>
+                        <div class="wiz-form-group"><label>Password</label><input type="password" id="prov-mqtt-pass"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>ALPN Protocol</label><input type="text" id="prov-mqtt-alpn" placeholder="x-amzn-mqtt-ca"></div>
+                        <div class="wiz-form-group"><label>Keep Alive (s)</label><input type="number" id="prov-mqtt-keepalive" placeholder="60"></div>
+                    </div>
+                    <label class="wiz-form-checkbox" style="margin-bottom:15px;">
+                        <input type="checkbox" id="prov-mqtt-clean" checked>
+                        Clean Session
+                    </label>
+
+                    <h4 style="margin:15px 0 5px 0; color:var(--color-primary);">Certificates & Security</h4>
+                    <div class="wiz-form-group">
+                        <label>Reject Unauthorized</label>
+                        <select id="prov-mqtt-reject"><option value="true">True (Secure)</option><option value="false">False (Insecure)</option></select>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group">
+                            <label>CA File</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="prov-mqtt-ca" class="cert-select" name="prov-mqtt-ca" style="flex:1;"><option value="">-- None --</option></select>
+                                <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload...</button>
+                            </div>
+                        </div>
+                        <div class="wiz-form-group">
+                            <label>Client Cert</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="prov-mqtt-cert" class="cert-select" name="prov-mqtt-cert" style="flex:1;"><option value="">-- None --</option></select>
+                                <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload...</button>
+                            </div>
+                        </div>
+                        <div class="wiz-form-group">
+                            <label>Client Key</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="prov-mqtt-key" class="cert-select" name="prov-mqtt-key" style="flex:1;"><option value="">-- None --</option></select>
+                                <button type="button" class="tool-button" onclick="document.getElementById('cert-upload-input').click()">Upload...</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="prov-group-opcua" class="conditional-group">
+                    <div class="wiz-form-group">
+                        <label>Endpoint URL</label>
+                        <input type="text" id="prov-opcua-url" placeholder="opc.tcp://localhost:4840">
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Username (Optional)</label><input type="text" id="prov-opcua-user"></div>
+                        <div class="wiz-form-group"><label>Password (Optional)</label><input type="password" id="prov-opcua-pass"></div>
+                    </div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For OPC UA, 'Subscribe Topics' should be NodeIDs (e.g. <code>ns=1;s=Temperature</code>).</p>
+                </div>
+
+                <div id="prov-group-http" class="conditional-group">
+                    <div class="wiz-form-group">
+                        <label>Path Prefix</label>
+                        <input type="text" id="prov-http-path" placeholder="/api/ingest/rest">
+                    </div>
+                </div>
+
+                <div id="prov-group-file" class="conditional-group">
+                    <div class="wiz-form-group">
+                        <label>File Path</label>
+                        <input type="text" id="prov-file-path" placeholder="data/test.csv">
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Stream Rate (ms)</label><input type="number" id="prov-file-rate" placeholder="1000"></div>
+                        <div class="wiz-form-group"><label>Default Topic</label><input type="text" id="prov-file-topic" placeholder="fallback/topic"></div>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 20px;">
+                    <button type="button" id="btn-prov-cancel" class="tool-button">Cancel</button>
+                    <button type="submit" class="tool-button button-primary">Save Provider</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="config.js"></script>
 </body>
 </html>

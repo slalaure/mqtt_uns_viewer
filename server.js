@@ -12,6 +12,8 @@
  * [UPDATED] Staggered simulator auto-start to prevent CPU spikes and event loop blocking.
  * [UPDATED] Configured Pino logger to write to both stdout and data/korelate.log for Admin UI.
  * [UPDATED] Eradicated silent catches on filesystem and websocket broadcasting logic.
+ * [UPDATED] Added SSL/TLS Certificate configuration for PostgreSQL/TimescaleDB connections.
+ * [UPDATED] Robust Environment Variable parsing to handle \r (CRLF) artifacts from Docker/Windows.
  */
 
 // --- Imports ---
@@ -127,6 +129,18 @@ function longReplacer(key, value) {
     return value;
 }
 
+// --- Helper Function for Robust Environment Variable Parsing ---
+// Safely parses boolean values from .env, stripping whitespace and \r artifacts
+function parseBoolEnv(val, defaultVal) {
+    if (val === undefined || val === null) return defaultVal;
+    return String(val).trim().toLowerCase() !== 'false';
+}
+
+function parseStrictBoolEnv(val, defaultVal) {
+    if (val === undefined || val === null) return defaultVal;
+    return String(val).trim().toLowerCase() === 'true';
+}
+
 // --- Global Variables ---
 let activeConnections = new Map(); 
 let brokerStatuses = new Map(); 
@@ -139,11 +153,12 @@ const i3xEvents = new EventEmitter(); // Global Event Bus for I3X SSE
 const config = {
     BROKER_CONFIGS: [],
     DATA_PROVIDERS: [], // Extended generic data providers configuration
+    CERTS_PATH: CERTS_PATH, // Expose to repositories
     MQTT_BROKER_HOST: process.env.MQTT_BROKER_HOST?.trim() || null,
     MQTT_TOPIC: process.env.MQTT_TOPIC?.trim() || null,
     CLIENT_ID: process.env.CLIENT_ID?.trim() || null,
-    IS_SIMULATOR_ENABLED: process.env.SIMULATOR_ENABLED === 'true',
-    IS_SPARKPLUG_ENABLED: process.env.SPARKPLUG_ENABLED === 'true',
+    IS_SIMULATOR_ENABLED: parseStrictBoolEnv(process.env.SIMULATOR_ENABLED, false),
+    IS_SPARKPLUG_ENABLED: parseStrictBoolEnv(process.env.SPARKPLUG_ENABLED, false),
     PORT: process.env.PORT || 8080,
     DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
     DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
@@ -158,37 +173,43 @@ const config = {
     PG_TABLE_NAME: process.env.PG_TABLE_NAME?.trim() || 'mqtt_events',
     PG_INSERT_BATCH_SIZE: process.env.PG_INSERT_BATCH_SIZE ? parseInt(process.env.PG_INSERT_BATCH_SIZE, 10) : 1000,
     PG_BATCH_INTERVAL_MS: process.env.PG_BATCH_INTERVAL_MS ? parseInt(process.env.PG_BATCH_INTERVAL_MS, 10) : 5000,
+    PG_SSL: parseStrictBoolEnv(process.env.PG_SSL, false),
+    PG_CA_FILENAME: process.env.PG_CA_FILENAME?.trim() || null,
+    PG_CERT_FILENAME: process.env.PG_CERT_FILENAME?.trim() || null,
+    PG_KEY_FILENAME: process.env.PG_KEY_FILENAME?.trim() || null,
+    PG_REJECT_UNAUTHORIZED: parseBoolEnv(process.env.PG_REJECT_UNAUTHORIZED, true),
     HTTP_USER: process.env.HTTP_USER?.trim() || null,
     HTTP_PASSWORD: process.env.HTTP_PASSWORD?.trim() || null,
-    VIEW_TREE_ENABLED: process.env.VIEW_TREE_ENABLED !== 'false',
-    VIEW_HMI_ENABLED: process.env.VIEW_HMI_ENABLED !== 'false', 
-    VIEW_HISTORY_ENABLED: process.env.VIEW_HISTORY_ENABLED !== 'false',
-    VIEW_MODELER_ENABLED: process.env.VIEW_MODELER_ENABLED !== 'false', 
-    VIEW_MAPPER_ENABLED: process.env.VIEW_MAPPER_ENABLED !== 'false',
-    VIEW_CHART_ENABLED: process.env.VIEW_CHART_ENABLED !== 'false',
-    VIEW_PUBLISH_ENABLED: process.env.VIEW_PUBLISH_ENABLED !== 'false',
-    VIEW_CHAT_ENABLED: process.env.VIEW_CHAT_ENABLED !== 'false',
-    VIEW_ALERTS_ENABLED: process.env.VIEW_ALERTS_ENABLED !== 'false', 
-    LLM_API_URL: process.env.LLM_API_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
-    LLM_API_KEY: process.env.LLM_API_KEY || '',
-    LLM_MODEL: process.env.LLM_MODEL || 'gemini-2.0-flash',
+    // robust parsing for UI toggles to avoid CRLF \r bugs
+    VIEW_TREE_ENABLED: parseBoolEnv(process.env.VIEW_TREE_ENABLED, true),
+    VIEW_HMI_ENABLED: parseBoolEnv(process.env.VIEW_HMI_ENABLED, true), 
+    VIEW_HISTORY_ENABLED: parseBoolEnv(process.env.VIEW_HISTORY_ENABLED, true),
+    VIEW_MODELER_ENABLED: parseBoolEnv(process.env.VIEW_MODELER_ENABLED, true), 
+    VIEW_MAPPER_ENABLED: parseBoolEnv(process.env.VIEW_MAPPER_ENABLED, true),
+    VIEW_CHART_ENABLED: parseBoolEnv(process.env.VIEW_CHART_ENABLED, true),
+    VIEW_PUBLISH_ENABLED: parseBoolEnv(process.env.VIEW_PUBLISH_ENABLED, true),
+    VIEW_CHAT_ENABLED: parseBoolEnv(process.env.VIEW_CHAT_ENABLED, true),
+    VIEW_ALERTS_ENABLED: parseBoolEnv(process.env.VIEW_ALERTS_ENABLED, true), 
+    VIEW_CONFIG_ENABLED: parseBoolEnv(process.env.VIEW_CONFIG_ENABLED, true),
+    LLM_API_URL: process.env.LLM_API_URL?.trim() || 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    LLM_API_KEY: process.env.LLM_API_KEY?.trim() || '',
+    LLM_MODEL: process.env.LLM_MODEL?.trim() || 'gemini-2.0-flash',
     HMI_FILE_PATH: process.env.HMI_FILE_PATH?.trim() || process.env.SVG_FILE_PATH?.trim() || 'view.html',
     BASE_PATH: process.env.BASE_PATH?.trim() || '/',
-    VIEW_CONFIG_ENABLED: process.env.VIEW_CONFIG_ENABLED !== 'false',
     MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
     MAX_SAVED_MAPPER_VERSIONS: parseInt(process.env.MAX_SAVED_MAPPER_VERSIONS, 10) || 0,
     API_ALLOWED_IPS: process.env.API_ALLOWED_IPS?.trim() || null,
-    EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED === 'true',
+    EXTERNAL_API_ENABLED: parseStrictBoolEnv(process.env.EXTERNAL_API_ENABLED, false),
     EXTERNAL_API_KEYS_FILE: process.env.EXTERNAL_API_KEYS_FILE?.trim() || 'api_keys.json',
-    ANALYTICS_ENABLED: process.env.ANALYTICS_ENABLED === 'true', 
+    ANALYTICS_ENABLED: parseStrictBoolEnv(process.env.ANALYTICS_ENABLED, false), 
     AI_TOOLS: {
-        ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',         
-        ENABLE_SEMANTIC: process.env.LLM_TOOL_ENABLE_SEMANTIC !== 'false', 
-        ENABLE_PUBLISH: process.env.LLM_TOOL_ENABLE_PUBLISH !== 'false',   
-        ENABLE_FILES: process.env.LLM_TOOL_ENABLE_FILES !== 'false',       
-        ENABLE_SIMULATOR: process.env.LLM_TOOL_ENABLE_SIMULATOR !== 'false', 
-        ENABLE_MAPPER: process.env.LLM_TOOL_ENABLE_MAPPER !== 'false',     
-        ENABLE_ADMIN: process.env.LLM_TOOL_ENABLE_ADMIN !== 'false'        
+        ENABLE_READ: parseBoolEnv(process.env.LLM_TOOL_ENABLE_READ, true),         
+        ENABLE_SEMANTIC: parseBoolEnv(process.env.LLM_TOOL_ENABLE_SEMANTIC, true), 
+        ENABLE_PUBLISH: parseBoolEnv(process.env.LLM_TOOL_ENABLE_PUBLISH, true),   
+        ENABLE_FILES: parseBoolEnv(process.env.LLM_TOOL_ENABLE_FILES, true),       
+        ENABLE_SIMULATOR: parseBoolEnv(process.env.LLM_TOOL_ENABLE_SIMULATOR, true), 
+        ENABLE_MAPPER: parseBoolEnv(process.env.LLM_TOOL_ENABLE_MAPPER, true),     
+        ENABLE_ADMIN: parseBoolEnv(process.env.LLM_TOOL_ENABLE_ADMIN, true)        
     },
     // Auth Config
     SESSION_SECRET: process.env.SESSION_SECRET || 'dev_secret_key_change_me',
@@ -229,11 +250,11 @@ try {
             keyFilename: process.env.KEY_FILENAME?.trim() || null,
             caFilename: process.env.CA_FILENAME?.trim() || null,
             alpnProtocol: process.env.MQTT_ALPN_PROTOCOL?.trim() || null,
-            rejectUnauthorized: process.env.MQTT_REJECT_UNAUTHORIZED !== 'false'
+            rejectUnauthorized: parseBoolEnv(process.env.MQTT_REJECT_UNAUTHORIZED, true)
         }];
     }
 
-    if (config.BROKER_CONFIGS.length === 0 && process.env.ENABLE_LOCAL_MQTT_FALLBACK !== 'false') {
+    if (config.BROKER_CONFIGS.length === 0 && parseBoolEnv(process.env.ENABLE_LOCAL_MQTT_FALLBACK, true)) {
         const localBroker = {
             id: "local_mqtt",
             host: process.env.LOCAL_MQTT_HOST || "mqtt",
