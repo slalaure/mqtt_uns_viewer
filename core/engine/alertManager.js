@@ -245,9 +245,9 @@ class AlertManager {
 
     async processMessage(brokerId, topic, payload, correlationId = null) {
         if (!this.db) return;
-        
-        try {
-            const rules = await new Promise((resolve, reject) => {
+        if (this.llmConfig && this.llmConfig.VIEW_ALERTS_ENABLED === false) return;
+
+        try {            const rules = await new Promise((resolve, reject) => {
                 this.db.all("SELECT * FROM alert_rules WHERE enabled = true", (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows);

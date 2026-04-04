@@ -224,6 +224,8 @@ class MapperEngine {
     }
 
     async processMessage(brokerId, topic, payloadObject, isSparkplugOrigin = false, correlationId = null) {
+        if (this.serverConfig && this.serverConfig.VIEW_MAPPER_ENABLED === false) return;
+
         const activeRules = this.getActiveRules();
         if (activeRules.length === 0) return;
 

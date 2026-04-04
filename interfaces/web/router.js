@@ -17,6 +17,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
+const featureGate = require('./middlewares/featureGate');
 
 /**
  * Configures and returns the main application router.
@@ -126,10 +127,10 @@ function createRouter(deps) {
     router.use('/api/admin/ai_history', auth.requireAdmin, require('./aiHistoryApi')());
 
     // --- Alert API Routes ---
-    router.use('/api/alerts', ipFilterMiddleware, require('./alertApi')(logger)); 
+    router.use('/api/alerts', featureGate(config, 'VIEW_ALERTS_ENABLED'), ipFilterMiddleware, require('./alertApi')(logger)); 
 
     // --- [NEW] I3X API Standard Routes ---
-    router.use('/api/i3x', ipFilterMiddleware, require('../i3x/i3xRouter')(db, semanticManager, logger, i3xEvents));
+    router.use('/api/i3x', featureGate(config, 'VIEW_TREE_ENABLED'), ipFilterMiddleware, require('../i3x/i3xRouter')(db, semanticManager, logger, i3xEvents));
 
     // --- [NEW] Frontend Error Logs ---
     router.post('/api/logs/frontend', ipFilterMiddleware, (req, res) => {
@@ -138,7 +139,7 @@ function createRouter(deps) {
     });
 
     // --- API Routes for HMI ---
-    router.get('/api/hmi/file', (req, res) => {
+    router.get('/api/hmi/file', featureGate(config, 'VIEW_HMI_ENABLED'), (req, res) => {
         const filename = path.basename(req.query.name || '');
         if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).send('Invalid file type');
         const filePath = resolveHmiPath(filename, req);
@@ -152,7 +153,7 @@ function createRouter(deps) {
         }
     });
 
-    router.get('/api/hmi/list', (req, res, next) => {
+    router.get('/api/hmi/list', featureGate(config, 'VIEW_HMI_ENABLED'), (req, res, next) => {
         try {
             let files = new Set();
             if (fs.existsSync(DATA_PATH)) {
@@ -174,7 +175,7 @@ function createRouter(deps) {
         }
     });
 
-    router.get('/api/hmi/bindings.js', (req, res) => {
+    router.get('/api/hmi/bindings.js', featureGate(config, 'VIEW_HMI_ENABLED'), (req, res) => {
         const filename = path.basename(req.query.name || '');
         const filePath = resolveHmiPath(filename, req);
         res.setHeader('Content-Type', 'application/javascript');
@@ -185,7 +186,7 @@ function createRouter(deps) {
         }
     });
 
-    router.delete('/api/hmi/file', (req, res, next) => {
+    router.delete('/api/hmi/file', featureGate(config, 'VIEW_HMI_ENABLED'), (req, res, next) => {
         if (!req.user) return res.status(401).json({ error: "Unauthorized" });
         const filename = path.basename(req.query.name || '');
         if (!filename.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) return res.status(400).send('Invalid file type');
@@ -279,10 +280,10 @@ function createRouter(deps) {
         router.use('/api/env', ipFilterMiddleware, auth.requireAdmin, require('./configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager)); 
     }
     
-    router.use('/api/mapper', ipFilterMiddleware, require('./mapperApi')(mapperEngine)); 
-    router.use('/api/chart', ipFilterMiddleware, require('./chartApi')(CHART_CONFIG_PATH, logger)); 
+    router.use('/api/mapper', featureGate(config, 'VIEW_MAPPER_ENABLED'), ipFilterMiddleware, require('./mapperApi')(mapperEngine, config)); 
+    router.use('/api/chart', featureGate(config, 'VIEW_CHART_ENABLED'), ipFilterMiddleware, require('./chartApi')(CHART_CONFIG_PATH, logger)); 
 
-    router.post('/api/publish/message', ipFilterMiddleware, (req, res, next) => {
+    router.post('/api/publish/message', featureGate(config, 'VIEW_PUBLISH_ENABLED'), ipFilterMiddleware, (req, res, next) => {
         const { topic, payload, format, qos, retain, brokerId } = req.body;
         const conn = getBrokerConnection(brokerId);
         if (!conn || !conn.connected) return res.status(503).json({ error: "Provider not connected" });

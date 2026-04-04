@@ -15,9 +15,13 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const featureGate = require('./middlewares/featureGate');
 
-module.exports = (mapperEngine) => {
+module.exports = (mapperEngine, config) => {
     const router = express.Router();
+
+    // Block all mapper API routes if the feature is disabled
+    router.use(featureGate(config, 'VIEW_MAPPER_ENABLED'));
     
     const DATA_DIR = path.join(process.cwd(), 'data');
     const GLOBAL_VERSIONS_DIR = path.join(DATA_DIR, 'mapper_versions');

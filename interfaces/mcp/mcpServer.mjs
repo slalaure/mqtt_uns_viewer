@@ -101,8 +101,8 @@ function loadManifests() {
 }
 loadManifests();
 
-// --- Tool Flags ---
-const TOOL_FLAGS = {
+// --- Tool Flags (Default, will be refined by remote config) ---
+let TOOL_FLAGS = {
     ENABLE_READ: process.env.LLM_TOOL_ENABLE_READ !== 'false',
     ENABLE_SEMANTIC: process.env.LLM_TOOL_ENABLE_SEMANTIC !== 'false',
     ENABLE_PUBLISH: process.env.LLM_TOOL_ENABLE_PUBLISH !== 'false',
@@ -141,12 +141,20 @@ function jsonSchemaToZod(schema) {
 /**
  * Creates and configures the MCP server instance.
  */
-async function createMcpServer() {
+async function createMcpServer(remoteConfig) {
     const server = new McpServer({
         name: "Korelate Controller",
         version: "1.6.0-beta1",
         description: "Control the Korelate via tools defined in ai_tools_manifest.json.",
     });
+
+    // Refine TOOL_FLAGS based on remote visibility (Strict Feature Gating)
+    if (remoteConfig) {
+        if (remoteConfig.viewMapperEnabled === false) TOOL_FLAGS.ENABLE_MAPPER = false;
+        if (remoteConfig.viewAlertsEnabled === false) TOOL_FLAGS.ENABLE_ADMIN = false; 
+        if (remoteConfig.isSimulatorEnabled === false) TOOL_FLAGS.ENABLE_SIMULATOR = false;
+        if (remoteConfig.viewPublishEnabled === false) TOOL_FLAGS.ENABLE_PUBLISH = false;
+    }
 
     for (const toolDef of toolsManifest.tools) {
         const flag = TOOL_FLAGS[toolDef.category];
@@ -194,15 +202,17 @@ async function createMcpServer() {
  * Main entry point.
  */
 async function main() {
+    let remoteConfig = null;
     try {
-        await axios.get(`${API_BASE_URL}/config`, axiosConfig);
+        const res = await axios.get(`${API_BASE_URL}/config`, axiosConfig);
+        remoteConfig = res.data;
         console.error(`✅ MCP Server connected to main API at: ${API_BASE_URL}/config`);
     } catch (error) {
         console.error("❌ FATAL: Could not contact main server. Exiting.");
         process.exit(1);
     }
 
-    const server = await createMcpServer();
+    const server = await createMcpServer(remoteConfig);
 
     if (TRANSPORT_MODE === "http") {
         const app = express();

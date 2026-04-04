@@ -217,7 +217,17 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         const descriptions = [];
         toolsManifest.tools.forEach(toolDef => {
             const flagKey = toolDef.category; 
+            
+            // --- STRICT FEATURE GATING ---
+            // 1. Check module-specific toggle in AI_TOOLS config
             if (flagKey && config.AI_TOOLS && config.AI_TOOLS[flagKey] === false) return; 
+            
+            // 2. Check global feature flags (prevent AI from using features disabled on server)
+            if (flagKey === 'mapper' && config.VIEW_MAPPER_ENABLED === false) return;
+            if (flagKey === 'alerts' && config.VIEW_ALERTS_ENABLED === false) return;
+            if (flagKey === 'simulator' && config.IS_SIMULATOR_ENABLED === false) return;
+            if (flagKey === 'publish' && config.VIEW_PUBLISH_ENABLED === false) return;
+
             enabledTools.push({
                 type: "function",
                 function: {
