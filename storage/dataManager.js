@@ -14,9 +14,6 @@
  * It acts as a single entry point for the mqtt-handler and abstracts
  * away the underlying storage, fanning out messages to one or more
  * repositories (e.g., DuckDB, TimescaleDB, Azure Tables, DynamoDB, AVEVA PI, BigQuery).
- * [UPDATED] Uses camelCase repository filenames.
- * [UPDATED] Refactored to fully abstract repositories into a dynamic registry for easier testing and extension.
- * [UPDATED] Added getPerennialSchema and queryPerennial to expose long-term storage to the LLM agent.
  */
 // Import repository modules
 const duckDbRepo = require('./duckdbRepository');
@@ -35,11 +32,6 @@ let perennialRepository = null; // [NEW] Stores the active perennial driver for 
 
 /**
  * Initializes the Data Manager and all configured repositories.
- * @param {object} appConfig - The global application config.
- * @param {pino.Logger} appLogger - The main pino logger.
- * @param {object} appMapperEngine - The mapper engine instance.
- * @param {duckdb.Database} dbConnection - The *active* DuckDB connection from server.js.
- * @param {function} appBroadcastDbStatus - The callback to broadcast DB status.
  */
 function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastDbStatus) {
     logger = appLogger.child({ component: 'DataManager' });
@@ -48,12 +40,14 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
 
     // 0. Initialize the DLQ (Dead Letter Queue) manager
     dlqManager.init(appLogger, appConfig);
+    
+    // Register the retry handler to allow DLQ to re-attempt insertions
+    dlqManager.registerRetryHandler(retryMessage);
 
-    // Clear any previously registered repos (useful for testing re-initialization)
+    // Clear any previously registered repos
     activeRepositories = [];
 
-    // 1. Initialize the DuckDB repository (always enabled for the UI)
-    // We pass the active DB connection to it.
+    // 1. Initialize the DuckDB repository
     duckDbRepo.init(appLogger, appConfig, dbConnection, appBroadcastDbStatus, appMapperEngine, dlqManager);
     registerRepository(duckDbRepo);
 
@@ -92,7 +86,6 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
 
 /**
  * Registers a new storage repository dynamically.
- * @param {object} repo - The repository module (must expose at least a push() method).
  */
 function registerRepository(repo) {
     if (repo && typeof repo.push === 'function') {
@@ -103,7 +96,7 @@ function registerRepository(repo) {
 }
 
 /**
- * Clears all active repositories. Useful for teardown in unit tests.
+ * Clears all active repositories.
  */
 function clearRepositories() {
     activeRepositories = [];
@@ -112,8 +105,6 @@ function clearRepositories() {
 
 /**
  * Inserts a message into all configured storage repositories.
- * This is a non-blocking, "fire-and-forget" function fanning out to the registry.
- * @param {object} message - The message object from mqtt-handler.
  */
 function insertMessage(message) {
     for (const repo of activeRepositories) {
@@ -126,8 +117,39 @@ function insertMessage(message) {
 }
 
 /**
+ * Re-attempts to insert a message into a specific repository (used by DLQ).
+ * @param {string} repoName - The name of the repository to target.
+ * @param {Object} message - The original message object.
+ */
+async function retryMessage(repoName, message) {
+    const repo = activeRepositories.find(r => r.name === repoName);
+    if (!repo) {
+        throw new Error(`Repository ${repoName} not found or not active.`);
+    }
+    
+    // Most repos use a background batch processor. 
+    // For retries, we want to know if it succeeded.
+    // However, repo.push() is usually sync and just adds to a queue.
+    
+    // We'll call push() and assume it succeeded in queuing.
+    // If the repo is disconnected, it might throw or the next batch will fail again.
+    // To properly support exponential backoff, the repo should ideally provide a way 
+    // to check its health or perform a sync insert.
+    
+    // For now, if the repo is a TimescaleRepo or similar, check its isConnected status.
+    if (Object.prototype.hasOwnProperty.call(repo, 'isConnected') && !repo.isConnected) {
+        throw new Error(`Repository ${repoName} is currently disconnected.`);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(repo, 'db') && !repo.db && repo.name === 'DuckDBRepo') {
+        throw new Error(`Repository ${repoName} is not ready (DuckDB connection null).`);
+    }
+
+    repo.push(message);
+}
+
+/**
  * Retrieves the schema/dialect of the active perennial storage.
- * @returns {Promise<Object>}
  */
 async function getPerennialSchema() {
     if (!perennialRepository) {
@@ -141,8 +163,6 @@ async function getPerennialSchema() {
 
 /**
  * Executes a native query against the active perennial storage.
- * @param {string} query - The native query (SQL, PartiQL, etc.)
- * @returns {Promise<Array>}
  */
 async function queryPerennial(query) {
     if (!perennialRepository) {
@@ -156,14 +176,12 @@ async function queryPerennial(query) {
 
 /**
  * Signals all repositories to stop their batch timers and process remaining queues.
- * @returns {Promise<void>}
  */
 async function stop() {
     logger.info("Stopping all repository batch processors...");
     const stopPromises = activeRepositories.map(repo => {
         if (typeof repo.stop === 'function') {
             const result = repo.stop();
-            // Handle both sync and async stop methods gracefully
             return result instanceof Promise ? result : Promise.resolve(result);
         }
         return Promise.resolve();
@@ -174,7 +192,6 @@ async function stop() {
 
 /**
  * Asynchronously closes all active database connections.
- * @returns {Promise<void>}
  */
 async function close() {
     logger.info("Closing all database connections...");
@@ -184,7 +201,7 @@ async function close() {
             if (typeof repo.close === 'function') {
                 repo.close(resolve);
             } else {
-                resolve(); // Resolve immediately if the repo has no close method
+                resolve();
             }
         });
     });
@@ -196,6 +213,7 @@ async function close() {
 module.exports = {
     init,
     insertMessage,
+    retryMessage,
     getPerennialSchema,
     queryPerennial,
     stop,

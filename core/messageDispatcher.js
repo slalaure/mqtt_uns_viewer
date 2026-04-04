@@ -136,7 +136,15 @@ class PayloadWorkerPool {
 
 // Instantiate pool matching CPU cores (capped at 4 to balance with other I/O tasks)
 const poolSize = Math.max(2, Math.min(os.cpus().length - 1, 4));
-const workerPool = new PayloadWorkerPool(poolSize);
+let workerPool = new PayloadWorkerPool(poolSize);
+
+/**
+ * Injects a custom worker pool (useful for tests).
+ * @param {Object} pool 
+ */
+function setWorkerPool(pool) {
+    workerPool = pool;
+}
 
 // --- Module-Scoped Variables ---
 /** @type {Object} */
@@ -301,16 +309,23 @@ async function handleMessage(providerId, topic, payload, options = {}) {
         }
 
         if (alertManager) {
-            alertManager.processMessage(providerId, topic, payloadObjectForMapper, correlationId);
+            await alertManager.processMessage(providerId, topic, payloadObjectForMapper, correlationId);
         }
 
         // --- 6. Webhook Execution ---
         const webhookManager = require('./webhookManager');
-        webhookManager.trigger(topic, payloadObjectForMapper, correlationId);
+        await webhookManager.trigger(topic, payloadObjectForMapper, correlationId);
 
     } catch (err) {
         handlerLogger.error({ msg: `❌ UNEXPECTED ERROR processing topic ${topic}`, error_message: err.message });
     }
+}
+
+/**
+ * Resets throttling counters (used for tests).
+ */
+function resetThrottling() {
+    namespaceCounts.clear();
 }
 
 /**
@@ -341,4 +356,4 @@ function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManage
     return handleMessage; 
 }
 
-module.exports = { init };
+module.exports = { init, setWorkerPool, resetThrottling };

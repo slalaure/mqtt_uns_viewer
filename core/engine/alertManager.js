@@ -9,12 +9,8 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Alert Manager (Root Service)
- * [UPDATED] Refactored to ES6 Class (OOP Standardization).
- * [UPDATED] Reverted isolated-vm to native 'vm' to permanently fix C++ Segmentation Faults with DuckDB.
- * [UPDATED] V8 Scripts are strictly cached and Event Loop yielded for high throughput.
  */
 const crypto = require('crypto');
-const vm = require('vm');
 const axios = require('axios');
 const llmEngine = require('./llmEngine');
 
@@ -25,9 +21,7 @@ class AlertManager {
         this.llmConfig = null;
         this.broadcaster = null;
         this.agentRunner = null;
-        
-        // Cache to store compiled V8 scripts to prevent CPU spikes and memory leaks
-        this.scriptCache = new Map();
+        this.sandboxPool = null;
     }
 
     init(database, appLogger, config, appBroadcaster) {
@@ -95,6 +89,13 @@ class AlertManager {
         }
     }
 
+    setSandbox(sandboxPool) {
+        this.sandboxPool = sandboxPool;
+        if (this.logger) {
+            this.logger.info("✅ Alert Manager: Sandbox Pool registered.");
+        }
+    }
+
     registerAgentRunner(runnerFn) {
         this.agentRunner = runnerFn;
         if (this.logger) {
@@ -130,8 +131,6 @@ class AlertManager {
                     return reject(new Error("Forbidden: Cannot edit rules you do not own."));
                 }
                 
-                this.scriptCache.delete(id); // Clear cache to force recompilation
-
                 const query = `
                     UPDATE alert_rules 
                     SET name = ?, topic_pattern = ?, condition_code = ?, severity = ?, workflow_prompt = ?, notifications = ?
@@ -176,8 +175,6 @@ class AlertManager {
                 if (rule.owner_id !== userId && !isAdmin) {
                     return reject(new Error("Forbidden: Cannot delete rules you do not own."));
                 }
-
-                this.scriptCache.delete(ruleId); // Clean up memory
 
                 this.db.run("DELETE FROM alert_rules WHERE id = ?", ruleId, (delErr) => {
                     if (delErr) return reject(delErr);
@@ -249,8 +246,15 @@ class AlertManager {
     async processMessage(brokerId, topic, payload, correlationId = null) {
         if (!this.db) return;
         
-        this.db.all("SELECT * FROM alert_rules WHERE enabled = true", async (err, rules) => {
-            if (err || !rules || rules.length === 0) return;
+        try {
+            const rules = await new Promise((resolve, reject) => {
+                this.db.all("SELECT * FROM alert_rules WHERE enabled = true", (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
+            });
+
+            if (!rules || rules.length === 0) return;
             
             for (const rule of rules) {
                 if (!rule._cachedRegex || rule._rawPattern !== rule.topic_pattern) {
@@ -264,80 +268,65 @@ class AlertManager {
                         
                         await new Promise(setImmediate); // Yield to Event Loop
                         
-                        // Native VM Context for evaluation
-                        const context = vm.createContext({
-                            msg: msgContext,
-                            console: { log: () => {} },
-                            db: {
-                                all: async (sql) => new Promise((resolve, reject) => {
-                                    if (!this.db) return reject(new Error("DB not ready"));
-                                    if (!sql.trim().toUpperCase().startsWith('SELECT')) return reject(new Error("Read-only."));
-                                    this.db.all(sql, (e, rows) => e ? reject(e) : resolve(rows));
-                                }),
-                                get: async (sql) => new Promise((resolve, reject) => {
-                                    if (!this.db) return reject(new Error("DB not ready"));
-                                    if (!sql.trim().toUpperCase().startsWith('SELECT')) return reject(new Error("Read-only."));
-                                    this.db.all(sql, (e, rows) => e ? reject(e) : resolve(rows && rows.length > 0 ? rows[0] : null));
-                                })
-                            }
-                        });
-                        
-                        let cached = this.scriptCache.get(rule.id);
-                        if (!cached || cached.rawCode !== rule.condition_code) {
-                            const wrappedCode = `(async () => { ${rule.condition_code} })()`;
-                            cached = {
-                                script: new vm.Script(wrappedCode),
-                                rawCode: rule.condition_code
-                            };
-                            this.scriptCache.set(rule.id, cached);
+                        if (!this.sandboxPool) {
+                            this.logger.error("Sandbox Pool not available for Alert Manager.");
+                            continue;
                         }
-                        
-                        // Execute natively with a strict synchronous timeout
-                        const isTriggered = await cached.script.runInContext(context, { timeout: 1000 });
+
+                        // Offload to SandboxPool for secure execution with memory limits
+                        const wrappedCode = `(async () => { ${rule.condition_code} })()`;
+                        const isTriggered = await this.sandboxPool.execute(wrappedCode, { msg: msgContext }, 1000);
                         
                         if (isTriggered === true) {
-                            this.triggerAlert(rule, msgContext);
+                            await this.triggerAlert(rule, msgContext);
                         }
                     } catch (evalErr) { 
                         this.logger.error({ err: evalErr, ruleId: rule.id, topic }, "Alert Manager: Failed to evaluate condition script.");
                     }
                 }
             }
-        });
+        } catch (dbErr) {
+            this.logger.error({ err: dbErr }, "Alert Manager: Failed to load rules from DB.");
+        }
     }
 
-    triggerAlert(rule, msgContext) {
-        const dedupQuery = `
-            SELECT id FROM active_alerts 
-            WHERE rule_id = ? AND topic = ? AND status NOT IN ('resolved')
-        `;
-        this.db.all(dedupQuery, rule.id, msgContext.topic, (err, rows) => {
-            if (err) return;
-            if (rows.length > 0) return;
-            
-            const alertId = `alert_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-            const now = new Date().toISOString();
-            const triggerVal = JSON.stringify(msgContext.payload).substring(0, 200);
-            
-            const insertQuery = `
-                INSERT INTO active_alerts (id, rule_id, topic, broker_id, trigger_value, status, correlation_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?)
+    async triggerAlert(rule, msgContext) {
+        return new Promise((resolve) => {
+            const dedupQuery = `
+                SELECT id FROM active_alerts 
+                WHERE rule_id = ? AND topic = ? AND status NOT IN ('resolved')
             `;
-            
-            this.db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, msgContext.correlationId || null, now, now, (insErr) => {
-                if (insErr) return this.logger.error({ err: insErr, correlationId: msgContext.correlationId }, "Failed to persist alert.");
+            this.db.all(dedupQuery, rule.id, msgContext.topic, (err, rows) => {
+                if (err) return resolve();
+                if (rows.length > 0) return resolve();
                 
-                this.logger.info({ msg: `🚨 New Alert Triggered: ${rule.name} on ${msgContext.topic}`, correlationId: msgContext.correlationId });
+                const alertId = `alert_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+                const now = new Date().toISOString();
+                const triggerVal = JSON.stringify(msgContext.payload).substring(0, 200);
                 
-                if (this.broadcaster) {
-                    this.broadcaster(JSON.stringify({
-                        type: 'alert-triggered',
-                        alert: {
-                            id: alertId, ruleName: rule.name, topic: msgContext.topic, severity: rule.severity, timestamp: now, correlationId: msgContext.correlationId
-                        }
-                    }));
-                }
-                this.executeWorkflow(alertId, rule, msgContext);
+                const insertQuery = `
+                    INSERT INTO active_alerts (id, rule_id, topic, broker_id, trigger_value, status, correlation_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?)
+                `;
+                
+                this.db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, msgContext.correlationId || null, now, now, (insErr) => {
+                    if (insErr) {
+                        this.logger.error({ err: insErr, correlationId: msgContext.correlationId }, "Failed to persist alert.");
+                        return resolve();
+                    }
+                    
+                    this.logger.info({ msg: `🚨 New Alert Triggered: ${rule.name} on ${msgContext.topic}`, correlationId: msgContext.correlationId });
+                    
+                    if (this.broadcaster) {
+                        this.broadcaster(JSON.stringify({
+                            type: 'alert-triggered',
+                            alert: {
+                                id: alertId, ruleName: rule.name, topic: msgContext.topic, severity: rule.severity, timestamp: now, correlationId: msgContext.correlationId
+                            }
+                        }));
+                    }
+                    this.executeWorkflow(alertId, rule, msgContext).then(resolve);
+                });
             });
         });
     }
@@ -353,7 +342,8 @@ class AlertManager {
             const systemPrompt = llmEngine.generateAlertAnalysisPrompt(rule, msgContext);
 
             try {
-                finalAnalysis = await this.agentRunner(systemPrompt, `Proceed with investigation for alert ${alertId}. Trace ID: ${correlationId || 'none'}`);
+                // [UPDATED] Passing correlationId as 3rd arg for end-to-end tracing
+                finalAnalysis = await this.agentRunner(systemPrompt, `Proceed with investigation for alert ${alertId}. Trace ID: ${correlationId || 'none'}`, correlationId);
                 this.updateAlertStatus(alertId, 'open', 'System (AI)', finalAnalysis);
                 if (this.logger) this.logger.info({ msg: `[AlertWorkflow] AI Analysis complete for ${alertId}`, correlationId });
             } catch (aiError) {

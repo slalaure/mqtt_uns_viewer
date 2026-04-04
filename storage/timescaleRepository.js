@@ -216,7 +216,7 @@ class TimescaleRepository extends BaseRepository {
             
             const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             if (this.dlqManager) {
-                this.dlqManager.push(excessMessages);
+                this.dlqManager.push(excessMessages, this.name);
             }
         }
     }
@@ -272,7 +272,7 @@ class TimescaleRepository extends BaseRepository {
             } else {
                 this.logger.error({ err: err.message, code: err.code }, `❌ TimescaleDB batch insert failed (Non-recoverable). Sending ${batch.length} messages to DLQ.`);
                 if (this.dlqManager) {
-                    this.dlqManager.push(batch);
+                    this.dlqManager.push(batch, this.name);
                 }
             }
         }

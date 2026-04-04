@@ -146,7 +146,7 @@ class AzureTableRepository extends BaseRepository {
             this.logger.warn(`⚠️ Azure Table write queue exceeded ${MAX_QUEUE_SIZE}. Flushing ${FLUSH_CHUNK_SIZE} oldest messages to DLQ to prevent OOM.`);
             const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             if (this.dlqManager) {
-                this.dlqManager.push(excessMessages);
+                this.dlqManager.push(excessMessages, this.name);
             }
         }
     }
@@ -218,7 +218,7 @@ class AzureTableRepository extends BaseRepository {
                                 needsDb: true
                             };
                         });
-                        this.dlqManager.push(failedMsgs);
+                        this.dlqManager.push(failedMsgs, this.name);
                     }
                 }
             }

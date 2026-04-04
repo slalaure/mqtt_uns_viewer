@@ -60,9 +60,11 @@ class LlmEngine {
     /**
      * Executes an autonomous agent loop without streaming.
      */
-    async runAutonomousAgent(systemPromptText, userPromptText, config, enabledTools, toolImplementations, systemUser, logger) {
+    async runAutonomousAgent(systemPromptText, userPromptText, config, enabledTools, toolImplementations, systemUser, logger, correlationId = null) {
         if (!config.LLM_API_KEY) throw new Error("LLM_API_KEY not configured.");
         
+        const agentLogger = correlationId && logger ? logger.child({ correlationId }) : logger;
+
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
@@ -82,7 +84,7 @@ class LlmEngine {
 
         while (turnCount < MAX_AGENT_TURNS && !finalResponse) {
             turnCount++;
-            if (logger) logger.info(`[LlmEngine] Turn ${turnCount}...`);
+            if (agentLogger) agentLogger.info(`[LlmEngine] Turn ${turnCount}...`);
 
             const requestPayload = {
                 model: config.LLM_MODEL,
@@ -105,7 +107,7 @@ class LlmEngine {
                         if (toolImplementations[fnName]) {
                             let args = {};
                             try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
-                            if (logger) logger.info(`[LlmEngine] Executing tool: ${fnName}`);
+                            if (agentLogger) agentLogger.info(`[LlmEngine] Executing tool: ${fnName}`);
                             result = await toolImplementations[fnName](args, systemUser);
                             result = JSON.stringify(result);
                         } else {

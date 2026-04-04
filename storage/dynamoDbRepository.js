@@ -166,7 +166,7 @@ class DynamoDbRepository extends BaseRepository {
             this.logger.warn(`⚠️ DynamoDB write queue exceeded ${MAX_QUEUE_SIZE}. Flushing ${FLUSH_CHUNK_SIZE} oldest messages to DLQ to prevent OOM.`);
             const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             if (this.dlqManager) {
-                this.dlqManager.push(excessMessages);
+                this.dlqManager.push(excessMessages, this.name);
             }
         }
     }
@@ -219,7 +219,7 @@ class DynamoDbRepository extends BaseRepository {
                 if (response.UnprocessedItems && Object.keys(response.UnprocessedItems).length > 0) {
                     const unprocessedArray = response.UnprocessedItems[this.tableName] || [];
                     this.logger.warn(`⚠️ DynamoDB throttled ${unprocessedArray.length} items. Sending chunk to DLQ.`);
-                    if (this.dlqManager) this.dlqManager.push(chunk);
+                    if (this.dlqManager) this.dlqManager.push(chunk, this.name);
                     successCount += (chunk.length - unprocessedArray.length);
                 } else {
                     successCount += chunk.length;
@@ -227,7 +227,7 @@ class DynamoDbRepository extends BaseRepository {
 
             } catch (err) {
                 this.logger.error({ err: err.message }, `❌ DynamoDB batch insert failed. Sending ${chunk.length} messages to DLQ.`);
-                if (this.dlqManager) this.dlqManager.push(chunk);
+                if (this.dlqManager) this.dlqManager.push(chunk, this.name);
             }
         }
 

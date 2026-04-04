@@ -15,6 +15,7 @@ const simulatorManager = require('../core/simulatorManager');
 const dataManager = require('../storage/dataManager'); 
 const alertManager = require('../core/engine/alertManager'); 
 const semanticManager = require('../core/semantic/semanticManager'); 
+const SandboxPool = require('../core/engine/sandboxPool');
 const { EventEmitter } = require('events');
 
 /**
@@ -38,6 +39,9 @@ function initServices(server, app, db, config, logger, paths, state) {
         isShuttingDown
     } = state;
 
+    // 0. Initialize Sandbox Pool for secure JS execution
+    const sandboxPool = new SandboxPool(logger, db);
+
     // 1. Initialize Semantic Manager
     semanticManager.init({ logger, config });
 
@@ -47,9 +51,13 @@ function initServices(server, app, db, config, logger, paths, state) {
         wsManager.broadcast, 
         logger,
         longReplacer,
-        config 
+        config,
+        sandboxPool
     );
     mapperEngine.setDb(db);
+
+    // 2.5 Initialize Alert Manager Sandbox
+    alertManager.setSandbox(sandboxPool);
 
     // 3. Initialize DB Manager for maintenance
     const dbManager = require('../storage/dbManager')(
@@ -132,7 +140,8 @@ function initServices(server, app, db, config, logger, paths, state) {
         wsManager,
         connectorManager,
         simulatorManager,
-        maintenanceTimer
+        maintenanceTimer,
+        sandboxPool
     };
 }
 

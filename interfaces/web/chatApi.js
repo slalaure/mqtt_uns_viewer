@@ -235,7 +235,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     //  INTERNAL AGENT RUNNER 
     // Executes the agent loop autonomously (no HTTP res needed)
     // Returns Promise<String> with the final response
-    const runInternalAgent = async (systemPrompt, userPrompt) => {
+    const runInternalAgent = async (systemPrompt, userPrompt, correlationId = null) => {
         const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
         const brokerContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
@@ -260,7 +260,8 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
             enabledTools,
             toolImplementations,
             systemUser,
-            logger
+            logger,
+            correlationId
         );
     };
 

@@ -106,6 +106,7 @@ class WebhookManager {
 
     trigger(topic, payload, correlationId = null) {
         const now = Date.now();
+        const promises = [];
         
         for (const webhook of this.webhooks) {
             if (mqttMatch(webhook.topic, topic)) {
@@ -117,9 +118,10 @@ class WebhookManager {
                 }
 
                 this.lastTriggered.set(webhook.id, now);
-                this.executeWebhook(webhook, topic, payload, correlationId);
+                promises.push(this.executeWebhook(webhook, topic, payload, correlationId));
             }
         }
+        return Promise.all(promises);
     }
 
     async executeWebhook(webhook, topic, payload, correlationId = null) {

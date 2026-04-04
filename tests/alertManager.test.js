@@ -1,5 +1,5 @@
 /**
- * @license Apache License, Version 2.0
+ * @license Apache License, Version 2.0 (the "License")
  * @author Sebastien Lalaurette
  * * Unit tests for the Alert Manager.
  * Verifies rule evaluation, VM sandbox isolation, and state transitions.
@@ -16,7 +16,7 @@ const createMockLogger = () => ({
 });
 
 describe('AlertManager', () => {
-    let mockDb, mockLogger, mockConfig, mockBroadcaster;
+    let mockDb, mockLogger, mockConfig, mockBroadcaster, mockSandboxPool;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -24,6 +24,16 @@ describe('AlertManager', () => {
         mockLogger = createMockLogger();
         mockConfig = {};
         mockBroadcaster = jest.fn();
+
+        // Mock SandboxPool
+        mockSandboxPool = {
+            execute: jest.fn().mockImplementation(async (code, contextData) => {
+                if (code.includes('msg.payload.val > 50')) {
+                    return contextData.msg.payload.val > 50;
+                }
+                return false;
+            })
+        };
 
         // Create a Mock DB simulating DuckDB's run and all methods
         mockDb = {
@@ -42,6 +52,7 @@ describe('AlertManager', () => {
 
         // Initialize the Alert Manager
         alertManager.init(mockDb, mockLogger, mockConfig, mockBroadcaster);
+        alertManager.setSandbox(mockSandboxPool);
     });
 
     test('createRule should insert a new rule into the database', async () => {
@@ -117,8 +128,8 @@ describe('AlertManager', () => {
         // Trigger processing
         await alertManager.processMessage('default', 'test/sensor', { val: 75 }, 'trace-123');
 
-        // Wait for immediate microtasks (since script execution is async)
-        await new Promise(setImmediate);
+        // Wait for all async tasks (including processQueue microtasks and sandbox execution)
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         // Verify that the alert insertion was triggered
         expect(mockDb.run).toHaveBeenCalledWith(
@@ -128,7 +139,6 @@ describe('AlertManager', () => {
             'test/sensor',
             'default',
             '{"val":75}',
-            'new',
             'trace-123',
             expect.any(String), // created_at
             expect.any(String), // updated_at
@@ -156,7 +166,7 @@ describe('AlertManager', () => {
         // Trigger processing with a value that does not satisfy the condition
         await alertManager.processMessage('default', 'test/sensor', { val: 30 });
 
-        await new Promise(setImmediate);
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         // Should not insert an alert
         expect(mockDb.run).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO active_alerts'), expect.anything());

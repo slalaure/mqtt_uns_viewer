@@ -9,65 +9,15 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * Mapper Engine for real-time topic and payload transformation.
- * [UPDATED] Refactored into a pure ES6 Class (OOP Standardization).
- * [UPDATED] Reverted isolated-vm to native 'vm' to permanently fix C++ Segmentation Faults with DuckDB.
- * [UPDATED] V8 Scripts are strictly cached and Event Loop yielded for high throughput.
  */
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 const mustache = require('mustache');
 const mqttMatch = require('mqtt-match');
 const spBv10Codec = require('sparkplug-payload').get("spBv10"); 
 
 const MAPPINGS_FILE_PATH = path.join(__dirname, '..', '..', 'data', 'mappings.json');
-
-/**
- * @typedef {Object} MapperTarget
- * @property {string} id Unique identifier for the target.
- * @property {boolean} enabled Whether the target is active.
- * @property {string} [code] Custom JavaScript code for transformation.
- * @property {string} [outputTopic] Topic template for publishing results.
- * @property {string} [targetBrokerId] Optional specific broker ID for output.
- */
-
-/**
- * @typedef {Object} MapperRule
- * @property {string} sourceTopic MQTT topic pattern to match.
- * @property {MapperTarget[]} targets List of transformation targets.
- */
-
-/**
- * @typedef {Object} MapperVersion
- * @property {string} id Version identifier.
- * @property {string} name Display name of the version.
- * @property {string} createdAt ISO timestamp.
- * @property {MapperRule[]} rules Rules associated with this version.
- */
-
-/**
- * @typedef {Object} MapperConfig
- * @property {MapperVersion[]} versions List of all mapper versions.
- * @property {string} activeVersionId ID of the currently active version.
- */
-
-/**
- * @typedef {Object} MapperLogEntry
- * @property {string} ts ISO timestamp.
- * @property {string} inTopic Incoming topic.
- * @property {string} [correlationId] Correlation ID for tracking.
- * @property {string} [error] Error message if execution failed.
- * @property {string} [debug] Debug message.
- * @property {string} [outTopic] Resulting outgoing topic.
- * @property {string} [outPayload] Truncated output payload string.
- */
-
-/**
- * @typedef {Object} MapperMetricsEntry
- * @property {number} count Total execution count.
- * @property {MapperLogEntry[]} logs Recent execution logs.
- */
 
 class MapperEngine {
     /**
@@ -76,8 +26,9 @@ class MapperEngine {
      * @param {Object} logger Logger instance (Pino).
      * @param {Function} longReplacer Function to handle BigInt/Long serialization in JSON.
      * @param {Object} appServerConfig Application server configuration object.
+     * @param {Object} sandboxPool Worker Pool for script execution.
      */
-    constructor(connectionsMap, broadcaster, logger, longReplacer, appServerConfig) {
+    constructor(connectionsMap, broadcaster, logger, longReplacer, appServerConfig, sandboxPool) {
         /** @type {Map<string, import('mqtt').MqttClient>} */
         this.activeConnections = connectionsMap;
         /** @type {Function} */
@@ -88,6 +39,8 @@ class MapperEngine {
         this.payloadReplacer = longReplacer;
         /** @type {Object} */
         this.serverConfig = appServerConfig;
+        /** @type {Object} */
+        this.sandboxPool = sandboxPool;
 
         /** @type {MapperConfig} */
         this.config = { versions: [], activeVersionId: null };
@@ -98,25 +51,6 @@ class MapperEngine {
         /** @type {Object|null} */
         this.internalDb = null;
         
-        /** @type {Map<string, {script: import('vm').Script, rawCode: string}>} */
-        this.scriptCache = new Map(); 
-
-        this.DEFAULT_JS_CODE = `// 'msg' object contains msg.topic, msg.payload (parsed JSON), and msg.brokerId.
-// 'db' object is available with await db.all(sql) and await db.get(sql).
-// CASE 1: Single Output (Fan-out)
-// Return 'msg' to automatically publish it to all Target Topic(s) defined above.
-// return msg;
-
-// CASE 2: Multiple Specific Outputs
-// Return an array of messages to explicitly route different payloads to different topics.
-/*
-const msg1 = { topic: "uns/factory/temp", payload: { value: msg.payload.T1 } };
-const msg2 = { topic: "uns/factory/press", payload: { value: msg.payload.P1 } };
-return [msg1, msg2];
-*/
-
-return msg;
-`;
         this.loadMappings();
     }
 
@@ -174,9 +108,6 @@ return msg;
 
     saveMappings(newConfig) {
         try {
-            // Clear script cache to ensure new code is compiled
-            this.scriptCache.clear();
-
             this.config = newConfig; 
             fs.writeFileSync(MAPPINGS_FILE_PATH, JSON.stringify(this.config, null, 2));
             this.engineLogger.info(`✅ Mapper Engine: Saved config. Active: ${this.config.activeVersionId}`);
@@ -321,45 +252,11 @@ return msg;
                             return; 
                         }
 
-                        await new Promise(setImmediate); // Yield to Event Loop
-
-                        let resultMsg = null;
+                        // Offload to SandboxPool for secure execution with memory limits
+                        const cleanCode = target.code.replace(/\u00A0/g, " ");
+                        const wrappedCode = `(async () => { ${cleanCode} })()`;
                         
-                        // Native VM execution context
-                        const context = vm.createContext({
-                            msg: msgForSandbox,
-                            console: {
-                                log: (...args) => this.engineLogger.info({ vm_log: args }, "VM Log"),
-                                warn: (...args) => this.engineLogger.warn({ vm_log: args }, "VM Warn"),
-                                error: (...args) => this.engineLogger.error({ vm_log: args }, "VM Error")
-                            },
-                            db: {
-                                all: async (sql) => new Promise((resolve, reject) => {
-                                    if (!this.internalDb) return reject(new Error("Database not initialized"));
-                                    if (!sql.trim().toUpperCase().startsWith('SELECT')) return reject(new Error("Database access is read-only."));
-                                    this.internalDb.all(sql, (err, rows) => err ? reject(err) : resolve(rows));
-                                }),
-                                get: async (sql) => new Promise((resolve, reject) => {
-                                    if (!this.internalDb) return reject(new Error("Database not initialized"));
-                                    if (!sql.trim().toUpperCase().startsWith('SELECT')) return reject(new Error("Database access is read-only."));
-                                    this.internalDb.all(sql, (err, rows) => err ? reject(err) : resolve(rows && rows.length > 0 ? rows[0] : null));
-                                })
-                            }
-                        });
-
-                        // Compile and Cache the V8 Script
-                        let cached = this.scriptCache.get(target.id);
-                        if (!cached || cached.rawCode !== target.code) {
-                            const cleanCode = target.code.replace(/\u00A0/g, " ");
-                            cached = {
-                                script: new vm.Script(`(async () => { ${cleanCode} })()`),
-                                rawCode: target.code
-                            };
-                            this.scriptCache.set(target.id, cached);
-                        }
-                        
-                        // Execute with strict timeout
-                        resultMsg = await cached.script.runInContext(context, { timeout: 2000 }); 
+                        const resultMsg = await this.sandboxPool.execute(wrappedCode, { msg: msgForSandbox }, 2000);
 
                         if (resultMsg !== null && resultMsg !== undefined) {
                             const results = Array.isArray(resultMsg) ? resultMsg : [resultMsg];
@@ -476,6 +373,6 @@ return msg;
 }
 
 // Wrapper to export an instance to maintain compatibility with server.js
-module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerConfig) => {
-    return new MapperEngine(connectionsMap, broadcaster, logger, longReplacer, appServerConfig);
+module.exports = (connectionsMap, broadcaster, logger, longReplacer, appServerConfig, sandboxPool) => {
+    return new MapperEngine(connectionsMap, broadcaster, logger, longReplacer, appServerConfig, sandboxPool);
 };

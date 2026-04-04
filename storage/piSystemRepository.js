@@ -174,7 +174,7 @@ class PiSystemRepository extends BaseRepository {
             this.logger.warn(`⚠️ PI System write queue exceeded ${MAX_QUEUE_SIZE}. Flushing ${FLUSH_CHUNK_SIZE} oldest messages to DLQ to prevent OOM.`);
             const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             if (this.dlqManager) {
-                this.dlqManager.push(excessMessages);
+                this.dlqManager.push(excessMessages, this.name);
             }
         }
     }
@@ -229,7 +229,7 @@ class PiSystemRepository extends BaseRepository {
         } catch (err) {
             this.logger.error({ err: err.message }, `❌ PI System batch insert failed. Sending ${batch.length} messages to DLQ.`);
             if (this.dlqManager) {
-                this.dlqManager.push(batch);
+                this.dlqManager.push(batch, this.name);
             }
             this.isConnected = false;
         }

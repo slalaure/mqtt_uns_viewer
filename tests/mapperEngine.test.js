@@ -1,5 +1,5 @@
 /**
- * @license Apache License, Version 2.0
+ * @license Apache License, Version 2.0 (the "License")
  * @author Sebastien Lalaurette
  * * Unit tests for the Mapper Engine.
  * Verifies sandbox execution, database requirement detection, and message routing.
@@ -20,7 +20,7 @@ const createMockLogger = () => ({
 });
 
 describe('MapperEngine', () => {
-    let mockConnections, mockBroadcaster, mockLogger, mockReplacer, engine;
+    let mockConnections, mockBroadcaster, mockLogger, mockReplacer, engine, mockSandboxPool;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -29,6 +29,20 @@ describe('MapperEngine', () => {
         mockBroadcaster = jest.fn();
         mockLogger = createMockLogger();
         mockReplacer = (k, v) => v; // Simple passthrough for JSON.stringify
+
+        // Mock SandboxPool
+        mockSandboxPool = {
+            execute: jest.fn().mockImplementation(async (code, contextData) => {
+                // Basic mock execution logic for tests
+                if (code.includes('throw new Error("Sandbox boom!");')) {
+                    throw new Error("Sandbox boom!");
+                }
+                if (code.includes('msg.payload.val * 2')) {
+                    return [{ topic: "test/target", payload: { new_val: contextData.msg.payload.val * 2 } }];
+                }
+                return contextData.msg;
+            })
+        };
 
         // Create a mock mappings.json configuration
         const mockConfig = {
@@ -64,14 +78,13 @@ describe('MapperEngine', () => {
         fs.existsSync.mockReturnValue(true);
         fs.readFileSync.mockReturnValue(JSON.stringify(mockConfig));
 
-        // Initialize the engine
-        engine = mapperEngineFactory(mockConnections, mockBroadcaster, mockLogger, mockReplacer, {});
+        // Initialize the engine with the mock sandbox pool
+        engine = mapperEngineFactory(mockConnections, mockBroadcaster, mockLogger, mockReplacer, {}, mockSandboxPool);
         
-        // Inject a mock Database that uses callbacks, matching the duckdb API
-        // This prevents the sandbox's 'await db.all' from hanging indefinitely
+        // Inject a mock Database
         engine.setDb({
             all: jest.fn((sql, ...args) => {
-                const cb = args[args.length - 1]; // Callback is always the last argument
+                const cb = args[args.length - 1]; 
                 if (typeof cb === 'function') cb(null, [{ 1: 1 }]);
             }),
             get: jest.fn((sql, ...args) => {
@@ -82,10 +95,7 @@ describe('MapperEngine', () => {
     });
 
     test('rulesForTopicRequireDb should detect "await db" usage in target scripts', () => {
-        // The rule for 'test/source' has a target that uses 'await db'
         expect(engine.rulesForTopicRequireDb('test/source')).toBe(true);
-        
-        // Unmapped topic should not require DB
         expect(engine.rulesForTopicRequireDb('other/topic')).toBe(false);
     });
 
@@ -103,16 +113,14 @@ describe('MapperEngine', () => {
         expect(mockPublish).toHaveBeenCalledWith(
             'test/target',
             JSON.stringify({ new_val: 42 }),
-            expect.any(Object) // options object { qos: 1, retain: false }
+            expect.any(Object)
         );
         
-        // Verify that metrics were correctly updated for Target 1
         const metrics = engine.getMetrics();
         expect(metrics['test/source::target_1'].count).toBe(1);
     });
 
     test('processMessage should handle execution errors gracefully', async () => {
-        // Modify the config to inject a syntax error
         const badConfig = {
             activeVersionId: 'v1',
             versions: [{
@@ -123,18 +131,16 @@ describe('MapperEngine', () => {
                         id: 'err_target',
                         enabled: true,
                         routingMode: 'code',
-                        code: 'throw new Error("Sandbox boom!");' // Deliberate crash
+                        code: 'throw new Error("Sandbox boom!");'
                     }]
                 }]
             }]
         };
         fs.readFileSync.mockReturnValue(JSON.stringify(badConfig));
-        engine = mapperEngineFactory(mockConnections, mockBroadcaster, mockLogger, mockReplacer, {});
+        engine = mapperEngineFactory(mockConnections, mockBroadcaster, mockLogger, mockReplacer, {}, mockSandboxPool);
 
-        // This should NOT crash the Node process
         await engine.processMessage('default_broker', 'test/error', { val: 1 }, false);
 
-        // Verify the error was caught and logged into the metrics system
         const metrics = engine.getMetrics();
         const logs = metrics['test/error::err_target'].logs;
         expect(logs.length).toBeGreaterThan(0);

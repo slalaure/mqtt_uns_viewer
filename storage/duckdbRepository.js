@@ -60,7 +60,7 @@ class DuckDBRepository extends BaseRepository {
             const excessMessages = this.writeQueue.splice(0, FLUSH_CHUNK_SIZE);
             
             if (this.dlqManager) {
-                this.dlqManager.push(excessMessages);
+                this.dlqManager.push(excessMessages, this.name);
                 this.logger.info(`✅ Spilled ${FLUSH_CHUNK_SIZE} messages to DLQ.`);
             } else {
                 this.logger.error("❌ DLQ Manager not available. Dropped messages to prevent OOM!");
@@ -113,19 +113,19 @@ class DuckDBRepository extends BaseRepository {
                 if (finalizeErr) {
                      this.logger.error({ err: finalizeErr }, "DB Batch: Failed to finalize statement");
                      this.db.run('ROLLBACK;'); 
-                     if (this.dlqManager) this.dlqManager.push(batch);
+                     if (this.dlqManager) this.dlqManager.push(batch, this.name);
                      return;
                 }
 
                 if (errorCount > 0) {
                     this.logger.warn(`DB Batch: ${errorCount} errors, rolling back transaction.`);
                     this.db.run('ROLLBACK;');
-                    if (this.dlqManager) this.dlqManager.push(batch);
+                    if (this.dlqManager) this.dlqManager.push(batch, this.name);
                 } else {
                     this.db.run('COMMIT;', (commitErr) => {
                         if (commitErr) {
                             this.logger.error({ err: commitErr }, "DB Batch: Failed to COMMIT transaction");
-                            if (this.dlqManager) this.dlqManager.push(batch);
+                            if (this.dlqManager) this.dlqManager.push(batch, this.name);
                         } else {
                             this.logger.info(`✅ 🦆 Batch inserted ${batch.length} messages into DuckDB.`);
 
