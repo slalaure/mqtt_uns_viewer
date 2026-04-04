@@ -7,8 +7,6 @@
  * limitations under the License.
  * @author Sebastien Lalaurette
  * @copyright (c) 2025 Sebastien Lalaurette
- *
-  
  */
 const express = require('express');
 const fs = require('fs');
@@ -180,70 +178,108 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
     });
 
 
-    // --- Environment Config Routes ---
+    // --- Database-Backed Config Routes ---
 
-    router.get('/', (req, res, next) => {
+    /**
+     * Helper to get merged configuration (Env + DB).
+     */
+    async function getMergedConfig() {
+        // 1. Start with values from .env
+        const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
+        const config = dotenv.parse(envFileContent);
+
+        // 2. Overwrite with values from DB
+        return new Promise((resolve) => {
+            db.all("SELECT key, value FROM app_config", (err, rows) => {
+                if (!err && rows) {
+                    rows.forEach(row => {
+                        try {
+                            config[row.key] = JSON.parse(row.value);
+                        } catch (e) {
+                            config[row.key] = row.value;
+                        }
+                    });
+                }
+                resolve(config);
+            });
+        });
+    }
+
+    router.get('/', async (req, res, next) => {
         try {
-            const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
-            const config = dotenv.parse(envFileContent);
+            const config = await getMergedConfig();
             res.json(config);
         } catch (err) {
             next(err);
         }
     });
 
-    router.post('/', (req, res, next) => {
+    router.post('/', async (req, res, next) => {
         const newConfig = req.body;
-        const tempPath = path.join(dataPath, '.env.tmp');
-        let envFileContent = "";
-        const writtenKeys = new Set(); // Track which keys were found and replaced
+        
+        // List of keys that MUST stay in .env (immutable boot variables)
+        const immutableKeys = ['PORT', 'SESSION_SECRET', 'BASE_PATH', 'DUCKDB_MAX_SIZE_MB'];
+        
+        const envUpdates = {};
+        const dbUpdates = [];
+
+        for (const [key, val] of Object.entries(newConfig)) {
+            if (immutableKeys.includes(key)) {
+                envUpdates[key] = val;
+            } else {
+                dbUpdates.push({ key, value: typeof val === 'object' ? JSON.stringify(val) : String(val) });
+            }
+        }
 
         try {
-            const exampleContent = fs.readFileSync(envExamplePath, { encoding: 'utf8' });
-            
-            exampleContent.split('\n').forEach(line => {
-                if (line.startsWith('#') || !line.trim()) {
-                    envFileContent += line + '\n';
-                } else {
-                    const firstEqual = line.indexOf('=');
-                    if (firstEqual !== -1) {
-                        const key = line.substring(0, firstEqual);
-                        if (newConfig.hasOwnProperty(key)) {
-                            let val = newConfig[key];
-                            if (key === 'MQTT_BROKERS' || key === 'DATA_PROVIDERS') {
-                                envFileContent += `${key}='${val}'\n`;
+            // 1. Update .env for immutable keys (if any)
+            if (Object.keys(envUpdates).length > 0) {
+                const tempPath = path.join(dataPath, '.env.tmp');
+                let envFileContent = "";
+                const writtenKeys = new Set();
+                const exampleContent = fs.readFileSync(envExamplePath, { encoding: 'utf8' });
+
+                exampleContent.split('\n').forEach(line => {
+                    if (line.startsWith('#') || !line.trim()) {
+                        envFileContent += line + '\n';
+                    } else {
+                        const firstEqual = line.indexOf('=');
+                        if (firstEqual !== -1) {
+                            const key = line.substring(0, firstEqual);
+                            if (envUpdates.hasOwnProperty(key)) {
+                                envFileContent += `${key}=${envUpdates[key]}\n`;
+                                writtenKeys.add(key);
                             } else {
-                                envFileContent += `${key}=${val}\n`;
+                                // Keep existing value for other keys in .env
+                                envFileContent += line + '\n';
                             }
-                            writtenKeys.add(key);
-                        } else {
-                            envFileContent += line + '\n';
                         }
                     }
-                }
-            });
-            
-            // Append any keys present in the payload but missing from the template
-            let hasAppended = false;
-            for (const [key, val] of Object.entries(newConfig)) {
-                if (!writtenKeys.has(key)) {
-                    if (!hasAppended) {
-                        envFileContent += "\n# --- Appended Configuration ---\n";
-                        hasAppended = true;
-                    }
-                    if (key === 'MQTT_BROKERS' || key === 'DATA_PROVIDERS') {
-                        envFileContent += `${key}='${val}'\n`;
-                    } else {
-                        envFileContent += `${key}=${val}\n`;
-                    }
-                }
+                });
+                fs.writeFileSync(tempPath, envFileContent);
+                fs.renameSync(tempPath, envPath);
+                logger.info("✅ Updated immutable keys in .env");
             }
-            
-            fs.writeFileSync(tempPath, envFileContent);
-            fs.renameSync(tempPath, envPath);
 
-            res.json({ message: 'Configuration saved successfully.' });
+            // 2. Update DuckDB for dynamic keys
+            if (dbUpdates.length > 0) {
+                const stmt = db.prepare("INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, current_timestamp) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at");
+                
+                for (const update of dbUpdates) {
+                    await new Promise((resolve, reject) => {
+                        stmt.run(update.key, update.value, (err) => {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    });
+                }
+                stmt.finalize();
+                logger.info(`✅ Updated ${dbUpdates.length} dynamic keys in database.`);
+            }
+
+            res.json({ message: 'Configuration saved successfully (DB + .env).' });
         } catch (err) {
+            logger.error({ err }, "Failed to save configuration");
             next(err);
         }
     });
@@ -262,6 +298,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
         logger.warn("⚠️  User initiated full database reset (TRUNCATE).");
 
         db.serialize(() => {
+            // Do NOT truncate app_config, only data
             db.run("DELETE FROM mqtt_events;", (err) => {
                 if (err) {
                     return next(err);

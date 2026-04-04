@@ -42,7 +42,7 @@ const mqttToSqlLike = (topicPattern) => {
 
 module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, config) => {
     const router = express.Router();
-    const isMultiBroker = config.BROKER_CONFIGS.length > 1;
+    const isMultiBroker = (config.DATA_PROVIDERS || []).length > 1;
 
     // Helper for logging
     const log = (msg) => console.log(`[ContextAPI] ${msg}`);

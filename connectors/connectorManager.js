@@ -36,15 +36,7 @@ class ConnectorManager {
             context.alertManager
         );
 
-        // 1. Backward compatibility: Load Legacy MQTT Brokers from .env configuration
-        if (this.context.config.BROKER_CONFIGS && this.context.config.BROKER_CONFIGS.length > 0) {
-            this.context.config.BROKER_CONFIGS.forEach(brokerConfig => {
-                const providerConfig = { type: 'mqtt', ...brokerConfig };
-                this.loadProvider(providerConfig);
-            });
-        }
-
-        // 2. Future implementation: Load other providers if configured in config
+        // 1. Load generic DATA_PROVIDERS
         if (this.context.config.DATA_PROVIDERS) {
             this.context.config.DATA_PROVIDERS.forEach(providerConfig => {
                 this.loadProvider(providerConfig);

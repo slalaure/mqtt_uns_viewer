@@ -206,10 +206,7 @@ class MapperEngine {
     isPublishAllowed(brokerId, topic) {
         if (!this.serverConfig) return true; 
         
-        const allConfigs = [
-            ...(this.serverConfig.BROKER_CONFIGS || []),
-            ...(this.serverConfig.DATA_PROVIDERS || [])
-        ];
+        const allConfigs = this.serverConfig.DATA_PROVIDERS || [];
         
         const providerConfig = allConfigs.find(b => b.id === brokerId);
         

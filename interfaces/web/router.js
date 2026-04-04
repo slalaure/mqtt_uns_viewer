@@ -228,9 +228,9 @@ function createRouter(deps) {
     router.get('/api/config', (req, res) => {
         res.json({
             isSimulatorEnabled: config.IS_SIMULATOR_ENABLED,
-            brokerConfigs: config.BROKER_CONFIGS.map(b => ({ id: b.id, host: b.host, port: b.port, subscribe: b.subscribe, publish: b.publish, type: 'mqtt' })),
+            brokerConfigs: config.DATA_PROVIDERS.map(b => ({ id: b.id, host: b.host, port: b.port, subscribe: b.subscribe, publish: b.publish, type: b.type || 'mqtt' })),
             dataProviders: config.DATA_PROVIDERS.map(p => ({ id: p.id, type: p.type, subscribe: p.subscribe, publish: p.publish })),
-            isMultiBroker: (config.BROKER_CONFIGS.length + config.DATA_PROVIDERS.length) > 1,
+            isMultiBroker: (config.DATA_PROVIDERS || []).length > 1,
             viewTreeEnabled: config.VIEW_TREE_ENABLED,
             viewHmiEnabled: config.VIEW_HMI_ENABLED,
             viewHistoryEnabled: config.VIEW_HISTORY_ENABLED,

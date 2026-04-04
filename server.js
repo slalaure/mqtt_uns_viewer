@@ -128,6 +128,10 @@ let services = {};
         const wsManager = require('./core/websocketManager');
         const db = await initDatabase(logger, config, paths, wsManager);
 
+        // 5.5 Merge Dynamic Configuration from DB
+        const { mergeConfigFromDb } = require('./boot/config');
+        await mergeConfigFromDb(config, db, logger);
+
         // 6. Initialize Services
         services = initServices(server, app, db, config, logger, paths, state);
 

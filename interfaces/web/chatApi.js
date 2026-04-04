@@ -246,8 +246,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     // Executes the agent loop autonomously (no HTTP res needed)
     // Returns Promise<String> with the final response
     const runInternalAgent = async (systemPrompt, userPrompt, correlationId = null) => {
-        const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
-        const brokerContext = allProviders.map(b => {
+        const allProviders = config.DATA_PROVIDERS || [];        const brokerContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
             return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
@@ -329,8 +328,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         sendChunk(res, 'status', 'Processing request...', clientId);
 
         // --- SECURITY: Build Broker Context ---
-        const allProviders = [...(config.BROKER_CONFIGS || []), ...(config.DATA_PROVIDERS || [])];
-        const brokerContext = allProviders.map(b => {
+        const allProviders = config.DATA_PROVIDERS || [];        const brokerContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
             return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;

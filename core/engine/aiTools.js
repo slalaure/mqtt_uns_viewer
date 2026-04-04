@@ -386,7 +386,7 @@ class AiTools {
                 return new Promise((resolve) => {
                     this.logger.info(`[AiTools:publish] Topic: ${topic}`);
                     
-                    const allProviders = [...(this.config.BROKER_CONFIGS || []), ...(this.config.DATA_PROVIDERS || [])];
+                    const allProviders = this.config.DATA_PROVIDERS || [];
                     let targetBrokerConfig = allProviders[0]; 
 
                     if (broker_id) {

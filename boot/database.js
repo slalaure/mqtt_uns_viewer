@@ -50,6 +50,11 @@ async function initDatabase(logger, config, paths, wsManager) {
                     broker_id VARCHAR,
                     correlation_id VARCHAR
                 );
+                CREATE TABLE IF NOT EXISTS app_config (
+                    key VARCHAR PRIMARY KEY,
+                    value JSON,
+                    updated_at TIMESTAMPTZ DEFAULT current_timestamp
+                );
             `, (createErr) => {
                 if (createErr) {
                     logger.error({ err: createErr }, "❌ FATAL: Failed to ensure tables exist.");
