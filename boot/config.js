@@ -83,6 +83,23 @@ function parseStrictBool(val, defaultVal) {
 }
 
 /**
+ * Parses JSON robustly. Unwraps double stringified values.
+ */
+function robustJsonParse(val) {
+    if (typeof val !== 'string') return val;
+    let parsed = val;
+    try {
+        parsed = JSON.parse(val);
+        if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+        }
+    } catch (e) {
+        // If it fails on the second pass, return the result of the first pass (or raw string)
+    }
+    return parsed;
+}
+
+/**
  * Load and parse application configuration from environment variables.
  * @param {Object} logger Pino logger instance.
  * @param {Object} paths Object containing important file paths.
@@ -156,8 +173,8 @@ function loadConfig(logger, paths) {
     // --- Data Providers Parsing ---
     if (process.env.DATA_PROVIDERS) {
         try {
-            config.DATA_PROVIDERS = JSON.parse(process.env.DATA_PROVIDERS);
-            logger?.info(`✅ Loaded ${config.DATA_PROVIDERS.length} custom data provider(s).`);
+            config.DATA_PROVIDERS = robustJsonParse(process.env.DATA_PROVIDERS);
+            logger?.info(`✅ Loaded ${Array.isArray(config.DATA_PROVIDERS) ? config.DATA_PROVIDERS.length : 0} custom data provider(s).`);
         } catch (jsonErr) {
             logger?.warn({ err: jsonErr }, "⚠️ Invalid JSON in DATA_PROVIDERS.");
             config.DATA_PROVIDERS = [];
@@ -181,6 +198,8 @@ function loadConfig(logger, paths) {
             logger?.info(`✅ No DATA_PROVIDERS configured; using local MQTT fallback ${localBroker.host}:${localBroker.port}`);
         }
     }
+
+    if (!Array.isArray(config.DATA_PROVIDERS)) config.DATA_PROVIDERS = [];
 
     // --- Normalize Base Path ---
     let basePath = config.BASE_PATH;
@@ -212,16 +231,11 @@ async function mergeConfigFromDb(config, db, logger) {
             }
 
             rows.forEach(row => {
-                let val;
-                try {
-                    val = JSON.parse(row.value);
-                } catch (e) {
-                    val = row.value;
-                }
+                const val = robustJsonParse(row.value);
 
                 switch (row.key) {
                     case 'DATA_PROVIDERS':
-                        config.DATA_PROVIDERS = val;
+                        config.DATA_PROVIDERS = Array.isArray(val) ? val : [];
                         break;
                     case 'SIMULATOR_ENABLED':
                         config.IS_SIMULATOR_ENABLED = parseStrictBool(val, config.IS_SIMULATOR_ENABLED);
