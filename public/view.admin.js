@@ -1065,15 +1065,15 @@ async function loadApiKeys() {
                 scopesDisplay = Array.isArray(s) ? s.join(', ') : "None";
             } catch(e) {}
 
-            tr.innerHTML = \`
-                <td style="padding: 10px;">\${escapeHtml(k.name)}</td>
-                <td style="padding: 10px;"><code>\${escapeHtml(scopesDisplay)}</code></td>
-                <td style="padding: 10px; color: var(--color-text-secondary);">\${new Date(k.created_at).toLocaleString()}</td>
-                <td style="padding: 10px; color: var(--color-text-secondary);">\${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
+            tr.innerHTML = `
+                <td style="padding: 10px;">${escapeHtml(k.name)}</td>
+                <td style="padding: 10px;"><code>${escapeHtml(scopesDisplay)}</code></td>
+                <td style="padding: 10px; color: var(--color-text-secondary);">${new Date(k.created_at).toLocaleString()}</td>
+                <td style="padding: 10px; color: var(--color-text-secondary);">${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
                 <td style="padding: 10px; text-align: center;">
-                    <button class="tool-button button-danger btn-delete-apikey" data-id="\${k.id}">Revoke</button>
+                    <button class="tool-button button-danger btn-delete-apikey" data-id="${k.id}">Revoke</button>
                 </td>
-            \`;
+            `;
             apiKeysTableBody.appendChild(tr);
         });
 
@@ -1085,13 +1085,13 @@ async function loadApiKeys() {
             });
         });
     } catch (error) {
-        apiKeysTableBody.innerHTML = \`<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--color-danger);">\${error.message}</td></tr>\`;
+        apiKeysTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--color-danger);">${error.message}</td></tr>`;
     }
 }
 
 async function deleteApiKey(id) {
     try {
-        const response = await fetch(\`api/admin/api_keys/\${id}\`, { method: 'DELETE' });
+        const response = await fetch(`api/admin/api_keys/${id}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('Failed to delete API key');
         showToast('API key revoked successfully.', 'success');
         loadApiKeys();
@@ -1123,7 +1123,7 @@ async function onApiKeySubmit(e) {
         // Show the generated key
         await confirmModal(
             "API Key Generated", 
-            \`Successfully created API key for '\${name}'.\n\nAPI KEY: \${data.api_key}\n\nWARNING: Please copy this key now. It is hashed and will never be shown again.\`,
+            `Successfully created API key for '${name}'.\n\nAPI KEY: ${data.api_key}\n\nWARNING: Please copy this key now. It is hashed and will never be shown again.`,
             "I have copied the key", false
         );
 
