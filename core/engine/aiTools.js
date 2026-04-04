@@ -93,6 +93,42 @@ class AiTools {
                 }
             },
             
+            get_dlq_status: async () => {
+                try {
+                    const dlqManager = require('../storage/dlqManager');
+                    const messages = dlqManager.getMessages();
+                    return { 
+                        content: [{ 
+                            type: "text", 
+                            text: JSON.stringify({ 
+                                total_failed_messages: messages.length,
+                                messages: messages.slice(-50) 
+                            }, null, 2) 
+                        }] 
+                    };
+                } catch (e) {
+                    return { error: `Failed to get DLQ status: ${e.message}` };
+                }
+            },
+
+            get_system_logs: async ({ lines = 50 }, user) => {
+                if (!user || user.role !== 'admin') {
+                    return { error: "Forbidden: Only admins can read system logs." };
+                }
+                try {
+                    const logPath = path.join(this.DATA_PATH, 'korelate.log');
+                    if (!fs.existsSync(logPath)) return { error: "Log file not found." };
+                    
+                    const content = fs.readFileSync(logPath, 'utf8').split('\n');
+                    const requestedLines = Math.min(Math.max(parseInt(lines) || 50, 1), 100);
+                    const lastLines = content.slice(-requestedLines).join('\n');
+                    
+                    return { content: [{ type: "text", text: lastLines }] };
+                } catch (e) {
+                    return { error: `Failed to read logs: ${e.message}` };
+                }
+            },
+            
             query_perennial_storage: async ({ query }) => {
                 if (!this.dataManager || typeof this.dataManager.queryPerennial !== 'function') {
                     return { error: "Perennial storage querying is not implemented or no perennial storage is currently active." };

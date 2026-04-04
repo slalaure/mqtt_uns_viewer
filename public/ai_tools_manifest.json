@@ -662,6 +662,31 @@
             }
         },
         {
+            "name": "get_dlq_status",
+            "description": "Retrieves the current state of the Dead Letter Queue (DLQ). Use this to diagnose database connection issues or persistent insertion failures. Returns a list of failed message envelopes with retry counts and error reasons.",
+            "category": "ENABLE_ADMIN",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "get_system_logs",
+            "description": "Reads the last few lines of the application system log (korelate.log). Use this to diagnose internal errors, connector crashes, or connectivity issues reported by the backend.",
+            "category": "ENABLE_READ",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "lines": {
+                        "type": "number",
+                        "description": "Number of lines to retrieve (max 100, default 50)."
+                    }
+                },
+                "required": []
+            }
+        },
+        {
             "name": "query_perennial_storage",
             "description": "Executes a native query against the long-term perennial storage. Use the dialect specified by 'describe_perennial_storage' (e.g., SQL for BigQuery/Postgres, PartiQL for DynamoDB).",
             "category": "ENABLE_READ",
