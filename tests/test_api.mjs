@@ -195,14 +195,14 @@ async function runTests() {
     
     // Get Topics (Contains Broker IDs)
     const topics = await get('/context/topics');
-    let validBrokerId = 'default_broker'; // Fallback
+    let validBrokerId = 'default_connector'; // Fallback
     let sampleTopic = '';
 
     if (topics && topics.length > 0) {
         info(`Topics found: ${topics.length}`);
         // Capture a valid broker ID from the first topic
-        if (topics[0].broker_id) {
-            validBrokerId = topics[0].broker_id;
+        if (topics[0].source_id) {
+            validBrokerId = topics[0].source_id;
             info(`Detected valid Broker ID: ${validBrokerId}`);
         }
         sampleTopic = topics[0].topic || topics[0];
@@ -287,7 +287,7 @@ async function runTests() {
         topic: 'test/api/healthcheck',
         payload: JSON.stringify({ status: 'ok', timestamp: Date.now() }),
         format: 'json',
-        brokerId: validBrokerId // Uses the detected ID from topics list
+        sourceId: validBrokerId // Uses the detected ID from topics list
     });
     if(pubRes) info("Publish command sent.");
 

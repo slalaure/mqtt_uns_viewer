@@ -45,7 +45,7 @@ uns/line2/temp,19.8,1.1,idle`;
         mockContext = {
             logger: createMockLogger(),
             handleMessage: jest.fn(),
-            updateBrokerStatus: jest.fn()
+            updateConnectorStatus: jest.fn()
         };
 
         providerConfig = {
@@ -70,7 +70,7 @@ uns/line2/temp,19.8,1.1,idle`;
 
         expect(result).toBe(false);
         expect(provider.connected).toBe(false);
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test_csv_stream', 'error', 'File not found');
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test_csv_stream', 'error', 'File not found');
     });
 
     test('should read CSV, extract headers, and dynamically route based on the topic column', async () => {

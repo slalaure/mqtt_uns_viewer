@@ -149,7 +149,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager, ap
             let count = 0;
             for (const entry of entries) {
                 const message = {
-                    brokerId: entry.brokerId || entry.broker_id || 'default_broker',
+                    sourceId: entry.sourceId || entry.source_id || 'default_connector',
                     timestamp: new Date(entry.timestamp || entry.timestampMs || Date.now()),
                     topic: entry.topic,
                     payloadStringForDb: typeof entry.payload === 'string' ? entry.payload : JSON.stringify(entry.payload),
@@ -320,7 +320,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager, ap
 
         db.serialize(() => {
             // Do NOT truncate app_config, only data
-            db.run("DELETE FROM mqtt_events;", (err) => {
+            db.run("DELETE FROM korelate_events;", (err) => {
                 if (err) {
                     return next(err);
                 }

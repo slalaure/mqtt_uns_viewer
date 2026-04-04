@@ -460,7 +460,7 @@ function renderActiveAlerts() {
     }
     
     if (providerVal && providerVal !== 'all') {
-        filteredAlerts = filteredAlerts.filter(a => a.broker_id === providerVal);
+        filteredAlerts = filteredAlerts.filter(a => a.source_id === providerVal);
     }
 
     if (searchVal) {

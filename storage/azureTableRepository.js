@@ -91,14 +91,14 @@ class AzureTableRepository extends BaseRepository {
             engine: 'Azure Table Storage',
             tableName: this.tableName,
             dialect: 'OData Filter String',
-            notes: "Azure Table is a NoSQL Key-Value store. DO NOT send SQL. You must provide an OData filter string as the query parameter. Example: `PartitionKey eq 'default_broker_2026-04-02' and topic eq 'factory/line1/temp'`",
+            notes: "Azure Table is a NoSQL Key-Value store. DO NOT send SQL. You must provide an OData filter string as the query parameter. Example: `PartitionKey eq 'default_connector_2026-04-02' and topic eq 'factory/line1/temp'`",
             schema: [
                 { name: 'partitionKey', type: 'String (BrokerId_YYYY-MM-DD)' },
                 { name: 'rowKey', type: 'String (UUID)' },
                 { name: 'timestamp_val', type: 'String (ISO 8601)' },
                 { name: 'topic', type: 'String' },
                 { name: 'payload', type: 'String (JSON)' },
-                { name: 'broker_id', type: 'String' },
+                { name: 'source_id', type: 'String' },
                 { name: 'correlation_id', type: 'String' }
             ]
         };
@@ -174,7 +174,7 @@ class AzureTableRepository extends BaseRepository {
 
         for (const msg of batch) {
             const dateObj = new Date(msg.timestamp);
-            const partitionKey = `${msg.brokerId}_${dateObj.toISOString().split('T')[0]}`;
+            const partitionKey = `${msg.sourceId}_${dateObj.toISOString().split('T')[0]}`;
             const rowKey = msg.correlationId || crypto.randomUUID();
 
             const entity = {
@@ -183,8 +183,8 @@ class AzureTableRepository extends BaseRepository {
                 timestamp_val: dateObj.toISOString(), // Azure reserves 'Timestamp', so we use timestamp_val
                 topic: msg.topic,
                 payload: msg.payloadStringForDb,
-                broker_id: msg.brokerId,
-                correlation_id: msg.correlationId || null
+                source_id: msg.sourceId,
+                correlation_id: msg.correlationId || null, connectorType: msg.connectorType || "mqtt"
             };
 
             if (!groupedByPartition.has(partitionKey)) {
@@ -209,7 +209,7 @@ class AzureTableRepository extends BaseRepository {
                         const failedMsgs = chunk.map(action => {
                             const ent = action[1];
                             return {
-                                brokerId: ent.broker_id,
+                                sourceId: ent.source_id,
                                 timestamp: new Date(ent.timestamp_val),
                                 topic: ent.topic,
                                 payloadStringForDb: ent.payload,

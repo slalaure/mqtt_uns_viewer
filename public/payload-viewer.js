@@ -27,15 +27,15 @@ export function createPayloadViewer(elements) {
 
     /**
      * Displays a payload in the main content area.
-     * @param {string} brokerId - The broker ID.
+     * @param {string} sourceId - The broker ID.
      * @param {string} topic - The topic string.
      * @param {string} payload - The payload string.
      */
-    function display(brokerId, topic, payload) {
+    function display(sourceId, topic, payload) {
         if (topicEl) {
             if (topic) {
-                //  Conditionally show brokerId
-                topicEl.textContent = isMultiBroker ? `[${brokerId}] ${topic}` : topic;
+                //  Conditionally show sourceId
+                topicEl.textContent = isMultiBroker ? `[${sourceId}] ${topic}` : topic;
             } else {
                 topicEl.textContent = "No topic selected";
             }
@@ -57,11 +57,11 @@ export function createPayloadViewer(elements) {
 
     /**
      * Updates the recent history log for a topic.
-     * @param {string} brokerId - The broker ID.
+     * @param {string} sourceId - The broker ID.
      * @param {string} topic - The topic string.
      * @param {Array} data - Array of history entries from the server.
      */
-    function updateHistory(brokerId, topic, data) {
+    function updateHistory(sourceId, topic, data) {
         if (!historyLogEl) return;
         historyLogEl.innerHTML = ''; // Clear existing children safely
         
@@ -70,7 +70,7 @@ export function createPayloadViewer(elements) {
         }
 
         //  Create topic display string
-        const displayTopic = isMultiBroker ? `[${brokerId}] ${topic}` : topic;
+        const displayTopic = isMultiBroker ? `[${sourceId}] ${topic}` : topic;
 
         if (!data || data.length === 0) {
             if (placeholderEl) {
@@ -95,11 +95,11 @@ export function createPayloadViewer(elements) {
             tsSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
             div.appendChild(tsSpan);
 
-            // Add brokerId to history entry if multi-broker
+            // Add sourceId to history entry if multi-broker
             if (isMultiBroker) {
                 const brokerSpan = document.createElement('span');
                 brokerSpan.className = 'history-entry-broker';
-                brokerSpan.textContent = `[${entry.broker_id}]`;
+                brokerSpan.textContent = `[${entry.source_id}]`;
                 div.appendChild(brokerSpan);
             }
             

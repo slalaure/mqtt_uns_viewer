@@ -50,7 +50,7 @@ class AlertManager {
                 id VARCHAR PRIMARY KEY,
                 rule_id VARCHAR,
                 topic VARCHAR,
-                broker_id VARCHAR,
+                source_id VARCHAR,
                 trigger_value VARCHAR,
                 status VARCHAR,
                 analysis_result VARCHAR,
@@ -243,7 +243,7 @@ class AlertManager {
         });
     }
 
-    async processMessage(brokerId, topic, payload, correlationId = null) {
+    async processMessage(sourceId, topic, payload, correlationId = null) {
         if (!this.db) return;
         if (this.llmConfig && this.llmConfig.VIEW_ALERTS_ENABLED === false) return;
 
@@ -264,7 +264,7 @@ class AlertManager {
 
                 if (rule._cachedRegex.test(topic)) {
                     try {
-                        const msgContext = { topic, brokerId, payload, correlationId };
+                        const msgContext = { topic, sourceId, payload, correlationId };
                         
                         await new Promise(setImmediate); // Yield to Event Loop
                         
@@ -305,11 +305,11 @@ class AlertManager {
                 const triggerVal = JSON.stringify(msgContext.payload).substring(0, 200);
                 
                 const insertQuery = `
-                    INSERT INTO active_alerts (id, rule_id, topic, broker_id, trigger_value, status, correlation_id, created_at, updated_at)
+                    INSERT INTO active_alerts (id, rule_id, topic, source_id, trigger_value, status, correlation_id, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?)
                 `;
                 
-                this.db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.brokerId, triggerVal, msgContext.correlationId || null, now, now, (insErr) => {
+                this.db.run(insertQuery, alertId, rule.id, msgContext.topic, msgContext.sourceId, triggerVal, msgContext.correlationId || null, now, now, (insErr) => {
                     if (insErr) {
                         this.logger.error({ err: insErr, correlationId: msgContext.correlationId }, "Failed to persist alert.");
                         return resolve();

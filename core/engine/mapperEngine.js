@@ -203,15 +203,15 @@ class MapperEngine {
         return false; 
     }
 
-    isPublishAllowed(brokerId, topic) {
+    isPublishAllowed(sourceId, topic) {
         if (!this.serverConfig) return true; 
         
         const allConfigs = this.serverConfig.DATA_PROVIDERS || [];
         
-        const providerConfig = allConfigs.find(b => b.id === brokerId);
+        const providerConfig = allConfigs.find(b => b.id === sourceId);
         
         if (!providerConfig) {
-            if (this.activeConnections.has(brokerId)) return true;
+            if (this.activeConnections.has(sourceId)) return true;
             return false; 
         }
         
@@ -220,7 +220,7 @@ class MapperEngine {
         return publishPatterns.some(pattern => mqttMatch(pattern, topic));
     }
 
-    async processMessage(brokerId, topic, payloadObject, isSparkplugOrigin = false, correlationId = null) {
+    async processMessage(sourceId, topic, payloadObject, isSparkplugOrigin = false, correlationId = null) {
         if (this.serverConfig && this.serverConfig.VIEW_MAPPER_ENABLED === false) return;
 
         const activeRules = this.getActiveRules();
@@ -229,7 +229,7 @@ class MapperEngine {
         const originalMsg = {
             topic: topic,
             payload: payloadObject,
-            brokerId: brokerId,
+            sourceId: sourceId,
             correlationId: correlationId 
         };
 
@@ -277,7 +277,7 @@ class MapperEngine {
                                     const viewContext = {
                                         ...res.payload,
                                         topic: topic,
-                                        brokerId: brokerId,
+                                        sourceId: sourceId,
                                         correlationId: correlationId
                                     };
 
@@ -312,11 +312,11 @@ class MapperEngine {
                                         outputPayloadForMetrics = outputPayload;
                                     }
 
-                                    const targetBrokerId = target.targetBrokerId || brokerId; 
-                                    const connection = this.activeConnections.get(targetBrokerId);
+                                    const targetConnectorId = target.targetConnectorId || sourceId; 
+                                    const connection = this.activeConnections.get(targetConnectorId);
                                     
                                     if (connection && connection.connected) {
-                                        if (this.isPublishAllowed(targetBrokerId, outputTopic)) {
+                                        if (this.isPublishAllowed(targetConnectorId, outputTopic)) {
                                             const publishOptions = { qos: 1, retain: false };
                                             if (correlationId) {
                                                 publishOptions.properties = {
@@ -328,19 +328,19 @@ class MapperEngine {
                                             
                                             this.broadcastCallback(JSON.stringify({
                                                 type: 'mapped-topic-generated',
-                                                brokerId: targetBrokerId, 
+                                                sourceId: targetConnectorId, 
                                                 topic: outputTopic,
                                                 correlationId
                                             }));
 
                                             this.updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null, correlationId);
                                         } else {
-                                            const errorMessage = `Target broker '${targetBrokerId}' does not allow publishing to '${outputTopic}'. Check config.`;
+                                            const errorMessage = `Target broker '${targetConnectorId}' does not allow publishing to '${outputTopic}'. Check config.`;
                                             this.engineLogger.warn({ msg: errorMessage, correlationId });
                                             this.updateMetrics(rule, target, topic, null, null, errorMessage, null, correlationId);
                                         }
                                     } else {
-                                        const errorMessage = `Target broker '${targetBrokerId}' not found or not connected. Cannot publish.`;
+                                        const errorMessage = `Target broker '${targetConnectorId}' not found or not connected. Cannot publish.`;
                                         this.engineLogger.error({ msg: errorMessage, correlationId });
                                         this.updateMetrics(rule, target, topic, null, null, errorMessage, null, correlationId);
                                     }

@@ -48,7 +48,7 @@ class AiTools {
         this.db = context.db;
         this.logger = context.logger;
         this.config = context.config;
-        this.getBrokerConnection = context.getBrokerConnection;
+        this.getConnectorConnection = context.getConnectorConnection;
         this.simulatorManager = context.simulatorManager;
         this.wsManager = context.wsManager;
         this.mapperEngine = context.mapperEngine;
@@ -160,7 +160,7 @@ class AiTools {
             get_application_status: async () => {
                 return new Promise((resolve, reject) => {
                     this.db.serialize(() => {
-                        this.db.all("SELECT COUNT(*) as count FROM mqtt_events", (err, rows) => {
+                        this.db.all("SELECT COUNT(*) as count FROM korelate_events", (err, rows) => {
                             if (err) return reject(err);
                             const count = rows[0]?.count || 0;
                             resolve({ status: "online", count: count, db_limit: this.config.DUCKDB_MAX_SIZE_MB });
@@ -171,7 +171,7 @@ class AiTools {
             list_topics: async () => {
                 return new Promise((resolve, reject) => {
                     this.db.serialize(() => {
-                        this.db.all("SELECT DISTINCT topic FROM mqtt_events ORDER BY topic ASC LIMIT 200", (err, rows) => {
+                        this.db.all("SELECT DISTINCT topic FROM korelate_events ORDER BY topic ASC LIMIT 200", (err, rows) => {
                             if (err) return reject(err);
                             resolve(rows.map(r => r.topic));
                         });
@@ -181,7 +181,7 @@ class AiTools {
             get_topics_list: async () => {
                 return new Promise((resolve, reject) => {
                     this.db.serialize(() => {
-                        this.db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events ORDER BY broker_id, topic ASC", (err, rows) => {
+                        this.db.all("SELECT DISTINCT source_id, topic FROM korelate_events ORDER BY source_id, topic ASC", (err, rows) => {
                             if (err) return reject(err);
                             resolve(rows);
                         });
@@ -205,7 +205,7 @@ class AiTools {
                         whereClauses.push(`timestamp <= '${timeWindow.end.toISOString()}'`);
                     }
 
-                    const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
+                    const sql = `SELECT topic, payload, timestamp FROM korelate_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT ${safeLimit}`;
                     this.db.serialize(() => {
                         this.db.all(sql, (err, rows) => {
                             if (err) return reject(err);
@@ -217,7 +217,7 @@ class AiTools {
             get_topic_history: async ({ topic, time_expression, limit }) => {
                 return new Promise((resolve, reject) => {
                     const safeLimit = (limit && !isNaN(parseInt(limit))) ? parseInt(limit) : 20;
-                    let sql = `SELECT topic, payload, timestamp, broker_id FROM mqtt_events WHERE topic = ?`;
+                    let sql = `SELECT topic, payload, timestamp, source_id FROM korelate_events WHERE topic = ?`;
                     let params = [topic];
 
                     const timeWindow = parseTimeWindow(time_expression);
@@ -235,7 +235,7 @@ class AiTools {
                     });
                 });
             },
-            aggregate_time_series: async ({ topic, variables, time_expression, aggregation = 'MEAN', broker_id }) => {
+            aggregate_time_series: async ({ topic, variables, time_expression, aggregation = 'MEAN', source_id }) => {
                 return new Promise((resolve, reject) => {
                     const timeWindow = parseTimeWindow(time_expression);
                     if (!timeWindow) return resolve({ error: "Could not parse time_expression into a valid date range." });
@@ -279,9 +279,9 @@ class AiTools {
                         `timestamp >= CAST('${timeWindow.start.toISOString()}' AS TIMESTAMPTZ)`, 
                         `timestamp <= CAST('${timeWindow.end.toISOString()}' AS TIMESTAMPTZ)`
                     ];
-                    if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+                    if (source_id) whereClauses.push(`source_id = '${escapeSQL(source_id)}'`);
 
-                    const sql = `SELECT ${selectCols} FROM mqtt_events WHERE ${whereClauses.join(' AND ')} GROUP BY 1 ORDER BY 1 ASC`;
+                    const sql = `SELECT ${selectCols} FROM korelate_events WHERE ${whereClauses.join(' AND ')} GROUP BY 1 ORDER BY 1 ASC`;
 
                     this.db.serialize(() => {
                         this.db.all(sql, (err, rows) => {
@@ -296,11 +296,11 @@ class AiTools {
                     });
                 });
             },
-            get_latest_message: async ({ topic, broker_id }) => {
+            get_latest_message: async ({ topic, source_id }) => {
                 return new Promise((resolve, reject) => {
-                    let sql = `SELECT * FROM mqtt_events WHERE topic = ?`;
+                    let sql = `SELECT * FROM korelate_events WHERE topic = ?`;
                     let params = [topic];
-                    if (broker_id) { sql += " AND broker_id = ?"; params.push(broker_id); }
+                    if (source_id) { sql += " AND source_id = ?"; params.push(source_id); }
                     sql += " ORDER BY timestamp DESC LIMIT 1";
                     this.db.serialize(() => {
                         this.db.all(sql, ...params, (err, rows) => {
@@ -340,7 +340,7 @@ class AiTools {
                     }
                 });
             },
-            search_uns_concept: async ({ concept, filters, broker_id }) => {
+            search_uns_concept: async ({ concept, filters, source_id }) => {
                 this.loadUnsModel();
                 const lowerConcept = concept.toLowerCase();
                 const model = this.unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
@@ -349,7 +349,7 @@ class AiTools {
                 const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
                 let whereClauses = [`topic LIKE '${safeTopic}'`];
                 
-                if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+                if (source_id) whereClauses.push(`source_id = '${escapeSQL(source_id)}'`);
 
                 if (filters) {
                     for (const [key, value] of Object.entries(filters)) {
@@ -358,7 +358,7 @@ class AiTools {
                 }
 
                 return new Promise((resolve, reject) => {
-                    const sql = `SELECT topic, payload, timestamp FROM mqtt_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
+                    const sql = `SELECT topic, payload, timestamp FROM korelate_events WHERE ${whereClauses.join(' AND ')} ORDER BY timestamp DESC LIMIT 50`;
                     this.db.serialize(() => {
                         this.db.all(sql, (err, rows) => {
                             if (err) return reject(err);
@@ -370,7 +370,7 @@ class AiTools {
             infer_schema: async ({ topic_pattern }) => {
                 const safePattern = escapeSQL(topic_pattern).replace(/%/g, '\\%').replace(/#/g, '%').replace(/\+/g, '%');
                 return new Promise((resolve, reject) => {
-                    const sql = `SELECT payload FROM mqtt_events WHERE topic LIKE '${safePattern}' ORDER BY timestamp DESC LIMIT 20`;
+                    const sql = `SELECT payload FROM korelate_events WHERE topic LIKE '${safePattern}' ORDER BY timestamp DESC LIMIT 20`;
                     this.db.serialize(() => {
                         this.db.all(sql, (err, rows) => {
                             if (err) return reject(err);
@@ -382,40 +382,40 @@ class AiTools {
             },
             
             // --- Publish Tool ---
-            publish_message: async ({ topic, payload, retain = false, broker_id }) => {
+            publish_message: async ({ topic, payload, retain = false, source_id }) => {
                 return new Promise((resolve) => {
                     this.logger.info(`[AiTools:publish] Topic: ${topic}`);
                     
                     const allProviders = this.config.DATA_PROVIDERS || [];
-                    let targetBrokerConfig = allProviders[0]; 
+                    let targetConnectorConfig = allProviders[0]; 
 
-                    if (broker_id) {
-                        targetBrokerConfig = allProviders.find(b => b.id === broker_id);
-                        if (!targetBrokerConfig) return resolve({ error: `Broker '${broker_id}' not found.` });
+                    if (source_id) {
+                        targetConnectorConfig = allProviders.find(b => b.id === source_id);
+                        if (!targetConnectorConfig) return resolve({ error: `Broker '${source_id}' not found.` });
                     } else {
-                        const capableBroker = allProviders.find(b => {
+                        const capableConnector = allProviders.find(b => {
                             const pubs = b.publish || ((b.type === 'file' || b.type === 'dynamic') ? ['#'] : []);
                             return pubs.some(p => mqttMatch(p, topic));
                         });
-                        if (capableBroker) targetBrokerConfig = capableBroker;
+                        if (capableConnector) targetConnectorConfig = capableConnector;
                     }
 
-                    const usedBrokerId = targetBrokerConfig.id;
+                    const usedConnectorId = targetConnectorConfig.id;
                     
-                    const allowedTopics = targetBrokerConfig.publish || ((targetBrokerConfig.type === 'file' || targetBrokerConfig.type === 'dynamic') ? ['#'] : []);
+                    const allowedTopics = targetConnectorConfig.publish || ((targetConnectorConfig.type === 'file' || targetConnectorConfig.type === 'dynamic') ? ['#'] : []);
                     const allowed = allowedTopics.some(p => mqttMatch(p, topic));
 
-                    if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedBrokerId}'.` });
+                    if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedConnectorId}'.` });
 
-                    const connection = this.getBrokerConnection(usedBrokerId);
-                    if (!connection || !connection.connected) return resolve({ error: `Broker '${usedBrokerId}' disconnected.` });
+                    const connection = this.getConnectorConnection(usedConnectorId);
+                    if (!connection || !connection.connected) return resolve({ error: `Broker '${usedConnectorId}' disconnected.` });
 
                     let finalPayload = payload;
                     if (typeof payload === 'object') finalPayload = JSON.stringify(payload);
 
                     connection.publish(topic, finalPayload, { qos: 1, retain: !!retain }, (err) => {
                         if (err) resolve({ error: err.message });
-                        else resolve({ success: true, message: `Published to ${topic} on ${usedBrokerId}` });
+                        else resolve({ success: true, message: `Published to ${topic} on ${usedConnectorId}` });
                     });
                 });
             },
@@ -580,14 +580,14 @@ class AiTools {
             },
 
             // --- Admin / Simulators Tools ---
-            prune_topic_history: async ({ topic_pattern, broker_id }) => {
+            prune_topic_history: async ({ topic_pattern, source_id }) => {
                 return new Promise((resolve) => {
                     const sqlPattern = topic_pattern.replace(/'/g, "''").replace(/#/g, '%').replace(/\+/g, '%');
                     let whereClauses = [`topic LIKE '${sqlPattern}'`];
-                    if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+                    if (source_id) whereClauses.push(`source_id = '${escapeSQL(source_id)}'`);
                     
                     this.db.serialize(() => {
-                        this.db.run(`DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
+                        this.db.run(`DELETE FROM korelate_events WHERE ${whereClauses.join(' AND ')}`, function(err) {
                             if (err) resolve({ error: err.message });
                             else {
                                 this.db.exec("CHECKPOINT; VACUUM;", () => {});

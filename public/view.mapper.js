@@ -44,12 +44,12 @@ const modalBtnDeleteRule = document.getElementById('modal-btn-delete-rule');
 const modalBtnDeletePrune = document.getElementById('modal-btn-delete-prune');
 
 // --- Default Code Templates ---
-const DEFAULT_JS_CODE_UI = `// 'msg' object contains msg.topic, msg.payload, and msg.brokerId.
+const DEFAULT_JS_CODE_UI = `// 'msg' object contains msg.topic, msg.payload, and msg.sourceId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
 // Return 'msg' to automatically publish it to all Target Topic(s) defined in the UI.
 return msg;`;
 
-const DEFAULT_JS_CODE_CODE = `// 'msg' object contains msg.topic, msg.payload, and msg.brokerId.
+const DEFAULT_JS_CODE_CODE = `// 'msg' object contains msg.topic, msg.payload, and msg.sourceId.
 // 'db' object is available with await db.all(sql) and await db.get(sql).
 // Return an array of messages to explicitly route different payloads to different topics.
 /*
@@ -249,20 +249,20 @@ export function updateMapperConfig(newConfig) {
  * Handle click on mapper tree node.
  * Restored capability to click on folder nodes to create wildcard rules.
  */
-export function handleMapperNodeClick(event, nodeContainer, brokerId, topic) {
+export function handleMapperNodeClick(event, nodeContainer, sourceId, topic) {
     const li = nodeContainer.closest('li');
 
     // Display payload info (folders usually won't have a payload, but that's fine)
     const payload = nodeContainer.dataset.payload; 
-    payloadViewer.display(brokerId, topic, payload);
+    payloadViewer.display(sourceId, topic, payload);
     currentEditingPayload = payload; // Save for maximized editor reference
 
     // Enable editor for the node
-    currentEditingBrokerId = brokerId;
+    currentEditingBrokerId = sourceId;
     currentEditingSourceTopic = topic;
     
     if (isMounted) {
-        renderTransformEditor(brokerId, topic);
+        renderTransformEditor(sourceId, topic);
     }
 }
 
@@ -274,15 +274,15 @@ export function getMappedTargetTopics() {
     return mappedTargetTopics;
 }
 
-export function addMappedTargetTopic(brokerId, topic) {
-    const key = `${brokerId}|${topic}`;
-    mappedTargetTopics.set(key, { brokerId, topic });
+export function addMappedTargetTopic(sourceId, topic) {
+    const key = `${sourceId}|${topic}`;
+    mappedTargetTopics.set(key, { sourceId, topic });
 }
 
-export function getTopicMappingStatus(brokerId, topic) {
+export function getTopicMappingStatus(sourceId, topic) {
     if (!mapperConfig || !mapperConfig.versions) return null;
     
-    const targetKey = `${brokerId}|${topic}`;
+    const targetKey = `${sourceId}|${topic}`;
     if (mappedTargetTopics.has(targetKey)) return 'target';
 
     const activeVersion = mapperConfig.versions.find(v => v.id === mapperConfig.activeVersionId);
@@ -358,11 +358,11 @@ function getRuleForTopic(sourceTopic, createIfMissing = false) {
     return rule;
 }
 
-function renderTransformEditor(brokerId, sourceTopic) {
+function renderTransformEditor(sourceId, sourceTopic) {
     mapperTransformPlaceholder.style.display = 'none';
     mapperTransformForm.style.display = 'flex';
     
-    const displayTopic = isMultiProvider ? `[${brokerId}] ${sourceTopic}` : sourceTopic;
+    const displayTopic = isMultiProvider ? `[${sourceId}] ${sourceTopic}` : sourceTopic;
     mapperSourceTopicInput.value = displayTopic; 
 
     aceEditors.forEach(editor => editor.destroy());
@@ -529,7 +529,7 @@ function onAddTarget() {
         outputTopic: initialOutputTopic,
         mode: "js",
         code: DEFAULT_JS_CODE_UI,
-        targetBrokerId: null 
+        targetConnectorId: null 
     };
 
     rule.targets.push(newTarget);
@@ -757,9 +757,9 @@ function onVersionChange() {
 
 // --- Delete Modal Logic ---
 
-function showPruneModal(rule, target, brokerId, topic) {
-    deleteModalContext = { rule, target, brokerId, topic }; 
-    const displayTopic = isMultiProvider ? `[${brokerId}] ${target.outputTopic}` : target.outputTopic;
+function showPruneModal(rule, target, sourceId, topic) {
+    deleteModalContext = { rule, target, sourceId, topic }; 
+    const displayTopic = isMultiProvider ? `[${sourceId}] ${target.outputTopic}` : target.outputTopic;
     deleteModalTopic.textContent = displayTopic;
     let pattern = target.outputTopic; // Note: For prune, might need manual edit if multiple topics
     deleteModalPattern.value = pattern;
@@ -775,7 +775,7 @@ function onDeleteRule() {
     trackEvent('mapper_delete_rule_only'); 
     if (!deleteModalContext) return;
 
-    const { rule, target, brokerId, topic } = deleteModalContext;
+    const { rule, target, sourceId, topic } = deleteModalContext;
     
     const editor = aceEditors.get(target.id);
     if (editor) {
@@ -797,7 +797,7 @@ function onDeleteRule() {
         mapperTransformForm.style.display = 'none';
         payloadViewer.clear(); 
     } else {
-        renderTransformEditor(brokerId, topic); 
+        renderTransformEditor(sourceId, topic); 
     }
     
     onSave(); 
@@ -808,7 +808,7 @@ async function onDeleteAndPrune() {
     trackEvent('mapper_delete_and_prune'); 
     if (!deleteModalContext) return;
 
-    const { rule, target, brokerId, topic } = deleteModalContext;
+    const { rule, target, sourceId, topic } = deleteModalContext;
     const topicPattern = deleteModalPattern.value;
 
     appCallbacks.addPruneIgnorePattern(topicPattern);
@@ -817,11 +817,11 @@ async function onDeleteAndPrune() {
     showToast('Purging history...', 'info');
 
     try {
-        const targetBrokerId = target.targetBrokerId || brokerId;
+        const targetConnectorId = target.targetConnectorId || sourceId;
         const response = await fetch('api/context/prune-topic', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ topicPattern: topicPattern, broker_id: targetBrokerId })
+            body: JSON.stringify({ topicPattern: topicPattern, source_id: targetConnectorId })
         });
 
         if (!response.ok) {
@@ -860,7 +860,7 @@ async function onDeleteAndPrune() {
             mapperTransformForm.style.display = 'none';
             payloadViewer.clear(); 
         } else {
-            renderTransformEditor(brokerId, topic); 
+            renderTransformEditor(sourceId, topic); 
         }
         showToast(`Rule deleted & ${result.count} entries pruned.`, 'success');
         hidePruneModal();

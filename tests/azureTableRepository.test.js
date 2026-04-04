@@ -93,7 +93,7 @@ describe('AzureTableRepository', () => {
         // Create 250 messages for the exact same broker and date (Same PartitionKey)
         for (let i = 0; i < 250; i++) {
             azureTableRepo.push({
-                brokerId: 'brokerA',
+                sourceId: 'brokerA',
                 topic: 'test/topic',
                 payloadStringForDb: JSON.stringify({ val: i }),
                 timestamp: testDate,
@@ -117,7 +117,7 @@ describe('AzureTableRepository', () => {
         azureTableRepo.client.submitTransaction.mockRejectedValueOnce(new Error("Azure Throttling"));
 
         azureTableRepo.push({
-            brokerId: 'brokerA',
+            sourceId: 'brokerA',
             topic: 'fail/topic',
             payloadStringForDb: '{}',
             timestamp: new Date(),

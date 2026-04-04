@@ -36,7 +36,7 @@ function createRouter(deps) {
         semanticManager,
         i3xEvents,
         getPrimaryConnection,
-        getBrokerConnection,
+        getConnectorConnection,
         simulatorManager,
         wsManager,
         mapperEngine,
@@ -273,7 +273,7 @@ function createRouter(deps) {
     router.use('/api/tools', ipFilterMiddleware, require('./toolsApi')(logger));
     
     if (config.VIEW_CHAT_ENABLED) {
-        router.use('/api/chat', ipFilterMiddleware, require('./chatApi')(db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine));
+        router.use('/api/chat', ipFilterMiddleware, require('./chatApi')(db, logger, config, getConnectorConnection, simulatorManager, wsManager, mapperEngine));
     }
     
     if (config.VIEW_CONFIG_ENABLED) {
@@ -284,8 +284,8 @@ function createRouter(deps) {
     router.use('/api/chart', featureGate(config, 'VIEW_CHART_ENABLED'), ipFilterMiddleware, require('./chartApi')(CHART_CONFIG_PATH, logger)); 
 
     router.post('/api/publish/message', featureGate(config, 'VIEW_PUBLISH_ENABLED'), ipFilterMiddleware, (req, res, next) => {
-        const { topic, payload, format, qos, retain, brokerId } = req.body;
-        const conn = getBrokerConnection(brokerId);
+        const { topic, payload, format, qos, retain, sourceId } = req.body;
+        const conn = getConnectorConnection(sourceId);
         if (!conn || !conn.connected) return res.status(503).json({ error: "Provider not connected" });
         let finalPayload = payload;
         if (format === 'json' || typeof payload === 'object') {

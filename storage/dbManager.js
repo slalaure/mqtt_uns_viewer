@@ -20,7 +20,7 @@ module.exports = (db, dbFile, dbWalFile, broadcast, logger, maxSizeMB, pruneChun
         try { totalSize += fs.statSync(dbWalFile).size; } catch (e) { /* wal file might not exist */ }
         const fileSizeInMB = totalSize / (1024 * 1024);
 
-        db.all("SELECT COUNT(*) as count FROM mqtt_events", (err, rows) => {
+        db.all("SELECT COUNT(*) as count FROM korelate_events", (err, rows) => {
             const totalMessages = (!err && rows && rows[0]) ? Number(rows[0].count) : 0;
             callback({
                 type: 'db-status-update',
@@ -55,7 +55,7 @@ module.exports = (db, dbFile, dbWalFile, broadcast, logger, maxSizeMB, pruneChun
         logger.info(`✅    -> Database size (${statusData.dbSizeMB.toFixed(2)} MB) exceeds limit of ${maxSizeMB} MB.`);
         logger.info(`✅    -> Pruning ${rowsToDelete} oldest events (Chunk: ${pruneChunkSize} x ${multiplier})...`);
         
-        const query = `DELETE FROM mqtt_events WHERE rowid IN (SELECT rowid FROM mqtt_events ORDER BY timestamp ASC LIMIT ?);`;
+        const query = `DELETE FROM korelate_events WHERE rowid IN (SELECT rowid FROM korelate_events ORDER BY timestamp ASC LIMIT ?);`;
 
         db.run(query, [rowsToDelete], (err) => {
             if (err) logger.error({ err }, "❌ Error during pruning:");

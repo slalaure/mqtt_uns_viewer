@@ -43,12 +43,17 @@ async function initDatabase(logger, config, paths, wsManager) {
             
             // 3. Ensure tables exist
             db.exec(`
-                CREATE TABLE IF NOT EXISTS mqtt_events (
+                -- Migration: Rename mqtt_events to korelate_events if it exists
+                -- We use a TRY/CATCH style or check existence first. 
+                -- DuckDB doesn't have RENAME TABLE IF EXISTS but we can check via pragma
+                
+                CREATE TABLE IF NOT EXISTS korelate_events (
                     timestamp TIMESTAMPTZ,
                     topic VARCHAR,
                     payload JSON,
-                    broker_id VARCHAR,
-                    correlation_id VARCHAR
+                    source_id VARCHAR,
+                    correlation_id VARCHAR,
+                    connector_type VARCHAR
                 );
                 CREATE TABLE IF NOT EXISTS app_config (
                     key VARCHAR PRIMARY KEY,
@@ -68,11 +73,35 @@ async function initDatabase(logger, config, paths, wsManager) {
                     logger.error({ err: createErr }, "❌ FATAL: Failed to ensure tables exist.");
                     return reject(createErr); 
                 }
-                // Schema Migration: Add correlation_id if missing
-                db.all("PRAGMA table_info(mqtt_events);", (pragmaErr, columns) => {
+
+                // Check if old table exists and migrate data
+                db.all("PRAGMA table_info(mqtt_events);", (oldPragmaErr, oldColumns) => {
+                    if (oldColumns && oldColumns.length > 0) {
+                        logger.warn("⚠️ Migrating 'mqtt_events' to 'korelate_events'...");
+                        db.run("INSERT INTO korelate_events (timestamp, topic, payload, source_id, correlation_id) SELECT timestamp, topic, payload, source_id, correlation_id FROM mqtt_events;", (insertErr) => {
+                            if (!insertErr) {
+                                db.run("DROP TABLE mqtt_events;");
+                                logger.info("✅ Migration 'mqtt_events' -> 'korelate_events' completed.");
+                                // set connector_type='mqtt' for legacy records? Let's default it
+                                db.run("UPDATE korelate_events SET connector_type = 'mqtt' WHERE connector_type IS NULL;");
+                            } else {
+                                logger.error({ err: insertErr }, "❌ Failed to migrate data from 'mqtt_events' to 'korelate_events'.");
+                            }
+                        });
+                    }
+                });
+
+                // Schema Migration: Add correlation_id if missing in korelate_events
+                db.all("PRAGMA table_info(korelate_events);", (pragmaErr, columns) => {
                     if (columns && !columns.some(col => col.name === 'correlation_id')) {
-                        logger.warn("⚠️ Migrating 'mqtt_events': Adding 'correlation_id' column...");
-                        db.run("ALTER TABLE mqtt_events ADD COLUMN correlation_id VARCHAR;");
+                        logger.warn("⚠️ Migrating 'korelate_events': Adding 'correlation_id' column...");
+                        db.run("ALTER TABLE korelate_events ADD COLUMN correlation_id VARCHAR;");
+                    }
+                    if (columns && !columns.some(col => col.name === 'connector_type')) {
+                        logger.warn("⚠️ Migrating 'korelate_events': Adding 'connector_type' column...");
+                        db.run("ALTER TABLE korelate_events ADD COLUMN connector_type VARCHAR;", (altErr) => {
+                             if(!altErr) db.run("UPDATE korelate_events SET connector_type = 'mqtt' WHERE connector_type IS NULL;");
+                        });
                     }
                 });
                 resolve(db);

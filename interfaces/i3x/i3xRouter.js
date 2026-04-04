@@ -58,7 +58,7 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         const mapping = semanticManager.topicMappings.find(m => m.elementId === elementId);
         if (mapping) {
             const sqlPattern = mapping.pattern.replace(/\+/g, '%').replace(/#/g, '%');
-            let query = `SELECT payload, timestamp FROM mqtt_events WHERE topic LIKE ?`;
+            let query = `SELECT payload, timestamp FROM korelate_events WHERE topic LIKE ?`;
             let params = [sqlPattern];
             if (startTime) { query += ` AND timestamp >= CAST(? AS TIMESTAMPTZ)`; params.push(startTime); }
             if (endTime) { query += ` AND timestamp <= CAST(? AS TIMESTAMPTZ)`; params.push(endTime); }
@@ -221,8 +221,8 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         }
         
         const topic = mapping.pattern;
-        const brokerId = instance.brokerId || 'default_broker';
-        const connection = connectorManager.providers.get(brokerId);
+        const sourceId = instance.sourceId || 'default_connector';
+        const connection = connectorManager.providers.get(sourceId);
         
         if (!connection || !connection.connected) return res.status(503).json({ error: "Data provider not connected" });
         

@@ -22,7 +22,7 @@ let logger = null;
 let appBasePath = '/';
 let longReplacer = null; 
 let getDbStatus = null; 
-let getBrokerStatuses = null; 
+let getConnectorStatuses = null; 
 
 // Map to store clients by ID: Map<string, WebSocket>
 const clients = new Map();
@@ -46,15 +46,15 @@ const escapeSQL = (str) => {
  * @param {string} basePath - The application's base path.
  * @param {function} getDbCallback - The getDbStatus function from db_manager.
  * @param {function} replacer - The longReplacer function for JSON stringify.
- * @param {function} getBrokerStatusesCallback - Callback to get current broker statuses.
+ * @param {function} getConnectorStatusesCallback - Callback to get current broker statuses.
  */
-function initWebSocketManager(server, database, appLogger, basePath, getDbCallback, replacer, getBrokerStatusesCallback) {
+function initWebSocketManager(server, database, appLogger, basePath, getDbCallback, replacer, getConnectorStatusesCallback) {
     db = database;
     logger = appLogger.child({ component: 'WebSocketManager' });
     appBasePath = basePath;
     longReplacer = replacer; 
     getDbStatus = getDbCallback;
-    getBrokerStatuses = getBrokerStatusesCallback;
+    getConnectorStatuses = getConnectorStatusesCallback;
 
     // "noServer: true"
     // We detach the WebSocket server from the HTTP server's default routing.
@@ -86,17 +86,17 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         }
 
         // 0. Send Broker Statuses (Immediate UI feedback)
-        if (getBrokerStatuses) {
-            const statuses = getBrokerStatuses();
+        if (getConnectorStatuses) {
+            const statuses = getConnectorStatuses();
             const statusObj = Object.fromEntries(statuses);
             ws.send(JSON.stringify({ 
-                type: 'broker-status-all', 
+                type: 'connector-status-all', 
                 data: statusObj 
             }));
         }
 
         // 1. Send DB Bounds
-        db.all("SELECT epoch_ms(MIN(timestamp)) as min_ts, epoch_ms(MAX(timestamp)) as max_ts FROM mqtt_events", (err, rows) => {
+        db.all("SELECT epoch_ms(MIN(timestamp)) as min_ts, epoch_ms(MAX(timestamp)) as max_ts FROM korelate_events", (err, rows) => {
             if (!err && rows && rows.length > 0) {
                 const min = rows[0].min_ts ? Number(rows[0].min_ts) : 0;
                 const max = rows[0].max_ts ? Number(rows[0].max_ts) : Date.now();
@@ -108,7 +108,7 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
 
         // 2. Send initial batch
         logger.info("[WS] Fetching initial data batch (LIMIT 200)...");
-        db.all("SELECT timestamp, topic, payload, broker_id FROM mqtt_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
+        db.all("SELECT timestamp, topic, payload, source_id FROM korelate_events ORDER BY timestamp DESC LIMIT 200", (err, rows) => {
             if (err) logger.error({ err }, "❌ Error fetching initial data.");
             else if (ws.readyState === ws.OPEN) {
                 const processedRows = rows.map(row => processRow(row));
@@ -119,13 +119,13 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         // 3. Send initial tree state
         const treeStateQuery = `
             WITH RankedEvents AS (
-                SELECT *, ROW_NUMBER() OVER(PARTITION BY broker_id, topic ORDER BY timestamp DESC) as rn
-                FROM mqtt_events
+                SELECT *, ROW_NUMBER() OVER(PARTITION BY source_id, topic ORDER BY timestamp DESC) as rn
+                FROM korelate_events
             )
-            SELECT topic, payload, timestamp, broker_id
+            SELECT topic, payload, timestamp, source_id
             FROM RankedEvents
             WHERE rn = 1
-            ORDER BY broker_id, topic ASC;
+            ORDER BY source_id, topic ASC;
         `;
         db.all(treeStateQuery, (err, rows) => {
             if (!err && ws.readyState === ws.OPEN) {
@@ -162,8 +162,8 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                     }
 
                     const query = `
-                        SELECT timestamp, topic, payload, broker_id 
-                        FROM mqtt_events 
+                        SELECT timestamp, topic, payload, source_id 
+                        FROM korelate_events 
                         WHERE ${whereClauses.join(' AND ')}
                         ORDER BY timestamp DESC 
                         LIMIT ${limit};
@@ -188,21 +188,21 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
 
                 if (parsedMessage.type === 'get-topic-history' && parsedMessage.topic) {
                     const topic = parsedMessage.topic;
-                    let brokerId = parsedMessage.brokerId; 
-                    let query = "SELECT timestamp, topic, payload, broker_id FROM mqtt_events WHERE topic = ?";
+                    let sourceId = parsedMessage.sourceId; 
+                    let query = "SELECT timestamp, topic, payload, source_id FROM korelate_events WHERE topic = ?";
                     let params = [topic];
                     
-                    if (brokerId) {
-                        if (brokerId === 'default') brokerId = 'default_broker';
-                        query += " AND broker_id = ?";
-                        params.push(brokerId);
+                    if (sourceId) {
+                        if (sourceId === 'default') sourceId = 'default_connector';
+                        query += " AND source_id = ?";
+                        params.push(sourceId);
                     }
                     query += " ORDER BY timestamp DESC LIMIT 20";
 
                     db.all(query, ...params, (err, rows) => {
                         if (!err && ws.readyState === ws.OPEN) {
                             const processedRows = rows.map(row => processRow(row));
-                            ws.send(JSON.stringify({ type: 'topic-history-data', topic, brokerId, data: processedRows }));
+                            ws.send(JSON.stringify({ type: 'topic-history-data', topic, sourceId, data: processedRows }));
                         }
                     });
                 }

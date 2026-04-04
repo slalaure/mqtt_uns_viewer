@@ -184,7 +184,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
     const timestamp = new Date();
     
     // Use ingress correlationId if provided, otherwise generate a new one
-    const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null, correlationId: ingressCorrelationId } = options;
+    const { isSparkplugOrigin = false, rawBuffer = null, decodeError = null, correlationId: ingressCorrelationId, connectorType = 'unknown' } = options;
     const correlationId = ingressCorrelationId || crypto.randomUUID(); 
 
     let payloadObjectForMapper = null; 
@@ -192,11 +192,12 @@ async function handleMessage(providerId, topic, payload, options = {}) {
     let payloadStringForDb = null;     
 
     // Include correlationId in all logs for this message
-    const handlerLogger = logger.child({ provider: providerId, correlationId }); 
+    const handlerLogger = logger.child({ provider: providerId, correlationId, connectorType }); 
 
     try {
         // --- 1. Smart Namespace Rate Limiting (Anti-Spam) ---
-        const parts = topic.split('/');
+        // Abstraction: Determine namespace based on path separators. If no '/', use the whole topic.
+        const parts = topic.includes('/') ? topic.split('/') : [topic];
         const namespace = parts.length > 1 ? `${providerId}:${parts[0]}/${parts[1]}` : `${providerId}:${parts[0]}`;
 
         const count = (namespaceCounts.get(namespace) || 0) + 1;
@@ -283,8 +284,9 @@ async function handleMessage(providerId, topic, payload, options = {}) {
 
         // --- 4. Broadcast WebSocket ---
         const finalMessageObject = {
-            type: 'mqtt-message',
-            brokerId: providerId, 
+            type: 'korelate-event',
+            sourceId: providerId, 
+            connectorType,
             topic,
             payload: payloadStringForWs,
             timestamp: timestamp.toISOString(),
@@ -295,7 +297,8 @@ async function handleMessage(providerId, topic, payload, options = {}) {
         // --- 5. DB / Mapper / Alert Execution ---
         const needsDb = mapperEngine.rulesForTopicRequireDb(topic);
         dataManager.insertMessage({ 
-            brokerId: providerId, 
+            sourceId: providerId, 
+            connectorType,
             timestamp, 
             topic, 
             payloadStringForDb, 

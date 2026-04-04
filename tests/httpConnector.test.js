@@ -42,7 +42,7 @@ describe('HttpProvider', () => {
             logger: createMockLogger(),
             handleMessage: jest.fn(),
             activeConnections: new Map(),
-            updateBrokerStatus: jest.fn()
+            updateConnectorStatus: jest.fn()
         };
 
         config = {
@@ -61,7 +61,7 @@ describe('HttpProvider', () => {
         expect(result).toBe(true);
         expect(mockApp.post).toHaveBeenCalledWith('/api/ingest/test-http/*', expect.any(Function), expect.any(Function));
         expect(mockApp.post).toHaveBeenCalledWith('/api/subscribe/test-http', expect.any(Function), expect.any(Function));
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test-http', 'connected', null);
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test-http', 'connected', null);
     });
 
     test('ingestion route should respect allowed publish patterns', async () => {

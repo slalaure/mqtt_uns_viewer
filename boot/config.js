@@ -122,7 +122,7 @@ function loadConfig(logger, paths) {
         PG_USER: process.env.PG_USER?.trim() || 'postgres',
         PG_PASSWORD: process.env.PG_PASSWORD?.trim() || 'password',
         PG_DATABASE: process.env.PG_DATABASE?.trim() || 'korelate',
-        PG_TABLE_NAME: process.env.PG_TABLE_NAME?.trim() || 'mqtt_events',
+        PG_TABLE_NAME: process.env.PG_TABLE_NAME?.trim() || 'korelate_events',
         PG_INSERT_BATCH_SIZE: process.env.PG_INSERT_BATCH_SIZE ? parseInt(process.env.PG_INSERT_BATCH_SIZE, 10) : 1000,
         PG_BATCH_INTERVAL_MS: process.env.PG_BATCH_INTERVAL_MS ? parseInt(process.env.PG_BATCH_INTERVAL_MS, 10) : 5000,
         PG_SSL: parseStrictBool(process.env.PG_SSL, false),

@@ -7,7 +7,7 @@ const path = require('path');
 const { performance } = require('perf_hooks');
 
 // [UPDATED] Added '..' to point to the root data folder from the tests folder
-const DB_PATH = path.join(__dirname, '..', 'data', 'mqtt_events.duckdb');
+const DB_PATH = path.join(__dirname, '..', 'data', 'korelate_events.duckdb');
 const TOPIC = 'ALAT/Sassenage/Cavendish/BMS/HVAC/Ambience/Telemetry';
 const MAX_POINTS = 500;
 
@@ -34,7 +34,7 @@ async function runBenchmark() {
             MIN(epoch_ms(timestamp)) as min_ts, 
             MAX(epoch_ms(timestamp)) as max_ts,
             COUNT(*) as total_rows
-        FROM mqtt_events 
+        FROM korelate_events 
         WHERE topic = '${TOPIC}'
     `;
     
@@ -86,7 +86,7 @@ async function runBenchmark() {
                 CAST(payload->>'temperature_c' AS DOUBLE) as temp,
                 CAST(payload->>'co2_ppm' AS DOUBLE) as co2,
                 CAST(payload->>'occupancy_count' AS DOUBLE) as occ
-            FROM mqtt_events
+            FROM korelate_events
             WHERE topic = '${TOPIC}'
               AND timestamp >= CAST('${startIso}' AS TIMESTAMPTZ)
               AND timestamp <= CAST('${endIso}' AS TIMESTAMPTZ)
@@ -124,7 +124,7 @@ async function runBenchmark() {
                 AVG(CAST(payload->>'temperature_c' AS DOUBLE)) as temp,
                 AVG(CAST(payload->>'co2_ppm' AS DOUBLE)) as co2,
                 AVG(CAST(payload->>'occupancy_count' AS DOUBLE)) as occ
-            FROM mqtt_events
+            FROM korelate_events
             WHERE topic = '${TOPIC}'
               AND timestamp >= CAST('${startIso}' AS TIMESTAMPTZ)
               AND timestamp <= CAST('${endIso}' AS TIMESTAMPTZ)
@@ -151,7 +151,7 @@ async function runBenchmark() {
                     CAST(payload->>'co2_ppm' AS DOUBLE) as co2,
                     CAST(payload->>'occupancy_count' AS DOUBLE) as occ,
                     ROW_NUMBER() OVER (ORDER BY timestamp ASC) as rn
-                FROM mqtt_events
+                FROM korelate_events
                 WHERE topic = '${TOPIC}'
                   AND timestamp >= CAST('${startIso}' AS TIMESTAMPTZ)
                   AND timestamp <= CAST('${endIso}' AS TIMESTAMPTZ)

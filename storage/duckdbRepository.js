@@ -95,13 +95,14 @@ class DuckDBRepository extends BaseRepository {
             // Use CAST(? AS TIMESTAMPTZ) in the SQL.
             // We will pass the ISO string directly. DuckDB handles ISO strings with 'Z' correctly 
             // as UTC when cast to TIMESTAMPTZ, preventing the 1h offset.
-            const stmt = this.db.prepare('INSERT INTO mqtt_events (timestamp, topic, payload, broker_id, correlation_id) VALUES (CAST(? AS TIMESTAMPTZ), ?, ?, ?, ?)');
+            const stmt = this.db.prepare('INSERT INTO korelate_events (timestamp, topic, payload, source_id, correlation_id, connector_type) VALUES (CAST(? AS TIMESTAMPTZ), ?, ?, ?, ?, ?)');
             let errorCount = 0;
 
             for (const msg of batch) {
                 const timestampIso = msg.timestamp.toISOString();
+                const connType = msg.connectorType || 'mqtt';
                 
-                stmt.run(timestampIso, msg.topic, msg.payloadStringForDb, msg.brokerId, msg.correlationId || null, (runErr) => {
+                stmt.run(timestampIso, msg.topic, msg.payloadStringForDb, msg.sourceId, msg.correlationId || null, connType, (runErr) => {
                     if (runErr) {
                         this.logger.warn({ err: runErr, topic: msg.topic }, "DB Batch: Failed to insert one message");
                         errorCount++;
@@ -136,7 +137,7 @@ class DuckDBRepository extends BaseRepository {
                                         try {
                                             const payloadObject = JSON.parse(msg.payloadStringForDb);
                                             await this.mapperEngine.processMessage(
-                                                msg.brokerId,
+                                                msg.sourceId,
                                                 msg.topic, 
                                                 payloadObject,
                                                 msg.isSparkplugOrigin,

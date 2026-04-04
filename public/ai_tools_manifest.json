@@ -1,5 +1,5 @@
 {
-    "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{BROKER_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or HMI), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n3. **UNS Model Adherence (Publishing & Simulating)**: When asked to trigger an alarm, publish data, or simulate an event, you MUST FIRST use `get_model_definition` to find the exact `topic_template` and `schema`.\n   - DO NOT invent topic structures.\n   - DO NOT invent JSON payloads. Strictly respect the enums, casing, and types defined in the schema.\n\n### DEVELOPER GUIDE FOR HMI DASHBOARDS & 3D DIGITAL TWINS\nWhen the user asks for a diagram, synoptic, dashboard, or 3D view, use `create_hmi_view`.\n1. You can generate HTML (including `<a-scene>` for A-Frame 3D) or pure SVG XML. Ensure elements have unique `id` or `data-key` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerHmiBindings({\n  initialize: (hmiRoot) => { console.log(\"HMI initialized\"); },\n  update: (brokerId, topic, payload, hmiRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema\n    // 3. Update DOM using REAL tag names\n  },\n  reset: (hmiRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names or topic structures. Use the tools provided to discover the environment state.",
+    "system_prompt_template": "You are an expert Unified Namespace (UNS) Architect and Operator.\n\nSYSTEM CONTEXT:\n{{CONNECTOR_CONTEXT}}\n\n### AVAILABLE TOOLS OVERVIEW\n{{TOOLS_CONTEXT}}\n\n### DATA HANDLING STRATEGY (CRITICAL)\n1. **Payload Structure**: Before generating any code (Mapper or HMI), you MUST determine where the data values reside.\n   - Check `get_model_definition` for a `payload_config.data_wrapper` property (e.g., \"variables\", \"d\", \"metrics\").\n   - If no model exists, look at raw message samples via `infer_schema`.\n   - **Do not assume** data is at the root. Do not assume it is in `variables` unless the model says so.\n2. **Tag Names**: You MUST use the EXACT tag names found in the payload (e.g., `AI_PT101`), not invented logical names (e.g., `Tank_Level`). Use `infer_schema` to find the real tag names.\n3. **UNS Model Adherence (Publishing & Simulating)**: When asked to trigger an alarm, publish data, or simulate an event, you MUST FIRST use `get_model_definition` to find the exact `topic_template` and `schema`.\n   - DO NOT invent topic structures.\n   - DO NOT invent JSON payloads. Strictly respect the enums, casing, and types defined in the schema.\n\n### DEVELOPER GUIDE FOR HMI DASHBOARDS & 3D DIGITAL TWINS\nWhen the user asks for a diagram, synoptic, dashboard, or 3D view, use `create_hmi_view`.\n1. You can generate HTML (including `<a-scene>` for A-Frame 3D) or pure SVG XML. Ensure elements have unique `id` or `data-key` attributes.\n2. You MUST generate a matching JavaScript file using this API signature:\n```javascript\nwindow.registerHmiBindings({\n  initialize: (hmiRoot) => { console.log(\"HMI initialized\"); },\n  update: (sourceId, topic, payload, hmiRoot) => {\n    // 1. Safe Parse\n    const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;\n    // 2. Resolve Data Root based on Model/Schema\n    // 3. Update DOM using REAL tag names\n  },\n  reset: (hmiRoot) => { }\n});\n```\n\n### STRATEGY\nAlways Verify -> Plan -> Execute. Never guess tag names or topic structures. Use the tools provided to discover the environment state.",
     "tools": [
         {
             "name": "get_application_status",
@@ -50,7 +50,7 @@
                         "type": "number",
                         "description": "Max results to return."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional. Filter by specific broker ID."
                     }
@@ -79,7 +79,7 @@
                         "type": "number",
                         "description": "Max results (default 20)."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional. Filter by specific broker ID."
                     }
@@ -124,7 +124,7 @@
                         ],
                         "description": "Aggregation function to apply. Default is MEAN."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional broker ID."
                     }
@@ -147,7 +147,7 @@
                         "type": "string",
                         "description": "The exact MQTT topic."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional. Filter by specific broker ID."
                     }
@@ -172,7 +172,7 @@
                         "type": "object",
                         "description": "Key-value pairs to filter the JSON payload (e.g., {\"status\": \"RELEASED\"})."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional. Broker ID."
                     }
@@ -235,7 +235,7 @@
         },
         {
             "name": "publish_message",
-            "description": "Publish a NEW MQTT message. You MUST strictly follow the topic template and JSON schema from get_model_definition if applicable. Check 'Broker Permissions' in system prompt to choose the correct broker_id.",
+            "description": "Publish a NEW MQTT message. You MUST strictly follow the topic template and JSON schema from get_model_definition if applicable. Check 'Broker Permissions' in system prompt to choose the correct source_id.",
             "category": "ENABLE_PUBLISH",
             "inputSchema": {
                 "type": "object",
@@ -257,7 +257,7 @@
                         ],
                         "description": "Payload format."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional. ID of the broker to use."
                     },
@@ -401,7 +401,7 @@
         },
         {
             "name": "prune_topic_history",
-            "description": "Deletes messages from the database that match a specific topic pattern. Can be filtered by broker_id.",
+            "description": "Deletes messages from the database that match a specific topic pattern. Can be filtered by source_id.",
             "category": "ENABLE_ADMIN",
             "inputSchema": {
                 "type": "object",
@@ -410,7 +410,7 @@
                         "type": "string",
                         "description": "The topic pattern to prune, using MQTT wildcards (+, #)."
                     },
-                    "broker_id": {
+                    "source_id": {
                         "type": "string",
                         "description": "Optional. The ID of the broker to prune from (e.g., 'broker_1')."
                     }

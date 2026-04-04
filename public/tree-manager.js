@@ -37,11 +37,11 @@ export function createTreeManager(rootElement, options = {}) {
      * Smart fallback to guess the provider type if it wasn't registered in the initial config.
      * Useful for dynamically launched CSV parsers.
      */
-    function getProviderType(brokerId) {
-        if (!brokerId) return 'mqtt';
-        if (providersMap[brokerId]) return providersMap[brokerId];
+    function getProviderType(sourceId) {
+        if (!sourceId) return 'mqtt';
+        if (providersMap[sourceId]) return providersMap[sourceId];
         
-        const lower = brokerId.toLowerCase();
+        const lower = sourceId.toLowerCase();
         if (lower.includes('csv') || lower.includes('file')) return 'file';
         if (lower.includes('opc')) return 'opcua';
         if (lower === 'i3x') return 'i3x';
@@ -53,13 +53,13 @@ export function createTreeManager(rootElement, options = {}) {
      * Creates or updates a node in this tree.
      * Organizes hierarchy by: Technology Type -> Provider ID -> Topic hierarchy
      */
-    function update(brokerId, topic, payload, timestamp, updateOptions = {}) {
+    function update(sourceId, topic, payload, timestamp, updateOptions = {}) {
         // Block live MQTT updates if we are currently viewing the I3X Semantic Model
         if (isI3xModeActive) return null;
 
         const { enableAnimations = false } = updateOptions;
         
-        const safeBrokerId = brokerId || 'default';
+        const safeBrokerId = sourceId || 'default';
         const providerType = getProviderType(safeBrokerId);
         
         // Remove leading slashes to prevent empty parts
@@ -126,7 +126,7 @@ export function createTreeManager(rootElement, options = {}) {
                     <span class="node-timestamp"></span>
                 `;
 
-                nodeContainer.dataset.brokerId = safeBrokerId;
+                nodeContainer.dataset.sourceId = safeBrokerId;
                 nodeContainer.dataset.topic = nodeSpecificTopic; 
 
                 // Semantic drag and drop fallback for data endpoints
@@ -136,7 +136,7 @@ export function createTreeManager(rootElement, options = {}) {
                         const dragPayload = {
                             type: 'topic',
                             path: nodeSpecificTopic,
-                            brokerId: safeBrokerId
+                            sourceId: safeBrokerId
                         };
                         e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
                         e.dataTransfer.effectAllowed = 'copy';
@@ -243,8 +243,8 @@ export function createTreeManager(rootElement, options = {}) {
         nodeMap.clear();
 
         const sortedEntries = entries.sort((a, b) => {
-            const brokerA = a.broker_id || a.brokerId || 'default';
-            const brokerB = b.broker_id || b.brokerId || 'default';
+            const brokerA = a.source_id || a.sourceId || 'default';
+            const brokerB = b.source_id || b.sourceId || 'default';
             
             const typeA = getProviderType(brokerA);
             const typeB = getProviderType(brokerB);
@@ -258,7 +258,7 @@ export function createTreeManager(rootElement, options = {}) {
         for (const entry of sortedEntries) {
             i++;
             try {
-                update(entry.broker_id || entry.brokerId, entry.topic, entry.payload, entry.timestamp, { enableAnimations: false });
+                update(entry.source_id || entry.sourceId, entry.topic, entry.payload, entry.timestamp, { enableAnimations: false });
             } catch (e) {
                 console.error(`[tree-manager ${treeId}] Failed to update node for topic: ${entry.topic}`, e); 
             }
@@ -319,7 +319,7 @@ export function createTreeManager(rootElement, options = {}) {
                 <span class="node-name" style="color: var(--color-primary); font-weight: bold; letter-spacing: 1px;">I3X_Semantic_Graph</span>
             `;
             
-            nodeContainer.dataset.brokerId = 'i3x';
+            nodeContainer.dataset.sourceId = 'i3x';
             nodeContainer.dataset.topic = '';
             
             i3xRootLi.appendChild(nodeContainer);
@@ -378,7 +378,7 @@ export function createTreeManager(rootElement, options = {}) {
             nodeContainer.dataset.elementId = obj.elementId;
             nodeContainer.dataset.typeId = obj.typeId;
             nodeContainer.dataset.isI3x = "true";
-            nodeContainer.dataset.brokerId = 'i3x';
+            nodeContainer.dataset.sourceId = 'i3x';
             nodeContainer.dataset.topic = obj.elementId;
             
             li.appendChild(nodeContainer);
@@ -423,7 +423,7 @@ export function createTreeManager(rootElement, options = {}) {
                         
                         const relContainer = document.createElement('div');
                         relContainer.className = 'node-container';
-                        relContainer.dataset.brokerId = 'i3x';
+                        relContainer.dataset.sourceId = 'i3x';
                         relContainer.dataset.topic = targetId;
                         relContainer.dataset.isI3x = "true";
                         relContainer.dataset.elementId = targetId;
@@ -470,10 +470,10 @@ export function createTreeManager(rootElement, options = {}) {
     function colorTree(colorLogicFn) {
         rootNode.querySelectorAll('li > .node-container').forEach(nodeContainer => {
             const li = nodeContainer.closest('li');
-            const brokerId = nodeContainer.dataset.brokerId;
+            const sourceId = nodeContainer.dataset.sourceId;
             const topic = nodeContainer.dataset.topic;
-            if (brokerId !== undefined && topic !== undefined) {
-                 colorLogicFn(brokerId, topic, li);
+            if (sourceId !== undefined && topic !== undefined) {
+                 colorLogicFn(sourceId, topic, li);
             }
         });
     }
@@ -492,11 +492,11 @@ export function createTreeManager(rootElement, options = {}) {
         
         const nodeName = nodeContainer.querySelector('.node-name').textContent.toLowerCase();
         const originalTopic = nodeContainer.dataset.topic?.toLowerCase() || '';
-        const brokerId = nodeContainer.dataset.brokerId?.toLowerCase() || '';
+        const sourceId = nodeContainer.dataset.sourceId?.toLowerCase() || '';
         
         const isMatch = nodeName.includes(filterText) || 
                         originalTopic.includes(filterText) || 
-                        brokerId.includes(filterText);
+                        sourceId.includes(filterText);
                         
         let hasVisibleChild = false;
         const children = node.querySelectorAll(':scope > ul > li');

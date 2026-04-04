@@ -155,9 +155,9 @@ class MapperTargetEditor extends HTMLElement {
                 select.appendChild(opt);
             });
 
-            select.value = this.target.targetBrokerId || ""; 
+            select.value = this.target.targetConnectorId || ""; 
             select.addEventListener('change', () => {
-                this.target.targetBrokerId = select.value || null; 
+                this.target.targetConnectorId = select.value || null; 
                 state.mapperUnsaved = true;
             });
             brokerGroup.appendChild(select);

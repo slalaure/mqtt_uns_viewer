@@ -242,7 +242,7 @@ const onCurrentTopicChange = (topic) => {
   }
 };
 
-const onCurrentBrokerIdChange = (brokerId) => {
+const onCurrentBrokerIdChange = (sourceId) => {
   // Optional broker sync
 };
 
@@ -477,11 +477,11 @@ function setRelativeRange(hours) {
   triggerDataFetch();
 }
 
-export function handleChartNodeClick(event, nodeContainer, brokerId, topic) {
+export function handleChartNodeClick(event, nodeContainer, sourceId, topic) {
   const payload = nodeContainer.dataset.payload;
-  selectedChartBrokerId = brokerId;
+  selectedChartBrokerId = sourceId;
   selectedChartTopic = topic;
-  payloadViewer.display(brokerId, topic, payload);
+  payloadViewer.display(sourceId, topic, payload);
   populateChartVariables(payload);
 }
 
@@ -642,7 +642,7 @@ function populateChartVariables(payloadString) {
       checkbox.type = "checkbox";
       checkbox.id = `chart-var-${varId.replace(/[^a-zA-Z0-9]/g, "_")}`;
       checkbox.value = varId;
-      checkbox.dataset.brokerId = selectedChartBrokerId;
+      checkbox.dataset.sourceId = selectedChartBrokerId;
       checkbox.dataset.topic = selectedChartTopic;
       checkbox.dataset.path = key.path;
       checkbox.checked = chartedVariables.has(varId);
@@ -691,7 +691,7 @@ function onChartVariableToggle(event) {
 
   if (checkbox.checked) {
     chartedVariables.set(varId, {
-      brokerId: checkbox.dataset.brokerId,
+      sourceId: checkbox.dataset.sourceId,
       topic: checkbox.dataset.topic,
       path: checkbox.dataset.path,
     });
@@ -736,10 +736,10 @@ async function processChartData() {
   // Group variables by topic/broker
   const topicsMap = new Map();
   chartedVariables.forEach((varInfo, varId) => {
-    const key = `${varInfo.brokerId}|${varInfo.topic}`;
+    const key = `${varInfo.sourceId}|${varInfo.topic}`;
     if (!topicsMap.has(key)) {
       topicsMap.set(key, {
-        brokerId: varInfo.brokerId,
+        sourceId: varInfo.sourceId,
         topic: varInfo.topic,
         variables: [],
       });
@@ -1043,7 +1043,7 @@ async function loadChartConfig() {
             chartType: "line",
             connectNulls: false,
             variables: savedConfig.map((v) => ({
-              brokerId: "default",
+              sourceId: "default",
               topic: v.topic,
               path: v.path,
             })),
@@ -1127,9 +1127,9 @@ function onChartConfigChange(showNotification = true) {
   chartedVariables.clear();
   if (Array.isArray(config.variables)) {
     config.variables.forEach((v) => {
-      const brokerId = v.brokerId || "default_broker";
-      const varId = `${brokerId}|${v.topic}|${v.path}`;
-      chartedVariables.set(varId, { ...v, brokerId: brokerId });
+      const sourceId = v.sourceId || "default_connector";
+      const varId = `${sourceId}|${v.topic}|${v.path}`;
+      chartedVariables.set(varId, { ...v, sourceId: sourceId });
     });
   }
 

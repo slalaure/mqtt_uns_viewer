@@ -65,7 +65,7 @@ describe('OpcUaProvider', () => {
         mockContext = {
             logger: createMockLogger(),
             handleMessage: jest.fn(),
-            updateBrokerStatus: jest.fn()
+            updateConnectorStatus: jest.fn()
         };
 
         providerConfig = {
@@ -85,8 +85,8 @@ describe('OpcUaProvider', () => {
         
         expect(result).toBe(true);
         expect(provider.connected).toBe(true);
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test_opc', 'connecting', null);
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test_opc', 'connected', null);
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test_opc', 'connecting', null);
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test_opc', 'connected', null);
         
         // Verify OPC UA calls
         expect(OPCUAClient.create).toHaveBeenCalled();
@@ -108,7 +108,7 @@ describe('OpcUaProvider', () => {
         // Simulate a connection drop resulting in a backoff retry
         backoffHandler(3, 5000); // Retry #3, 5000ms delay
 
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test_opc', 'connecting', 'Retrying... (3)');
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test_opc', 'connecting', 'Retrying... (3)');
         expect(provider.logger.warn).toHaveBeenCalledWith(expect.stringContaining('5000ms'));
     });
 
@@ -122,7 +122,7 @@ describe('OpcUaProvider', () => {
 
         expect(result).toBe(false);
         expect(provider.connected).toBe(false);
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test_opc', 'error', 'Connection Refused');
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test_opc', 'error', 'Connection Refused');
         expect(provider.logger.error).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('Failed to connect'));
     });
 
@@ -171,6 +171,6 @@ describe('OpcUaProvider', () => {
         expect(provider.subscription.terminate).toHaveBeenCalled();
         expect(provider.session.close).toHaveBeenCalled();
         expect(provider.client.disconnect).toHaveBeenCalled();
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('test_opc', 'disconnected', null);
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test_opc', 'disconnected', null);
     });
 });

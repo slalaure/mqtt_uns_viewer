@@ -26,16 +26,16 @@ const { EventEmitter } = require('events');
  * @param {import('./config').AppConfig} config App configuration.
  * @param {Object} logger Logger instance.
  * @param {Object} paths File paths.
- * @param {Object} state Global state objects (activeConnections, brokerStatuses, etc.)
+ * @param {Object} state Global state objects (activeConnections, connectorStatuses, etc.)
  * @returns {Object} Initialized managers and services.
  */
 function initServices(server, app, db, config, logger, paths, state) {
     const { 
         activeConnections, 
-        brokerStatuses, 
+        connectorStatuses, 
         i3xEvents,
         longReplacer,
-        updateBrokerStatus,
+        updateConnectorStatus,
         isShuttingDown
     } = state;
 
@@ -83,7 +83,7 @@ function initServices(server, app, db, config, logger, paths, state) {
         config.BASE_PATH, 
         dbManager.getDbStatus, 
         longReplacer, 
-        () => brokerStatuses
+        () => connectorStatuses
     );
 
     // 6. Intercept wsManager.broadcast to feed I3X Event Bus
@@ -92,7 +92,7 @@ function initServices(server, app, db, config, logger, paths, state) {
         originalBroadcast(msgStr);
         try {
             const msg = JSON.parse(msgStr);
-            if (msg.type === 'mqtt-message') {
+            if (msg.type === 'korelate-event') {
                 let payloadObj = msg.payload;
                 try { 
                     payloadObj = JSON.parse(msg.payload); 
@@ -112,14 +112,14 @@ function initServices(server, app, db, config, logger, paths, state) {
         logger,
         app,
         activeConnections,
-        brokerStatuses,
+        connectorStatuses,
         wsManager,
         mapperEngine,
         dataManager,
         alertManager,
         CERTS_PATH: paths.CERTS_PATH,
         broadcastDbStatus: dbManager.broadcastDbStatus,
-        updateBrokerStatus,
+        updateConnectorStatus,
         isShuttingDown
     });
 

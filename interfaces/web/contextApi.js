@@ -69,7 +69,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     router.get('/topics', (req, res, next) => {
         log("Listing topics...");
         db.serialize(() => {
-            db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events ORDER BY broker_id, topic ASC", (err, rows) => {
+            db.all("SELECT DISTINCT source_id, topic FROM korelate_events ORDER BY source_id, topic ASC", (err, rows) => {
                 if (err) {
                     return next(err);
                 }
@@ -80,14 +80,14 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     router.get('/tree', (req, res, next) => {
         db.serialize(() => {
-            db.all("SELECT DISTINCT broker_id, topic FROM mqtt_events", (err, rows) => {
+            db.all("SELECT DISTINCT source_id, topic FROM korelate_events", (err, rows) => {
                 if (err) {
                     return next(err);
                 }
 
                 const tree = {};
                 rows.forEach(row => {
-                    const displayTopic = isMultiBroker ? `${row.broker_id}/${row.topic}` : row.topic;
+                    const displayTopic = isMultiBroker ? `${row.source_id}/${row.topic}` : row.topic;
                     let currentLevel = tree;
                     const parts = displayTopic.split('/');
 
@@ -119,10 +119,10 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         // 3. Order: Sort by time DESC (newest first).
         // 4. Qualify: Keep only the 1st row (the newest) for each group.
         const query = `
-            SELECT topic, payload, broker_id, timestamp
-            FROM mqtt_events
+            SELECT topic, payload, source_id, timestamp
+            FROM korelate_events
             WHERE timestamp <= CAST(? AS TIMESTAMPTZ)
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY topic, broker_id ORDER BY timestamp DESC) = 1
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY topic, source_id ORDER BY timestamp DESC) = 1
         `;
 
         db.serialize(() => {
@@ -195,21 +195,21 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                     });
 
                     const safeTopic = escapeSQL(t.topic);
-                    const safeBroker = escapeSQL(t.brokerId);
+                    const safeBroker = escapeSQL(t.sourceId);
 
                     const query = `
                         SELECT ${selectCols}
-                        FROM mqtt_events
+                        FROM korelate_events
                         WHERE topic = '${safeTopic}' 
-                          AND broker_id = '${safeBroker}'
+                          AND source_id = '${safeBroker}'
                           AND timestamp >= CAST('${startDate}' AS TIMESTAMPTZ)
                           AND timestamp <= CAST('${endDate}' AS TIMESTAMPTZ)
                         GROUP BY 1 ORDER BY 1 ASC
                     `;
 
                     db.all(query, (err, rows) => {
-                        if (err) resolve({ brokerId: t.brokerId, topic: t.topic, error: err.message });
-                        else resolve({ brokerId: t.brokerId, topic: t.topic, data: rows });
+                        if (err) resolve({ sourceId: t.sourceId, topic: t.topic, error: err.message });
+                        else resolve({ sourceId: t.sourceId, topic: t.topic, data: rows });
                     });
                 });
             });
@@ -220,7 +220,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     router.get('/search', (req, res, next) => {
         const query = req.query.q;
-        const brokerId = req.query.brokerId;
+        const sourceId = req.query.sourceId;
         const startDate = req.query.startDate;
         const endDate = req.query.endDate;
 
@@ -244,8 +244,8 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             )`
         ];
 
-        if (brokerId) {
-            whereClauses.push(`broker_id = '${escapeSQL(brokerId)}'`);
+        if (sourceId) {
+            whereClauses.push(`source_id = '${escapeSQL(sourceId)}'`);
         }
         if (startDate) {
             whereClauses.push(`timestamp >= '${escapeSQL(startDate)}'`);
@@ -255,8 +255,8 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         }
 
         const sqlQuery = `
-            SELECT topic, payload, timestamp, broker_id
-            FROM mqtt_events
+            SELECT topic, payload, timestamp, source_id
+            FROM korelate_events
             WHERE ${whereClauses.join(' AND ')}
             ORDER BY timestamp DESC
             LIMIT ${limit};
@@ -286,7 +286,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     });
 
     router.post('/search/model', (req, res, next) => {
-        const { topic_template, filters, broker_id } = req.body; 
+        const { topic_template, filters, source_id } = req.body; 
 
         if (!topic_template) {
             return res.status(400).json({ error: "Missing 'topic_template'." });
@@ -298,8 +298,8 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
         let whereClauses = [`topic LIKE '${safe_topic}'`];
 
-        if (broker_id) {
-            whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+        if (source_id) {
+            whereClauses.push(`source_id = '${escapeSQL(source_id)}'`);
         }
 
         if (filters && typeof filters === 'object') {
@@ -316,8 +316,8 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         }
 
         const sqlQuery = `
-            SELECT topic, payload, timestamp, broker_id
-            FROM mqtt_events
+            SELECT topic, payload, timestamp, source_id
+            FROM korelate_events
             WHERE ${whereClauses.join(' AND ')}
             ORDER BY timestamp DESC
             LIMIT ${limit};
@@ -356,16 +356,16 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
             return res.status(403).json({ error: "Forbidden: Only Admins can prune database history." });
         }
 
-        const { topicPattern, broker_id } = req.body;
+        const { topicPattern, source_id } = req.body;
 
         if (!topicPattern) return res.status(400).json({ error: "Missing 'topicPattern'." });
 
         const sqlPattern = mqttToSqlLike(topicPattern);
         let whereClauses = [`topic LIKE '${sqlPattern}'`];
         
-        if (broker_id) whereClauses.push(`broker_id = '${escapeSQL(broker_id)}'`);
+        if (source_id) whereClauses.push(`source_id = '${escapeSQL(source_id)}'`);
 
-        const query = `DELETE FROM mqtt_events WHERE ${whereClauses.join(' AND ')};`;
+        const query = `DELETE FROM korelate_events WHERE ${whereClauses.join(' AND ')};`;
 
         db.serialize(() => {
             db.run(query, function(err) { 
@@ -383,16 +383,16 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     router.get('/topic/:topic(*)', (req, res, next) => {
         const topic = req.params.topic;
-        const brokerId = req.query.brokerId; 
+        const sourceId = req.query.sourceId; 
 
         if (!topic) return res.status(400).json({ error: "Topic not specified." });
 
-        let query = `SELECT * FROM mqtt_events WHERE topic = ?`;
+        let query = `SELECT * FROM korelate_events WHERE topic = ?`;
         let params = [topic];
 
-        if (brokerId) {
-            query += " AND broker_id = ?";
-            params.push(brokerId);
+        if (sourceId) {
+            query += " AND source_id = ?";
+            params.push(sourceId);
         }
         query += " ORDER BY timestamp DESC LIMIT 1";
 
@@ -421,19 +421,19 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     router.get('/history/:topic(*)', (req, res, next) => {
         const topic = req.params.topic;
-        const brokerId = req.query.brokerId; 
+        const sourceId = req.query.sourceId; 
         const limit = parseInt(req.query.limit, 10) || 20;
         const startDate = req.query.startDate;
         const endDate = req.query.endDate;
 
         if (!topic) return res.status(400).json({ error: "Topic not specified." });
 
-        let query = `SELECT * FROM mqtt_events WHERE topic = ?`;
+        let query = `SELECT * FROM korelate_events WHERE topic = ?`;
         let params = [topic];
 
-        if (brokerId) {
-            query += " AND broker_id = ?";
-            params.push(brokerId);
+        if (sourceId) {
+            query += " AND source_id = ?";
+            params.push(sourceId);
         }
 
         if (startDate) {

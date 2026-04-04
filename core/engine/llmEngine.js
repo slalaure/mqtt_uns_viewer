@@ -50,9 +50,9 @@ class LlmEngine {
     /**
      * Generates the base system prompt for the UNS Architect Chat Assistant.
      */
-    generateChatSystemPrompt(template, brokerContext, toolsContext) {
-        let prompt = template || "You are an expert UNS Architect. CONTEXT:\n{{BROKER_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
-        prompt = prompt.replace('{{BROKER_CONTEXT}}', brokerContext);
+    generateChatSystemPrompt(template, connectorContext, toolsContext) {
+        let prompt = template || "You are an expert UNS Architect. CONTEXT:\n{{CONNECTOR_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
+        prompt = prompt.replace('{{CONNECTOR_CONTEXT}}', connectorContext);
         prompt = prompt.replace('{{TOOLS_CONTEXT}}', toolsContext);
         return prompt;
     }

@@ -33,7 +33,7 @@ const DATA_PATH = path.join(__dirname, 'data');
 const ENV_PATH = path.join(DATA_PATH, '.env');
 const ENV_EXAMPLE_PATH = path.join(__dirname, '.env.example');
 const CERTS_PATH = path.join(DATA_PATH, 'certs');
-const DB_PATH = path.join(DATA_PATH, 'mqtt_events.duckdb');
+const DB_PATH = path.join(DATA_PATH, 'korelate_events.duckdb');
 const CHART_CONFIG_PATH = path.join(DATA_PATH, 'charts.json'); 
 const SESSIONS_PATH = path.join(DATA_PATH, 'sessions');
 
@@ -79,22 +79,22 @@ function longReplacer(key, value) {
 let isShuttingDown = false;
 let isPruning = false;
 const activeConnections = new Map(); 
-const brokerStatuses = new Map(); 
+const connectorStatuses = new Map(); 
 const i3xEvents = new EventEmitter();
 
 const state = {
     activeConnections,
-    brokerStatuses,
+    connectorStatuses,
     i3xEvents,
     longReplacer,
     isShuttingDown: () => isShuttingDown,
     isPruning: false,
     getPrimaryConnection: () => activeConnections.size > 0 ? activeConnections.values().next().value : null,
-    getBrokerConnection: (id) => id ? activeConnections.get(id) : state.getPrimaryConnection(),
-    updateBrokerStatus: (brokerId, status, error = null) => {
+    getConnectorConnection: (id) => id ? activeConnections.get(id) : state.getPrimaryConnection(),
+    updateConnectorStatus: (sourceId, status, error = null) => {
         const info = { status, error, timestamp: Date.now() };
-        brokerStatuses.set(brokerId, info);
-        if (services.wsManager) services.wsManager.broadcast(JSON.stringify({ type: 'broker-status', brokerId, ...info }));
+        connectorStatuses.set(sourceId, info);
+        if (services.wsManager) services.wsManager.broadcast(JSON.stringify({ type: 'connector-status', sourceId, ...info }));
     }
 };
 
@@ -134,7 +134,7 @@ let services = {};
             userManager, alertManager: require('./core/engine/alertManager'),
             semanticManager: require('./core/semantic/semanticManager'),
             i3xEvents, getPrimaryConnection: state.getPrimaryConnection,
-            getBrokerConnection: state.getBrokerConnection,
+            getConnectorConnection: state.getConnectorConnection,
             simulatorManager: services.simulatorManager,
             wsManager: services.wsManager,
             mapperEngine: services.mapperEngine,

@@ -82,11 +82,11 @@ const onCurrentTopicChange = (topic) => {
     }
 };
 
-const onCurrentBrokerIdChange = (brokerId) => {
-    if (brokerId && providerSelectElement && state.activeView !== 'publish') {
-        const exists = Array.from(providerSelectElement.options).some(opt => opt.value === brokerId);
+const onCurrentBrokerIdChange = (sourceId) => {
+    if (sourceId && providerSelectElement && state.activeView !== 'publish') {
+        const exists = Array.from(providerSelectElement.options).some(opt => opt.value === sourceId);
         if (exists) {
-            providerSelectElement.value = brokerId;
+            providerSelectElement.value = sourceId;
             validatePublishPermissions();
         }
     }
@@ -377,8 +377,8 @@ async function onPublishSubmit(event) {
     publishButton.textContent = 'Publishing...';
     
     try {
-        // We still use 'brokerId' in the JSON payload to preserve backend API compatibility
-        const requestBody = { topic, payload, format, qos, retain, brokerId: providerId };
+        // We still use 'sourceId' in the JSON payload to preserve backend API compatibility
+        const requestBody = { topic, payload, format, qos, retain, sourceId: providerId };
 
         const response = await fetch('api/publish/message', {
             method: 'POST',

@@ -87,7 +87,7 @@ function exportHistoryToJSON() {
     const selectedProviderId = providerFilterSelect ? providerFilterSelect.value : 'all';
 
     const entriesToExport = allHistoryEntries.filter(entry => {
-        if (selectedProviderId !== 'all' && entry.brokerId !== selectedProviderId) return false;
+        if (selectedProviderId !== 'all' && entry.sourceId !== selectedProviderId) return false;
         if (entry.timestampMs < currentMinTimestamp || entry.timestampMs > currentMaxTimestamp) return false;
         
         if (searchActive) {
@@ -105,7 +105,7 @@ function exportHistoryToJSON() {
 
     const sanitizedEntries = entriesToExport.map(entry => ({
         timestamp: entry.timestamp,
-        brokerId: entry.brokerId, // Keep 'brokerId' key for JSON backward compatibility
+        sourceId: entry.sourceId, // Keep 'sourceId' key for JSON backward compatibility
         topic: entry.topic,
         payload: entry.payload
     }));
@@ -136,7 +136,7 @@ function exportHistoryToCSV() {
     const selectedProviderId = providerFilterSelect ? providerFilterSelect.value : 'all';
 
     const entriesToExport = allHistoryEntries.filter(entry => {
-        if (selectedProviderId !== 'all' && entry.brokerId !== selectedProviderId) return false;
+        if (selectedProviderId !== 'all' && entry.sourceId !== selectedProviderId) return false;
         if (entry.timestampMs < currentMinTimestamp || entry.timestampMs > currentMaxTimestamp) return false;
         
         if (searchActive) {
@@ -157,7 +157,7 @@ function exportHistoryToCSV() {
     
     entriesToExport.forEach(entry => {
         const ts = new Date(entry.timestamp).toISOString();
-        const provider = `"${entry.brokerId.replace(/"/g, '""')}"`;
+        const provider = `"${entry.sourceId.replace(/"/g, '""')}"`;
         const topic = `"${entry.topic.replace(/"/g, '""')}"`;
         const payload = `"${entry.payload.replace(/"/g, '""')}"`;
         csvContent += `${ts},${provider},${topic},${payload}\r\n`;
@@ -185,7 +185,7 @@ export function renderFilteredHistory() {
     const selectedProviderId = providerFilterSelect ? providerFilterSelect.value : 'all';
 
     const filteredEntries = allHistoryEntries.filter(entry => {
-        if (selectedProviderId !== 'all' && entry.brokerId !== selectedProviderId) return false;
+        if (selectedProviderId !== 'all' && entry.sourceId !== selectedProviderId) return false;
         if (entry.timestampMs < currentMinTimestamp || entry.timestampMs > currentMaxTimestamp) return false;
         
         if (searchActive) {
@@ -278,11 +278,11 @@ const onTopicStateChange = (topic) => {
     }
 };
 
-const onBrokerStateChange = (brokerId) => {
-    if (brokerId && providerFilterSelect) {
-        const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === brokerId);
+const onBrokerStateChange = (sourceId) => {
+    if (sourceId && providerFilterSelect) {
+        const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === sourceId);
         if (exists) {
-            providerFilterSelect.value = brokerId;
+            providerFilterSelect.value = sourceId;
             visibleCount = 1000;
             renderFilteredHistory();
         }
@@ -554,7 +554,7 @@ function addHistoryEntry(entry, searchTerm = null) {
     topicSpan.className = 'log-entry-topic';
     
     // UI Label logic
-    const providerPrefix = isMultiProvider ? `[${entry.brokerId}] ` : '';
+    const providerPrefix = isMultiProvider ? `[${entry.sourceId}] ` : '';
     topicSpan.innerHTML = highlightText(providerPrefix + entry.topic, searchTerm); 
 
     const timeSpan = document.createElement('span');

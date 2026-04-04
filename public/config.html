@@ -252,7 +252,7 @@
                                 <div class="wiz-form-group"><label>Host</label><input type="text" name="PG_HOST" placeholder="localhost"></div>
                                 <div class="wiz-form-group"><label>Port</label><input type="number" name="PG_PORT" placeholder="5432"></div>
                                 <div class="wiz-form-group"><label>Database</label><input type="text" name="PG_DATABASE" placeholder="korelate"></div>
-                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="PG_TABLE_NAME" placeholder="mqtt_events"></div>
+                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="PG_TABLE_NAME" placeholder="korelate_events"></div>
                                 <div class="wiz-form-group"><label>User</label><input type="text" name="PG_USER" placeholder="postgres"></div>
                                 <div class="wiz-form-group"><label>Password</label><input type="password" name="PG_PASSWORD"></div>
                             </div>
@@ -311,7 +311,7 @@
                             <div class="wiz-grid-2">
                                 <div class="wiz-form-group"><label>Project ID</label><input type="text" name="BQ_PROJECT_ID" placeholder="my-gcp-project"></div>
                                 <div class="wiz-form-group"><label>Dataset ID</label><input type="text" name="BQ_DATASET_ID" placeholder="korelate"></div>
-                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="BQ_TABLE_NAME" placeholder="mqtt_events"></div>
+                                <div class="wiz-form-group"><label>Table Name</label><input type="text" name="BQ_TABLE_NAME" placeholder="korelate_events"></div>
                                 <div class="wiz-form-group"><label>Location</label><input type="text" name="BQ_LOCATION" placeholder="US"></div>
                             </div>
                             <div class="wiz-form-group">
@@ -397,7 +397,7 @@
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_READ" name="LLM_TOOL_ENABLE_READ"> Read DB & History</label>
                         <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_SEMANTIC" name="LLM_TOOL_ENABLE_SEMANTIC"> Semantic Analysis</label>
-                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_PUBLISH" name="LLM_TOOL_ENABLE_PUBLISH"> Publish to Brokers</label>
+                        <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_PUBLISH" name="LLM_TOOL_ENABLE_PUBLISH"> Publish to Connectors</label>
                         <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_FILES" name="LLM_TOOL_ENABLE_FILES"> Create HMI/Read Files</label>
                         <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_MAPPER" name="LLM_TOOL_ENABLE_MAPPER"> Deploy ETL Rules</label>
                         <label class="wiz-form-checkbox"><input type="checkbox" id="wiz-LLM_TOOL_ENABLE_SIMULATOR" name="LLM_TOOL_ENABLE_SIMULATOR"> Control Simulators</label>

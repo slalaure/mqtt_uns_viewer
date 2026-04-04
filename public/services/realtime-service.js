@@ -73,7 +73,7 @@ class RealtimeService {
      * @param {Object} message 
      */
     handleMessage(message) {
-        if (message.type === 'mqtt-message') {
+        if (message.type === 'korelate-event') {
             this.enqueueRealtimeMessage(message);
         } else {
             if (this.callbacks.onOtherMessage) {
@@ -116,12 +116,12 @@ class RealtimeService {
         // Reverse batch to make it Newest -> Oldest for history unshift-like behavior
         for (let i = batch.length - 1; i >= 0; i--) {
             const msg = batch[i];
-            const topicKey = `${msg.brokerId}|${msg.topic}`;
+            const topicKey = `${msg.sourceId}|${msg.topic}`;
 
             if (!uniqueTopics.has(topicKey)) {
                 uniqueTopics.set(topicKey, msg);
                 if (this.callbacks.onTopicUpdate) {
-                    this.callbacks.onTopicUpdate(msg.brokerId, msg.topic, msg.payload);
+                    this.callbacks.onTopicUpdate(msg.sourceId, msg.topic, msg.payload);
                 }
             }
             historyEntries.push(msg);

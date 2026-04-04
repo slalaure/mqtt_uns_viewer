@@ -29,7 +29,7 @@ const activeStreams = new Map();
 // Helper for Exponential Backoff delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine) => {
+module.exports = (db, logger, config, getConnectorConnection, simulatorManager, wsManager, mapperEngine) => {
     const router = express.Router();
     const ROOT_PATH = path.join(__dirname, '..', '..');
     const DATA_PATH = path.join(ROOT_PATH, 'data');
@@ -59,7 +59,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
     // --- Initialize Centralized AI Tools ---
     const aiToolsInstance = new AiTools({
-        db, logger, config, getBrokerConnection, simulatorManager, wsManager, mapperEngine, dataManager, alertManager, aiActionManager, ROOT_PATH, DATA_PATH, SESSIONS_DIR, MODEL_MANIFEST_PATH
+        db, logger, config, getConnectorConnection, simulatorManager, wsManager, mapperEngine, dataManager, alertManager, aiActionManager, ROOT_PATH, DATA_PATH, SESSIONS_DIR, MODEL_MANIFEST_PATH
     });
     
     const toolImplementations = aiToolsInstance.getImplementations();
@@ -246,7 +246,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
     // Executes the agent loop autonomously (no HTTP res needed)
     // Returns Promise<String> with the final response
     const runInternalAgent = async (systemPrompt, userPrompt, correlationId = null) => {
-        const allProviders = config.DATA_PROVIDERS || [];        const brokerContext = allProviders.map(b => {
+        const allProviders = config.DATA_PROVIDERS || [];        const connectorContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
             return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
@@ -256,7 +256,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
         const systemPromptText = llmEngine.generateChatSystemPrompt(
             toolsManifest.system_prompt_template,
-            brokerContext,
+            connectorContext,
             toolsContext
         ) + `\n\nSYSTEM INSTRUCTION: ${systemPrompt}`;
 
@@ -328,7 +328,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
         sendChunk(res, 'status', 'Processing request...', clientId);
 
         // --- SECURITY: Build Broker Context ---
-        const allProviders = config.DATA_PROVIDERS || [];        const brokerContext = allProviders.map(b => {
+        const allProviders = config.DATA_PROVIDERS || [];        const connectorContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
             return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
@@ -339,7 +339,7 @@ module.exports = (db, logger, config, getBrokerConnection, simulatorManager, wsM
 
         const systemPromptText = llmEngine.generateChatSystemPrompt(
             toolsManifest.system_prompt_template,
-            brokerContext,
+            connectorContext,
             toolsContext
         );
 

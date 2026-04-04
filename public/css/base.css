@@ -160,12 +160,12 @@ body.dark-mode .app-logo {
     font-weight: 500; 
 }
 /* Broker Status Container */
-.broker-status-container {
+.connector-status-container {
     display: flex;
     gap: 12px;
     align-items: center;
 }
-.broker-status-item {
+.connector-status-item {
     display: flex;
     align-items: center;
     gap: 6px;

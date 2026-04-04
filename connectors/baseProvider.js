@@ -10,7 +10,7 @@
  * @typedef {Object} ProviderContext
  * @property {Object} logger Logger instance.
  * @property {Function} handleMessage Central message handler function.
- * @property {Function} [updateBrokerStatus] Callback to update status in UI.
+ * @property {Function} [updateConnectorStatus] Callback to update status in UI.
  * @property {Object} [dataManager] Data manager instance.
  */
 
@@ -77,7 +77,7 @@ class BaseProvider {
      */
     handleIncomingMessage(topic, payload, options = {}) {
         if (this.context.handleMessage) {
-            this.context.handleMessage(this.id, topic, payload, options);
+            this.context.handleMessage(this.id, topic, payload, { ...options, connectorType: this.type });
         } else {
             this.logger.warn(`Message dropped: Central handler not bound for ${this.id}`);
         }
@@ -89,8 +89,8 @@ class BaseProvider {
      * @param {string} [error] - Error message if applicable
      */
     updateStatus(status, error = null) {
-        if (this.context.updateBrokerStatus) {
-            this.context.updateBrokerStatus(this.id, status, error);
+        if (this.context.updateConnectorStatus) {
+            this.context.updateConnectorStatus(this.id, status, error);
         }
     }
 }

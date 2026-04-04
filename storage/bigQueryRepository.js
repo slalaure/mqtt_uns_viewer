@@ -27,7 +27,7 @@ class BigQueryRepository extends BaseRepository {
         super({}, {}, 'BigQueryRepo');
         this.bigquery = null;
         this.datasetId = 'korelate';
-        this.tableName = 'mqtt_events';
+        this.tableName = 'korelate_events';
         this.isConnected = false;
         this.isConnecting = false;
         this.dlqManager = null;
@@ -42,7 +42,7 @@ class BigQueryRepository extends BaseRepository {
         this.dlqManager = appDlqManager;
         
         this.datasetId = this.config.BQ_DATASET_ID || 'korelate';
-        this.tableName = this.config.BQ_TABLE_NAME || 'mqtt_events';
+        this.tableName = this.config.BQ_TABLE_NAME || 'korelate_events';
         this.batchSize = this.config.BQ_INSERT_BATCH_SIZE || 1000;
         this.batchIntervalMs = this.config.BQ_BATCH_INTERVAL_MS || 5000;
 
@@ -104,7 +104,7 @@ class BigQueryRepository extends BaseRepository {
                     { name: 'timestamp', type: 'TIMESTAMP', mode: 'REQUIRED' },
                     { name: 'topic', type: 'STRING', mode: 'REQUIRED' },
                     { name: 'payload', type: 'STRING', mode: 'NULLABLE' }, 
-                    { name: 'broker_id', type: 'STRING', mode: 'NULLABLE' },
+                    { name: 'source_id', type: 'STRING', mode: 'NULLABLE' },
                     { name: 'correlation_id', type: 'STRING', mode: 'NULLABLE' }
                 ];
 
@@ -195,8 +195,8 @@ class BigQueryRepository extends BaseRepository {
             timestamp: new Date(msg.timestamp).toISOString(),
             topic: msg.topic,
             payload: msg.payloadStringForDb,
-            broker_id: msg.brokerId,
-            correlation_id: msg.correlationId || null
+            source_id: msg.sourceId,
+            correlation_id: msg.correlationId || null, connector_type: msg.connectorType || "mqtt"
         }));
 
         try {

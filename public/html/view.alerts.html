@@ -141,7 +141,7 @@ const currentVal = msg.payload.value;
 // SQL to get avg from history (DuckDB syntax)
 const sql = `
     SELECT AVG(CAST(payload->>'value' AS DOUBLE)) as avg_val 
-    FROM mqtt_events 
+    FROM korelate_events 
     WHERE topic = '${msg.topic}' 
     ORDER BY timestamp DESC LIMIT 10
 `;

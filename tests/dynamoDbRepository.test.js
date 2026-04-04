@@ -70,7 +70,7 @@ describe('DynamoDbRepository', () => {
         // Create 60 messages
         for (let i = 0; i < 60; i++) {
             dynamoDbRepo.push({
-                brokerId: 'aws_iot',
+                sourceId: 'aws_iot',
                 topic: 'sensor/data',
                 payloadStringForDb: JSON.stringify({ id: i }),
                 timestamp: new Date(),
@@ -108,7 +108,7 @@ describe('DynamoDbRepository', () => {
         // Push 10 items
         for (let i = 0; i < 10; i++) {
             dynamoDbRepo.push({
-                brokerId: 'aws_iot',
+                sourceId: 'aws_iot',
                 topic: 'sensor/data',
                 payloadStringForDb: '{}',
                 timestamp: new Date()

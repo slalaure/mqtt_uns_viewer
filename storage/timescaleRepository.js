@@ -123,7 +123,7 @@ class TimescaleRepository extends BaseRepository {
      * Creates the target table and hypertables if they don't exist.
      */
     async createTableIfNotExists(client) {
-        const tableName = this.config.PG_TABLE_NAME || 'mqtt_events';
+        const tableName = this.config.PG_TABLE_NAME || 'korelate_events';
         
         // 1. Create standard table
         const createTableQuery = `
@@ -131,19 +131,26 @@ class TimescaleRepository extends BaseRepository {
                 timestamp TIMESTAMPTZ NOT NULL,
                 topic     VARCHAR NOT NULL,
                 payload   JSONB,
-                broker_id VARCHAR,
-                correlation_id VARCHAR
+                source_id VARCHAR,
+                correlation_id VARCHAR,
+                connector_type VARCHAR
             );
         `;
         
-        // 2. Create TimescaleDB hypertable (this will fail gracefully if not Timescale)
+        // 2. Add connector_type column if it doesn't exist (Migration)
+        const alterTableQuery = `
+            ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS connector_type VARCHAR;
+        `;
+
+        // 3. Create TimescaleDB hypertable (this will fail gracefully if not Timescale)
         const createHypertableQuery = `
             SELECT create_hypertable('${tableName}', 'timestamp', if_not_exists => TRUE);
         `;
 
         try {
             await client.query(createTableQuery);
-            this.logger.info(`✅    -> Table '${tableName}' verified (schema includes broker_id).`);
+            await client.query(alterTableQuery);
+            this.logger.info(`✅    -> Table '${tableName}' verified (schema includes source_id, connector_type).`);
             
             try {
                 await client.query(createHypertableQuery);
@@ -167,7 +174,7 @@ class TimescaleRepository extends BaseRepository {
      */
     async getSchema() {
         if (!this.isConnected) await this.connect();
-        const tableName = this.config.PG_TABLE_NAME || 'mqtt_events';
+        const tableName = this.config.PG_TABLE_NAME || 'korelate_events';
         
         const query = `
             SELECT column_name, data_type 
@@ -229,13 +236,14 @@ class TimescaleRepository extends BaseRepository {
         let paramIndex = 1;
         
         const placeholders = batch.map(msg => {
-            values.push(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.brokerId, msg.correlationId || null);
-            const p = `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`;
-            paramIndex += 5;
+            const connType = msg.connectorType || 'mqtt';
+            values.push(msg.timestamp, msg.topic, msg.payloadStringForDb, msg.sourceId, msg.correlationId || null, connType);
+            const p = `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5})`;
+            paramIndex += 6;
             return p;
         }).join(',');
 
-        const query = `INSERT INTO ${tableName} (timestamp, topic, payload, broker_id, correlation_id) VALUES ${placeholders}`;
+        const query = `INSERT INTO ${tableName} (timestamp, topic, payload, source_id, correlation_id, connector_type) VALUES ${placeholders}`;
         return { query, values };
     }
 
@@ -256,7 +264,7 @@ class TimescaleRepository extends BaseRepository {
             return;
         }
 
-        const tableName = this.config.PG_TABLE_NAME || 'mqtt_events';
+        const tableName = this.config.PG_TABLE_NAME || 'korelate_events';
         const { query, values } = this.formatBatchForInsert(batch, tableName);
 
         try {

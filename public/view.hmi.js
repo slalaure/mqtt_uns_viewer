@@ -405,7 +405,7 @@ async function initEmbeddedCharts() {
                 borderColor: '#3391ff',
                 fill: false,
                 tension: 0.1,
-                _brokerId: v.brokerId || 'default_broker',
+                _sourceId: v.sourceId || 'default_connector',
                 _topic: v.topic,
                 _path: v.path
             }));
@@ -607,15 +607,15 @@ function flushUpdateQueue() {
         if (!root) return;
         
         updateQueue.forEach((data, key) => {
-            const { brokerId, topic, payloadObject, isJson } = data;
+            const { sourceId, topic, payloadObject, isJson } = data;
             
             activeBindings.forEach(binding => {
-                try { binding.update(brokerId, topic, payloadObject, root, currentHmiContext); } 
+                try { binding.update(sourceId, topic, payloadObject, root, currentHmiContext); } 
                 catch (err) { console.error(`[HMI Script Error] Topic ${topic}:`, err); }
             });
             
             if (isJson) {
-                const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
+                const specificId = isMultiBroker ? `${sourceId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');
                 const idsToTry = [specificId, genericId];
                 
@@ -644,7 +644,7 @@ function flushUpdateQueue() {
         embeddedChartInstances.forEach((chartInst, chartId) => {
             let updated = false;
             chartInst.data.datasets.forEach(ds => {
-                const queueKey = `${ds._brokerId}:${ds._topic}`;
+                const queueKey = `${ds._sourceId}:${ds._topic}`;
                 if (updateQueue.has(queueKey)) {
                     const data = updateQueue.get(queueKey);
                     const val = getNestedValue(data.payloadObject, ds._path);
@@ -666,13 +666,13 @@ function flushUpdateQueue() {
     }
 }
 
-export function updateMap(brokerId, topic, payload) {
+export function updateMap(sourceId, topic, payload) {
     if (hmiHistoryToggle?.checked || !hmiContent) return;
     let payloadObject;
     let isJson = false;
     try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
     
-    updateQueue.set(`${brokerId}:${topic}`, { brokerId, topic, payloadObject, isJson });
+    updateQueue.set(`${sourceId}:${topic}`, { sourceId, topic, payloadObject, isJson });
     if (!animationFrameRequested) {
         animationFrameRequested = true;
         requestAnimationFrame(flushUpdateQueue);
@@ -727,17 +727,17 @@ async function fetchLastKnownState(timestamp) {
         const stateData = await response.json(); 
         
         stateData.forEach(entry => {
-            const { broker_id: brokerId, topic, payload } = entry;
+            const { source_id: sourceId, topic, payload } = entry;
             let payloadObject;
             let isJson = false;
             try { payloadObject = JSON.parse(payload); isJson = true; } catch (e) { payloadObject = payload; }
             
             activeBindings.forEach(binding => {
-                try { binding.update(brokerId, topic, payloadObject, hmiContent, currentHmiContext); } catch (err) {}
+                try { binding.update(sourceId, topic, payloadObject, hmiContent, currentHmiContext); } catch (err) {}
             });
 
             if (isJson) {
-                const specificId = isMultiBroker ? `${brokerId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
+                const specificId = isMultiBroker ? `${sourceId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');         
                 try {
                     hmiContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`).forEach(groupElement => {

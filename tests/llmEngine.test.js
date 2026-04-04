@@ -57,15 +57,15 @@ describe('LLM Engine', () => {
         });
 
         test('generateChatSystemPrompt should correctly replace context placeholders', () => {
-            const template = "You are an AI. CONTEXT:\n{{BROKER_CONTEXT}}\nTOOLS:\n{{TOOLS_CONTEXT}}";
-            const brokerContext = "- Broker 'local': READ-ONLY";
+            const template = "You are an AI. CONTEXT:\n{{CONNECTOR_CONTEXT}}\nTOOLS:\n{{TOOLS_CONTEXT}}";
+            const connectorContext = "- Broker 'local': READ-ONLY";
             const toolsContext = "- **test_tool**: Does a test";
 
-            const prompt = llmEngine.generateChatSystemPrompt(template, brokerContext, toolsContext);
+            const prompt = llmEngine.generateChatSystemPrompt(template, connectorContext, toolsContext);
 
             expect(prompt).toContain("- Broker 'local': READ-ONLY");
             expect(prompt).toContain("- **test_tool**: Does a test");
-            expect(prompt).not.toContain('{{BROKER_CONTEXT}}');
+            expect(prompt).not.toContain('{{CONNECTOR_CONTEXT}}');
         });
     });
 

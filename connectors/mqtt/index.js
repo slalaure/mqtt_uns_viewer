@@ -159,7 +159,8 @@ class MqttProvider extends BaseProvider {
                         isSparkplugOrigin,
                         rawBuffer: payload,
                         decodeError,
-                        correlationId
+                        correlationId,
+                        connectorType: this.type
                     });
                 } else {
                     this.logger.warn(`Message dropped: Central handler not bound for ${this.id}`);

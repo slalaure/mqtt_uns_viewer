@@ -166,7 +166,7 @@ DB_BATCH_INTERVAL_MS=2000    # Flush interval for DB writes.
 PERENNIAL_DRIVER=timescale   # Enable long-term storage (Options: 'none', 'timescale')
 PG_HOST=192.168.1.50         # Postgres connection details
 PG_DATABASE=korelate
-PG_TABLE_NAME=mqtt_events
+PG_TABLE_NAME=korelate_events
 ```
 
 #### Authentication & Security
@@ -317,7 +317,7 @@ Accessible via the Cog icon (`/config.html`) or the Admin Tab.
  ┃ ┣ 📄 charts.json        # Global Saved Charts
  ┃ ┣ 📄 mappings.json      # Global ETL Rules
  ┃ ┣ 📄 uns_model.json     # Semantic Model Definition
- ┃ ┗ 📄 mqtt_events.duckdb # Hot DB
+ ┃ ┗ 📄 korelate_events.duckdb # Hot DB
  ┣ 📂 connectors/          # Southbound DB Adapters (MQTT, OPC UA, File)
  ┣ 📂 storage/             # Database Repositories (DuckDB, Timescale, User)
  ┣ 📂 core/                # Agnostic Processing Core
@@ -344,7 +344,7 @@ window.registerHmiBindings({
     initialize: (hmiRoot) => { console.log("View Loaded"); },
     
     // Called on EVERY incoming MQTT message
-    update: (brokerId, topic, payload, hmiRoot) => {
+    update: (sourceId, topic, payload, hmiRoot) => {
         // Safe Parse
         const msg = (typeof payload === 'string') ? JSON.parse(payload) : payload;
         
@@ -395,7 +395,7 @@ return [msgAnalyse, msgComp];
 // Calculate average of last 10 readings before publishing
 const history = await db.all(`
     SELECT CAST(payload->>'value' AS FLOAT) as val 
-    FROM mqtt_events 
+    FROM korelate_events 
     WHERE topic = '${msg.topic}' 
     ORDER BY timestamp DESC LIMIT 10
 `);

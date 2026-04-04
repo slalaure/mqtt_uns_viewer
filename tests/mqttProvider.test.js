@@ -56,7 +56,7 @@ describe('MqttProvider', () => {
         mockContext = {
             logger: createMockLogger(),
             handleMessage: jest.fn(),
-            updateBrokerStatus: jest.fn(),
+            updateConnectorStatus: jest.fn(),
             CERTS_PATH: '/mock/certs/path',
             config: {
                 IS_SPARKPLUG_ENABLED: true
@@ -95,7 +95,7 @@ describe('MqttProvider', () => {
         expect(provider.connected).toBe(true);
         expect(mqtt.connect).toHaveBeenCalled();
         expect(client.subscribe).toHaveBeenCalledWith(['factory/#'], { qos: 1 }, expect.any(Function));
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('main_mqtt', 'connected');
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('main_mqtt', 'connected');
     });
 
     test('should process standard MQTT messages and forward to central handler', async () => {
@@ -209,6 +209,6 @@ describe('MqttProvider', () => {
 
         expect(result).toBe(false);
         expect(provider.logger.error).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('Could not read MTLS'));
-        expect(mockContext.updateBrokerStatus).toHaveBeenCalledWith('main_mqtt', 'error', 'MTLS Certs missing');
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('main_mqtt', 'error', 'MTLS Certs missing');
     });
 });

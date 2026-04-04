@@ -101,13 +101,13 @@ describe('MapperEngine', () => {
 
     test('processMessage should execute JS code in sandbox and call publish', async () => {
         const mockPublish = jest.fn();
-        mockConnections.set('default_broker', {
+        mockConnections.set('default_connector', {
             connected: true,
             publish: mockPublish
         });
 
         // Trigger the mapper with a payload of { val: 21 }
-        await engine.processMessage('default_broker', 'test/source', { val: 21 }, false);
+        await engine.processMessage('default_connector', 'test/source', { val: 21 }, false);
 
         // Target 1 should have multiplied the value by 2 (21 * 2 = 42)
         expect(mockPublish).toHaveBeenCalledWith(
@@ -139,7 +139,7 @@ describe('MapperEngine', () => {
         fs.readFileSync.mockReturnValue(JSON.stringify(badConfig));
         engine = mapperEngineFactory(mockConnections, mockBroadcaster, mockLogger, mockReplacer, {}, mockSandboxPool);
 
-        await engine.processMessage('default_broker', 'test/error', { val: 1 }, false);
+        await engine.processMessage('default_connector', 'test/error', { val: 1 }, false);
 
         const metrics = engine.getMetrics();
         const logs = metrics['test/error::err_target'].logs;

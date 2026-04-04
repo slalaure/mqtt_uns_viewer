@@ -32,7 +32,7 @@ class DynamoDbRepository extends BaseRepository {
         this.isConnected = false;
         this.isConnecting = false;
         this.dlqManager = null;
-        this.tableName = 'mqtt_events';
+        this.tableName = 'korelate_events';
     }
 
     /**
@@ -43,7 +43,7 @@ class DynamoDbRepository extends BaseRepository {
         this.config = appConfig;
         this.dlqManager = appDlqManager;
         
-        this.tableName = this.config.DYNAMODB_TABLE_NAME || 'mqtt_events';
+        this.tableName = this.config.DYNAMODB_TABLE_NAME || 'korelate_events';
         this.batchSize = this.config.DYNAMODB_INSERT_BATCH_SIZE || 1000;
         this.batchIntervalMs = this.config.DYNAMODB_BATCH_INTERVAL_MS || 5000;
 
@@ -127,7 +127,7 @@ class DynamoDbRepository extends BaseRepository {
                 engine: 'AWS DynamoDB',
                 tableName: this.tableName,
                 dialect: 'PartiQL',
-                notes: `DynamoDB is a NoSQL store. Use PartiQL syntax (e.g., SELECT * FROM "${this.tableName}" WHERE "partition_key" = '...'). The schema is flexible, but expected attributes are: partition_key (S), sort_key (S), topic (S), payload (S), broker_id (S), timestamp_val (S).`,
+                notes: `DynamoDB is a NoSQL store. Use PartiQL syntax (e.g., SELECT * FROM "${this.tableName}" WHERE "partition_key" = '...'). The schema is flexible, but expected attributes are: partition_key (S), sort_key (S), topic (S), payload (S), source_id (S), timestamp_val (S).`,
                 keySchema: response.Table.KeySchema,
                 attributeDefinitions: response.Table.AttributeDefinitions
             };
@@ -195,11 +195,11 @@ class DynamoDbRepository extends BaseRepository {
                 const uniqueId = msg.correlationId || crypto.randomUUID();
 
                 const item = {
-                    partition_key: { S: `${msg.brokerId}#${isoDate}` },
+                    partition_key: { S: `${msg.sourceId}#${isoDate}` },
                     sort_key: { S: `${isoTimestamp}#${uniqueId}` },
                     topic: { S: msg.topic },
                     payload: { S: msg.payloadStringForDb },
-                    broker_id: { S: msg.brokerId },
+                    source_id: { S: msg.sourceId },
                     timestamp_val: { S: isoTimestamp }
                 };
 

@@ -184,7 +184,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
             let count = 0;
             for (const entry of entries) {
                 const message = {
-                    brokerId: entry.brokerId || entry.broker_id || 'default_broker',
+                    sourceId: entry.sourceId || entry.source_id || 'default_connector',
                     timestamp: new Date(entry.timestamp || entry.timestampMs || Date.now()),
                     topic: entry.topic,
                     payloadStringForDb: typeof entry.payload === 'string' ? entry.payload : JSON.stringify(entry.payload),
@@ -213,7 +213,7 @@ module.exports = (logger, db, dataManager, dataPath) => {
         logger.warn(`⚠️ [AdminAPI] Admin ${req.user.username} initiated full DB RESET.`);
 
         db.serialize(() => {
-            db.run("DELETE FROM mqtt_events;", (err) => {
+            db.run("DELETE FROM korelate_events;", (err) => {
                 if (err) {
                     return next(err);
                 }
