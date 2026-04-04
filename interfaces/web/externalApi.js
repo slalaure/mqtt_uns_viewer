@@ -44,11 +44,13 @@ module.exports = (getMainConnection, logger, db, longReplacer) => {
             return res.status(401).json({ error: "Unauthorized: Missing API key." });
         }
 
-        db.get("SELECT * FROM api_keys WHERE api_key = ?", [providedKey], (err, row) => {
+        db.all("SELECT * FROM api_keys WHERE api_key = ?", providedKey, (err, rows) => {
             if (err) {
                 logger.error({ err }, `[API_KEY_AUTH] Database error checking key from ${req.ip}`);
                 return res.status(500).json({ error: "Internal Server Error" });
             }
+
+            const row = rows && rows.length > 0 ? rows[0] : null;
 
             if (!row) {
                 logger.warn(`[API_KEY_AUTH] Failed auth from ${req.ip}: Invalid API key.`);
@@ -56,7 +58,7 @@ module.exports = (getMainConnection, logger, db, longReplacer) => {
             }
 
             // Update last_used_at async
-            db.run("UPDATE api_keys SET last_used_at = current_timestamp WHERE id = ?", [row.id], (updErr) => {
+            db.run("UPDATE api_keys SET last_used_at = current_timestamp WHERE id = ?", row.id, (updErr) => {
                 if (updErr) logger.warn({ err: updErr }, "Failed to update last_used_at for API key");
             });
 

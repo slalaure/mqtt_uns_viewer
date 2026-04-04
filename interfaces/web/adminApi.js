@@ -469,9 +469,15 @@ module.exports = (logger, db, dataManager, dataPath) => {
 
     // --- API Key Management ---
     router.get("/api_keys", (req, res, next) => {
-        db.all("SELECT id, name, scopes, created_at, last_used_at FROM api_keys", (err, rows) => {
+        db.all("SELECT id, api_key, name, scopes, created_at, last_used_at FROM api_keys", (err, rows) => {
             if (err) return next(err);
-            res.json(rows);
+            // Mask the keys for preview
+            const maskedRows = rows.map(r => {
+                const preview = r.api_key.substring(0, 8) + "***";
+                const { api_key, ...rest } = r;
+                return { ...rest, api_key_preview: preview };
+            });
+            res.json(maskedRows);
         });
     });
 
@@ -482,14 +488,14 @@ module.exports = (logger, db, dataManager, dataPath) => {
         const rawKey = "krl_" + crypto.randomBytes(32).toString("hex");
         const id = "key_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex");
         const scopesJson = JSON.stringify(scopes || []);
-        db.run("INSERT INTO api_keys (id, api_key, name, scopes) VALUES (?, ?, ?, ?)", [id, rawKey, name, scopesJson], (err) => {
+        db.run("INSERT INTO api_keys (id, api_key, name, scopes) VALUES (?, ?, ?, ?)", id, rawKey, name, scopesJson, (err) => {
             if (err) return next(err);
             res.json({ success: true, api_key: rawKey, message: "Save this key now! It will never be shown again." });
         });
     });
 
     router.delete("/api_keys/:id", (req, res, next) => {
-        db.run("DELETE FROM api_keys WHERE id = ?", [req.params.id], function(err) {
+        db.run("DELETE FROM api_keys WHERE id = ?", req.params.id, function(err) {
             if (err) return next(err);
             res.json({ success: true });
         });
