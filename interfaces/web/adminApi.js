@@ -467,5 +467,32 @@ module.exports = (logger, db, dataManager, dataPath) => {
         });
     });
 
+    // --- API Key Management ---
+    router.get("/api_keys", (req, res, next) => {
+        db.all("SELECT id, name, scopes, created_at, last_used_at FROM api_keys", (err, rows) => {
+            if (err) return next(err);
+            res.json(rows);
+        });
+    });
+
+    router.post("/api_keys", (req, res, next) => {
+        const { name, scopes } = req.body;
+        if (!name) return res.status(400).json({ error: "Name is required" });
+        const crypto = require("crypto");
+        const rawKey = "krl_" + crypto.randomBytes(32).toString("hex");
+        const id = "key_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex");
+        const scopesJson = JSON.stringify(scopes || []);
+        db.run("INSERT INTO api_keys (id, api_key, name, scopes) VALUES (?, ?, ?, ?)", [id, rawKey, name, scopesJson], (err) => {
+            if (err) return next(err);
+            res.json({ success: true, api_key: rawKey, message: "Save this key now! It will never be shown again." });
+        });
+    });
+
+    router.delete("/api_keys/:id", (req, res, next) => {
+        db.run("DELETE FROM api_keys WHERE id = ?", [req.params.id], function(err) {
+            if (err) return next(err);
+            res.json({ success: true });
+        });
+    });
     return router;
 };

@@ -55,6 +55,14 @@ async function initDatabase(logger, config, paths, wsManager) {
                     value JSON,
                     updated_at TIMESTAMPTZ DEFAULT current_timestamp
                 );
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    id VARCHAR PRIMARY KEY,
+                    api_key VARCHAR UNIQUE,
+                    name VARCHAR,
+                    scopes VARCHAR,
+                    created_at TIMESTAMPTZ DEFAULT current_timestamp,
+                    last_used_at TIMESTAMPTZ
+                );
             `, (createErr) => {
                 if (createErr) {
                     logger.error({ err: createErr }, "❌ FATAL: Failed to ensure tables exist.");

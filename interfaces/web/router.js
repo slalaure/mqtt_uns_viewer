@@ -43,7 +43,7 @@ function createRouter(deps) {
         ENV_PATH,
         ENV_EXAMPLE_PATH,
         CHART_CONFIG_PATH,
-        apiKeysConfig,
+        
         longReplacer,
         auth,
         ANALYTICS_SCRIPT
@@ -300,7 +300,7 @@ function createRouter(deps) {
     });
 
     if (deps.config.EXTERNAL_API_ENABLED) {
-        router.use('/api/external', ipFilterMiddleware, require('./externalApi')(getPrimaryConnection, logger, apiKeysConfig, longReplacer)); 
+        router.use('/api/external', ipFilterMiddleware, require('./externalApi')(getPrimaryConnection, logger, db, longReplacer)); 
     }
 
     if (config.VIEW_CONFIG_ENABLED) {

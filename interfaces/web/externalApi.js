@@ -17,11 +17,11 @@ const mqttMatch = require('mqtt-match');
  * Creates a router for the external publish API.
  * @param {function} getMainConnection - A function that returns the current main MQTT connection.
  * @param {pino.Logger} logger - The main pino logger.
- * @param {object} apiKeysConfig - The loaded configuration from api_keys.json.
+ * @param {object} db - DuckDB connection instance.
  * @param {function} longReplacer - The JSON replacer for BigInt.
  * @returns {express.Router}
  */
-module.exports = (getMainConnection, logger, apiKeysConfig, longReplacer) => {
+module.exports = (getMainConnection, logger, db, longReplacer) => {
     const router = express.Router();
 
     // --- API Key Authentication Middleware ---
@@ -44,21 +44,32 @@ module.exports = (getMainConnection, logger, apiKeysConfig, longReplacer) => {
             return res.status(401).json({ error: "Unauthorized: Missing API key." });
         }
 
-        const foundKey = apiKeysConfig.keys.find(k => k.key === providedKey);
+        db.get("SELECT * FROM api_keys WHERE api_key = ?", [providedKey], (err, row) => {
+            if (err) {
+                logger.error({ err }, `[API_KEY_AUTH] Database error checking key from ${req.ip}`);
+                return res.status(500).json({ error: "Internal Server Error" });
+            }
 
-        if (!foundKey) {
-            logger.warn(`[API_KEY_AUTH] Failed auth from ${req.ip}: Invalid API key.`);
-            return res.status(401).json({ error: "Unauthorized: Invalid API key." });
-        }
+            if (!row) {
+                logger.warn(`[API_KEY_AUTH] Failed auth from ${req.ip}: Invalid API key.`);
+                return res.status(401).json({ error: "Unauthorized: Invalid API key." });
+            }
 
-        if (!foundKey.enabled) {
-            logger.warn(`[API_KEY_AUTH] Failed auth from ${req.ip}: API key '${foundKey.name}' is disabled.`);
-            return res.status(403).json({ error: "Forbidden: This API key is disabled." });
-        }
+            // Update last_used_at async
+            db.run("UPDATE api_keys SET last_used_at = current_timestamp WHERE id = ?", [row.id], (updErr) => {
+                if (updErr) logger.warn({ err: updErr }, "Failed to update last_used_at for API key");
+            });
 
-        // Attach key config to request for use in the endpoint
-        req.apiKeyConfig = foundKey;
-        next();
+            try {
+                row.scopes = JSON.parse(row.scopes);
+            } catch (e) {
+                row.scopes = [];
+            }
+
+            // Attach key config to request for use in the endpoint
+            req.apiKeyConfig = row;
+            next();
+        });
     };
 
 
@@ -85,7 +96,7 @@ module.exports = (getMainConnection, logger, apiKeysConfig, longReplacer) => {
         const retainFlag = retain === true;
 
         // 2. Authorize Topic
-        const allowedTopics = apiKeyConfig.permissions.allow || [];
+        const allowedTopics = apiKeyConfig.scopes || [];
         const isAllowed = allowedTopics.some(pattern => mqttMatch(pattern, topic));
 
         if (!isAllowed) {

@@ -106,15 +106,6 @@ let services = {};
         // 1. Load Configuration
         const config = loadConfig(logger, paths);
 
-        // 2. Load API Keys
-        let apiKeysConfig = { keys: [] };
-        if (config.EXTERNAL_API_ENABLED) {
-            const keysFilePath = path.join(DATA_PATH, config.EXTERNAL_API_KEYS_FILE);
-            if (fs.existsSync(keysFilePath)) {
-                apiKeysConfig = JSON.parse(fs.readFileSync(keysFilePath, 'utf8'));
-            }
-        }
-
         // 3. Setup Express & HTTP
         const app = express();
         const server = http.createServer(app);
@@ -147,7 +138,7 @@ let services = {};
             simulatorManager: services.simulatorManager,
             wsManager: services.wsManager,
             mapperEngine: services.mapperEngine,
-            ENV_PATH, ENV_EXAMPLE_PATH, CHART_CONFIG_PATH, apiKeysConfig,
+            ENV_PATH, ENV_EXAMPLE_PATH, CHART_CONFIG_PATH, 
             longReplacer, auth: require('./interfaces/web/middlewares/auth'),
             ANALYTICS_SCRIPT: '', // Add if needed
             getIsPruning: () => state.isPruning,

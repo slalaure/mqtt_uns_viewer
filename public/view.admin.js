@@ -16,6 +16,9 @@
 import { confirmModal, showToast } from './utils.js';
 
 let usersTableBody = null;
+let apiKeysTableBody = null;
+let apikeyRegisterForm = null;
+let btnApiKeysRefresh = null;
 // --- Elements for Tabs ---
 let subNavButtons = null;
 // --- Elements for DB Maintenance ---
@@ -121,6 +124,9 @@ function initializeElements(container) {
     btnAdminEditorCancel = document.getElementById('btn-admin-editor-cancel');
     btnAdminEditorSave = document.getElementById('btn-admin-editor-save');
     btnAdminEditorDelete = document.getElementById('btn-admin-editor-delete');
+    apiKeysTableBody = document.getElementById("admin-apikeys-table-body");
+    apikeyRegisterForm = document.getElementById("apikey-register-form");
+    btnApiKeysRefresh = document.getElementById("btn-apikeys-refresh");
 
     if (btnAdminRefresh) btnAdminRefresh.className = 'tool-button';
     if (btnImportDb) btnImportDb.className = 'tool-button button-primary';
@@ -144,7 +150,8 @@ const onSubTabClick = (e) => {
     if (targetId === 'admin-alerts-panel') loadResolvedStats();
     if (targetId === 'admin-assets-panel') loadHmiAssets();
     if (targetId === 'admin-simulators-panel') loadSimulators();
-    if (targetId === 'admin-webhooks-panel') loadWebhooks();
+    if (targetId === "admin-webhooks-panel") loadWebhooks();
+    if (targetId === "admin-apikeys-panel") loadApiKeys();
     if (targetId === 'admin-ai-panel') loadAiHistory();
     if (targetId === 'admin-logs-panel') loadSystemLogs();
 };
@@ -166,6 +173,8 @@ export function mountAdminView() {
     if (isMounted || !isViewInitialized) return;
 
     btnAdminRefresh?.addEventListener('click', loadUsers);
+    btnApiKeysRefresh?.addEventListener("click", loadApiKeys);
+    apikeyRegisterForm?.addEventListener("submit", onApiKeySubmit);
     subNavButtons?.forEach(btn => btn.addEventListener('click', onSubTabClick));
     btnAiHistoryRefresh?.addEventListener('click', loadAiHistory);
     btnLogsRefresh?.addEventListener('click', loadSystemLogs);
@@ -191,7 +200,8 @@ export function mountAdminView() {
     else if (activeTab && activeTab.dataset.target === 'admin-db-panel') loadDlqStatus();
     else if (activeTab && activeTab.dataset.target === 'admin-assets-panel') loadHmiAssets();
     else if (activeTab && activeTab.dataset.target === 'admin-simulators-panel') loadSimulators();
-    else if (activeTab && activeTab.dataset.target === 'admin-webhooks-panel') loadWebhooks();
+    else if (activeTab && activeTab.dataset.target === "admin-webhooks-panel") loadWebhooks();
+    else if (activeTab && activeTab.dataset.target === "admin-apikeys-panel") loadApiKeys();
     else if (activeTab && activeTab.dataset.target === 'admin-logs-panel') loadSystemLogs();
     else if (activeTab && activeTab.dataset.target === 'admin-parsers-panel') {} // No immediate fetch needed
     else loadUsers();
@@ -221,6 +231,8 @@ export function unmountAdminView() {
     closeAssetEditor(); // Hide modal
 
     btnAdminRefresh?.removeEventListener('click', loadUsers);
+    btnApiKeysRefresh?.removeEventListener("click", loadApiKeys);
+    apikeyRegisterForm?.removeEventListener("submit", onApiKeySubmit);
     subNavButtons?.forEach(btn => btn.removeEventListener('click', onSubTabClick));
     btnAiHistoryRefresh?.removeEventListener('click', loadAiHistory);
     btnLogsRefresh?.removeEventListener('click', loadSystemLogs);
@@ -1018,5 +1030,107 @@ async function loadSystemLogs() {
     } catch (e) {
         console.error("Logs Load Error:", e);
         logsContent.textContent = `Error: ${e.message}`;
+    }
+}
+
+// ==========================================
+// API KEYS MANAGEMENT
+// ==========================================
+
+function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return unsafe;
+    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+async function loadApiKeys() {
+    if (!apiKeysTableBody) return;
+    try {
+        const response = await fetch('api/admin/api_keys');
+        if (!response.ok) throw new Error('Failed to load API keys');
+        const keys = await response.json();
+        
+        apiKeysTableBody.innerHTML = '';
+        if (keys.length === 0) {
+            apiKeysTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--color-text-secondary);">No API keys generated.</td></tr>';
+            return;
+        }
+
+        keys.forEach(k => {
+            const tr = document.createElement('tr');
+            
+            // Format scopes safely
+            let scopesDisplay = "None";
+            try {
+                const s = typeof k.scopes === 'string' ? JSON.parse(k.scopes) : k.scopes;
+                scopesDisplay = Array.isArray(s) ? s.join(', ') : "None";
+            } catch(e) {}
+
+            tr.innerHTML = \`
+                <td style="padding: 10px;">\${escapeHtml(k.name)}</td>
+                <td style="padding: 10px;"><code>\${escapeHtml(scopesDisplay)}</code></td>
+                <td style="padding: 10px; color: var(--color-text-secondary);">\${new Date(k.created_at).toLocaleString()}</td>
+                <td style="padding: 10px; color: var(--color-text-secondary);">\${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
+                <td style="padding: 10px; text-align: center;">
+                    <button class="tool-button button-danger btn-delete-apikey" data-id="\${k.id}">Revoke</button>
+                </td>
+            \`;
+            apiKeysTableBody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.btn-delete-apikey').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (await confirmModal("Revoke API Key", "Are you sure you want to revoke this API key? Applications using it will immediately lose access.", "Revoke", true)) {
+                    await deleteApiKey(e.target.dataset.id);
+                }
+            });
+        });
+    } catch (error) {
+        apiKeysTableBody.innerHTML = \`<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--color-danger);">\${error.message}</td></tr>\`;
+    }
+}
+
+async function deleteApiKey(id) {
+    try {
+        const response = await fetch(\`api/admin/api_keys/\${id}\`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete API key');
+        showToast('API key revoked successfully.', 'success');
+        loadApiKeys();
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function onApiKeySubmit(e) {
+    e.preventDefault();
+    const name = document.getElementById('apikey-name').value;
+    const scopesInput = document.getElementById('apikey-scopes').value;
+    const scopes = scopesInput.split(',').map(s => s.trim()).filter(s => s);
+
+    try {
+        const response = await fetch('api/admin/api_keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, scopes })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to create API key');
+        }
+
+        const data = await response.json();
+        
+        // Show the generated key
+        await confirmModal(
+            "API Key Generated", 
+            \`Successfully created API key for '\${name}'.\n\nAPI KEY: \${data.api_key}\n\nWARNING: Please copy this key now. It is hashed and will never be shown again.\`,
+            "I have copied the key", false
+        );
+
+        apikeyRegisterForm.reset();
+        document.getElementById('apikey-scopes').value = '#';
+        loadApiKeys();
+    } catch (error) {
+        showToast(error.message, 'error');
     }
 }

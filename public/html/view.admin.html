@@ -5,6 +5,7 @@
     <button class="sub-tab-button" data-target="admin-assets-panel">🖼️ HMI Assets</button>
     <button class="sub-tab-button" data-target="admin-simulators-panel">🕹️ Simulators</button>
     <button class="sub-tab-button" data-target="admin-parsers-panel">📂 Data Parsers</button>
+    <button class="sub-tab-button" data-target="admin-apikeys-panel">🔑 API Keys</button>
     <button class="sub-tab-button" data-target="admin-webhooks-panel">🔗 Webhooks</button>
     <button class="sub-tab-button" data-target="admin-ai-panel">🤖 AI History</button>
     <button class="sub-tab-button" data-target="admin-logs-panel">📜 System Logs</button>
@@ -265,6 +266,49 @@
     </div>
     </div>
 
+<div id="admin-apikeys-panel" class="alerts-content-container">
+    <div class="payload-header" style="margin-bottom: 15px;">
+        <div>
+            <h2 style="margin-bottom: 5px;">API Key Management</h2>
+            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Generate and revoke API keys for external integrations via HTTP.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button id="btn-apikeys-refresh" class="mapper-button">Refresh List</button>
+        </div>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin-top:0;">Generate New API Key</h3>
+        <form id="apikey-register-form" style="display: flex; flex-direction: column; gap: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+                <div class="form-group" style="margin:0;">
+                    <label>Application Name</label>
+                    <input type="text" id="apikey-name" placeholder="e.g. ERP Integration" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Allowed Topics (Scopes - Comma separated)</label>
+                    <input type="text" id="apikey-scopes" placeholder="e.g. commands/#, factory/line1/+" value="#" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+                </div>
+            </div>
+            <button type="submit" class="mapper-button button-primary" style="align-self: flex-start; padding: 10px 20px;">Generate Key</button>
+        </form>
+    </div>
+    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
+                <tr>
+                    <th style="padding: 10px; font-weight: 500;">Application Name</th>
+                    <th style="padding: 10px; font-weight: 500;">Scopes</th>
+                    <th style="padding: 10px; font-weight: 500;">Created At</th>
+                    <th style="padding: 10px; font-weight: 500;">Last Used</th>
+                    <th style="padding: 10px; font-weight: 500; text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="admin-apikeys-table-body">
+                <tr><td colspan="5" style="text-align:center; padding:20px;">Loading API keys...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
     <div id="admin-webhooks-panel" class="alerts-content-container">
     <div class="payload-header" style="margin-bottom: 15px;">
         <div>
