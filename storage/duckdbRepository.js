@@ -156,6 +156,13 @@ class DuckDBRepository extends BaseRepository {
     }
 
     /**
+     * Returns the current size of the write queue.
+     */
+    getQueueSize() {
+        return this.writeQueue.length;
+    }
+
+    /**
      * Closes the DuckDB connection.
      */
     async close(callback) {

@@ -30,6 +30,8 @@ const clients = new Map();
 // Maximum bytes a single WS client can buffer before we start dropping messages
 const MAX_WS_BUFFER_BYTES = 5 * 1024 * 1024; // 5 MB
 
+let droppedMessagesCount = 0;
+
 // Helper to escape single quotes for SQL strings
 const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
@@ -226,6 +228,30 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
     logger.info('✅ WebSocket Manager initialized.');
 }
 
+/**
+ * Returns backpressure metrics (used for tests).
+ */
+function getBackpressureMetrics() {
+    return {
+        droppedMessagesCount,
+        maxBufferBytes: MAX_WS_BUFFER_BYTES
+    };
+}
+
+/**
+ * Resets the dropped messages counter (used for tests).
+ */
+function resetDroppedMessagesCount() {
+    droppedMessagesCount = 0;
+}
+
+/**
+ * Returns the underlying WebSocket server (used for tests).
+ */
+function getWss() {
+    return wss;
+}
+
 // Helper to process row JSON/BigInt
 function processRow(row) {
     if (typeof row.timestamp === 'string') {
@@ -259,6 +285,7 @@ function broadcast(message) {
             if (client.bufferedAmount > MAX_WS_BUFFER_BYTES) {
                 // To avoid log spamming, we do not log every single dropped message.
                 // The client will miss a frame, but the app won't crash.
+                droppedMessagesCount++;
                 return;
             }
             client.send(message);
@@ -301,5 +328,8 @@ module.exports = {
     initWebSocketManager,
     broadcast,
     sendToClient,
+    getBackpressureMetrics,
+    resetDroppedMessagesCount,
+    getWss,
     close
 };

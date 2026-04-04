@@ -25,6 +25,13 @@ import {
 } from "./utils.js";
 import { createPayloadViewer } from "./payload-viewer.js";
 import { createDualTimeSlider } from "./time-slider.js";
+import { 
+    isBooleanLike, 
+    guessGroupKey, 
+    getAxisHue, 
+    buildChartDatasets,
+    PALETTE_HUES 
+} from "./libs/chart-logic.mjs";
 
 // --- DOM Element Querying ---
 const chartVariableList = document.getElementById("chart-variable-list");
@@ -79,17 +86,7 @@ let isMounted = false; // Lifecycle flag
 // Configuration for Chart
 const MAX_POINTS_PER_SERIES = 500;
 
-// --- Semantic Color Palette ---
-const PALETTE_HUES = [
-  210, // Blue (Default 1)
-  120, // Green (Default 2)
-  30, // Orange (Default 3)
-  270, // Purple (Default 4)
-  180, // Teal
-  60, // Yellow
-  300, // Magenta
-  0, // Red (Last resort)
-];
+// --- Semantic Color Palette (Now imported from chart-logic.mjs) ---
 
 let payloadViewer = createPayloadViewer({
   topicEl: document.getElementById("chart-payload-topic"),
@@ -707,99 +704,6 @@ function onChartVariableToggle(event) {
   appCallbacks.colorChartTreeCallback();
 }
 
-function isBooleanLike(dataPoints) {
-  if (!dataPoints || dataPoints.length === 0) return false;
-  for (const p of dataPoints) {
-    if (p.y !== 0 && p.y !== 1) return false;
-  }
-  return true;
-}
-
-function guessGroupKey(topic, path) {
-  const fullString = (topic + "/" + path).toLowerCase();
-  const keywords = [
-    "temperature",
-    "humidity",
-    "pressure",
-    "bar",
-    "psi",
-    "pascal",
-    "power",
-    "current",
-    "voltage",
-    "energy",
-    "speed",
-    "vibration",
-    "level",
-    "percent",
-    "battery",
-    "soc",
-    "heater",
-    "status",
-    "fire",
-    "load",
-    "flow",
-    "rate",
-    "debit",
-    "throughput",
-    "concentration",
-    "ppm",
-    "ppb",
-    "mg",
-    "µg",
-    "aqi",
-    "co2",
-    "pm25",
-  ];
-  for (const kw of keywords) {
-    if (fullString.includes(kw)) return kw;
-  }
-  const topicParts = topic.split("/");
-  const lastPart = topicParts[topicParts.length - 1];
-  if (path === "(value)" || path.toLowerCase() === "value") {
-    return lastPart.toLowerCase();
-  }
-  return (lastPart + "_" + path).replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
-}
-
-function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
-  const key = axisKey.toLowerCase();
-
-  // 1. Semantic Override (Only if enabled)
-  if (enableSemantic) {
-    if (key.includes("heater") || key.includes("fire")) return 0; // Red
-    if (key.includes("temperature")) return 15; // Red-Orange
-    if (key.includes("humidity") || key.includes("water")) return 210; // Blue
-    if (key.includes("pressure") || key.includes("bar") || key.includes("psi"))
-      return 180; // Teal/Cyan
-    if (key.includes("flow") || key.includes("rate") || key.includes("debit"))
-      return 240; // Indigo
-    if (
-      key.includes("power") ||
-      key.includes("energy") ||
-      key.includes("voltage")
-    )
-      return 45; // Yellow/Gold
-    if (
-      key.includes("concentration") ||
-      key.includes("ppm") ||
-      key.includes("aqi") ||
-      key.includes("co2")
-    )
-      return 300; // Magenta
-    if (
-      key.includes("percent") ||
-      key.includes("level") ||
-      key.includes("battery")
-    )
-      return 120; // Green
-    if (key.includes("status")) return 270; // Purple
-  }
-
-  // 2. Palette Rotation fallback
-  return PALETTE_HUES[axisIndex % PALETTE_HUES.length];
-}
-
 function onGenerateChart(showLoader = false) {
   trackEvent("chart_generate_refresh");
   if (isUserInteracting) {
@@ -846,13 +750,11 @@ async function processChartData() {
     if (jsonPath !== "(value)") {
       jsonPath = jsonPath.startsWith("[") ? "$" + jsonPath : "$." + jsonPath;
     }
-    topicsMap
-      .get(key)
-      .variables.push({
-        id: varId,
-        path: jsonPath,
-        originalPath: varInfo.path,
-      });
+    topicsMap.get(key).variables.push({
+      id: varId,
+      path: jsonPath,
+      originalPath: varInfo.path,
+    });
   });
 
   const topicsArray = Array.from(topicsMap.values());
@@ -898,21 +800,13 @@ async function processChartData() {
       }
     });
 
-    // --- Build Datasets ---
+    // --- Build Datasets & Scales using Shared Logic ---
     const chartType = chartTypeSelect.value;
     const connectNulls = chartConnectNulls.checked;
     const useSmartAxis = chartSmartAxis && chartSmartAxis.checked;
-    let datasets = [];
-
-    const isDarkMode = document.body.classList.contains("dark-mode");
-    const gridColor = isDarkMode
-      ? "rgba(255, 255, 255, 0.1)"
-      : "rgba(0, 0, 0, 0.1)";
-    const textColor = isDarkMode ? "#e0e0e0" : "#333";
 
     const axisGroups = new Map();
     chartedVariables.forEach((varInfo, varId) => {
-      const topicParts = varInfo.topic.split("/");
       const cleanPath = varInfo.path.replace(/\[|\]/g, "");
       const axisKey = useSmartAxis
         ? guessGroupKey(varInfo.topic, cleanPath)
@@ -921,6 +815,23 @@ async function processChartData() {
       axisGroups.set(axisKey, axisGroups.get(axisKey) + 1);
     });
     const distinctAxes = Array.from(axisGroups.keys());
+
+    const { datasets, scalesMeta } = buildChartDatasets(
+      rawPointsMap,
+      chartedVariables,
+      {
+        useSmartAxis,
+        connectNulls,
+        distinctAxes,
+      },
+    );
+
+    // Apply UI-specific Scale styling
+    const isDarkMode = document.body.classList.contains("dark-mode");
+    const gridColor = isDarkMode
+      ? "rgba(255, 255, 255, 0.1)"
+      : "rgba(0, 0, 0, 0.1)";
+    const textColor = isDarkMode ? "#e0e0e0" : "#333";
 
     const dynamicScales = {
       x: {
@@ -942,72 +853,33 @@ async function processChartData() {
       },
     };
 
-    const axisMap = new Map();
+    Object.values(scalesMeta).forEach((meta) => {
+      const yAxisId = meta.id;
+      const position =
+        Object.keys(scalesMeta).indexOf(yAxisId) % 2 === 0 ? "left" : "right";
 
-    // Dataset Construction Loop
-    for (const [
-      varId,
-      { brokerId, topic, path },
-    ] of chartedVariables.entries()) {
-      const rawPoints = rawPointsMap.get(varId) || [];
-      const topicParts = topic.split("/");
-      const cleanPath = path.replace(/\[|\]/g, "");
-      const label = `${topicParts.slice(-2).join("/")} | ${cleanPath}`;
-
-      // Sort by time
-      rawPoints.sort((a, b) => a.x - b.x);
-
-      // Determine Axis
-      const axisKey = useSmartAxis ? guessGroupKey(topic, cleanPath) : varId;
-      if (!axisMap.has(axisKey)) axisMap.set(axisKey, `y${axisMap.size}`);
-      const yAxisId = axisMap.get(axisKey);
-
-      // Determine Color
-      const axisIndex = distinctAxes.indexOf(axisKey);
-      const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
-      const color = `hsl(${hue}, 85%, 60%)`;
-
-      // Create Dataset (No local downsampling needed)
-      datasets.push({
-        label: label,
-        data: rawPoints,
-        borderColor: color,
-        backgroundColor: color,
-        fill: false,
-        spanGaps: connectNulls,
-        tension: 0.1,
-        yAxisID: yAxisId,
-        pointRadius: rawPoints.length > 200 ? 0 : 3,
-      });
-
-      // Config Scale
-      if (!dynamicScales[yAxisId]) {
-        const position =
-          Array.from(axisMap.values()).indexOf(yAxisId) % 2 === 0
-            ? "left"
-            : "right";
-        dynamicScales[yAxisId] = {
-          type: "linear",
+      dynamicScales[yAxisId] = {
+        type: "linear",
+        display: true,
+        position: position,
+        stack: useSmartAxis
+          ? position === "left"
+            ? "left-stack"
+            : "right-stack"
+          : undefined,
+        title: {
           display: true,
-          position: position,
-          stack: useSmartAxis
-            ? position === "left"
-              ? "left-stack"
-              : "right-stack"
-            : undefined,
-          title: {
-            display: true,
-            text: useSmartAxis ? axisKey.toUpperCase() : label,
-            color: `hsl(${hue}, 100%, 40%)`,
-          },
-        };
-        if (isBooleanLike(rawPoints)) {
-          dynamicScales[yAxisId].min = 0;
-          dynamicScales[yAxisId].max = 1.2;
-          dynamicScales[yAxisId].ticks = { stepSize: 1 };
-        }
+          text: useSmartAxis ? meta.axisKey.toUpperCase() : meta.label,
+          color: `hsl(${meta.hue}, 100%, 40%)`,
+        },
+      };
+
+      if (meta.isBoolean) {
+        dynamicScales[yAxisId].min = 0;
+        dynamicScales[yAxisId].max = 1.2;
+        dynamicScales[yAxisId].ticks = { stepSize: 1 };
       }
-    }
+    });
 
     // Prolong last value for live chart logic
     if (connectNulls && datasets.length > 0 && isChartLive) {
