@@ -100,6 +100,22 @@ class ConnectorManager {
             }
         });
         this.providers.clear();
+        this.context.activeConnections.clear();
+    }
+
+    /**
+     * Re-initializes providers by closing current ones and reloading from config.
+     */
+    async refreshProviders() {
+        this.logger.info("🔄 Refreshing Data Connectors from updated configuration...");
+        this.closeAll();
+        
+        // Reload generic DATA_PROVIDERS from the current config
+        if (this.context.config.DATA_PROVIDERS) {
+            this.context.config.DATA_PROVIDERS.forEach(providerConfig => {
+                this.loadProvider(providerConfig);
+            });
+        }
     }
 }
 

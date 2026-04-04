@@ -277,7 +277,7 @@ function createRouter(deps) {
     }
     
     if (config.VIEW_CONFIG_ENABLED) {
-        router.use('/api/env', ipFilterMiddleware, auth.requireAdmin, require('./configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager)); 
+        router.use('/api/env', ipFilterMiddleware, auth.requireAdmin, require('./configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager, config, deps.connectorManager)); 
     }
     
     router.use('/api/mapper', featureGate(config, 'VIEW_MAPPER_ENABLED'), ipFilterMiddleware, require('./mapperApi')(mapperEngine, config)); 

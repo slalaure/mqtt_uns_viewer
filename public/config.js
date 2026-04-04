@@ -95,15 +95,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function populateAdvancedForm(configObj) {
+        const immutableKeys = ['PORT', 'SESSION_SECRET', 'BASE_PATH', 'DUCKDB_MAX_SIZE_MB'];
+        
         advancedForm.innerHTML = '';
         for (const key in configObj) {
             const group = document.createElement('div');
             group.className = 'form-group';
             
+            const isImmutable = immutableKeys.includes(key);
+            const badgeClass = isImmutable ? 'badge-immutable' : 'badge-dynamic';
+            const badgeText = isImmutable ? 'IMMUTABLE' : 'DYNAMIC';
+            const badgeStyle = isImmutable ? 'background:#555; color:white;' : 'background:var(--color-primary); color:white;';
+
+            const labelContainer = document.createElement('div');
+            labelContainer.style.display = 'flex';
+            labelContainer.style.justifyContent = 'space-between';
+            labelContainer.style.alignItems = 'center';
+            labelContainer.style.marginBottom = '5px';
+
             const label = document.createElement('label');
             label.htmlFor = `adv-${key}`;
             label.textContent = key;
-            group.appendChild(label);
+            label.style.marginBottom = '0';
+            
+            const badge = document.createElement('span');
+            badge.textContent = badgeText;
+            badge.style.cssText = `font-size:0.65em; font-weight:bold; padding:2px 5px; border-radius:3px; ${badgeStyle}`;
+            
+            labelContainer.appendChild(label);
+            labelContainer.appendChild(badge);
+            group.appendChild(labelContainer);
 
             if (key === 'MQTT_BROKERS' || key === 'DATA_PROVIDERS') {
                 const textarea = document.createElement('textarea');
@@ -392,17 +413,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) throw new Error((await response.json()).error || 'Failed to save.');
             
-            const restart = await confirmModal(
-                "Restart Required", 
-                "Configuration saved!\nA server restart is required for changes to take effect.\n\nRestart now?", 
-                "Restart Now", false
-            );
-            
-            if (restart) {
-                showToast('Restarting server...', 'info');
-                fetch('api/env/restart', { method: 'POST' });
+            const result = await response.json();
+
+            if (result.restartRequired) {
+                const restart = await confirmModal(
+                    "Restart Required", 
+                    "Configuration saved!\nA server restart is required for changes to take effect (e.g. Port or Base Path).\n\nRestart now?", 
+                    "Restart Now", false
+                );
+                
+                if (restart) {
+                    showToast('Restarting server...', 'info');
+                    fetch('api/env/restart', { method: 'POST' });
+                } else {
+                    showToast('Configuration saved (Restart pending).', 'success');
+                }
             } else {
-                showToast('Configuration saved!', 'success');
+                showToast('Configuration saved and hot-reloaded!', 'success');
+                // Reload config to update UI with normalized values
+                loadConfig();
             }
         } catch (error) {
             showToast(error.message, "error");

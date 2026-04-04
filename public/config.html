@@ -414,7 +414,12 @@
         </div>
 
         <div id="advanced-view" style="display: none;">
-            <p>Direct `.env` file editor. Only use this if you know exactly the variable names you are targeting.</p>
+            <p style="margin-bottom: 15px; line-height: 1.5;">
+                Unified configuration editor. Settings are automatically split between the <b>.env file</b> (immutable boot variables) and the <b>DuckDB database</b> (dynamic settings).
+                <br>
+                <span style="display: inline-block; background: #555; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; font-weight: bold; margin-top: 5px;">IMMUTABLE</span> Requires server restart. &nbsp;
+                <span style="display: inline-block; background: var(--color-primary); color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; font-weight: bold;">DYNAMIC</span> Hot-reloaded instantly.
+            </p>
             
             <div class="cert-manager" style="margin-bottom: 25px; border-color: var(--color-primary);">
                 <h3 style="color: var(--color-primary);">Certificate Manager</h3>

@@ -13,8 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 const multer = require('multer');
+const { mergeConfigFromDb } = require('../../boot/config');
 
-module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) => {
+module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager, appConfig, connectorManager) => {
     const router = express.Router();
     const certsPath = path.join(dataPath, 'certs');
     const modelPath = path.join(dataPath, 'uns_model.json'); // Path to UNS Model
@@ -185,6 +186,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
      */
     async function getMergedConfig() {
         // 1. Start with values from .env
+        if (!fs.existsSync(envPath)) return {};
         const envFileContent = fs.readFileSync(envPath, { encoding: 'utf8' });
         const config = dotenv.parse(envFileContent);
 
@@ -225,18 +227,24 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
 
         for (const [key, val] of Object.entries(newConfig)) {
             if (immutableKeys.includes(key)) {
-                envUpdates[key] = val;
+                // Only mark for .env update if the value actually changed
+                const currentVal = String(appConfig[key]);
+                const newVal = String(val);
+                if (currentVal !== newVal) {
+                    envUpdates[key] = val;
+                }
             } else {
-                dbUpdates.push({ key, value: typeof val === 'object' ? JSON.stringify(val) : String(val) });
+                dbUpdates.push({ key, value: JSON.stringify(val) });
             }
         }
 
         try {
+            let restartRequired = false;
+
             // 1. Update .env for immutable keys (if any)
             if (Object.keys(envUpdates).length > 0) {
                 const tempPath = path.join(dataPath, '.env.tmp');
                 let envFileContent = "";
-                const writtenKeys = new Set();
                 const exampleContent = fs.readFileSync(envExamplePath, { encoding: 'utf8' });
 
                 exampleContent.split('\n').forEach(line => {
@@ -248,7 +256,6 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
                             const key = line.substring(0, firstEqual);
                             if (envUpdates.hasOwnProperty(key)) {
                                 envFileContent += `${key}=${envUpdates[key]}\n`;
-                                writtenKeys.add(key);
                             } else {
                                 // Keep existing value for other keys in .env
                                 envFileContent += line + '\n';
@@ -259,6 +266,7 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
                 fs.writeFileSync(tempPath, envFileContent);
                 fs.renameSync(tempPath, envPath);
                 logger.info("✅ Updated immutable keys in .env");
+                restartRequired = true; // Changes to .env always require a restart
             }
 
             // 2. Update DuckDB for dynamic keys
@@ -275,9 +283,22 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager) =>
                 }
                 stmt.finalize();
                 logger.info(`✅ Updated ${dbUpdates.length} dynamic keys in database.`);
+
+                // Hot reload: Merge the new DB settings into the running appConfig object
+                await mergeConfigFromDb(appConfig, db, logger);
+
+                // If DATA_PROVIDERS were updated, trigger a refresh of the connector connections
+                if (dbUpdates.some(u => u.key === 'DATA_PROVIDERS')) {
+                    if (connectorManager && typeof connectorManager.refreshProviders === 'function') {
+                        connectorManager.refreshProviders();
+                    }
+                }
             }
 
-            res.json({ message: 'Configuration saved successfully (DB + .env).' });
+            res.json({ 
+                message: 'Configuration saved successfully.', 
+                restartRequired: restartRequired 
+            });
         } catch (err) {
             logger.error({ err }, "Failed to save configuration");
             next(err);
