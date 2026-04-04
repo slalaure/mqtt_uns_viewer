@@ -95,7 +95,7 @@ class AiTools {
             
             get_dlq_status: async () => {
                 try {
-                    const dlqManager = require('../storage/dlqManager');
+                    const dlqManager = require('../../storage/dlqManager');
                     const messages = dlqManager.getMessages();
                     return { 
                         content: [{ 

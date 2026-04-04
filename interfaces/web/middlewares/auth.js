@@ -93,7 +93,7 @@ function authMiddleware(req, res, next) {
     
     // 1. Allow public assets
     const ext = path.extname(req.path).toLowerCase();
-    const allowedExts = ['.css', '.js', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.gltf', '.glb', '.bin'];
+    const allowedExts = ['.css', '.js', '.mjs', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.gltf', '.glb', '.bin'];
     if (allowedExts.includes(ext)) return next();
 
     // 2. Fallback to Legacy Basic Auth
