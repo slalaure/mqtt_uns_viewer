@@ -23,9 +23,12 @@
 - **Prometheus Metrics**: Implemented `/api/metrics` endpoint exposing real-time metrics: `korelate_messages_processed_total` (throughput), `korelate_active_ws_connections` (active clients), `korelate_dlq_size` (DLQ depth), and `korelate_errors_total` (error counts by code).
 - **Standardized Error Logging**: Created `core/errorUtils.js` to ensure all error logs include `code`, `message`, `traceId` (mapped from `correlationId`), and `stack` (when available). This enables better observability and troubleshooting in enterprise environments.
 - **Metrics Infrastructure**: Added `core/metricsManager.js` to centralize metric collection and formatting (Prometheus version 0.0.4).
-- **Core Logic Touched**: `core/messageDispatcher.js`, `core/websocketManager.js`, `storage/dlqManager.js`, `interfaces/web/router.js`.
+- **Unit Testing**: Added `tests/metricsManager.test.js` and `tests/errorUtils.test.js` to validate the observability pipeline and ensure Prometheus output compliance.
+- **Core Logic Touched**: `core/messageDispatcher.js`, `core/websocketManager.js`, `storage/dlqManager.js`, `interfaces/web/router.js`, `core/errorUtils.js`, `core/metricsManager.js`.
 - **Pitfalls & Solutions**:
     - *Metric Consistency*: Standardized on `correlationId` as the source for `traceId` in error logs to maintain consistency with the existing distributed tracing logic in `messageDispatcher.js`.
     - *Performance Protection*: Ensured that the `/api/metrics` endpoint is protected by `ipFilterMiddleware` to prevent unauthorized scraping of system health data.
     - *DLQ Observability*: Added `getMessages().length` as a gauge in metrics to provide immediate visibility into database insertion failures.
+    - *Circular Dependencies*: Resolved a circular dependency chain (`metricsManager` -> `dlqManager` -> `errorUtils` -> `metricsManager`) by implementing lazy-loading of modules in `core/errorUtils.js` and `core/metricsManager.js`.
+    - *Jest Mocking & Module Caching*: Fixed an issue where `jest.spyOn` failed to track `logError` calls in `messageDispatcher` by switching from named imports to full module imports, ensuring the spy correctly intercepts the module property.
 
