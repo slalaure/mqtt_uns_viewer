@@ -44,17 +44,23 @@ class AdminUsersPanel extends HTMLElement {
             return;
         }
 
+        const roles = ['viewer', 'operator', 'engineer', 'admin'];
+
         this.users.forEach(u => {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid var(--color-border)';
             const isSelf = window.currentUser && window.currentUser.id === u.id;
             
+            const roleOptions = roles.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r.toUpperCase()}</option>`).join('');
+
             tr.innerHTML = `
                 <td style="padding: 10px; font-weight: 500;">${u.username || '<span style="font-style:italic; color:gray;">(Google)</span>'}</td>
                 <td style="padding: 10px;">${u.display_name || '-'}</td>
                 <td style="padding: 10px; color: var(--color-text-secondary);">${u.email || '-'}</td>
                 <td style="padding: 10px;">
-                    <span style="background:${u.role === 'admin' ? 'var(--color-danger)' : 'var(--color-success)'}; color:white; padding:2px 6px; border-radius:4px; font-size:0.8em; font-weight:bold;">${u.role.toUpperCase()}</span>
+                    <select class="role-select" data-id="${u.id}" ${isSelf ? 'disabled' : ''} style="background:var(--color-bg-tertiary); color:var(--color-text-primary); border:1px solid var(--color-border); border-radius:4px; padding:2px 4px;">
+                        ${roleOptions}
+                    </select>
                 </td>
                 <td style="padding: 10px; font-size: 0.85em; color: var(--color-text-secondary);">${u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}</td>
                 <td style="padding: 10px; text-align: right;">
@@ -68,11 +74,35 @@ class AdminUsersPanel extends HTMLElement {
             tableBody.appendChild(tr);
         });
 
+        this.querySelectorAll('.role-select').forEach(select => {
+            select.onchange = (e) => this.updateUserRole(select.dataset.id, e.target.value);
+        });
+
         this.querySelectorAll('.btn-delete-user').forEach(btn => {
             if (!btn.disabled) {
                 btn.onclick = () => this.deleteUser(btn.dataset.id, btn.dataset.username);
             }
         });
+    }
+
+    async updateUserRole(id, newRole) {
+        try {
+            const res = await fetch(`api/admin/users/${id}/role`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: newRole })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast("User role updated successfully.", "success");
+            } else {
+                showToast("Error: " + data.error, "error");
+                this.loadUsers(); // Refresh to original value
+            }
+        } catch (e) {
+            showToast("Failed to update role.", "error");
+            this.loadUsers();
+        }
     }
 
     async deleteUser(id, username) {

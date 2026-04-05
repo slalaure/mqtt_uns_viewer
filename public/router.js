@@ -57,19 +57,35 @@ export function initRouter(appBasePath, routeNames, currentUser, viewCallbacks =
         }
     });
 
+    const ROLES = { 'viewer': 10, 'operator': 20, 'engineer': 30, 'admin': 100 };
+    const hasRole = (minRole) => {
+        const userRole = currentUser?.role || 'viewer';
+        return (ROLES[userRole] || 10) >= (ROLES[minRole] || 0);
+    };
+
     // 2. Bind all navigation buttons dynamically
     routeNames.forEach(route => {
         const btn = document.getElementById(`btn-${route}-view`);
         if (btn) {
             btn.addEventListener('click', () => {
                 // Safety Checks
-                if (route === 'admin' && currentUser?.role !== 'admin') {
-                    console.warn("Unauthorized access to admin view.");
+                if (route === 'admin' && !hasRole('admin')) {
+                    console.warn("Unauthorized: Admin role required.");
                     state.activeView = 'tree';
                     return;
                 }
-                if (route === 'modeler' && (!window.viewModelerEnabled || currentUser?.role !== 'admin')) {
-                    console.warn("Unauthorized access to modeler view or view is disabled.");
+                if (route === 'modeler' && (!window.viewModelerEnabled || !hasRole('engineer'))) {
+                    console.warn("Unauthorized or disabled: Engineer role required.");
+                    state.activeView = 'tree';
+                    return;
+                }
+                if (route === 'mapper' && !hasRole('engineer')) {
+                    console.warn("Unauthorized: Engineer role required.");
+                    state.activeView = 'tree';
+                    return;
+                }
+                if (route === 'publish' && !hasRole('operator')) {
+                    console.warn("Unauthorized: Operator role required.");
                     state.activeView = 'tree';
                     return;
                 }

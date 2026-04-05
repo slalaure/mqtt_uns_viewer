@@ -16,7 +16,7 @@ const express = require('express');
 // [UPDATED] Import from root
 const alertManager = require('../../core/engine/alertManager');
 
-module.exports = (logger) => {
+module.exports = (logger, auth) => {
     const router = express.Router();
 
     // --- RULES MANAGEMENT ---
@@ -32,7 +32,7 @@ module.exports = (logger) => {
     });
 
     // POST /api/alerts/rules - Create rule
-    router.post('/rules', async (req, res, next) => {
+    router.post('/rules', auth.requireRole('engineer'), async (req, res, next) => {
         if (!req.user && !req.headers['x-api-key']) {
             return res.status(401).json({ error: "Authentication required to create alert rules." });
         }
@@ -43,8 +43,8 @@ module.exports = (logger) => {
         }
         // Set owner
         ruleData.owner_id = req.user ? req.user.id : 'api_key_user';
-        // Admin can set 'global' owner explicitly if sent in body
-        if (req.user && req.user.role === 'admin' && req.body.is_global) {
+        // Engineers/Admins can set 'global' owner explicitly if sent in body
+        if (req.user && (req.user.role === 'admin' || req.user.role === 'engineer') && req.body.is_global) {
             ruleData.owner_id = 'global';
         }
 
@@ -58,7 +58,7 @@ module.exports = (logger) => {
     });
 
     // PUT /api/alerts/rules/:id - Update rule
-    router.put('/rules/:id', async (req, res, next) => {
+    router.put('/rules/:id', auth.requireRole('engineer'), async (req, res, next) => {
         if (!req.user) {
             return res.status(401).json({ error: "Authentication required to edit rules." });
         }
@@ -68,7 +68,7 @@ module.exports = (logger) => {
             return res.status(400).json({ error: "Missing required fields." });
         }
         const userId = req.user.id;
-        const isAdmin = req.user.role === 'admin';
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'engineer';
 
         try {
             const result = await alertManager.updateRule(ruleId, userId, ruleData, isAdmin);
@@ -80,10 +80,10 @@ module.exports = (logger) => {
     });
 
     // DELETE /api/alerts/rules/:id
-    router.delete('/rules/:id', async (req, res, next) => {
+    router.delete('/rules/:id', auth.requireRole('engineer'), async (req, res, next) => {
         if (!req.user) return res.status(401).json({ error: "Unauthorized" });
         try {
-            const isAdmin = req.user.role === 'admin';
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'engineer';
             await alertManager.deleteRule(req.params.id, req.user.id, isAdmin);
             res.json({ success: true });
         } catch (err) {
@@ -104,7 +104,7 @@ module.exports = (logger) => {
     });
 
     // POST /api/alerts/:id/status - Acknowledge or Resolve
-    router.post('/:id/status', async (req, res, next) => {
+    router.post('/:id/status', auth.requireRole('operator'), async (req, res, next) => {
         if (!req.user) return res.status(401).json({ error: "Unauthorized" });
         const { status } = req.body; // 'acknowledged', 'resolved'
         if (!['acknowledged', 'resolved', 'open'].includes(status)) {

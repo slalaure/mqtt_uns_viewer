@@ -1111,15 +1111,34 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChartCollapseAll?.addEventListener('click', () => chartTree.toggleAllFolders(true));
         chartFilterInput?.addEventListener('input', () => chartTree.applyFilter(chartFilterInput.value));
 
+        const ROLES = { 'viewer': 10, 'operator': 20, 'engineer': 30, 'admin': 100 };
+        const hasRole = (minRole) => {
+            const userRole = currentUser?.role || 'viewer';
+            return (ROLES[userRole] || 10) >= (ROLES[minRole] || 0);
+        };
+
+        // --- Role-Based Tab Visibility ---
+        const btnAdmin = document.getElementById('btn-admin-view');
+        if (btnAdmin) btnAdmin.style.display = hasRole('admin') ? 'block' : 'none';
+        
+        const btnModeler = document.getElementById('btn-modeler-view');
+        if (btnModeler) btnModeler.style.display = (appConfig.viewModelerEnabled && hasRole('engineer')) ? 'block' : 'none';
+
+        const btnMapper = document.getElementById('btn-mapper-view');
+        if (btnMapper) btnMapper.style.display = (appConfig.viewMapperEnabled && hasRole('engineer')) ? 'block' : 'none';
+
+        const btnPublish = document.getElementById('btn-publish-view');
+        if (btnPublish) btnPublish.style.display = (appConfig.viewPublishEnabled && hasRole('operator')) ? 'block' : 'none';
+
         // Dynamically build the allowed route names
         const routeNames = ['tree'];
         if (appConfig.viewHmiEnabled) routeNames.push('hmi');
         if (appConfig.viewHistoryEnabled) routeNames.push('history');
-        if (appConfig.viewModelerEnabled && currentUser.role === 'admin') routeNames.push('modeler');
-        if (appConfig.viewMapperEnabled) routeNames.push('mapper');
+        if (appConfig.viewModelerEnabled && hasRole('engineer')) routeNames.push('modeler');
+        if (appConfig.viewMapperEnabled && hasRole('engineer')) routeNames.push('mapper');
         if (appConfig.viewChartEnabled) routeNames.push('chart');
-        if (appConfig.viewPublishEnabled) routeNames.push('publish');
-        if (currentUser.role === 'admin') routeNames.push('admin');
+        if (appConfig.viewPublishEnabled && hasRole('operator')) routeNames.push('publish');
+        if (hasRole('admin')) routeNames.push('admin');
         if (appConfig.viewAlertsEnabled) routeNames.push('alerts');
 
         const viewCallbacks = {

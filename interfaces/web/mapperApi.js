@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const featureGate = require('./middlewares/featureGate');
 
-module.exports = (mapperEngine, config) => {
+module.exports = (mapperEngine, config, auth) => {
     const router = express.Router();
 
     // Block all mapper API routes if the feature is disabled
@@ -77,11 +77,8 @@ module.exports = (mapperEngine, config) => {
     });
 
     // --- Update Active Config (Live Deploy) ---
-    // [SECURED] Only Admins can change the live running logic of the server
-    router.post('/config', (req, res, next) => {
-        if (!req.user || req.user.role !== 'admin') {
-            return res.status(403).json({ error: "Forbidden: Only Administrators can deploy live mapping rules." });
-        }
+    // [SECURED] Engineers and Admins can change the live running logic of the server
+    router.post('/config', auth.requireRole('engineer'), (req, res, next) => {
         try {
             mapperEngine.saveMappings(req.body); // Save to mappings.json and update memory
             res.json({ success: true, message: "Configuration deployed to Live Engine." });
@@ -126,8 +123,10 @@ module.exports = (mapperEngine, config) => {
         let targetDir = GLOBAL_VERSIONS_DIR;
         let contextMsg = "Global";
 
-        // [LOGIC] Non-admins FORCE save to private
-        if (!req.user || req.user.role !== 'admin') {
+        // [LOGIC] Only Engineers and Admins can save to GLOBAL
+        const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'engineer');
+
+        if (!isPrivileged) {
             targetDir = getUserVersionsDir(req);
             contextMsg = "Private";
             if (!targetDir) return res.status(401).json({ error: "Authentication required to save private versions." });
@@ -182,8 +181,9 @@ module.exports = (mapperEngine, config) => {
             }
         }
 
-        // 2. Try to delete Global (Admin only)
-        if (req.user && req.user.role === 'admin') {
+        // 2. Try to delete Global (Engineer/Admin only)
+        const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'engineer');
+        if (isPrivileged) {
             const globalPath = path.join(GLOBAL_VERSIONS_DIR, `${safeName}.json`);
             if (fs.existsSync(globalPath)) {
                 try {
@@ -197,7 +197,7 @@ module.exports = (mapperEngine, config) => {
             // Check if it exists globally to give correct error
             const globalPath = path.join(GLOBAL_VERSIONS_DIR, `${safeName}.json`);
             if (fs.existsSync(globalPath)) {
-                return res.status(403).json({ error: "Forbidden: Only Admins can delete Global versions." });
+                return res.status(403).json({ error: "Forbidden: Engineer privileges required to delete Global versions." });
             }
         }
 

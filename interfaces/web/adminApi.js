@@ -159,6 +159,24 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
+    // --- Update User Role ---
+    router.put('/users/:id/role', async (req, res, next) => {
+        const userId = req.params.id;
+        const { role } = req.body;
+
+        if (userId === req.user.id) {
+            return res.status(400).json({ error: "You cannot change your own role." });
+        }
+
+        try {
+            await userManager.updateUserRole(userId, role);
+            logger.info(`[AdminAPI] User ${userId} role updated to ${role} by admin ${req.user.username}`);
+            res.json({ success: true, message: "User role updated successfully." });
+        } catch (err) {
+            next(err);
+        }
+    });
+
     // --- Database Maintenance ---
 
     router.post('/import-db', uploadJson.single('db_import'), async (req, res, next) => {

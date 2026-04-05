@@ -128,11 +128,10 @@ function createRouter(deps) {
     router.use('/api/admin/ai_history', auth.requireAdmin, require('./aiHistoryApi')());
 
     // --- Alert API Routes ---
-    router.use('/api/alerts', featureGate(config, 'VIEW_ALERTS_ENABLED'), ipFilterMiddleware, require('./alertApi')(logger)); 
+    router.use('/api/alerts', featureGate(config, 'VIEW_ALERTS_ENABLED'), ipFilterMiddleware, require('./alertApi')(logger, auth)); 
 
     // --- [NEW] I3X API Standard Routes ---
-    router.use('/api/i3x', featureGate(config, 'VIEW_TREE_ENABLED'), ipFilterMiddleware, require('../i3x/i3xRouter')(db, semanticManager, logger, i3xEvents));
-
+    router.use('/api/i3x', featureGate(config, 'VIEW_TREE_ENABLED'), ipFilterMiddleware, require('../i3x/i3xRouter')(db, semanticManager, logger, i3xEvents, auth)); 
     // --- [NEW] Frontend Error Logs ---
     router.post('/api/logs/frontend', ipFilterMiddleware, (req, res) => {
         logger.error({ frontend: req.body }, `[Frontend Error] ${req.body.type}: ${req.body.message}`);
@@ -288,10 +287,10 @@ function createRouter(deps) {
         router.use('/api/env', ipFilterMiddleware, auth.requireAdmin, require('./configApi')(ENV_PATH, ENV_EXAMPLE_PATH, DATA_PATH, logger, db, dataManager, config, deps.connectorManager)); 
     }
     
-    router.use('/api/mapper', featureGate(config, 'VIEW_MAPPER_ENABLED'), ipFilterMiddleware, require('./mapperApi')(mapperEngine, config)); 
+    router.use('/api/mapper', featureGate(config, 'VIEW_MAPPER_ENABLED'), ipFilterMiddleware, require('./mapperApi')(mapperEngine, config, auth)); 
     router.use('/api/chart', featureGate(config, 'VIEW_CHART_ENABLED'), ipFilterMiddleware, require('./chartApi')(CHART_CONFIG_PATH, logger)); 
 
-    router.post('/api/publish/message', featureGate(config, 'VIEW_PUBLISH_ENABLED'), ipFilterMiddleware, (req, res, next) => {
+    router.post('/api/publish/message', featureGate(config, 'VIEW_PUBLISH_ENABLED'), ipFilterMiddleware, auth.requireRole('operator'), (req, res, next) => {
         const { topic, payload, format, qos, retain, sourceId } = req.body;
         const conn = getConnectorConnection(sourceId);
         if (!conn || !conn.connected) return res.status(503).json({ error: "Provider not connected" });

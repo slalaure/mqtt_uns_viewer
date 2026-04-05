@@ -127,3 +127,10 @@
 - **Integration**: Plumbed the new repository into `storage/dataManager.js`, allowing it to participate in the automated fan-out insertion process and leverage the centralized Dead Letter Queue (DLQ) in case of network failure.
 - **Configuration & UI**: Exposed all necessary configuration fields (`INFLUX_URL`, `INFLUX_TOKEN`, `INFLUX_ORG`, `INFLUX_BUCKET`) in `boot/config.js` and dynamically generated them in the First-Run Setup Wizard (`public/config.html`).
 - **Unit Testing**: Added exhaustive tests (`tests/influxDbRepository.test.js`) covering line protocol serialization escapes and DLQ fallback logic.
+
+## 2026-04-05 - Granular RBAC Implementation
+- **Role Hierarchy**: Replaced the binary [User, Admin] model with a granular hierarchy: **Viewer** (Read-only), **Operator** (Publish/Ack), **Engineer** (Mappers/Rules), and **Admin** (System/Users).
+- **Access Control Middleware**: Enhanced `interfaces/web/middlewares/auth.js` with a `requireRole(minRole)` utility that enforces permissions across all REST endpoints.
+- **API Protection**: Updated `alertApi`, `mapperApi`, and the Publish router to use specific role-based guards.
+- **User Management**: Redesigned the Admin User Panel to allow dynamic role assignment via a new dropdown interface, backed by `UserManager.updateUserRole` in DuckDB.
+- **Frontend Visibility**: Implemented reactive tab and button visibility in `app.js` and route-guarding in `router.js` to ensure users only see and access actions permitted by their role.

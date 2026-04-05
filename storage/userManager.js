@@ -44,7 +44,7 @@ function init(database, appLogger, sessionsPath) {
             google_id VARCHAR,
             display_name VARCHAR,
             avatar_url VARCHAR,
-            role VARCHAR DEFAULT 'user',
+            role VARCHAR DEFAULT 'viewer',
             created_at TIMESTAMPTZ,
             last_login TIMESTAMPTZ
         );
@@ -64,7 +64,7 @@ function init(database, appLogger, sessionsPath) {
                 const hasRole = columns.some(col => col.name === 'role');
                 if (!hasRole) {
                     logger.warn("⚠️ Migrating 'users' table: Adding 'role' column...");
-                    db.run("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'user';", (alterErr) => {
+                    db.run("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'viewer';", (alterErr) => {
                         if (alterErr) {
                             logger.error({ err: alterErr }, "Failed to add role column.");
                         } else {
@@ -260,12 +260,12 @@ function findOrCreateGoogleUser(profile) {
             const newId = crypto.randomUUID();
             const insertQuery = `
                 INSERT INTO users (id, google_id, email, display_name, avatar_url, role, created_at, last_login)
-                VALUES (?, ?, ?, ?, ?, 'user', current_timestamp, current_timestamp)
+                VALUES (?, ?, ?, ?, ?, 'viewer', current_timestamp, current_timestamp)
             `;
             
             db.run(insertQuery, newId, googleId, email, displayName, avatarUrl, (insertErr) => {
                 if (insertErr) return reject(insertErr);
-                resolve({ id: newId, google_id: googleId, email, display_name: displayName, avatar_url: avatarUrl, role: 'user' });
+                resolve({ id: newId, google_id: googleId, email, display_name: displayName, avatar_url: avatarUrl, role: 'viewer' });
             });
         });
     });
@@ -290,12 +290,12 @@ async function createLocalUser(username, password) {
     return new Promise((resolve, reject) => {
         const insertQuery = `
             INSERT INTO users (id, username, password_hash, display_name, role, created_at, last_login)
-            VALUES (?, ?, ?, ?, 'user', current_timestamp, current_timestamp)
+            VALUES (?, ?, ?, ?, 'viewer', current_timestamp, current_timestamp)
         `;
         
         db.run(insertQuery, newId, username, passwordHash, username, (err) => {
             if (err) return reject(err);
-            resolve({ id: newId, username, display_name: username, role: 'user' });
+            resolve({ id: newId, username, display_name: username, role: 'viewer' });
         });
     });
 }
@@ -339,6 +339,23 @@ function deleteUser(userId) {
                     }
                 }
             }
+            resolve(true);
+        });
+    });
+}
+
+/**
+ * Updates a user's role.
+ */
+function updateUserRole(userId, newRole) {
+    const validRoles = ['viewer', 'operator', 'engineer', 'admin'];
+    if (!validRoles.includes(newRole)) {
+        return Promise.reject(new Error("Invalid role specified."));
+    }
+
+    return new Promise((resolve, reject) => {
+        db.run("UPDATE users SET role = ? WHERE id = ?", newRole, userId, (err) => {
+            if (err) return reject(err);
             resolve(true);
         });
     });

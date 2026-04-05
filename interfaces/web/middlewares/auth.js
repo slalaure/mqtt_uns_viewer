@@ -119,32 +119,59 @@ function authMiddleware(req, res, next) {
 
     // If it's a browser request (HTML), redirect to the login page.
     const loginUrl = (config && config.BASE_PATH && config.BASE_PATH !== '/') ? `${config.BASE_PATH}/login` : '/login';
-    return res.redirect(loginUrl);
-}
+    /**
+     * Role Definitions & Hierarchy
+     */
+    const ROLES = {
+        'viewer': 10,
+        'operator': 20,
+        'engineer': 30,
+        'admin': 100 // Admin is always at the top
+    };
 
-/**
- * Middleware to check if user is an admin.
- * Includes fallback to legacy Basic Auth.
- */
-function requireAdmin(req, res, next) {
-    if (req.isAuthenticated() && req.user.role === 'admin') {
-        return next();
+    /**
+     * Configures Passport and Session management.
+    ...
+    /**
+     * Middleware to check if user has a required role or higher.
+     * @param {string} minRole - The minimum role required ('viewer', 'operator', 'engineer', 'admin').
+     */
+    function requireRole(minRole) {
+        const minLevel = ROLES[minRole] || 0;
+
+        return (req, res, next) => {
+            // 1. Check Authenticated Session
+            if (req.isAuthenticated()) {
+                const userRole = req.user.role || 'viewer';
+                const userLevel = ROLES[userRole] || 10; // Default to viewer
+
+                if (userLevel >= minLevel) {
+                    return next();
+                }
+            }
+
+            // 2. Fallback to Legacy Basic Auth (Basic Auth always acts as Admin for backward compatibility)
+            if (config && config.HTTP_USER && config.HTTP_PASSWORD) {
+                const credentials = basicAuth(req);
+                if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
+                    return next();
+                }
+            }
+
+            logger.warn(`[Security] Access denied for ${req.user ? req.user.username : req.ip} (Role: ${req.user ? req.user.role : 'Guest'}) on ${req.originalUrl}. Required: ${minRole}`);
+            return res.status(403).json({ error: `Forbidden: ${minRole} privileges or higher required.` });
+        };
     }
 
-    // Fallback to Legacy Basic Auth
-    if (config.HTTP_USER && config.HTTP_PASSWORD) {
-        const credentials = basicAuth(req);
-        if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
-            return next();
-        }
-    }
+    /**
+     * Legacy Admin Check (for backward compatibility)
+     */
+    const requireAdmin = requireRole('admin');
 
-    logger.warn(`[Security] Admin access denied for ${req.user ? req.user.username : req.ip} on ${req.originalUrl}`);
-    return res.status(403).send("Forbidden: Admin privileges required.");
-}
-
-module.exports = {
-    configureAuth,
-    authMiddleware,
-    requireAdmin
-};
+    module.exports = {
+        configureAuth,
+        authMiddleware,
+        requireRole,
+        requireAdmin,
+        ROLES
+    };
