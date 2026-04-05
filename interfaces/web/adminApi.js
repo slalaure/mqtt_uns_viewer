@@ -517,8 +517,9 @@ module.exports = (logger, db, dataManager, dataPath) => {
     });
 
     // --- System Logs ---
-    router.get('/logs', (req, res, next) => {
+    router.get('/logs', async (req, res, next) => {
         const logPath = path.join(dataPath, 'korelate.log');
+        const { readLastLines } = require('../../core/fsUtils');
         
         if (!fs.existsSync(logPath)) {
             return res.json({ 
@@ -526,20 +527,12 @@ module.exports = (logger, db, dataManager, dataPath) => {
             });
         }
         
-        exec(`tail -n 500 "${logPath}"`, { maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
-            if (error) {
-                // Safe Fallback to native Node.js reading if tail is unavailable (e.g., Windows/certain Alpine builds)
-                try {
-                    const content = fs.readFileSync(logPath, 'utf8');
-                    const lines = content.split('\n');
-                    const last500 = lines.slice(-500).join('\n');
-                    return res.json({ logs: last500 });
-                } catch (fallbackErr) {
-                    return next(fallbackErr);
-                }
-            }
-            res.json({ logs: stdout });
-        });
+        try {
+            const logs = await readLastLines(logPath, 500);
+            res.json({ logs });
+        } catch (err) {
+            next(err);
+        }
     });
 
     // --- API Key Management ---

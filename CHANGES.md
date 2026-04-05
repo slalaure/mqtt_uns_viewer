@@ -115,3 +115,8 @@
     - Created `public/components/templates/` directory to store HTML templates.
     - Refactored `AiChatWidget` (`public/components/ai-chat-widget.js`) to asynchronously load `ai-chat-widget.html`.
     - Refactored `AdminAiPanel` (`public/components/admin-ai-panel.js`) to asynchronously load `admin-ai-panel.html`.
+
+## 2026-04-05 - Log Reading Security & Performance Optimization
+- **Security Hardening**: Replaced vulnerable `exec('tail...')` call in Admin API with a native Node.js implementation (`readLastLines`). This eliminates potential shell injection risks.
+- **Performance Optimization**: Created `core/fsUtils.js` with a memory-efficient `readLastLines` utility that reads files backwards in chunks without loading the entire content into RAM.
+- **Validation**: Added `tests/test_fs_utils.js` to verify the correctness of the reverse-buffer file reading logic across edge cases (empty files, small files, large requests).
