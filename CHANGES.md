@@ -134,3 +134,7 @@
 - **API Protection**: Updated `alertApi`, `mapperApi`, and the Publish router to use specific role-based guards.
 - **User Management**: Redesigned the Admin User Panel to allow dynamic role assignment via a new dropdown interface, backed by `UserManager.updateUserRole` in DuckDB.
 - **Frontend Visibility**: Implemented reactive tab and button visibility in `app.js` and route-guarding in `router.js` to ensure users only see and access actions permitted by their role.
+
+## 2026-04-05 - RBAC Unit Testing
+- **Security Validation**: Added exhaustive unit tests (`tests/authMiddleware.test.js`) covering the `requireRole` middleware to ensure privilege escalation is strictly blocked (e.g. Viewer attempting to reach Admin routes).
+- **Database Role Assertions**: Added `tests/userManager.test.js` to guarantee that all new users (Local or Google) fallback to the 'viewer' role by default, and that the Admin API successfully delegates to the `updateUserRole` database schema.

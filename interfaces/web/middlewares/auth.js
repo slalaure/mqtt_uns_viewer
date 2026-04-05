@@ -119,10 +119,13 @@ function authMiddleware(req, res, next) {
 
     // If it's a browser request (HTML), redirect to the login page.
     const loginUrl = (config && config.BASE_PATH && config.BASE_PATH !== '/') ? `${config.BASE_PATH}/login` : '/login';
-    /**
-     * Role Definitions & Hierarchy
-     */
-    const ROLES = {
+    return res.redirect(loginUrl);
+}
+
+/**
+ * Role Definitions & Hierarchy
+ */
+const ROLES = {
         'viewer': 10,
         'operator': 20,
         'engineer': 30,

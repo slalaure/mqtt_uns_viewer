@@ -371,5 +371,6 @@ module.exports = {
     createLocalUser,
     verifyPassword,
     getAllUsers,
-    deleteUser
+    deleteUser,
+    updateUserRole
 };
