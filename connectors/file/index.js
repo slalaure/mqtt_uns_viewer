@@ -11,21 +11,46 @@ const readline = require('readline');
 const path = require('path');
 const BaseProvider = require('../baseProvider');
 
+/**
+ * @typedef {Object} FileProviderConfig
+ * @extends import('../baseProvider').ProviderConfig
+ * @property {string} [filePath] Path to the local file (CSV or JSONL).
+ * @property {number} [streamRateMs] Rate at which to stream lines in ms.
+ * @property {string} [defaultTopic] Default topic for ingested data.
+ * @property {boolean} [loop] Whether to loop back to start of file on EOF.
+ */
+
 class FileProvider extends BaseProvider {
+    /**
+     * @param {FileProviderConfig} config 
+     * @param {import('../baseProvider').ProviderContext} context 
+     */
     constructor(config, context) {
         super(config, context);
         // Custom configuration specific to 'file' providers
+        /** @type {string|null} */
         this.filePath = config.filePath ? path.resolve(process.cwd(), config.filePath) : null;
+        /** @type {number} */
         this.streamRateMs = config.streamRateMs || 1000;
+        /** @type {string} */
         this.defaultTopic = config.defaultTopic || `file/${this.id}/data`;
+        /** @type {boolean} */
         this.loop = config.loop !== false; // Loop by default
+        /** @type {boolean} */
         this.isCsv = this.filePath ? this.filePath.toLowerCase().endsWith('.csv') : false;
+        /** @type {import('fs').ReadStream|null} */
         this.readStream = null;
+        /** @type {import('readline').Interface|null} */
         this.rl = null;
+        /** @type {NodeJS.Timeout|null} */
         this.timer = null;
+        /** @type {string[]} */
         this.headers = [];
     }
 
+    /**
+     * @returns {Promise<boolean>}
+     */
     async connect() {
         return new Promise((resolve) => {
             if (!this.filePath || !fs.existsSync(this.filePath)) {

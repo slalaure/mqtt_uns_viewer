@@ -8,10 +8,13 @@
 
 /**
  * @typedef {Object} ProviderContext
- * @property {Object} logger Logger instance.
- * @property {Function} handleMessage Central message handler function.
+ * @property {import('pino').Logger} logger Logger instance.
+ * @property {import('../core/messageDispatcher').handleMessage} handleMessage Central message handler function.
  * @property {Function} [updateConnectorStatus] Callback to update status in UI.
- * @property {Object} [dataManager] Data manager instance.
+ * @property {import('../storage/dataManager')} [dataManager] Data manager instance.
+ * @property {string} CERTS_PATH Path to certificates directory.
+ * @property {Object} config Global application configuration.
+ * @property {Function} isShuttingDown Whether the application is shutting down.
  */
 
 /**
@@ -36,7 +39,7 @@ class BaseProvider {
         this.id = config.id || 'default_provider';
         /** @type {string} */
         this.type = config.type || 'unknown';
-        /** @type {Object} */
+        /** @type {import('pino').Logger} */
         this.logger = context.logger.child({ component: `${this.type}-provider`, id: this.id });
         /** @type {boolean} */
         this.connected = false;

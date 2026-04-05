@@ -1,5 +1,16 @@
 # Korelate Changelog (AI Memory Bank)
 
+## 2026-04-05 - Codebase Typed Definitions (Backend)
+- **Standardized Interfaces**: Defined and standardized the `Message`, `MessageOptions`, `ProviderContext`, and `ProviderConfig` interfaces using JSDoc `@typedef`.
+- **Core Dispatcher**: Updated `core/messageDispatcher.js` to export `handleMessage` for type reference and added type definitions for all module-scoped variables.
+- **Provider Standardization**: Updated `BaseProvider` and all core connectors (`mqtt`, `opcua`, `http`, `file`) with specific `ProviderConfig` typedefs and JSDoc-typed class members.
+- **Data Pipeline Typing**: Updated `storage/dataManager.js` to use the centralized `Message` type for `insertMessage` and `retryMessage`.
+- **Webhook Observability**: Added `Webhook` typedef to `core/webhookManager.js` and typed member variables for better IDE support.
+- **Core Logic Touched**: `core/messageDispatcher.js`, `connectors/baseProvider.js`, `storage/dataManager.js`, `connectors/*/index.js`, `core/webhookManager.js`.
+- **Pitfalls & Solutions**:
+    - *ESM/CJS Interop in JSDoc*: Used `typeof import(...)` and relative paths in `@typedef` to ensure JSDoc types are discoverable across the project without requiring a global `.d.ts` file or TypeScript.
+    - *HandleMessage Export*: Exported `handleMessage` from `messageDispatcher.js` to allow providers to correctly reference the central handler type in their `ProviderContext`.
+
 ## 2026-04-05 - Edge Resource Hardening & DLQ Pruning
 - **DLQ Pruning**: Implemented `checkAndPrune` in `storage/dlqManager.js` to enforce a maximum disk-size limit (`DLQ_MAX_SIZE_MB`) for the DLQ. Prevents OS failure in edge deployments during extended offline periods by automatically dropping the oldest batches.
 - **Adaptive Pruning Multiplier**: Adopted DuckDB's adaptive multiplier approach in `dlqManager.js` to aggressively prune if the disk size significantly exceeds the threshold.

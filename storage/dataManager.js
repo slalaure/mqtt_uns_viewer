@@ -105,6 +105,7 @@ function clearRepositories() {
 
 /**
  * Inserts a message into all configured storage repositories.
+ * @param {import('../core/messageDispatcher').Message} message 
  */
 function insertMessage(message) {
     for (const repo of activeRepositories) {
@@ -119,7 +120,7 @@ function insertMessage(message) {
 /**
  * Re-attempts to insert a message into a specific repository (used by DLQ).
  * @param {string} repoName - The name of the repository to target.
- * @param {Object} message - The original message object.
+ * @param {import('../core/messageDispatcher').Message} message - The original message object.
  */
 async function retryMessage(repoName, message) {
     const repo = activeRepositories.find(r => r.name === repoName);

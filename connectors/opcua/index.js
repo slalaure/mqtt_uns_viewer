@@ -14,17 +14,40 @@ const {
 } = require("node-opcua");
 const BaseProvider = require('../baseProvider');
 
+/**
+ * @typedef {Object} OpcUaProviderConfig
+ * @extends import('../baseProvider').ProviderConfig
+ * @property {string} [endpointUrl] OPC UA server endpoint URL.
+ * @property {string} [username] Authentication username.
+ * @property {string} [password] Authentication password.
+ * @property {number} [publishingInterval] OPC UA publishing interval in ms.
+ * @property {number} [samplingInterval] OPC UA sampling interval in ms.
+ * @property {Array<string|{nodeId: string, topic: string}>} [subscribe] List of nodeIds or mappings to monitor.
+ */
+
 class OpcUaProvider extends BaseProvider {
+    /**
+     * @param {OpcUaProviderConfig} config 
+     * @param {import('../baseProvider').ProviderContext} context 
+     */
     constructor(config, context) {
         super(config, context);
+        /** @type {import('node-opcua').OPCUAClient|null} */
         this.client = null;
+        /** @type {import('node-opcua').ClientSession|null} */
         this.session = null;
+        /** @type {import('node-opcua').ClientSubscription|null} */
         this.subscription = null;
+        /** @type {string} */
         this.endpointUrl = config.endpointUrl || "opc.tcp://localhost:4840";
         // Map nodeId -> topic for two-way communication
+        /** @type {Map<string, string>} */
         this.nodeTopicMap = new Map();
     }
 
+    /**
+     * @returns {Promise<boolean>}
+     */
     async connect() {
         return new Promise(async (resolve) => {
             this.updateStatus('connecting');

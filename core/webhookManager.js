@@ -7,14 +7,35 @@
 const mqttMatch = require('mqtt-match');
 const axios = require('axios');
 
+/**
+ * @typedef {Object} Webhook
+ * @property {string} id Unique identifier.
+ * @property {string} topic MQTT-style topic pattern to match.
+ * @property {string} url Target URL.
+ * @property {string} [method] HTTP method (default: POST).
+ * @property {number} [min_interval_ms] Anti-flood interval (default: 1000).
+ * @property {boolean} [active] Whether the webhook is active.
+ * @property {string} [last_triggered] ISO timestamp of last execution.
+ * @property {string} [created_at] ISO timestamp of creation.
+ */
+
 class WebhookManager {
     constructor() {
+        /** @type {Object|null} */
         this.db = null;
+        /** @type {import('pino').Logger|null} */
         this.logger = null;
+        /** @type {Webhook[]} */
         this.webhooks = [];
+        /** @type {Map<string, number>} */
         this.lastTriggered = new Map(); // id -> timestamp
     }
 
+    /**
+     * Initializes the Webhook Manager.
+     * @param {Object} db Database connection.
+     * @param {import('pino').Logger} logger Logger instance.
+     */
     init(db, logger) {
         this.db = db;
         this.logger = logger.child({ component: 'WebhookManager' });

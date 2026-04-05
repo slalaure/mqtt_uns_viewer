@@ -12,18 +12,38 @@ const mqttMatch = require('mqtt-match');
 const webhookManager = require('../../core/webhookManager');
 const { v4: uuidv4 } = require('uuid');
 
+/**
+ * @typedef {Object} HttpProviderConfig
+ * @extends import('../baseProvider').ProviderConfig
+ * @property {string} [pathPrefix] Custom path prefix for ingestion.
+ * @property {string[]} [publish] Allowed ingestion topic patterns.
+ * @property {string[]} [subscribe] Allowed subscription/webhook topic patterns.
+ */
+
 class HttpProvider extends BaseProvider {
+    /**
+     * @param {HttpProviderConfig} config 
+     * @param {import('../baseProvider').ProviderContext} context 
+     */
     constructor(config, context) {
         super(config, context);
+        /** @type {import('express').Application} */
         this.app = context.app;
+        /** @type {boolean} */
         this.routeMounted = false;
+        /** @type {string} */
         this.pathPrefix = config.pathPrefix || `/api/ingest/${this.id}`;
 
         // Define allowed topics from config
+        /** @type {string[]} */
         this.allowedPublish = config.publish || ['#']; // For ingestion
+        /** @type {string[]} */
         this.allowedSubscribe = config.subscribe || ['#']; // For webhooks
     }
 
+    /**
+     * @returns {Promise<boolean>}
+     */
     async connect() {
         if (!this.app) {
             this.logger.error("Express app not found in context. Cannot mount HTTP routes.");

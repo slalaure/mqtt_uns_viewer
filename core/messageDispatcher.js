@@ -24,6 +24,19 @@ const os = require('os');
  * @property {Buffer} [rawBuffer] Original binary buffer of the payload.
  * @property {string} [decodeError] Error message if initial decoding failed.
  * @property {string} [correlationId] Existing correlation ID for tracking.
+ * @property {string} [connectorType] Type of connector.
+ */
+
+/**
+ * @typedef {Object} Message
+ * @property {string} sourceId The ID of the provider sending the data.
+ * @property {string} connectorType The type of connector (e.g., 'mqtt', 'opcua').
+ * @property {Date} timestamp The timestamp of the message.
+ * @property {string} topic The destination topic/node.
+ * @property {string} payloadStringForDb The payload serialized for database storage.
+ * @property {boolean} [isSparkplugOrigin] Whether the message is a Sparkplug B payload.
+ * @property {boolean} [needsDb] Whether the message requires database storage.
+ * @property {string} [correlationId] A unique identifier for tracking.
  */
 
 /**
@@ -140,26 +153,26 @@ let workerPool = new PayloadWorkerPool(poolSize);
 
 /**
  * Injects a custom worker pool (useful for tests).
- * @param {Object} pool 
+ * @param {PayloadWorkerPool} pool 
  */
 function setWorkerPool(pool) {
     workerPool = pool;
 }
 
 // --- Module-Scoped Variables ---
-/** @type {Object} */
+/** @type {import('pino').Logger} */
 let logger;
 /** @type {Object} */
 let config;
-/** @type {Object} */
+/** @type {import('./websocketManager')} */
 let wsManager;
-/** @type {Object} */
+/** @type {import('./engine/mapperEngine')} */
 let mapperEngine;
-/** @type {Object} */
+/** @type {import('../storage/dataManager')} */
 let dataManager;
 /** @type {Function} */
 let broadcastDbStatus;
-/** @type {Object} */
+/** @type {import('./engine/alertManager')} */
 let alertManager;
 const semanticManager = require('./semantic/semanticManager'); // Semantic Engine
 const metricsManager = require('./metricsManager');
@@ -396,4 +409,4 @@ function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManage
     return handleMessage; 
 }
 
-module.exports = { init, setWorkerPool, resetThrottling, stop };
+module.exports = { init, setWorkerPool, resetThrottling, stop, handleMessage };
