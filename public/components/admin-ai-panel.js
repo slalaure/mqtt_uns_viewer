@@ -13,8 +13,8 @@ class AdminAiPanel extends HTMLElement {
         this.history = [];
     }
 
-    connectedCallback() {
-        this.render();
+    async connectedCallback() {
+        await this.render();
         this.loadAiHistory();
     }
 
@@ -93,34 +93,16 @@ class AdminAiPanel extends HTMLElement {
         }
     }
 
-    render() {
-        this.innerHTML = `
-            <div style="max-width: 900px; margin: 0 auto;">
-                <h2>AI Actions History</h2>
-                <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-                    Review and revert modifications made by the AI Assistant.
-                </p>
-                <button id="btn-ai-history-refresh" class="mapper-button" style="margin-bottom: 15px;">↻ Refresh</button>
-                <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em;">
-                        <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                            <tr>
-                                <th style="padding: 10px; font-weight: 500;">Time</th>
-                                <th style="padding: 10px; font-weight: 500;">User</th>
-                                <th style="padding: 10px; font-weight: 500;">Tool</th>
-                                <th style="padding: 10px; font-weight: 500;">Details</th>
-                                <th style="padding: 10px; text-align: right; font-weight: 500;">Revert</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-ai-history-tbody">
-                            <tr><td colspan="5" style="text-align:center; padding:20px;">Loading history...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-
-        this.querySelector('#btn-ai-history-refresh').onclick = () => this.loadAiHistory();
+    async render() {
+        try {
+            const response = await fetch(`components/templates/admin-ai-panel.html`);
+            if (!response.ok) throw new Error(`Failed to load template: ${response.statusText}`);
+            this.innerHTML = await response.text();
+            this.querySelector('#btn-ai-history-refresh').onclick = () => this.loadAiHistory();
+        } catch (error) {
+            console.error("Error rendering AdminAiPanel:", error);
+            this.innerHTML = `<div class="error" style="padding:20px; color:var(--color-danger);">Failed to load AI History UI</div>`;
+        }
     }
 }
 

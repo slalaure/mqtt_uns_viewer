@@ -38,9 +38,9 @@ class AiChatWidget extends HTMLElement {
         this.processedChunkIds = new Set();
     }
 
-    connectedCallback() {
+    async connectedCallback() {
         if (this.isMounted) return;
-        this.render();
+        await this.render();
         this.setupEventListeners();
         this.initVoice();
         this.initTTS();
@@ -64,62 +64,15 @@ class AiChatWidget extends HTMLElement {
         this.loadSessions();
     }
 
-    render() {
-        this.innerHTML = `
-            <div id="chat-widget-container" class="chat-widget-container">
-                <chat-session-list></chat-session-list>
-                <div class="chat-header" id="chat-header">
-                    <span>AI Assistant</span>
-                    <div class="chat-controls">
-                        <button id="btn-chat-sessions" title="History">🕒</button>
-                        <button id="btn-chat-clear" title="Delete Session">🗑️</button>
-                        <button id="btn-chat-minimize" title="Minimize">_</button>
-                    </div>
-                </div>
-                <div class="chat-body">
-                    <div id="chat-history" class="chat-history-container">
-                        <div class="chat-message assistant">
-                            Hello! I am your UNS Assistant. How can I help?
-                        </div>
-                    </div>
-                    
-                    <div id="chat-file-preview" style="display:none; padding:10px; background:var(--color-bg-accent); border-top:1px solid var(--color-border); align-items:center; gap:10px;"></div>
-
-                    <div class="chat-input-area">
-                        <button id="btn-chat-attach" class="chat-icon-btn" title="Attach File">📎</button>
-                        <button id="btn-chat-cam" class="chat-icon-btn" title="Camera">📷</button>
-                        <button id="btn-chat-mic" class="chat-icon-btn" title="Voice Input">🎤</button>
-                        <textarea id="chat-input" rows="1" placeholder="Ask..."></textarea>
-                        <button id="btn-send-chat">➤</button>
-                        <button id="btn-stop-chat" style="display:none;" class="chat-icon-btn" title="Stop">🛑</button>
-                    </div>
-                </div>
-                
-                <!-- Resize Handles -->
-                <div class="chat-resize-handle chat-resize-nw"></div>
-                <div class="chat-resize-handle chat-resize-n"></div>
-                <div class="chat-resize-handle chat-resize-ne"></div>
-                <div class="chat-resize-handle chat-resize-e"></div>
-                <div class="chat-resize-handle chat-resize-se"></div>
-                <div class="chat-resize-handle chat-resize-s"></div>
-                <div class="chat-resize-handle chat-resize-sw"></div>
-                <div class="chat-resize-handle chat-resize-w"></div>
-            </div>
-
-            <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">💬</button>
-
-            <input type="file" id="chat-file-input" style="display:none;" accept="image/*,.pdf,.txt,.json,.csv,.js">
-
-            <div id="chat-camera-modal" class="chat-camera-modal" style="display:none;">
-                <div class="camera-content">
-                    <video id="chat-camera-feed" autoplay playsinline></video>
-                    <div class="camera-controls">
-                        <button class="camera-btn-cancel" id="btn-cam-cancel">Cancel</button>
-                        <button class="camera-btn-capture" id="btn-cam-capture" title="Take Photo"></button>
-                    </div>
-                </div>
-            </div>
-        `;
+    async render() {
+        try {
+            const response = await fetch(`${this.appBasePath}/components/templates/ai-chat-widget.html`);
+            if (!response.ok) throw new Error(`Failed to load template: ${response.statusText}`);
+            this.innerHTML = await response.text();
+        } catch (error) {
+            console.error("Error rendering AiChatWidget:", error);
+            this.innerHTML = `<div class="error">Failed to load Chat Assistant UI</div>`;
+        }
     }
 
     setupEventListeners() {

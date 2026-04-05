@@ -109,3 +109,9 @@
 
 ## 2026-04-05 - Global Maintenance
 - **Copyright Header Update**: Harmonized all JavaScript file headers to reflect the extended project lifespan: `(c) 2025-2026 Sebastien Lalaurette`.
+
+## 2026-04-05 - Web Component Architecture Refactoring
+- **Template Extraction**: Initiated the extraction of raw HTML/CSS from Javascript Web Components into dedicated external template files to improve maintainability and separation of concerns.
+    - Created `public/components/templates/` directory to store HTML templates.
+    - Refactored `AiChatWidget` (`public/components/ai-chat-widget.js`) to asynchronously load `ai-chat-widget.html`.
+    - Refactored `AdminAiPanel` (`public/components/admin-ai-panel.js`) to asynchronously load `admin-ai-panel.html`.
