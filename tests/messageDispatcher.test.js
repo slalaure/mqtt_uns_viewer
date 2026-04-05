@@ -26,6 +26,9 @@ jest.mock('../core/webhookManager', () => ({
 }));
 const webhookManager = require('../core/webhookManager');
 
+const metricsManager = require('../core/metricsManager');
+const errorUtils = require('../core/errorUtils');
+
 // Helper to create a fully mockable logger
 const createMockLogger = () => {
     const logger = {
@@ -72,6 +75,10 @@ describe('MessageDispatcher', () => {
             })
         };
         messageDispatcher.setWorkerPool(mockWorkerPool);
+
+        jest.spyOn(metricsManager, 'incrementMessagesProcessed').mockImplementation(() => {});
+        jest.spyOn(metricsManager, 'incrementError').mockImplementation(() => {});
+        jest.spyOn(errorUtils, 'logError').mockImplementation(() => {});
 
         // Initialize the dispatcher
         handleMessage = messageDispatcher.init(
@@ -159,5 +166,34 @@ describe('MessageDispatcher', () => {
             expect.objectContaining({ value: 100 }),
             'my-trace-id'
         );
+    });
+
+    test('should increment messages processed metric for every incoming message', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'test/metrics';
+        const payload = JSON.stringify({ value: 1 });
+
+        await handleMessage(providerId, topic, payload);
+        
+        expect(metricsManager.incrementMessagesProcessed).toHaveBeenCalled();
+    });
+
+    test('should handle and log unexpected errors correctly', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'test/error';
+        const payload = JSON.stringify({ value: 1 });
+
+        // Force an error in the pipeline
+        mockDataManager.insertMessage.mockImplementationOnce(() => {
+            throw new Error('Forced Database Error');
+        });
+
+        await handleMessage(providerId, topic, payload);
+
+        // Verify the standardized error logger was called
+        expect(errorUtils.logError).toHaveBeenCalledWith(expect.objectContaining({
+            code: 'UNEXPECTED_DISPATCH_ERROR',
+            message: expect.stringContaining('UNEXPECTED ERROR processing topic test/error')
+        }));
     });
 });

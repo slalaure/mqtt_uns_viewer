@@ -19,3 +19,13 @@
     - *ESM Conflicts*: `node-opcua` dependencies (like `hexy`) use ESM exports which crash Jest in CommonJS mode. Solution: Explicitly mock `node-opcua` at the very top of the test file before any other `require`.
     - *File Streaming*: `fileProvider.test.js` was unstable with fake timers due to internal Node.js stream buffering. Solution: Switched to real timers with small delays for robust integration testing.
 
+## 2026-04-05 - Enterprise Observability & Standardized Error Logging
+- **Prometheus Metrics**: Implemented `/api/metrics` endpoint exposing real-time metrics: `korelate_messages_processed_total` (throughput), `korelate_active_ws_connections` (active clients), `korelate_dlq_size` (DLQ depth), and `korelate_errors_total` (error counts by code).
+- **Standardized Error Logging**: Created `core/errorUtils.js` to ensure all error logs include `code`, `message`, `traceId` (mapped from `correlationId`), and `stack` (when available). This enables better observability and troubleshooting in enterprise environments.
+- **Metrics Infrastructure**: Added `core/metricsManager.js` to centralize metric collection and formatting (Prometheus version 0.0.4).
+- **Core Logic Touched**: `core/messageDispatcher.js`, `core/websocketManager.js`, `storage/dlqManager.js`, `interfaces/web/router.js`.
+- **Pitfalls & Solutions**:
+    - *Metric Consistency*: Standardized on `correlationId` as the source for `traceId` in error logs to maintain consistency with the existing distributed tracing logic in `messageDispatcher.js`.
+    - *Performance Protection*: Ensured that the `/api/metrics` endpoint is protected by `ipFilterMiddleware` to prevent unauthorized scraping of system health data.
+    - *DLQ Observability*: Added `getMessages().length` as a gauge in metrics to provide immediate visibility into database insertion failures.
+

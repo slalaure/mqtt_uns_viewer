@@ -162,6 +162,8 @@ let broadcastDbStatus;
 /** @type {Object} */
 let alertManager;
 const semanticManager = require('./semantic/semanticManager'); // Semantic Engine
+const metricsManager = require('./metricsManager');
+const errorUtils = require('./errorUtils');
 
 const MAX_PAYLOAD_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -181,6 +183,7 @@ let throttleResetTimer = null;
  * @param {MessageOptions} [options] - Metadata injected by the provider
  */
 async function handleMessage(providerId, topic, payload, options = {}) {
+    metricsManager.incrementMessagesProcessed();
     const timestamp = new Date();
     
     // Use ingress correlationId if provided, otherwise generate a new one
@@ -238,7 +241,13 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                     payloadStringForWs = JSON.stringify(payloadObjectForMapper, longReplacer, 2);
                     payloadStringForDb = JSON.stringify(payloadObjectForMapper, longReplacer);
                 } catch (err) {
-                    handlerLogger.error({ err, topic }, "❌ Error decoding Sparkplug payload in Worker");
+                    errorUtils.logError({ 
+                        logger: handlerLogger, 
+                        err, 
+                        code: 'SPARKPLUG_DECODE_ERROR', 
+                        traceId: correlationId,
+                        message: "❌ Error decoding Sparkplug payload in Worker"
+                    });
                     payloadStringForWs = rawBuffer.toString('hex');
                     payloadStringForDb = JSON.stringify({ raw_payload_hex: payloadStringForWs, decode_error: err.message });
                     payloadObjectForMapper = { raw_payload_hex: payloadStringForWs, decode_error: err.message };
@@ -281,6 +290,7 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                     payloadStringForDb = JSON.stringify(payloadObjectForMapper, longReplacer);
                     payloadStringForWs = JSON.stringify(payloadObjectForMapper, longReplacer, 2);
                 } catch (stringifyErr) {
+                    metricsManager.incrementError('json_stringify_error');
                     handlerLogger.error({ err: stringifyErr }, "Failed to stringify enriched I3X payload");
                 }
             } else if (payloadObjectForMapper && payloadObjectForMapper.raw_payload && Object.keys(payloadObjectForMapper).length === 1) {
@@ -330,7 +340,14 @@ async function handleMessage(providerId, topic, payload, options = {}) {
         await webhookManager.trigger(topic, payloadObjectForMapper, correlationId);
 
     } catch (err) {
-        handlerLogger.error({ msg: `❌ UNEXPECTED ERROR processing topic ${topic}`, error_message: err.message });
+        errorUtils.logError({
+            logger: handlerLogger,
+            err,
+            code: 'UNEXPECTED_DISPATCH_ERROR',
+            traceId: correlationId,
+            message: `❌ UNEXPECTED ERROR processing topic ${topic}`,
+            context: { topic }
+        });
     }
 }
 

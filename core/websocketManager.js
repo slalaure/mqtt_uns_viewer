@@ -15,6 +15,7 @@
 
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto'); // Used for generating Client IDs
+const { logError } = require('./errorUtils');
 
 let wss = null;
 let db = null;
@@ -208,7 +209,13 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
                 }
 
             } catch (e) {
-                logger.error({ err: e }, "❌ Error processing WS message");
+                logError({
+                    logger,
+                    err: e,
+                    code: 'WS_MESSAGE_PROCESSING_ERROR',
+                    traceId: clientId,
+                    message: "❌ Error processing WS message"
+                });
             }
         });
 
@@ -324,6 +331,14 @@ function close(callback) {
     }
 }
 
+/**
+ * Returns the number of active WebSocket connections.
+ * @returns {number}
+ */
+function getActiveConnectionsCount() {
+    return clients.size;
+}
+
 module.exports = {
     initWebSocketManager,
     broadcast,
@@ -331,5 +346,6 @@ module.exports = {
     getBackpressureMetrics,
     resetDroppedMessagesCount,
     getWss,
+    getActiveConnectionsCount,
     close
 };

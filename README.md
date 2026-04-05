@@ -94,11 +94,14 @@ To handle environments ranging from a few updates a minute to thousands of messa
     * **Smart Namespace Rate Limiting:** Drops high-frequency spam (>50 msgs/s per namespace) early at the MQTT handler level, protecting CPU/RAM while preserving low-frequency critical events.
     * **Queue Compaction:** Deduplicates topic states in memory before DuckDB insertion to prevent Out-Of-Memory (OOM) errors during packet storms.
     * **Frontend Backpressure:** Uses `requestAnimationFrame` to batch DOM updates, ensuring the browser UI never freezes, even under extreme load.
-2.  **Tier 1: In-Memory (Real-Time):** Instant WebSocket broadcasting for live dashboards.
-3.  **Tier 2: Embedded OLAP (DuckDB):** * Stores "Hot Data" locally.
+2.  **Enterprise Observability:**
+    * **Prometheus Metrics:** Tracks message throughput, error rates, WebSocket connections, and Dead Letter Queue (DLQ) size in real-time.
+    * **Standardized Error Logging:** All system errors include a unique `code`, `message`, and distributed `traceId` (mapped from `correlationId`) to enable seamless troubleshooting in enterprise log aggregators (e.g., ELK, Splunk).
+3.  **Tier 1: In-Memory (Real-Time):** Instant WebSocket broadcasting for live dashboards.
+4.  **Tier 2: Embedded OLAP (DuckDB):** * Stores "Hot Data" locally.
     * Time-series aggregations via native `time_bucket` functions.
     * Auto-pruning prevents disk overflow (`DUCKDB_MAX_SIZE_MB`).
-4.  **Tier 3: Perennial (TimescaleDB):**
+5.  **Tier 3: Perennial (TimescaleDB):**
     * Optional connector.
     * "Fire-and-forget" batched ingestion for long-term archival and compliance.
 
@@ -270,7 +273,7 @@ A floating assistant powered by LLMs (OpenAI, Gemini, Local models) running a re
 Define sophisticated detection rules using JavaScript conditions.
 * **Rule-Based Engine:** Write sandbox JS conditions (e.g., `return msg.payload.metrics[0].value > 80`) to trigger alerts.
 * **Autonomous AI Analyst:** When an alert triggers, the AI Agent automatically wakes up, reads the rule's custom `workflow_prompt` (e.g., "Check maintenance logs for this machine"), queries DuckDB, and generates a structured Markdown incident report.
-* **Webhooks & Triggers:** Automatically push the AI's Markdown report to external systems via HTTP POST (Slack/Teams).
+* **Webhooks & Triggers:** Automatically push the AI's Markdown report to external systems via HTTP POST (Slack/Teams). You can manage and **manually test** these webhook endpoints directly from the Admin panel.
 * **Live Dashboard:** Track active alerts, acknowledge/resolve them, and trace exactly which user (or AI) handled the incident and when.
 
 ### 9. I3X Standard API (RFC 001)
@@ -333,6 +336,15 @@ Accessible via the Cog icon (`/config.html`) or the Admin Tab.
 
 ### AI Tools Manifest (`ai_tools_manifest.json`)
 The application uses a Single Source of Truth (SSOT) for all LLM tools. Found in `public/ai_tools_manifest.json`, this file dictates the JSON Schemas, descriptions, and categories for tools used by both the internal Chat API and the external MCP server. Edit this file to expose new capabilities to the AI.
+
+### Working with AI Assistants (`GEMINI.md`)
+If you are using an AI coding assistant (like Gemini or Claude) to contribute to Korelate, refer to the `GEMINI.md` file at the root of the project. It contains the architectural mandates, prompt structures, and guidelines required to maintain consistency with the project's standards.
+
+### Testing Strategy
+The project maintains a comprehensive test suite (see `test_plan.md` for full details).
+* **Unit & Integration Tests (Backend):** Use `npx jest` to run the Jest suite.
+* **End-to-End Tests (Frontend):** Use `npx playwright test` to run the Playwright browser tests.
+* **Global Test Runner:** Use `node tests/run_all.js` to execute all tests (Unit + E2E) sequentially and generate a consolidated Markdown report in `test-results/`.
 
 ### HMI Scripting API
 To add logic (animations, color changes) to an HTML Dashboard or SVG, create a file named `[filename].js` alongside your `.html` or `.svg` file.
@@ -497,7 +509,13 @@ The application exposes a comprehensive REST API.
 | `GET` | `/api/admin/ai_history` | View history of AI-initiated modifications. | ✅ (Admin) |
 | `POST` | `/api/admin/ai_history/:id/revert` | Revert a specific AI action using its backup. | ✅ (Admin) |
 | `POST` | `/api/admin/data-parsers/csv` | Upload and start a dynamic CSV data stream. | ✅ (Admin) |
+| `GET` | `/api/admin/webhooks` | List all registered webhooks. | ✅ (Admin) |
+| `POST` | `/api/admin/webhooks` | Register a new webhook subscription. | ✅ (Admin) |
+| `DELETE` | `/api/admin/webhooks/:id` | Delete a webhook subscription. | ✅ (Admin) |
+| `POST` | `/api/admin/webhooks/:id/test` | Trigger a manual test payload for a webhook. | ✅ (Admin) |
 | `POST` | `/api/env/restart` | Restart the application server. | ✅ (Admin) |
+| `GET` | `/api/metrics` | Prometheus-formatted metrics (throughput, WS connections, errors, DLQ size). | ✅ (IP Filtered) |
+| `GET/POST` | `/api/i3x/*` | Full I3X (RFC 001) API implementation (Namespaces, Objects, Value, History, Subs). | ✅ (IP Filtered) |
 
 ---
 

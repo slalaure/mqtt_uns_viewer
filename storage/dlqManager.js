@@ -16,6 +16,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { logError } = require('../core/errorUtils');
 
 // --- Module-level State ---
 let logger = null;
@@ -86,7 +87,13 @@ function push(batch, repoName = 'unknown') {
         fs.appendFileSync(DLQ_FILE_PATH, content, 'utf8');
         logger.warn({ repoName, count: batch.length }, `📥 Pushed messages to DLQ due to failure in ${repoName}.`);
     } catch (err) {
-        logger.error({ err }, "❌ FATAL ERROR: Failed to write to DLQ file. Data loss occurred!");
+        logError({
+            logger,
+            err,
+            code: 'DLQ_WRITE_ERROR',
+            message: "❌ FATAL ERROR: Failed to write to DLQ file. Data loss occurred!",
+            context: { repoName }
+        });
     }
 }
 

@@ -12,6 +12,10 @@ Ce document décrit la stratégie et les scénarios de test pour garantir la sta
 ## 1. Tests Unitaires & Intégration (Backend)
 
 ### 1.1. Core Engines (Moteurs Principaux)
+* **Metrics & Observability (`metricsManager.test.js` & `errorUtils.test.js`)**
+    * *Counters* : Vérifier l'incrémentation correcte des compteurs de messages et d'erreurs (par code).
+    * *Format* : S'assurer que la sortie Prometheus est valide et contient les jauges (`DLQ Size`, `WS Connections`).
+    * *Log Format* : Vérifier que `logError` structure correctement les métadonnées (`code`, `traceId`, `stack`).
 * **Message Dispatcher (`messageDispatcher.test.js`)**
     * *Anti-Spam* : Vérifier qu'un namespace dépassant 50 msgs/sec est throttle.
     * *Payload Limits* : Vérifier qu'un payload > 2MB est tronqué et remplacé par un message d'erreur pour éviter l'OOM.

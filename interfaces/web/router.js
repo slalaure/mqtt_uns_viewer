@@ -18,6 +18,7 @@ const path = require('path');
 const fs = require('fs');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const featureGate = require('./middlewares/featureGate');
+const metricsManager = require('../../core/metricsManager');
 
 /**
  * Configures and returns the main application router.
@@ -136,6 +137,13 @@ function createRouter(deps) {
     router.post('/api/logs/frontend', ipFilterMiddleware, (req, res) => {
         logger.error({ frontend: req.body }, `[Frontend Error] ${req.body.type}: ${req.body.message}`);
         res.status(200).json({ success: true });
+    });
+
+    // --- [NEW] Metrics API ---
+    router.get('/api/metrics', ipFilterMiddleware, (req, res) => {
+        const metrics = metricsManager.getPrometheusMetrics();
+        res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+        res.send(metrics);
     });
 
     // --- API Routes for HMI ---
