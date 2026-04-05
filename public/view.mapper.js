@@ -66,8 +66,9 @@ return [
 let mapperConfig = { versions: [], activeVersionId: null };
 let mapperMetrics = {};
 let mappedTargetTopics = new Map(); 
-let currentEditingBrokerId = null; 
+let currentEditingSourceId = null;
 let currentEditingSourceTopic = null;
+
 let currentEditingPayload = null; // Stores payload for maximized editor reference
 let deleteModalContext = null;
 let maxMappersLimit = 0; 
@@ -143,8 +144,8 @@ export function initMapperView(callbacks) {
  */
 
 const onCurrentTopicChange = (topic) => {
-    if (topic && state.currentBrokerId) {
-        const node = document.querySelector(`#mapper-tree .node-container[data-topic="${topic}"][data-broker-id="${state.currentBrokerId}"]`);
+    if (topic && state.currentSourceId) {
+        const node = document.querySelector(`#mapper-tree .node-container[data-topic="${topic}"][data-source-id="${state.currentSourceId}"]`);
         if (node) {
             document.querySelectorAll('#mapper-tree .selected').forEach(n => n.classList.remove('selected'));
             node.classList.add('selected');
@@ -157,7 +158,7 @@ const onCurrentTopicChange = (topic) => {
             }
 
             // TRIGGER BUSINESS LOGIC: Hydrate payload viewer and transform editor
-            handleMapperNodeClick(null, node, state.currentBrokerId, topic);
+            handleMapperNodeClick(null, node, state.currentSourceId, topic);
         }
     }
 };
@@ -191,10 +192,10 @@ export function mountMapperView() {
     modalBtnDeletePrune?.addEventListener('click', onDeleteAndPrune);
 
     // Re-render current selection if returning to the view or it was selected in another tab
-    if (state.currentTopic && state.currentBrokerId) {
+    if (state.currentTopic && state.currentSourceId) {
         onCurrentTopicChange(state.currentTopic);
-    } else if (currentEditingSourceTopic && currentEditingBrokerId) {
-        renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic);
+    } else if (currentEditingSourceTopic && currentEditingSourceId) {
+        renderTransformEditor(currentEditingSourceId, currentEditingSourceTopic);
     }
 
     isMounted = true;
@@ -260,7 +261,7 @@ export function handleMapperNodeClick(event, nodeContainer, sourceId, topic) {
     currentEditingPayload = payload; // Save for maximized editor reference
 
     // Enable editor for the node
-    currentEditingBrokerId = sourceId;
+    currentEditingSourceId = sourceId;
     currentEditingSourceTopic = topic;
     
     if (isMounted) {
@@ -536,7 +537,7 @@ function onAddTarget() {
 
     rule.targets.push(newTarget);
     state.mapperUnsaved = true; // Flag as unsaved
-    renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic); 
+    renderTransformEditor(currentEditingSourceId, currentEditingSourceTopic); 
 
     // Expand the newly added target automatically
     const newEditorDiv = mapperTargetsList.lastElementChild;
@@ -749,7 +750,7 @@ function onVersionChange() {
     state.mapperUnsaved = false; // Clear unsaved state on version switch
     
     if (currentEditingSourceTopic) {
-        renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic);
+        renderTransformEditor(currentEditingSourceId, currentEditingSourceTopic);
     } else {
         mapperTransformPlaceholder.style.display = 'block';
         mapperTransformForm.style.display = 'none';
@@ -793,7 +794,7 @@ function onDeleteRule() {
             activeVersion.rules = activeVersion.rules.filter(r => r.sourceTopic !== rule.sourceTopic);
         }
         
-        currentEditingBrokerId = null; 
+        currentEditingSourceId = null; 
         currentEditingSourceTopic = null;
         mapperTransformPlaceholder.style.display = 'block';
         mapperTransformForm.style.display = 'none';
@@ -856,7 +857,7 @@ async function onDeleteAndPrune() {
         await appCallbacks.pruneTopicFromFrontend(topicPattern);
 
         if(ruleWasRemoved) {
-            currentEditingBrokerId = null; 
+            currentEditingSourceId = null; 
             currentEditingSourceTopic = null;
             mapperTransformPlaceholder.style.display = 'block';
             mapperTransformForm.style.display = 'none';

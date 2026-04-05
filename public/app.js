@@ -359,10 +359,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Reactive Topic Selection ---
     subscribe('currentTopic', (topic) => {
-        if (!topic || !state.currentBrokerId) return;
+        if (!topic || !state.currentSourceId) return;
         
         // 1. Sync Tree selection (Main Tree)
-        const node = document.querySelector(`#mqtt-tree .node-container[data-topic="${topic}"][data-broker-id="${state.currentBrokerId}"]`);
+        const node = document.querySelector(`#mqtt-tree .node-container[data-topic="${topic}"][data-source-id="${state.currentSourceId}"]`);
         if (node && node !== selectedMainTreeNode) {
             if (selectedMainTreeNode) selectedMainTreeNode.classList.remove('selected');
             selectedMainTreeNode = node;
@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Sync Payload Viewer
             const payload = node.dataset.payload;
-            mainPayloadViewer.display(state.currentBrokerId, topic, payload);
+            mainPayloadViewer.display(state.currentSourceId, topic, payload);
         }
     });
 
@@ -392,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedMainTreeNode.classList.add('selected');
         
         // Update reactive state
-        state.currentBrokerId = sourceId;
+        state.currentSourceId = sourceId;
         state.currentTopic = topic;
         
         if (livePayloadToggle && livePayloadToggle.checked) {
@@ -902,12 +902,12 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.reload();
     } 
 
-    function finishInitialization(appConfig) {
+    async function finishInitialization(appConfig) {
         if (brokerConfigs.length > 0) {
             const allTopics = brokerConfigs.flatMap(b => b.topics || b.subscribe || []);
             subscribedTopicPatterns = [...new Set(allTopics)];
         }
-        
+
         (appConfig.brokerConfigs || []).forEach(b => { providersMap[b.id] = b.type || 'mqtt'; });
         (appConfig.dataProviders || []).forEach(p => { providersMap[p.id] = p.type || 'file'; });
 
@@ -916,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { enabled: appConfig.viewTreeEnabled, id: 'btn-tree-view' },
             { enabled: appConfig.viewHmiEnabled, id: 'btn-hmi-view' },
             { enabled: appConfig.viewHistoryEnabled, id: 'btn-history-view' },
-            { enabled: appConfig.viewModelerEnabled && currentUser.role === 'admin', id: 'btn-modeler-view' }, 
+            { enabled: appConfig.viewModelerEnabled && currentUser.role === 'admin', id: 'btn-modeler-view' },
             { enabled: appConfig.viewMapperEnabled, id: 'btn-mapper-view' },
             { enabled: appConfig.viewChartEnabled, id: 'btn-chart-view' },
             { enabled: appConfig.viewPublishEnabled, id: 'btn-publish-view' },
@@ -938,18 +938,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // --- Initialize Chart View BEFORE Tree ---
+        if (appConfig.viewChartEnabled) {
+            await initChartView({
+                getHistory: () => allHistoryEntries,
+                requestRangeCallback: requestHistoryRange,
+                colorChartTreeCallback: colorChartTree,
+                maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
+                isMultiBroker: isMultiBroker
+            });
+        }
+
         // --- Init View Managers ---
         mainPayloadViewer = createPayloadViewer({
             topicEl: document.getElementById('payload-topic'),
             contentEl: document.getElementById('payload-content'),
             historyLogEl: document.getElementById('topic-history-log'),
             placeholderEl: document.querySelector('.topic-history-log .history-placeholder'),
-            isMultiBroker: isMultiBroker 
+            isMultiBroker: isMultiBroker
         });
 
         mainTree = createTreeManager(document.getElementById('mqtt-tree'), {
             treeId: 'main',
-            onNodeClick: handleMainTreeClick, 
+            onNodeClick: handleMainTreeClick,
             onCheckboxClick: handleMainTreeCheckboxClick,
             showCheckboxes: true,
             allowFolderCollapse: true,
@@ -959,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         mapperTree = createTreeManager(document.getElementById('mapper-tree'), {
             treeId: 'mapper',
-            onNodeClick: (e, node, sourceId, topic) => { 
+            onNodeClick: (e, node, sourceId, topic) => {
                 if (!topic && node.dataset.isI3x !== "true") {
                     node.closest('li').classList.toggle('collapsed');
                     return;
@@ -968,34 +979,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     node.closest('li').classList.toggle('collapsed');
                     return;
                 }
-                handleMapperNodeClick(e, node, sourceId, topic); 
+                handleMapperNodeClick(e, node, sourceId, topic);
                 document.querySelectorAll('#mapper-tree .selected').forEach(n => n.classList.remove('selected'));
-                node.classList.add('selected');
-            },
-            allowFolderCollapse: true,
-            isMultiBroker: isMultiBroker,
-            providersMap: providersMap 
-        });
-
-        chartTree = createTreeManager(document.getElementById('chart-tree'), {
-            treeId: 'chart',
-            onNodeClick: (e, node, sourceId, topic) => { 
-                if (!topic && node.dataset.isI3x !== "true") {
-                    node.closest('li').classList.toggle('collapsed');
-                    return;
-                }
-                if (node.dataset.isI3x === "true" && (!topic && sourceId === 'i3x')) {
-                    node.closest('li').classList.toggle('collapsed');
-                    return;
-                }
-                handleChartNodeClick(e, node, sourceId, topic);
-                document.querySelectorAll('#chart-tree .selected').forEach(n => n.classList.remove('selected'));
                 node.classList.add('selected');
             },
             allowFolderCollapse: true,
             isMultiBroker: isMultiBroker,
             providersMap: providersMap
         });
+
+        if (appConfig.viewChartEnabled) {
+            chartTree = createTreeManager(document.getElementById('chart-tree'), {
+                treeId: 'chart',
+                onNodeClick: (e, node, sourceId, topic) => {
+                    if (!topic && node.dataset.isI3x !== "true") {
+                        node.closest('li').classList.toggle('collapsed');
+                        return;
+                    }
+                    if (node.dataset.isI3x === "true" && (!topic && sourceId === 'i3x')) {
+                        node.closest('li').classList.toggle('collapsed');
+                        return;
+                    }
+                    handleChartNodeClick(e, node, sourceId, topic);
+                    document.querySelectorAll('#chart-tree .selected').forEach(n => n.classList.remove('selected'));
+                    node.classList.add('selected');
+                },
+                allowFolderCollapse: true,
+                isMultiBroker: isMultiBroker,
+                providersMap: providersMap
+            });
+        }
 
         refreshSemanticTrees();
 
@@ -1005,12 +1018,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (appConfig.viewHistoryEnabled) {
-            initHistoryView({ 
+            initHistoryView({
                 isMultiBroker: isMultiBroker,
                 brokerConfigs: brokerConfigs,
                 dataProviders: dataProviders,
-                requestRangeCallback: requestHistoryRange 
-            }); 
+                requestRangeCallback: requestHistoryRange
+            });
         }
 
         // Initialize Modeler
@@ -1021,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appConfig.viewMapperEnabled) {
             initMapperView({
                 pruneTopicFromFrontend: pruneTopicFromFrontend,
-                getSubscribedTopics: () => subscribedTopicPatterns, 
+                getSubscribedTopics: () => subscribedTopicPatterns,
                 colorAllTrees: colorAllMapperTrees,
                 addPruneIgnorePattern: (pattern) => {
                     recentlyPrunedPatterns.add(pattern);
@@ -1034,26 +1047,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        if (appConfig.viewChartEnabled) {
-            initChartView({
-                getHistory: () => allHistoryEntries,
-                requestRangeCallback: requestHistoryRange, 
-                colorChartTreeCallback: colorChartTree,
-                maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
-                isMultiBroker: isMultiBroker 
-            });
-        }
-
         if (appConfig.viewPublishEnabled) {
             initPublishView({
-                subscribedTopics: subscribedTopicPatterns, 
+                subscribedTopics: subscribedTopicPatterns,
                 simulatorListContainer: simulatorControls,
-                isMultiBroker: isMultiBroker, 
+                isMultiBroker: isMultiBroker,
                 brokerConfigs: brokerConfigs,
                 dataProviders: dataProviders
             });
         }
-
         if (currentUser.role === 'admin') {
             initAdminView();
         }

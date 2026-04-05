@@ -11,7 +11,21 @@
 - **Backend API Hardening**: 
     - Added missing `GET` and `PUT` routes in `interfaces/web/adminApi.js` for `/hmi-assets/:filename` and `/simulators/:filename` to allow reading and updating files from the Admin code editor.
     - Exposed `MapperEngine.deleteVersion()` to allow safe deletion of non-active mapper versions via the Admin UI.
+- **WIP: Alerts & Chart View Web Components Refactoring**:
+    - **Alerts View**: Successfully split `view.alerts.js` into `<alerts-active-panel>` and `<alerts-rules-panel>`. DOM extracted to `view.alerts.html`.
+    - **Chart View (BROKEN STATE)**: Started refactoring `view.chart.js` to use `<chart-config-bar>`, `<chart-time-slider>`, and `<chart-variable-list>`. DOM extracted to `view.chart.html`. The view is currently broken: selecting a node in the tree shows "No numeric properties found in this payload" and chart generation fails. Needs further debugging on event bubbling and variable mapping logic.
     - Exposed `AlertManager.purgeResolvedAlerts()` to allow database maintenance (Delete + Vacuum) via the Admin UI.
+- **Protocol-Agnostic Refactoring**:
+    - Renamed `state.currentBrokerId` to `state.currentSourceId` in `public/state.js` to generalize across different data providers (MQTT, OPC UA, HTTP, etc.).
+    - Updated all views (`view.chart.js`, `view.mapper.js`, `view.history.js`, `view.publish.js`) and `app.js` to subscribe to the new `currentSourceId`.
+    - Standardized DOM data attributes in `tree-manager.js` to use `data-source-id` instead of `data-broker-id`.
+- **Chart View Fixes**:
+    - **Tree Selection & Payloads**: Resolved the "No numeric properties found" bug by ensuring `tree-manager.js` correctly stringifies JSON payloads before storing them in the DOM `dataset`. Fixed selectors to match the new `data-source-id` attribute.
+    - **Chart Rendering & Dates**: Fixed a bug where curves wouldn't display on initial load because the requested date range was 1970 (`timestamp = 0`). Now defaults to a 1-hour window.
+    - **Color Customization**: Fixed the color picker so that custom colors selected by the user override the auto-generated semantic Hues in `chart-logic.mjs`. Improved UX by adding `.var-color-picker` styling and immediate `oninput` state synchronization.
+    - **Flexbox Resize & UI Oomph**: 
+        - Resolved a display glitch when resizing the Chart View horizontally by forcing `min-height: 0` on containers and strict `100%` dimensions on the `<canvas>`.
+        - Made the Chart configuration header (`chart-config-bar`) opaque and sticky to ensure it remains legible and "on top" when the view is resized or scrolled.
 - **Improved Testing**: 
     - Added unit tests for DLQ clearing and message retrieval in `tests/dlqManager.test.js`.
     - Added unit tests for version management in `tests/mapperEngine.test.js`.

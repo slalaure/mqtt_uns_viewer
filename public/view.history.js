@@ -434,7 +434,7 @@ export function mountHistoryView() {
     providerFilterSelect?.addEventListener('change', onProviderChange);
 
     subscribe('currentTopic', onTopicStateChange, true);
-    subscribe('currentBrokerId', onBrokerStateChange);
+    subscribe('currentSourceId', onBrokerStateChange);
 
     // Initial render trigger
     renderFilteredHistory();
@@ -455,7 +455,7 @@ export function unmountHistoryView() {
     providerFilterSelect?.removeEventListener('change', onProviderChange);
 
     unsubscribe('currentTopic', onTopicStateChange, true);
-    unsubscribe('currentBrokerId', onBrokerStateChange);
+    unsubscribe('currentSourceId', onBrokerStateChange);
 
     isMounted = false;
     console.log("[History View] Unmounted & Cleaned up.");

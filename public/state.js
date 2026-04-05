@@ -17,7 +17,7 @@ const listeners = new Map();
 // Initial source of truth for the frontend
 const internalState = {
     currentTopic: null,
-    currentBrokerId: null,
+    currentSourceId: null,
     isDarkMode: localStorage.getItem('theme') === 'dark',
     isLivePayload: true,
     unsavedChanges: false,

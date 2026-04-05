@@ -155,7 +155,7 @@ export function buildChartDatasets(rawPointsMap, chartedVariables, options = {})
         // Determine Color
         const axisIndex = distinctAxes.indexOf(axisKey);
         const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
-        const color = `hsl(${hue}, 85%, 60%)`;
+        const color = chartedVariables.get(varId)?.color || `hsl(${hue}, 85%, 60%)`;
 
         datasets.push({
             label: label,

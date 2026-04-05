@@ -24,7 +24,9 @@ import {
   showToast,
 } from "./utils.js";
 import { createPayloadViewer } from "./payload-viewer.js";
-import { createDualTimeSlider } from "./time-slider.js";
+import './components/chart-config-bar.js';
+import './components/chart-time-slider.js';
+import './components/chart-variable-list.js';
 import { 
     isBooleanLike, 
     guessGroupKey, 
@@ -34,38 +36,18 @@ import {
 } from "./libs/chart-logic.mjs";
 
 // --- DOM Element Querying ---
-const chartVariableList = document.getElementById("chart-variable-list");
-const chartMainArea = document.getElementById("chart-main-area");
-const chartCanvas = document.getElementById("chart-canvas");
-const chartPlaceholder = document.getElementById("chart-placeholder");
-const btnChartFullscreen = document.getElementById("btn-chart-fullscreen");
-const btnChartExportCSV = document.getElementById("btn-chart-export-csv");
-const btnChartExportPNG = document.getElementById("btn-chart-export-png");
-const btnChartClear = document.getElementById("btn-chart-clear");
-const chartTypeSelect = document.getElementById("chart-type-select");
-const chartConnectNulls = document.getElementById("chart-connect-nulls-toggle");
-const chartConfigSelect = document.getElementById("chart-config-select");
-const chartSmartAxis = document.getElementById("chart-smart-axis-toggle");
-const btnChartSaveCurrent = document.getElementById("btn-chart-save-current");
-const btnChartSaveAs = document.getElementById("btn-chart-save-as");
-const btnChartDeleteConfig = document.getElementById("btn-chart-delete-config");
-const chartStartDateInput = document.getElementById("chart-start-date");
-const chartEndDateInput = document.getElementById("chart-end-date");
-const chartRangeButtonsContainer = document.getElementById(
-  "chart-range-buttons",
-);
-const chartTimeSliderContainer = document.getElementById(
-  "chart-time-range-slider-container",
-);
-const chartHandleMin = document.getElementById("chart-handle-min");
-const chartHandleMax = document.getElementById("chart-handle-max");
-const chartSliderRange = document.getElementById("chart-slider-range");
-const chartLabelMin = document.getElementById("chart-label-min");
-const chartLabelMax = document.getElementById("chart-label-max");
+let chartVariableList = null;
+let chartMainArea = null;
+let chartCanvas = null;
+let chartPlaceholder = null;
+
+// Web Components
+let configBar = null;
+let timeSlider = null;
 
 // --- Module-level State ---
 let chartInstance = null;
-let selectedChartBrokerId = null;
+let selectedChartSourceId = null;
 let selectedChartTopic = null;
 let chartedVariables = new Map();
 let minTimestamp = 0;
@@ -88,13 +70,7 @@ const MAX_POINTS_PER_SERIES = 500;
 
 // --- Semantic Color Palette (Now imported from chart-logic.mjs) ---
 
-let payloadViewer = createPayloadViewer({
-  topicEl: document.getElementById("chart-payload-topic"),
-  contentEl: document.getElementById("chart-payload-content"),
-  historyLogEl: null,
-  placeholderEl: null,
-  isMultiBroker: false,
-});
+let payloadViewer = null;
 
 let appCallbacks = {
   colorChartTreeCallback: () => console.error("colorChartTreeCallback not set"),
@@ -174,13 +150,16 @@ function hideChartLoader() {
 // --- Named Event Handlers (For easy removal on unmount) ---
 
 const onChartUnsavedChange = (isUnsaved) => {
-  if (isUnsaved) {
-    if (btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
-      btnChartSaveCurrent.classList.add("btn-unsaved");
-    }
-  } else {
-    if (btnChartSaveCurrent) {
-      btnChartSaveCurrent.classList.remove("btn-unsaved");
+  if (configBar) {
+    const btnChartSaveCurrent = configBar.querySelector("#btn-chart-save-current");
+    if (isUnsaved) {
+      if (btnChartSaveCurrent && !btnChartSaveCurrent.disabled) {
+        btnChartSaveCurrent.classList.add("btn-unsaved");
+      }
+    } else {
+      if (btnChartSaveCurrent) {
+        btnChartSaveCurrent.classList.remove("btn-unsaved");
+      }
     }
   }
 };
@@ -203,11 +182,15 @@ const onAggSelectChange = () => {
 };
 
 const onDateChange = () => {
-  const start = chartStartDateInput.value
-    ? new Date(chartStartDateInput.value).getTime()
+  if (!configBar) return;
+  const startInput = configBar.getStartDateInput();
+  const endInput = configBar.getEndDateInput();
+  
+  const start = startInput && startInput.value
+    ? new Date(startInput.value).getTime()
     : 0;
-  const end = chartEndDateInput.value
-    ? new Date(chartEndDateInput.value).getTime()
+  const end = endInput && endInput.value
+    ? new Date(endInput.value).getTime()
     : Date.now();
   if (start && end && start < end) {
     isChartLive = Math.abs(end - Date.now()) < 60000;
@@ -219,9 +202,9 @@ const onDateChange = () => {
 };
 
 const onCurrentTopicChange = (topic) => {
-  if (topic && state.currentBrokerId) {
+  if (topic && state.currentSourceId) {
     const node = document.querySelector(
-      `#chart-tree .node-container[data-topic="${topic}"][data-broker-id="${state.currentBrokerId}"]`,
+      `#chart-tree .node-container[data-topic="${topic}"][data-source-id="${state.currentSourceId}"]`,
     );
     if (node) {
       document
@@ -237,19 +220,36 @@ const onCurrentTopicChange = (topic) => {
       }
 
       // TRIGGER BUSINESS LOGIC: Populate variables and payload viewer
-      handleChartNodeClick(null, node, state.currentBrokerId, topic);
+      handleChartNodeClick(null, node, state.currentSourceId, topic);
     }
   }
 };
 
-const onCurrentBrokerIdChange = (sourceId) => {
+const onCurrentSourceIdChange = (sourceId) => {
   // Optional broker sync
 };
+
+function initializeElements() {
+  chartMainArea = document.getElementById("chart-main-area");
+  chartCanvas = document.getElementById("chart-canvas");
+  chartPlaceholder = document.getElementById("chart-placeholder");
+  configBar = document.querySelector("chart-config-bar");
+  timeSlider = document.querySelector("chart-time-slider");
+  chartVariableList = document.querySelector("chart-variable-list");
+
+  payloadViewer = createPayloadViewer({
+    topicEl: document.getElementById("chart-payload-topic"),
+    contentEl: document.getElementById("chart-payload-content"),
+    historyLogEl: null,
+    placeholderEl: null,
+    isMultiBroker: false,
+  });
+}
 
 /**
  * Initializes the Chart View DOM structure (Called once on app start).
  */
-export function initChartView(callbacks) {
+export async function initChartView(callbacks) {
   const {
     displayPayload,
     maxSavedChartConfigs,
@@ -262,113 +262,121 @@ export function initChartView(callbacks) {
   maxChartsLimit = maxSavedChartConfigs || 0;
   isMultiBroker = multiBrokerState || false;
 
-  // Convert Fullscreen button to Maximize style
-  if (btnChartFullscreen) {
-    btnChartFullscreen.innerHTML = "⛶ Maximize";
-    btnChartFullscreen.style.fontSize = "0.85em";
-    btnChartFullscreen.style.padding = "4px 10px";
+  // Load the template
+  try {
+    const response = await fetch("html/view.chart.html");
+    const html = await response.text();
+    const container = document.getElementById("chart-view");
+    if (container) {
+      container.innerHTML = html;
+    }
+  } catch (error) {
+    console.error("Failed to load chart view template:", error);
   }
 
-  // Remove pie option from selector
-  if (chartTypeSelect) {
-    for (let i = 0; i < chartTypeSelect.options.length; i++) {
-      if (chartTypeSelect.options[i].value === "pie") {
-        chartTypeSelect.remove(i);
-        break;
+  initializeElements();
+
+  if (configBar) {
+    const typeSelect = configBar.getTypeSelect();
+    if (typeSelect) {
+      // Remove pie option from selector
+      for (let i = 0; i < typeSelect.options.length; i++) {
+        if (typeSelect.options[i].value === "pie") {
+          typeSelect.remove(i);
+          break;
+        }
+      }
+
+      // Inject Aggregation Dropdown Dynamically
+      if (!document.getElementById("chart-aggregation-select")) {
+        const typeGroup = typeSelect.closest(".form-group");
+        if (typeGroup) {
+          const aggGroup = document.createElement("div");
+          aggGroup.className = "form-group";
+          aggGroup.innerHTML = `
+              <label for="chart-aggregation-select">Aggregation:</label>
+              <select id="chart-aggregation-select" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
+                  <option value="AUTO">Auto (Mean)</option>
+                  <option value="MIN">Min</option>
+                  <option value="MAX">Max</option>
+                  <option value="MEAN">Mean</option>
+                  <option value="MEDIAN">Median</option>
+              </select>
+          `;
+          typeGroup.parentNode.insertBefore(aggGroup, typeGroup);
+        }
       }
     }
-  }
 
-  // Inject Aggregation Dropdown Dynamically
-  if (chartTypeSelect && !document.getElementById("chart-aggregation-select")) {
-    const typeGroup = chartTypeSelect.closest(".form-group");
-    const aggGroup = document.createElement("div");
-    aggGroup.className = "form-group";
-    aggGroup.innerHTML = `
-            <label for="chart-aggregation-select">Aggregation:</label>
-            <select id="chart-aggregation-select" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
-                <option value="AUTO">Auto (Mean)</option>
-                <option value="MIN">Min</option>
-                <option value="MAX">Max</option>
-                <option value="MEAN">Mean</option>
-                <option value="MEDIAN">Median</option>
-            </select>
-        `;
-    typeGroup.parentNode.insertBefore(aggGroup, typeGroup);
-  }
-
-  payloadViewer = createPayloadViewer({
-    topicEl: document.getElementById("chart-payload-topic"),
-    contentEl: document.getElementById("chart-payload-content"),
-    isMultiBroker: false,
-  });
-
-  if (chartRangeButtonsContainer) {
-    const createRangeBtn = (text, hours) => {
-      const btn = document.createElement("button");
-      btn.textContent = text;
-      btn.className = "tool-button";
-      btn.style.padding = "4px 8px";
-      btn.style.fontSize = "0.85em";
-      btn.onclick = () => setRelativeRange(hours);
-      return btn;
-    };
-    chartRangeButtonsContainer.innerHTML = "";
-    chartRangeButtonsContainer.appendChild(createRangeBtn("1h", 1));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("6h", 6));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("24h", 24));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("7d", 24 * 7));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("1M", 24 * 30));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("3M", 24 * 30 * 3));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("1Y", 24 * 365));
-    chartRangeButtonsContainer.appendChild(createRangeBtn("Full", "FULL"));
-  }
-
-  if (chartHandleMin && chartHandleMax) {
-    chartSlider = createDualTimeSlider({
-      containerEl: chartTimeSliderContainer,
-      handleMinEl: chartHandleMin,
-      handleMaxEl: chartHandleMax,
-      rangeEl: chartSliderRange,
-      labelMinEl: chartLabelMin,
-      labelMaxEl: chartLabelMax,
-      onDrag: (newMin, newMax) => {
-        isUserInteracting = true;
-        currentMinTimestamp = newMin;
-        currentMaxTimestamp = newMax;
-        const timeRange = maxTimestamp - minTimestamp;
-        if (timeRange > 0) {
-          const maxPercent = ((newMax - minTimestamp) / timeRange) * 100;
-          isChartLive = maxPercent > 99.9;
-        }
-        if (chartStartDateInput)
-          chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
-        if (chartEndDateInput)
-          chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-        if (chartSlider) {
-          chartSlider.updateUI(
-            minTimestamp,
-            maxTimestamp,
-            currentMinTimestamp,
-            currentMaxTimestamp,
-          );
-        }
-      },
-      onDragEnd: (newMin, newMax) => {
-        isUserInteracting = false;
-        currentMinTimestamp = newMin;
-        currentMaxTimestamp = newMax;
-        if (chartStartDateInput)
-          chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
-        if (chartEndDateInput)
-          chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-        triggerDataFetch();
-      },
-    });
+    const rangeButtons = configBar.getRangeButtonsContainer();
+    if (rangeButtons) {
+      const createRangeBtn = (text, hours) => {
+        const btn = document.createElement("button");
+        btn.textContent = text;
+        btn.className = "tool-button";
+        btn.style.padding = "4px 8px";
+        btn.style.fontSize = "0.85em";
+        btn.onclick = () => setRelativeRange(hours);
+        return btn;
+      };
+      rangeButtons.innerHTML = "";
+      rangeButtons.appendChild(createRangeBtn("1h", 1));
+      rangeButtons.appendChild(createRangeBtn("6h", 6));
+      rangeButtons.appendChild(createRangeBtn("24h", 24));
+      rangeButtons.appendChild(createRangeBtn("7d", 24 * 7));
+      rangeButtons.appendChild(createRangeBtn("1M", 24 * 30));
+      rangeButtons.appendChild(createRangeBtn("3M", 24 * 30 * 3));
+      rangeButtons.appendChild(createRangeBtn("1Y", 24 * 365));
+      rangeButtons.appendChild(createRangeBtn("Full", "FULL"));
+    }
   }
 
   loadChartConfig();
 }
+
+const onTimeDrag = (event) => {
+  const newMin = event.detail.min;
+  const newMax = event.detail.max;
+  isUserInteracting = true;
+  currentMinTimestamp = newMin;
+  currentMaxTimestamp = newMax;
+  const timeRange = maxTimestamp - minTimestamp;
+  if (timeRange > 0) {
+    const maxPercent = ((newMax - minTimestamp) / timeRange) * 100;
+    isChartLive = maxPercent > 99.9;
+  }
+  if (configBar) {
+    const startInput = configBar.getStartDateInput();
+    const endInput = configBar.getEndDateInput();
+    if (startInput) startInput.value = toDateTimeLocal(currentMinTimestamp);
+    if (endInput) endInput.value = toDateTimeLocal(currentMaxTimestamp);
+  }
+  if (timeSlider) {
+    timeSlider.updateUI(
+      minTimestamp,
+      maxTimestamp,
+      currentMinTimestamp,
+      currentMaxTimestamp,
+    );
+  }
+};
+
+const onTimeDragEnd = (event) => {
+  const newMin = event.detail.min;
+  const newMax = event.detail.max;
+  isUserInteracting = false;
+  currentMinTimestamp = newMin;
+  currentMaxTimestamp = newMax;
+  if (configBar) {
+    const startInput = configBar.getStartDateInput();
+    const endInput = configBar.getEndDateInput();
+    if (startInput) startInput.value = toDateTimeLocal(currentMinTimestamp);
+    if (endInput) endInput.value = toDateTimeLocal(currentMaxTimestamp);
+  }
+  triggerDataFetch();
+};
+
+const onChartConfigChangeWrapper = () => onChartConfigChange(true);
 
 /**
  * Mounts the view (attaches event listeners).
@@ -377,32 +385,41 @@ export function initChartView(callbacks) {
 export function mountChartView() {
   if (isMounted) return;
 
-  btnChartFullscreen?.addEventListener("click", toggleChartFullscreen);
-  btnChartExportPNG?.addEventListener("click", onExportPNG);
-  btnChartExportCSV?.addEventListener("click", onExportCSV);
-  btnChartClear?.addEventListener("click", onClearAll);
-  chartConfigSelect?.addEventListener("change", onChartConfigChange);
-  btnChartSaveCurrent?.addEventListener("click", onSaveCurrent);
-  btnChartSaveAs?.addEventListener("click", onSaveAsNew);
-  btnChartDeleteConfig?.addEventListener("click", onDeleteConfig);
+  if (configBar) {
+    configBar.addEventListener("config-selected", onChartConfigChangeWrapper);
+    configBar.addEventListener("save-current", onSaveCurrent);
+    configBar.addEventListener("save-as", onSaveAsNew);
+    configBar.addEventListener("delete-config", onDeleteConfig);
+    configBar.addEventListener("type-changed", onTypeSelectChange);
+    configBar.addEventListener("connect-nulls-changed", onConnectNullsChange);
+    configBar.addEventListener("smart-axis-changed", onSmartAxisChange);
+    configBar.addEventListener("date-changed", onDateChange);
+    configBar.addEventListener("clear-all", onClearAll);
+    configBar.addEventListener("export-csv", onExportCSV);
+    configBar.addEventListener("export-png", onExportPNG);
+    configBar.addEventListener("toggle-fullscreen", toggleChartFullscreen);
+  }
 
-  chartTypeSelect?.addEventListener("change", onTypeSelectChange);
-  chartConnectNulls?.addEventListener("change", onConnectNullsChange);
-  chartSmartAxis?.addEventListener("change", onSmartAxisChange);
-
-  chartStartDateInput?.addEventListener("change", onDateChange);
-  chartEndDateInput?.addEventListener("change", onDateChange);
+  if (timeSlider) {
+    timeSlider.addEventListener("time-drag", onTimeDrag);
+    timeSlider.addEventListener("time-drag-end", onTimeDragEnd);
+  }
 
   const aggSelect = document.getElementById("chart-aggregation-select");
   aggSelect?.addEventListener("change", onAggSelectChange);
 
+  if (chartVariableList) {
+    chartVariableList.addEventListener("variable-toggled", onVariableToggled);
+    chartVariableList.addEventListener("color-changed", onColorChanged);
+  }
+
   // Subscriptions
   subscribe("chartUnsaved", onChartUnsavedChange);
   subscribe("currentTopic", onCurrentTopicChange, true);
-  subscribe("currentBrokerId", onCurrentBrokerIdChange);
+  subscribe("currentSourceId", onCurrentSourceIdChange);
 
   // Hydrate from global state if something was selected in another view
-  if (state.currentTopic && state.currentBrokerId) {
+  if (state.currentTopic && state.currentSourceId) {
       onCurrentTopicChange(state.currentTopic);
   } else if (chartedVariables.size > 0 && !chartInstance) {
       onGenerateChart();
@@ -424,29 +441,38 @@ export function unmountChartView() {
     chartInstance = null;
   }
 
-  btnChartFullscreen?.removeEventListener("click", toggleChartFullscreen);
-  btnChartExportPNG?.removeEventListener("click", onExportPNG);
-  btnChartExportCSV?.removeEventListener("click", onExportCSV);
-  btnChartClear?.removeEventListener("click", onClearAll);
-  chartConfigSelect?.removeEventListener("change", onChartConfigChange);
-  btnChartSaveCurrent?.removeEventListener("click", onSaveCurrent);
-  btnChartSaveAs?.removeEventListener("click", onSaveAsNew);
-  btnChartDeleteConfig?.removeEventListener("click", onDeleteConfig);
+  if (configBar) {
+    configBar.removeEventListener("config-selected", onChartConfigChangeWrapper);
+    configBar.removeEventListener("save-current", onSaveCurrent);
+    configBar.removeEventListener("save-as", onSaveAsNew);
+    configBar.removeEventListener("delete-config", onDeleteConfig);
+    configBar.removeEventListener("type-changed", onTypeSelectChange);
+    configBar.removeEventListener("connect-nulls-changed", onConnectNullsChange);
+    configBar.removeEventListener("smart-axis-changed", onSmartAxisChange);
+    configBar.removeEventListener("date-changed", onDateChange);
+    configBar.removeEventListener("clear-all", onClearAll);
+    configBar.removeEventListener("export-csv", onExportCSV);
+    configBar.removeEventListener("export-png", onExportPNG);
+    configBar.removeEventListener("toggle-fullscreen", toggleChartFullscreen);
+  }
 
-  chartTypeSelect?.removeEventListener("change", onTypeSelectChange);
-  chartConnectNulls?.removeEventListener("change", onConnectNullsChange);
-  chartSmartAxis?.removeEventListener("change", onSmartAxisChange);
-
-  chartStartDateInput?.removeEventListener("change", onDateChange);
-  chartEndDateInput?.removeEventListener("change", onDateChange);
+  if (timeSlider) {
+    timeSlider.removeEventListener("time-drag", onTimeDrag);
+    timeSlider.removeEventListener("time-drag-end", onTimeDragEnd);
+  }
 
   const aggSelect = document.getElementById("chart-aggregation-select");
   aggSelect?.removeEventListener("change", onAggSelectChange);
 
+  if (chartVariableList) {
+    chartVariableList.removeEventListener("variable-toggled", onVariableToggled);
+    chartVariableList.removeEventListener("color-changed", onColorChanged);
+  }
+
   // Clean up subscriptions
   unsubscribe("chartUnsaved", onChartUnsavedChange);
   unsubscribe("currentTopic", onCurrentTopicChange, true);
-  unsubscribe("currentBrokerId", onCurrentBrokerIdChange);
+  unsubscribe("currentSourceId", onCurrentSourceIdChange);
 
   isMounted = false;
   console.log("[Chart View] Unmounted & Cleaned up.");
@@ -480,9 +506,11 @@ function setRelativeRange(hours) {
 
 export function handleChartNodeClick(event, nodeContainer, sourceId, topic) {
   const payload = nodeContainer.dataset.payload;
-  selectedChartBrokerId = sourceId;
+  selectedChartSourceId = sourceId;
   selectedChartTopic = topic;
-  payloadViewer.display(sourceId, topic, payload);
+  if (payloadViewer) {
+    payloadViewer.display(sourceId, topic, payload);
+  }
   populateChartVariables(payload);
 }
 
@@ -492,7 +520,7 @@ export function updateChartSliderUI(
   isInitialLoad = false,
   force = false,
 ) {
-  if (!chartSlider) return;
+  if (!timeSlider) return;
   if (isUserInteracting && !force) return;
   if (!isInitialLoad && !force && Date.now() - lastSliderUpdate < 1000) return;
 
@@ -511,15 +539,24 @@ export function updateChartSliderUI(
     if (currentMinTimestamp < min) currentMinTimestamp = min;
   }
 
-  if (chartStartDateInput)
-    chartStartDateInput.value = toDateTimeLocal(currentMinTimestamp);
-  if (chartEndDateInput)
-    chartEndDateInput.value = toDateTimeLocal(currentMaxTimestamp);
-  if (chartTimeSliderContainer)
-    chartTimeSliderContainer.style.display =
-      min === 0 && max === 0 ? "none" : "flex";
+  if (configBar) {
+    const startInput = configBar.getStartDateInput();
+    const endInput = configBar.getEndDateInput();
+    if (startInput)
+      startInput.value = toDateTimeLocal(currentMinTimestamp);
+    if (endInput)
+      endInput.value = toDateTimeLocal(currentMaxTimestamp);
+  }
 
-  chartSlider.updateUI(
+  // Use component logic to control visibility if possible, or assume it handles it
+  if (timeSlider) {
+     const container = timeSlider.querySelector('#chart-time-range-slider-container');
+     if (container) {
+         container.style.display = min === 0 && max === 0 ? "none" : "flex";
+     }
+  }
+
+  timeSlider.updateUI(
     minTimestamp,
     maxTimestamp,
     currentMinTimestamp,
@@ -567,12 +604,14 @@ function findNumericKeys(obj, path = "", list = []) {
           list.push({
             path: newPath,
             type: Number.isInteger(value) ? "int" : "float",
+            value: value
           });
         } else if (typeof value === "string" && value.trim() !== "") {
           if (!isNaN(parseFloat(value)) && isFinite(Number(value))) {
             list.push({
               path: newPath,
               type: value.includes(".") ? "float (string)" : "int (string)",
+              value: value
             });
           }
         }
@@ -587,12 +626,14 @@ function findNumericKeys(obj, path = "", list = []) {
       list.push({
         path: newPath,
         type: Number.isInteger(value) ? "int" : "float",
+        value: value
       });
     } else if (typeof value === "string" && value.trim() !== "") {
       if (!isNaN(parseFloat(value)) && isFinite(Number(value))) {
         list.push({
           path: newPath,
           type: value.includes(".") ? "float (string)" : "int (string)",
+          value: value
         });
       }
     } else if (typeof value === "object") {
@@ -602,114 +643,105 @@ function findNumericKeys(obj, path = "", list = []) {
   return list;
 }
 
+function renderVariableList(topic, brokerId, variables) {
+  if (chartVariableList) {
+    chartVariableList.updateData(topic, brokerId, variables, chartedVariables);
+  }
+}
+
 function populateChartVariables(payloadString) {
   if (!chartVariableList) return;
-  chartVariableList.innerHTML = "";
-  if (!selectedChartTopic || !selectedChartBrokerId) {
-    chartVariableList.innerHTML =
-      '<p class="history-placeholder">No topic selected.</p>';
+  if (!selectedChartTopic || !selectedChartSourceId) {
+    renderVariableList(selectedChartTopic, selectedChartSourceId, []);
     return;
   }
   if (payloadString === null || payloadString === undefined) {
-    chartVariableList.innerHTML =
-      '<p class="history-placeholder">No payload for this topic.</p>';
+    renderVariableList(selectedChartTopic, selectedChartSourceId, []);
     return;
   }
   try {
     const payload = JSON.parse(payloadString);
     let numericKeys = [];
     if (typeof payload === "number" || typeof payload === "boolean") {
-      numericKeys.push({ path: "(value)", type: typeof payload });
+      numericKeys.push({ path: "(value)", type: typeof payload, value: payload });
     } else if (
       typeof payload === "string" &&
       !isNaN(parseFloat(payload)) &&
       isFinite(Number(payload))
     ) {
-      numericKeys.push({ path: "(value)", type: "float (string)" });
+      numericKeys.push({ path: "(value)", type: "float (string)", value: payload });
     } else {
       numericKeys = findNumericKeys(payload);
     }
-    if (numericKeys.length === 0) {
-      chartVariableList.innerHTML =
-        '<p class="history-placeholder">No numeric properties found in this payload.</p>';
-      return;
-    }
-
-    numericKeys.forEach((key) => {
-      const itemDiv = document.createElement("div");
-      itemDiv.className = "chart-variable-item";
-      const varId = `${selectedChartBrokerId}|${selectedChartTopic}|${key.path}`;
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.id = `chart-var-${varId.replace(/[^a-zA-Z0-9]/g, "_")}`;
-      checkbox.value = varId;
-      checkbox.dataset.sourceId = selectedChartBrokerId;
-      checkbox.dataset.topic = selectedChartTopic;
-      checkbox.dataset.path = key.path;
-      checkbox.checked = chartedVariables.has(varId);
-      checkbox.addEventListener("change", onChartVariableToggle);
-
-      const label = document.createElement("label");
-      label.htmlFor = checkbox.id;
-      label.textContent = key.path;
-      const typeSpan = document.createElement("span");
-      typeSpan.className = "var-type";
-      typeSpan.textContent = `(${key.type})`;
-      label.appendChild(typeSpan);
-      itemDiv.appendChild(checkbox);
-      itemDiv.appendChild(label);
-      chartVariableList.appendChild(itemDiv);
-    });
+    
+    renderVariableList(selectedChartTopic, selectedChartSourceId, numericKeys);
   } catch (e) {
-    chartVariableList.innerHTML =
-      '<p class="history-placeholder">Payload is not valid JSON.</p>';
+    renderVariableList(selectedChartTopic, selectedChartSourceId, []);
   }
 }
 
 function onClearAll() {
   trackEvent("chart_clear_all");
   chartedVariables.clear();
-  if (chartVariableList) {
-    chartVariableList
-      .querySelectorAll('input[type="checkbox"]:checked')
-      .forEach((cb) => {
-        cb.checked = false;
-      });
+  if (chartVariableList && typeof chartVariableList.renderList === 'function') {
+    chartVariableList.renderList();
   }
-  chartTypeSelect.value = "line";
-  chartConnectNulls.checked = false;
+  if (configBar) {
+    const typeSelect = configBar.getTypeSelect();
+    if (typeSelect) typeSelect.value = "line";
+    const connectNulls = configBar.getConnectNullsToggle();
+    if (connectNulls) connectNulls.checked = false;
+    const configSelect = configBar.getSelectElement();
+    if (configSelect) configSelect.value = "";
+  }
   currentConfigId = null;
-  chartConfigSelect.value = "";
   state.chartUnsaved = false;
   onGenerateChart(true);
   appCallbacks.colorChartTreeCallback();
 }
 
-function onChartVariableToggle(event) {
-  const checkbox = event.target;
-  const varId = checkbox.value;
+const onVariableToggled = (e) => {
+  const { id, sourceId, topic, path, checked } = e.detail;
   state.chartUnsaved = true;
 
-  if (checkbox.checked) {
-    chartedVariables.set(varId, {
-      sourceId: checkbox.dataset.sourceId,
-      topic: checkbox.dataset.topic,
-      path: checkbox.dataset.path,
-    });
+  if (checked) {
+    if (!chartedVariables.has(id)) {
+      chartedVariables.set(id, {
+        sourceId: sourceId,
+        topic: topic,
+        path: path,
+      });
+    }
     trackEvent("chart_add_variable");
   } else {
-    chartedVariables.delete(varId);
+    chartedVariables.delete(id);
     trackEvent("chart_remove_variable");
   }
   onGenerateChart(true);
   appCallbacks.colorChartTreeCallback();
-}
+};
+
+const onColorChanged = (e) => {
+  const { id, color } = e.detail;
+  if (chartedVariables.has(id)) {
+    chartedVariables.get(id).color = color;
+    state.chartUnsaved = true;
+    onGenerateChart(false);
+  }
+};
 
 function onGenerateChart(showLoader = false) {
   trackEvent("chart_generate_refresh");
   if (isUserInteracting) {
     return;
   }
+  
+  // Default to 1 hour range if not set
+  if (currentMaxTimestamp === 0) {
+      setRelativeRange(1);
+      return;
+  }
+
   if (showLoader) showChartLoader();
 
   // Debounce to prevent API spam in live mode
@@ -727,7 +759,7 @@ async function processChartData() {
       chartInstance = null;
     }
     hideChartLoader(); // Includes logic to show placeholder
-    chartCanvas.style.display = "none";
+    if (chartCanvas) chartCanvas.style.display = "none";
     return;
   }
 
@@ -802,9 +834,9 @@ async function processChartData() {
     });
 
     // --- Build Datasets & Scales using Shared Logic ---
-    const chartType = chartTypeSelect.value;
-    const connectNulls = chartConnectNulls.checked;
-    const useSmartAxis = chartSmartAxis && chartSmartAxis.checked;
+    const chartType = configBar && configBar.getTypeSelect() ? configBar.getTypeSelect().value : "line";
+    const connectNulls = configBar && configBar.getConnectNullsToggle() ? configBar.getConnectNullsToggle().checked : false;
+    const useSmartAxis = configBar && configBar.getSmartAxisToggle() ? configBar.getSmartAxisToggle().checked : false;
 
     const axisGroups = new Map();
     chartedVariables.forEach((varInfo, varId) => {
@@ -900,44 +932,46 @@ async function processChartData() {
       chartInstance.data.datasets = datasets;
       chartInstance.options.scales = dynamicScales;
       chartInstance.update("none"); // 'none' prevents animation recalculation
-      chartCanvas.style.display = "block";
+      if (chartCanvas) chartCanvas.style.display = "block";
     } else {
       // Destroy and rebuild if type changes
       if (chartInstance) chartInstance.destroy();
-      chartCanvas.style.display = "block";
-      chartInstance = new Chart(chartCanvas, {
-        type: chartType,
-        data: { datasets },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: dynamicScales,
-          plugins: {
-            legend: { labels: { color: textColor } },
-            zoom: {
+      if (chartCanvas) {
+        chartCanvas.style.display = "block";
+        chartInstance = new Chart(chartCanvas, {
+          type: chartType,
+          data: { datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: dynamicScales,
+            plugins: {
+              legend: { labels: { color: textColor } },
               zoom: {
-                drag: {
-                  enabled: true,
-                  backgroundColor: "rgba(54, 162, 235, 0.3)",
-                },
-                mode: "x",
-                onZoomComplete: ({ chart }) => {
-                  const { min, max } = chart.scales.x;
-                  currentMinTimestamp = min;
-                  currentMaxTimestamp = max;
-                  isUserInteracting = false; // Fix infinite load
-                  isChartLive = false;
-                  updateChartSliderUI(min, max, false, true);
-                  setTimeout(() => triggerDataFetch(), 0);
+                zoom: {
+                  drag: {
+                    enabled: true,
+                    backgroundColor: "rgba(54, 162, 235, 0.3)",
+                  },
+                  mode: "x",
+                  onZoomComplete: ({ chart }) => {
+                    const { min, max } = chart.scales.x;
+                    currentMinTimestamp = min;
+                    currentMaxTimestamp = max;
+                    isUserInteracting = false; // Fix infinite load
+                    isChartLive = false;
+                    updateChartSliderUI(min, max, false, true);
+                    setTimeout(() => triggerDataFetch(), 0);
+                  },
                 },
               },
             },
+            animation: false,
+            parsing: false,
+            normalized: true,
           },
-          animation: false,
-          parsing: false,
-          normalized: true,
-        },
-      });
+        });
+      }
     }
     hideChartLoader();
   } catch (err) {
@@ -950,8 +984,10 @@ function toggleChartFullscreen() {
   trackEvent("chart_fullscreen");
   if (!chartMainArea) return;
   const isMaximized = chartMainArea.classList.toggle("maximized");
+  const btnChartFullscreen = configBar ? configBar.querySelector("#btn-chart-fullscreen") : null;
+  
   if (isMaximized) {
-    btnChartFullscreen.innerHTML = "✖ Minimize";
+    if (btnChartFullscreen) btnChartFullscreen.innerHTML = "✖ Minimize";
     chartMainArea.style.position = "fixed";
     chartMainArea.style.top = "0";
     chartMainArea.style.left = "0";
@@ -960,7 +996,7 @@ function toggleChartFullscreen() {
     chartMainArea.style.zIndex = "10000";
     chartMainArea.style.backgroundColor = "var(--color-bg-secondary)";
   } else {
-    btnChartFullscreen.innerHTML = "⛶ Maximize";
+    if (btnChartFullscreen) btnChartFullscreen.innerHTML = "⛶ Maximize";
     chartMainArea.style.position = "";
     chartMainArea.style.top = "";
     chartMainArea.style.left = "";
@@ -1070,6 +1106,8 @@ async function loadChartConfig() {
 }
 
 function populateChartConfigSelect() {
+  if (!configBar) return;
+  const chartConfigSelect = configBar.getSelectElement();
   if (!chartConfigSelect) return;
   chartConfigSelect.innerHTML = "";
   const newOption = document.createElement("option");
@@ -1087,7 +1125,9 @@ function populateChartConfigSelect() {
 }
 
 function onChartConfigChange(showNotification = true) {
-  const configId = chartConfigSelect.value;
+  if (!configBar) return;
+  const chartConfigSelect = configBar.getSelectElement();
+  const configId = chartConfigSelect ? chartConfigSelect.value : null;
   currentConfigId = configId;
   if (!configId) {
     onClearAll();
@@ -1103,27 +1143,41 @@ function onChartConfigChange(showNotification = true) {
   const userRole = window.currentUser ? window.currentUser.role : "user";
   const isGlobal = config._isGlobal === true;
 
+  const btnChartSaveCurrent = configBar.querySelector("#btn-chart-save-current");
+  const btnChartSaveAs = configBar.querySelector("#btn-chart-save-as");
+  const btnChartDeleteConfig = configBar.querySelector("#btn-chart-delete-config");
+
   if (isGlobal && userRole !== "admin") {
-    btnChartSaveCurrent.disabled = true;
-    btnChartSaveCurrent.textContent = "🔒 Locked";
-    btnChartSaveCurrent.title =
-      "Global charts are read-only. Use 'Save As' to create a private copy.";
-    btnChartDeleteConfig.disabled = true;
-    btnChartDeleteConfig.title = "Cannot delete Global chart.";
+    if (btnChartSaveCurrent) {
+        btnChartSaveCurrent.disabled = true;
+        btnChartSaveCurrent.textContent = "🔒 Locked";
+        btnChartSaveCurrent.title =
+          "Global charts are read-only. Use 'Save As' to create a private copy.";
+    }
+    if (btnChartDeleteConfig) {
+        btnChartDeleteConfig.disabled = true;
+        btnChartDeleteConfig.title = "Cannot delete Global chart.";
+    }
 
     // Ensure "Save As" is available
-    btnChartSaveAs.disabled = false;
+    if (btnChartSaveAs) btnChartSaveAs.disabled = false;
   } else {
     // Unlock controls
-    btnChartSaveCurrent.disabled = false;
-    btnChartSaveCurrent.textContent = "Save";
-    btnChartSaveCurrent.title = "Save changes to this chart";
-    btnChartDeleteConfig.disabled = false;
-    btnChartDeleteConfig.title = "Delete this chart";
+    if (btnChartSaveCurrent) {
+        btnChartSaveCurrent.disabled = false;
+        btnChartSaveCurrent.textContent = "Save";
+        btnChartSaveCurrent.title = "Save changes to this chart";
+    }
+    if (btnChartDeleteConfig) {
+        btnChartDeleteConfig.disabled = false;
+        btnChartDeleteConfig.title = "Delete this chart";
+    }
   }
 
-  chartTypeSelect.value = config.chartType || "line";
-  chartConnectNulls.checked = config.connectNulls || false;
+  const typeSelect = configBar.getTypeSelect();
+  if (typeSelect) typeSelect.value = config.chartType || "line";
+  const connectNulls = configBar.getConnectNullsToggle();
+  if (connectNulls) connectNulls.checked = config.connectNulls || false;
 
   chartedVariables.clear();
   if (Array.isArray(config.variables)) {
@@ -1138,9 +1192,9 @@ function onChartConfigChange(showNotification = true) {
   onGenerateChart(true);
   appCallbacks.colorChartTreeCallback();
 
-  if (selectedChartTopic && selectedChartBrokerId) {
+  if (selectedChartTopic && selectedChartSourceId) {
     const node = document.querySelector(
-      `.node-container[data-topic="${selectedChartTopic}"][data-broker-id="${selectedChartBrokerId}"]`,
+      `.node-container[data-topic="${selectedChartTopic}"][data-source-id="${selectedChartSourceId}"]`,
     );
     if (node) populateChartVariables(node.dataset.payload);
   }
@@ -1150,7 +1204,7 @@ function onChartConfigChange(showNotification = true) {
   }
 }
 async function saveAllChartConfigs(configObject, notify = true) {
-  if (notify) showToast("Saving...", "info");
+  if (notify && configBar) configBar.setSaveStatus("Saving...");
   try {
     const response = await fetch("api/chart/config", {
       method: "POST",
@@ -1159,10 +1213,10 @@ async function saveAllChartConfigs(configObject, notify = true) {
     });
     if (!response.ok) throw new Error("Failed to save");
 
-    if (notify) showToast("Saved!", "success");
+    if (notify && configBar) configBar.setSaveStatus("Saved!");
     return true;
   } catch (error) {
-    if (notify) showToast(`Error: ${error.message}`, "error");
+    if (notify && configBar) configBar.setSaveStatus(`Error: ${error.message}`);
     return false;
   }
 }
@@ -1182,9 +1236,15 @@ async function onSaveCurrent() {
     return;
   }
 
-  config.name = chartConfigSelect.options[chartConfigSelect.selectedIndex].text;
-  config.chartType = chartTypeSelect.value;
-  config.connectNulls = chartConnectNulls.checked;
+  const chartConfigSelect = configBar ? configBar.getSelectElement() : null;
+  const typeSelect = configBar ? configBar.getTypeSelect() : null;
+  const connectNulls = configBar ? configBar.getConnectNullsToggle() : null;
+
+  if (chartConfigSelect && chartConfigSelect.options.length > 0) {
+      config.name = chartConfigSelect.options[chartConfigSelect.selectedIndex].text;
+  }
+  if (typeSelect) config.chartType = typeSelect.value;
+  if (connectNulls) config.connectNulls = connectNulls.checked;
   config.variables = Array.from(chartedVariables.values());
 
   const success = await saveAllChartConfigs(allChartConfigs);
@@ -1206,20 +1266,25 @@ async function onSaveAsNew() {
     return;
   }
 
+  const chartConfigSelect = configBar ? configBar.getSelectElement() : null;
   const activeVersionName =
-    chartConfigSelect.options[chartConfigSelect.selectedIndex]?.text ||
-    "current";
+    chartConfigSelect && chartConfigSelect.options.length > 0 && chartConfigSelect.selectedIndex >= 0
+        ? chartConfigSelect.options[chartConfigSelect.selectedIndex]?.text
+        : "current";
   const name = prompt(
     "Enter a name for this new chart configuration:",
     `Copy of ${activeVersionName}`,
   );
   if (!name || name.trim().length === 0) return;
 
+  const typeSelect = configBar ? configBar.getTypeSelect() : null;
+  const connectNulls = configBar ? configBar.getConnectNullsToggle() : null;
+
   const newConfig = {
     id: `chart_${Date.now()}`,
     name: name.trim(),
-    chartType: chartTypeSelect.value,
-    connectNulls: chartConnectNulls.checked,
+    chartType: typeSelect ? typeSelect.value : "line",
+    connectNulls: connectNulls ? connectNulls.checked : false,
     variables: Array.from(chartedVariables.values()),
   };
 
@@ -1233,9 +1298,17 @@ async function onSaveAsNew() {
     populateChartConfigSelect();
 
     // Reset UI lock since it's a new (Private) chart
-    btnChartSaveCurrent.disabled = false;
-    btnChartSaveCurrent.textContent = "Save";
-    btnChartDeleteConfig.disabled = false;
+    if (configBar) {
+        const btnChartSaveCurrent = configBar.querySelector("#btn-chart-save-current");
+        const btnChartDeleteConfig = configBar.querySelector("#btn-chart-delete-config");
+        if (btnChartSaveCurrent) {
+            btnChartSaveCurrent.disabled = false;
+            btnChartSaveCurrent.textContent = "Save";
+        }
+        if (btnChartDeleteConfig) {
+            btnChartDeleteConfig.disabled = false;
+        }
+    }
     state.chartUnsaved = false;
   }
 }
@@ -1247,8 +1320,10 @@ async function onDeleteConfig() {
     return;
   }
 
-  const chartName =
-    chartConfigSelect.options[chartConfigSelect.selectedIndex].text;
+  const chartConfigSelect = configBar ? configBar.getSelectElement() : null;
+  const chartName = chartConfigSelect && chartConfigSelect.selectedIndex >= 0
+    ? chartConfigSelect.options[chartConfigSelect.selectedIndex].text
+    : "this chart";
   const isConfirmed = await confirmModal(
     "Delete Chart",
     `Are you sure you want to delete the chart '${chartName}'?\nThis action cannot be undone.`,

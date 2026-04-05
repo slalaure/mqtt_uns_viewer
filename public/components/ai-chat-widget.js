@@ -292,7 +292,7 @@ class AiChatWidget extends HTMLElement {
                 messages: this.conversationHistory,
                 context: {
                     currentTopic: state.currentTopic,
-                    currentBrokerId: state.currentBrokerId
+                    currentSourceId: state.currentSourceId
                 }
             };
             

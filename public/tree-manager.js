@@ -193,7 +193,7 @@ export function createTreeManager(rootElement, options = {}) {
             affectedNodes.push({ element: li, isNew: isNewNode });
             
             if (isLastPart) {
-                nodeContainer.dataset.payload = payload;
+                nodeContainer.dataset.payload = (typeof payload === 'object') ? JSON.stringify(payload) : payload;
                 li.classList.add('is-file');
                 li.classList.remove('is-folder', 'collapsed');
             } else {

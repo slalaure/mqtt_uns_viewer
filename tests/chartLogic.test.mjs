@@ -91,5 +91,23 @@ describe('Chart Logic', () => {
             expect(scalesMeta['y0']).toBeDefined();
             expect(scalesMeta['y0'].id).toBe('y0');
         });
+
+        test('should respect user-defined color in datasets', () => {
+            const rawPointsMap = new Map([
+                ['var1', [{x: 100, y: 1}]]
+            ]);
+            const customColor = '#ff00ff';
+            const chartedVariables = new Map([
+                ['var1', { topic: 'test/t1', path: 'p1', color: customColor }]
+            ]);
+            
+            const { datasets } = buildChartDatasets(rawPointsMap, chartedVariables, {
+                useSmartAxis: false,
+                distinctAxes: ['var1']
+            });
+
+            expect(datasets[0].borderColor).toBe(customColor);
+            expect(datasets[0].backgroundColor).toBe(customColor);
+        });
     });
 });

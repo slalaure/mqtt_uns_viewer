@@ -82,7 +82,7 @@ const onCurrentTopicChange = (topic) => {
     }
 };
 
-const onCurrentBrokerIdChange = (sourceId) => {
+const onCurrentSourceIdChange = (sourceId) => {
     if (sourceId && providerSelectElement && state.activeView !== 'publish') {
         const exists = Array.from(providerSelectElement.options).some(opt => opt.value === sourceId);
         if (exists) {
@@ -207,7 +207,7 @@ export function mountPublishView() {
     // --- Reactive State Subscriptions ---
     subscribe('isDarkMode', onDarkModeChange);
     subscribe('currentTopic', onCurrentTopicChange, true);
-    subscribe('currentBrokerId', onCurrentBrokerIdChange);
+    subscribe('currentSourceId', onCurrentSourceIdChange);
 
     // Initial validation run
     validatePublishPermissions();
@@ -235,7 +235,7 @@ export function unmountPublishView() {
 
     unsubscribe('isDarkMode', onDarkModeChange);
     unsubscribe('currentTopic', onCurrentTopicChange, true);
-    unsubscribe('currentBrokerId', onCurrentBrokerIdChange);
+    unsubscribe('currentSourceId', onCurrentSourceIdChange);
 
     isMounted = false;
     console.log("[Publish View] Unmounted & Cleaned up.");

@@ -110,19 +110,35 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    min-height: 150px;
+    min-height: 0;
     padding: 10px 20px;
     box-sizing: border-box;
-    overflow: hidden; /* Prevent canvas from overflowing */
+    overflow: hidden;
+    background-color: var(--color-bg-secondary);
 }
 .chart-config-bar {
     display: flex;
     align-items: center;
     gap: 15px;
-    padding-bottom: 10px;
+    padding: 10px 15px;
     border-bottom: 1px solid var(--color-border-secondary);
     flex-shrink: 0;
-    flex-wrap: wrap; /* Allow wrapping on small screens */
+    flex-wrap: wrap;
+    background-color: var(--color-bg-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.var-color-picker {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    vertical-align: middle;
+    margin-left: 8px;
+    background: none;
 }
 .chart-config-bar .form-group {
     margin: 0;
@@ -205,18 +221,20 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     position: relative;
     overflow: hidden;
     padding-top: 10px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    min-height: 0;
 }
 #chart-canvas {
-    max-width: 100%;
-    max-height: 100%;
+    width: 100% !important;
+    height: 100% !important;
 }
 #chart-placeholder {
-    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     color: var(--color-text-secondary);
     font-style: italic;
+    text-align: center;
 }
 /* --- Chart Fullscreen --- */
 #chart-main-area:fullscreen {
@@ -278,7 +296,7 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     #chart-main-area {
         padding: 10px;
         /* [FIX] Ensure container has layout stability in scroll mode */
-        min-height: 450px;
+        min-height: 300px;
     }
     /* [FIX] Explicit height for the canvas container on mobile
        to prevent infinite resizing loops (flickering) */
