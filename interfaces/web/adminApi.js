@@ -304,6 +304,39 @@ module.exports = (logger, db, dataManager, dataPath) => {
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} assets.`, files: fileNames });
     });
 
+    router.get('/hmi-assets/:filename', (req, res, next) => {
+        const filename = path.basename(req.params.filename);
+        const filepath = path.join(dataPath, filename);
+        
+        try {
+            if (fs.existsSync(filepath) && !filename.toLowerCase().startsWith('simulator-')) {
+                const content = fs.readFileSync(filepath, 'utf8');
+                res.json({ content });
+            } else {
+                res.status(404).json({ error: "Asset not found." });
+            }
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    router.put('/hmi-assets/:filename', (req, res, next) => {
+        const filename = path.basename(req.params.filename);
+        const filepath = path.join(dataPath, filename);
+        
+        try {
+            if (fs.existsSync(filepath) && !filename.toLowerCase().startsWith('simulator-')) {
+                fs.writeFileSync(filepath, req.body.content || '', 'utf8');
+                logger.info(`[AdminAPI] HMI Asset updated: ${filename}`);
+                res.json({ success: true, message: "Asset updated successfully." });
+            } else {
+                res.status(404).json({ error: "Asset not found." });
+            }
+        } catch (err) {
+            next(err);
+        }
+    });
+
     router.delete('/hmi-assets/:filename', (req, res, next) => {
         const filename = path.basename(req.params.filename);
         const filepath = path.join(dataPath, filename);
@@ -346,6 +379,39 @@ module.exports = (logger, db, dataManager, dataPath) => {
         const fileNames = req.files.map(f => f.filename);
         logger.info(`[AdminAPI] Simulators uploaded: ${fileNames.join(', ')}`);
         res.json({ success: true, message: `Successfully uploaded ${req.files.length} simulators. Restart server to activate.`, files: fileNames });
+    });
+
+    router.get('/simulators/:filename', (req, res, next) => {
+        const filename = path.basename(req.params.filename);
+        const filepath = path.join(simulatorsPath, filename);
+        
+        try {
+            if (fs.existsSync(filepath) && filename.toLowerCase().startsWith('simulator-')) {
+                const content = fs.readFileSync(filepath, 'utf8');
+                res.json({ content });
+            } else {
+                res.status(404).json({ error: "Simulator not found." });
+            }
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    router.put('/simulators/:filename', (req, res, next) => {
+        const filename = path.basename(req.params.filename);
+        const filepath = path.join(simulatorsPath, filename);
+        
+        try {
+            if (fs.existsSync(filepath) && filename.toLowerCase().startsWith('simulator-')) {
+                fs.writeFileSync(filepath, req.body.content || '', 'utf8');
+                logger.info(`[AdminAPI] Simulator updated: ${filename}`);
+                res.json({ success: true, message: "Simulator updated successfully." });
+            } else {
+                res.status(404).json({ error: "Simulator not found." });
+            }
+        } catch (err) {
+            next(err);
+        }
     });
 
     router.delete('/simulators/:filename', (req, res, next) => {

@@ -65,4 +65,20 @@ describe('DLQ Manager Hardening', () => {
             expect.stringContaining('exceeded limit')
         );
     });
+
+    it('should clear the DLQ file when clear() is called', () => {
+        dlqManager.init(mockLogger, { DLQ_MAX_SIZE_MB: 10 });
+        dlqManager.push([{ topic: 'test' }], 'testRepo');
+        expect(dlqManager.getMessages().length).toBe(1);
+        
+        dlqManager.clear();
+        expect(dlqManager.getMessages().length).toBe(0);
+        expect(fs.existsSync(DLQ_FILE)).toBe(false);
+    });
+
+    it('should return empty array if DLQ file does not exist', () => {
+        dlqManager.init(mockLogger, { DLQ_MAX_SIZE_MB: 10 });
+        if (fs.existsSync(DLQ_FILE)) fs.unlinkSync(DLQ_FILE);
+        expect(dlqManager.getMessages()).toEqual([]);
+    });
 });

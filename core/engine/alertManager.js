@@ -243,6 +243,22 @@ class AlertManager {
         });
     }
 
+    async purgeResolvedAlerts() {
+        if (!this.db) return { success: false, error: "Database not available" };
+        return new Promise((resolve, reject) => {
+            this.db.serialize(() => {
+                this.db.run("DELETE FROM resolved_alerts_history;", (err) => {
+                    if (err) return resolve({ success: false, error: err.message });
+                    
+                    this.db.run("VACUUM;", (vacErr) => {
+                        if (vacErr) this.logger.error({ err: vacErr }, "Failed to vacuum DB after alert purge");
+                        resolve({ success: true });
+                    });
+                });
+            });
+        });
+    }
+
     async processMessage(sourceId, topic, payload, correlationId = null) {
         if (!this.db) return;
         if (this.llmConfig && this.llmConfig.VIEW_ALERTS_ENABLED === false) return;

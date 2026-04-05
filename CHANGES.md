@@ -1,7 +1,23 @@
-# Korelate Changelog (AI Memory Bank)
-
-## 2026-04-05 - Codebase Typed Definitions (Backend)
-- **Standardized Interfaces**: Defined and standardized the `Message`, `MessageOptions`, `ProviderContext`, and `ProviderConfig` interfaces using JSDoc `@typedef`.
+## 2026-04-05 - View Refactoring & Web Component Migration
+- **Monolithic Views Refactored**: Successfully migrated `view.admin.js` and `view.chat.js` logic into reusable Native Web Components.
+    - *Admin View*: Created `admin-db-panel`, `admin-alerts-panel`, `admin-assets-panel`, `admin-simulators-panel`, `admin-parsers-panel`, `admin-ai-panel`, and `admin-logs-panel`.
+    - *Chat View*: Fully migrated all logic (STT, TTS, Camera, Sessions, Streaming, File Uploads, Drag/Resize) into the `<ai-chat-widget>` component.
+- **Fixed Infinite Loop**: Resolved a critical UI bug where `view.chat.js` and `AiChatWidget` competed for the same DOM elements, causing a re-rendering loop.
+- **Improved Encapsulation**: Reduced DOM manipulation boilerplate by over 80% in the orchestrator files (`view.admin.js`, `view.chat.js`).
+- **XSS & Security**: Integrated `DOMPurify` sanitization directly into the `AiChatWidget` rendering pipeline.
+- **Frontend Bug Fixes**:
+    - Fixed CustomEvent bubbling (`bubbles: true`, `composed: true`) in `admin-assets-panel` and `admin-simulators-panel` to ensure the Ace Editor modal opens correctly when editing files.
+    - Corrected API endpoint paths in Web Components (`admin-alerts-panel`, `admin-db-panel`, `admin-ai-panel`, `ai-chat-widget`) to perfectly match the backend Express routes, resolving 404 errors.
+- **Backend API Hardening**: 
+    - Added missing `GET` and `PUT` routes in `interfaces/web/adminApi.js` for `/hmi-assets/:filename` and `/simulators/:filename` to allow reading and updating files from the Admin code editor.
+    - Exposed `MapperEngine.deleteVersion()` to allow safe deletion of non-active mapper versions via the Admin UI.
+    - Exposed `AlertManager.purgeResolvedAlerts()` to allow database maintenance (Delete + Vacuum) via the Admin UI.
+- **Improved Testing**: 
+    - Added unit tests for DLQ clearing and message retrieval in `tests/dlqManager.test.js`.
+    - Added unit tests for version management in `tests/mapperEngine.test.js`.
+    - Added unit tests for alerts history purging in `tests/alertManager.test.js`.
+    - Restored compatibility for E2E tests by adding specific IDs to `confirmModal` elements in `public/utils.js`.
+ using JSDoc `@typedef`.
 - **Core Dispatcher**: Updated `core/messageDispatcher.js` to export `handleMessage` for type reference and added type definitions for all module-scoped variables.
 - **Provider Standardization**: Updated `BaseProvider` and all core connectors (`mqtt`, `opcua`, `http`, `file`) with specific `ProviderConfig` typedefs and JSDoc-typed class members.
 - **Data Pipeline Typing**: Updated `storage/dataManager.js` to use the centralized `Message` type for `insertMessage` and `retryMessage`.

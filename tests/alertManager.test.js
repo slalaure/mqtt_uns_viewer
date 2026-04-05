@@ -52,7 +52,8 @@ describe('AlertManager', () => {
             }),
             exec: jest.fn((sql, cb) => {
                 if (typeof cb === 'function') cb(null);
-            })
+            }),
+            serialize: jest.fn(cb => cb())
         };
 
         // Initialize the Alert Manager
@@ -216,6 +217,22 @@ describe('AlertManager', () => {
             expect.objectContaining({
                 text: expect.stringContaining('trace-999')
             })
+        );
+    });
+
+    test('purgeResolvedAlerts should delete old alerts and vacuum the database', async () => {
+        const result = await alertManager.purgeResolvedAlerts();
+
+        expect(result).toEqual({ success: true });
+        // Should delete from resolved_alerts_history
+        expect(mockDb.run).toHaveBeenCalledWith(
+            expect.stringContaining('DELETE FROM resolved_alerts_history'),
+            expect.any(Function)
+        );
+        // Should also vacuum
+        expect(mockDb.run).toHaveBeenCalledWith(
+            "VACUUM;",
+            expect.any(Function)
         );
     });
 });

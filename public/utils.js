@@ -152,6 +152,7 @@ export function confirmModal(title, message, confirmText = 'Confirm', isDanger =
     return new Promise((resolve) => {
         const backdrop = document.createElement('div');
         backdrop.className = 'generic-modal-backdrop';
+        backdrop.id = 'confirm-modal-backdrop';
         
         const content = document.createElement('div');
         content.className = 'generic-modal-content';
@@ -169,10 +170,12 @@ export function confirmModal(title, message, confirmText = 'Confirm', isDanger =
         
         const btnCancel = document.createElement('button');
         btnCancel.className = 'tool-button';
+        btnCancel.id = 'confirm-modal-cancel';
         btnCancel.textContent = 'Cancel';
         
         const btnConfirm = document.createElement('button');
         btnConfirm.className = `tool-button ${isDanger ? 'button-danger' : 'button-primary'}`;
+        btnConfirm.id = 'confirm-modal-ok';
         btnConfirm.textContent = confirmText;
         
         actions.appendChild(btnCancel);

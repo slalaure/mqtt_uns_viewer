@@ -389,26 +389,7 @@
         </main>
         <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;"></main>
     </div>
-    <div id="chat-widget-container" class="chat-widget-container">
-        <div class="chat-header">
-            <span>AI Assistant</span>
-            <div class="chat-controls">
-                <button id="btn-chat-clear" title="Clear History">🗑️</button>
-                <button id="btn-chat-minimize" title="Minimize">_</button>
-            </div>
-        </div>
-        <div class="chat-body">
-            <div id="chat-history" class="chat-history-container">
-            </div>
-            <div class="chat-input-area">
-                <textarea id="chat-input" rows="1" placeholder="Ask..."></textarea>
-                <button id="btn-send-chat">➤</button>
-            </div>
-        </div>
-    </div>
-    <button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">
-        💬
-    </button>
+    <ai-chat-widget></ai-chat-widget>
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>

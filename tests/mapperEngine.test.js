@@ -50,32 +50,39 @@ describe('MapperEngine', () => {
         // Create a mock mappings.json configuration
         const mockConfig = {
             activeVersionId: 'v1',
-            versions: [{
-                id: 'v1',
-                rules: [
-                    {
-                        sourceTopic: 'test/source',
-                        targets: [
-                            {
-                                id: 'target_1',
-                                enabled: true,
-                                outputTopic: 'test/target',
-                                routingMode: 'code',
-                                // Script that multiplies the value by 2
-                                code: 'return [{ topic: "test/target", payload: { new_val: msg.payload.val * 2 } }];'
-                            },
-                            {
-                                id: 'target_2',
-                                enabled: true,
-                                outputTopic: 'test/db',
-                                routingMode: 'code',
-                                // Script containing a DB call
-                                code: 'await db.all("SELECT 1"); return msg;'
-                            }
-                        ]
-                    }
-                ]
-            }]
+            versions: [
+                {
+                    id: 'v1',
+                    rules: [
+                        {
+                            sourceTopic: 'test/source',
+                            targets: [
+                                {
+                                    id: 'target_1',
+                                    enabled: true,
+                                    outputTopic: 'test/target',
+                                    routingMode: 'code',
+                                    // Script that multiplies the value by 2
+                                    code: 'return [{ topic: "test/target", payload: { new_val: msg.payload.val * 2 } }];'
+                                },
+                                {
+                                    id: 'target_2',
+                                    enabled: true,
+                                    outputTopic: 'test/db',
+                                    routingMode: 'code',
+                                    // Script containing a DB call
+                                    code: 'await db.all("SELECT 1"); return msg;'
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    id: 'v2',
+                    name: 'Version 2',
+                    rules: []
+                }
+            ]
         };
 
         fs.existsSync.mockReturnValue(true);
@@ -148,5 +155,17 @@ describe('MapperEngine', () => {
         const logs = metrics['test/error::err_target'].logs;
         expect(logs.length).toBeGreaterThan(0);
         expect(logs[0].error).toContain("Sandbox boom!");
+    });
+
+    test('deleteVersion should delete a non-active version', () => {
+        const result = engine.deleteVersion('v2'); // Note: v2 doesn't exist in our mock but logic should handle it
+        expect(result).toBe(true);
+        expect(fs.writeFileSync).toHaveBeenCalled();
+    });
+
+    test('deleteVersion should NOT delete the active version', () => {
+        const result = engine.deleteVersion('v1'); // activeVersionId is v1
+        expect(result).toBe(false);
+        expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
 });

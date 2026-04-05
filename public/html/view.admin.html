@@ -12,238 +12,43 @@
 </div>
 
 <div id="admin-users-panel" class="alerts-content-container active">
-    <div class="payload-header" style="margin-bottom: 15px;">
-        <h2>User Management</h2>
-        <button id="btn-admin-refresh" class="mapper-button">Refresh List</button>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                <tr>
-                    <th style="padding: 10px; font-weight: 500;">Username</th>
-                    <th style="padding: 10px; font-weight: 500;">Display Name</th>
-                    <th style="padding: 10px; font-weight: 500;">Email</th>
-                    <th style="padding: 10px; font-weight: 500;">Role</th>
-                    <th style="padding: 10px; font-weight: 500;">Last Login</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="admin-users-table-body">
-                <tr><td colspan="6" style="text-align:center; padding:20px;">Loading interface...</td></tr>
-            </tbody>
-        </table>
-    </div>
+    <admin-users-panel></admin-users-panel>
 </div>
 
 <div id="admin-db-panel" class="alerts-content-container">
-    <div style="max-width: 800px; margin: 0 auto;">
-        <h2>Database Maintenance</h2>
-        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-            Manage the embedded DuckDB database containing the MQTT history.
-        </p>
-        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="margin-top:0;">Import History (JSON)</h3>
-            <p style="font-size: 0.9em; margin-bottom: 15px;">
-                Import offline history data. This will be queued for insertion.
-            </p>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <input type="file" id="db-import-input" accept=".json" style="flex:1;">
-                <button id="btn-import-db" class="mapper-button" style="background-color: var(--color-primary); color: white;">Import Data</button>
-            </div>
-            <div id="db-import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
-        </div>
-        
-        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="margin-top:0;">Dead Letter Queue (DLQ) Recovery</h3>
-            <p style="font-size: 0.9em; margin-bottom: 15px;">
-                Manage messages that failed to insert into the database during transient errors or schema mismatches.
-            </p>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background-color: var(--color-bg-tertiary); padding: 10px; border-radius: 4px; border: 1px solid var(--color-border);">
-                <div>
-                    <strong>Failed Messages in DLQ:</strong> <span id="stats-dlq-count" style="font-weight:bold; font-size: 1.1em; margin-left: 5px;">--</span>
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button id="btn-replay-dlq" class="mapper-button button-primary" style="flex: 1;" disabled>Replay Failed Messages</button>
-                <button id="btn-clear-dlq" class="danger-button" style="flex: 1;" disabled>Clear DLQ</button>
-            </div>
-            <div id="dlq-status-message" style="margin-top: 10px; font-size: 0.9em; text-align: center;"></div>
-        </div>
-
-        <div style="background-color: rgba(220, 53, 69, 0.05); border: 1px solid var(--color-danger); border-radius: 8px; padding: 20px;">
-            <h3 style="margin-top:0; color: var(--color-danger);">⚠️ Danger Zone</h3>
-            <p style="font-size: 0.9em; margin-bottom: 15px;">
-                Permanently delete ALL recorded MQTT history. This cannot be undone.
-            </p>
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <button id="btn-reset-db" class="danger-button" style="padding: 10px 20px;">Reset Database to 0</button>
-                <span id="reset-db-status" style="font-weight: bold;"></span>
-            </div>
-        </div>
-    </div>
+    <admin-db-panel></admin-db-panel>
 </div>
 
 <div id="admin-alerts-panel" class="alerts-content-container">
-    <div style="max-width: 800px; margin: 0 auto;">
-        <h2>Alerts History Maintenance</h2>
-        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-            Manage the archive of triggered alerts.
-        </p>
-        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div>
-                    <strong>Resolved Alerts:</strong> <span id="stats-resolved-count" style="font-weight:bold;">--</span> 
-                    <span style="color: var(--color-text-secondary); margin-left:5px;">(~<span id="stats-resolved-size">--</span> MB)</span>
-                </div>
-            </div>
-            <button id="btn-purge-alerts" class="danger-button" style="width: 100%; padding: 10px;">Purge All Resolved Alerts</button>
-            <div id="purge-alerts-status" style="margin-top: 10px; text-align: center;"></div>
-        </div>
-    </div>
+    <admin-alerts-panel></admin-alerts-panel>
 </div>
 
 <div id="admin-assets-panel" class="alerts-content-container">
-    <div class="payload-header" style="margin-bottom: 15px;">
-        <div>
-            <h2 style="margin-bottom: 5px;">HMI Assets Management</h2>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Manage Global 3D Models, Scripts, SVGs, and HTML views.</p>
-        </div>
-        <button id="btn-hmi-refresh" class="mapper-button">Refresh List</button>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin-top:0;">Upload New Assets</h3>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="file" id="hmi-upload-input" accept=".html,.htm,.svg,.js,.glb,.gltf,.bin,.png,.jpg,.jpeg" multiple style="flex:1;">
-            <button id="btn-upload-hmi" class="mapper-button button-primary">Upload Files</button>
-        </div>
-        <div id="hmi-upload-status" style="margin-top: 10px; font-size: 0.9em; font-weight: 500;"></div>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                <tr>
-                    <th style="padding: 10px; font-weight: 500;">Filename</th>
-                    <th style="padding: 10px; font-weight: 500;">Type</th>
-                    <th style="padding: 10px; font-weight: 500;">Size</th>
-                    <th style="padding: 10px; font-weight: 500;">Last Modified</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="admin-hmi-table-body">
-                <tr><td colspan="5" style="text-align:center; padding:20px;">Loading interface...</td></tr>
-            </tbody>
-        </table>
-    </div>
+    <admin-assets-panel></admin-assets-panel>
 </div>
 
 <div id="admin-simulators-panel" class="alerts-content-container">
-    <div class="payload-header" style="margin-bottom: 15px;">
-        <div>
-            <h2 style="margin-bottom: 5px;">Simulators Management</h2>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Manage JavaScript simulator scenarios. Note: You must restart the server to detect new simulators.</p>
-        </div>
-        <button id="btn-sim-refresh" class="mapper-button">Refresh List</button>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin-top:0;">Upload New Simulator</h3>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="file" id="sim-upload-input" accept=".js" multiple style="flex:1;">
-            <button id="btn-upload-sim" class="mapper-button button-primary">Upload Files</button>
-        </div>
-        <div id="sim-upload-status" style="margin-top: 10px; font-size: 0.9em; font-weight: 500;"></div>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                <tr>
-                    <th style="padding: 10px; font-weight: 500;">Filename</th>
-                    <th style="padding: 10px; font-weight: 500;">Size</th>
-                    <th style="padding: 10px; font-weight: 500;">Last Modified</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="admin-sim-table-body">
-                <tr><td colspan="4" style="text-align:center; padding:20px;">Loading interface...</td></tr>
-            </tbody>
-        </table>
-    </div>
+    <admin-simulators-panel></admin-simulators-panel>
 </div>
 
 <div id="admin-parsers-panel" class="alerts-content-container">
-    <div style="max-width: 800px; margin: 0 auto;">
-        <h2>Data Parsers</h2>
-        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-            Upload and configure dynamic data providers like CSV files for playback.
-        </p>
-        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="margin-top:0;">CSV File Parser</h3>
-            <div style="background-color: var(--color-bg-tertiary); padding: 15px; border-radius: 6px; margin-bottom: 15px; font-size: 0.9em; border: 1px dashed var(--color-border);">
-                <strong>Expected Format:</strong> CSV with a header row.<br><br>
-                - If a column is named <code>topic</code>, it dynamically routes the row to that specific MQTT topic.<br>
-                - If no time column is present, you can simulate a delay (Delta) between each row publication.<br>
-                - All other columns form the JSON payload published to the broker.
-            </div>
-            <form id="csv-parser-form" style="display: flex; flex-direction: column; gap: 15px;">
-                <div class="form-group" style="margin:0;">
-                    <label>CSV File</label>
-                    <input type="file" id="csv-upload-input" accept=".csv" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg);">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Default Topic (Fallback if not in CSV)</label>
-                    <input type="text" id="csv-default-topic" value="factory/csv/data" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Time Delta between rows (ms)</label>
-                    <input type="number" id="csv-time-delta" value="1000" min="100" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-                <div class="form-group" style="margin:0; display:flex; align-items:center; gap:10px;">
-                    <input type="checkbox" id="csv-loop" checked>
-                    <label for="csv-loop" style="margin:0; cursor: pointer;">Loop continuously</label>
-                </div>
-                <button type="submit" id="btn-start-csv-parser" class="mapper-button button-primary" style="align-self: flex-start; padding: 10px 20px;">Start CSV Parser</button>
-                <div id="csv-parser-status" style="font-weight: 500;"></div>
-            </form>
-        </div>
-    </div>
+    <admin-parsers-panel></admin-parsers-panel>
 </div>
 
-<div id="admin-ai-panel" class="alerts-content-container" style="display: none;">
-    <div style="max-width: 900px; margin: 0 auto;">
-        <h2>AI Actions History</h2>
-        <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
-            Review and revert modifications made by the AI Assistant.
-        </p>
-        <button id="btn-ai-history-refresh" class="mapper-button" style="margin-bottom: 15px;">↻ Refresh</button>
-        <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em;">
-                <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                    <tr>
-                        <th style="padding: 10px; font-weight: 500;">Time</th>
-                        <th style="padding: 10px; font-weight: 500;">User</th>
-                        <th style="padding: 10px; font-weight: 500;">Tool</th>
-                        <th style="padding: 10px; font-weight: 500;">Details</th>
-                        <th style="padding: 10px; text-align: right; font-weight: 500;">Revert</th>
-                    </tr>
-                </thead>
-                <tbody id="admin-ai-history-tbody">
-                    <tr><td colspan="5" style="text-align:center; padding:20px;">Loading history...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+<div id="admin-ai-panel" class="alerts-content-container">
+    <admin-ai-panel></admin-ai-panel>
 </div>
 
 <div id="admin-logs-panel" class="alerts-content-container">
-    <div class="payload-header" style="margin-bottom: 15px;">
-        <div>
-            <h2 style="margin-bottom: 5px;">System Logs</h2>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">View the last 500 lines of backend and frontend logs.</p>
-        </div>
-        <button id="btn-logs-refresh" class="mapper-button">Refresh Logs</button>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px;">
-        <pre id="admin-logs-content" style="background-color: var(--color-code-bg); color: var(--color-code-text); padding: 15px; border-radius: 4px; height: 500px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85em; white-space: pre-wrap; word-wrap: break-word;">Loading logs...</pre>
-    </div>
+    <admin-logs-panel></admin-logs-panel>
+</div>
+
+<div id="admin-apikeys-panel" class="alerts-content-container">
+    <admin-apikeys-panel></admin-apikeys-panel>
+</div>
+
+<div id="admin-webhooks-panel" class="alerts-content-container">
+    <admin-webhooks-panel></admin-webhooks-panel>
 </div>
 
 <div id="admin-hmi-editor-modal" class="mapper-target-editor maximized" style="display: none; z-index: 10002;">
@@ -264,97 +69,4 @@
             </div>
         </div>
     </div>
-    </div>
-
-<div id="admin-apikeys-panel" class="alerts-content-container">
-    <div class="payload-header" style="margin-bottom: 15px;">
-        <div>
-            <h2 style="margin-bottom: 5px;">API Key Management</h2>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Generate and revoke API keys for external integrations via HTTP.</p>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button id="btn-apikeys-refresh" class="mapper-button">Refresh List</button>
-        </div>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin-top:0;">Generate New API Key</h3>
-        <form id="apikey-register-form" style="display: flex; flex-direction: column; gap: 15px;">
-            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
-                <div class="form-group" style="margin:0;">
-                    <label>Application Name</label>
-                    <input type="text" id="apikey-name" placeholder="e.g. ERP Integration" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Allowed Topics (Scopes - Comma separated)</label>
-                    <input type="text" id="apikey-scopes" placeholder="e.g. commands/#, factory/line1/+" value="#" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-            </div>
-            <button type="submit" class="mapper-button button-primary" style="align-self: flex-start; padding: 10px 20px;">Generate Key</button>
-        </form>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                <tr>
-                    <th style="padding: 10px; font-weight: 500;">Application Name</th>
-                    <th style="padding: 10px; font-weight: 500;">Scopes</th>
-                    <th style="padding: 10px; font-weight: 500;">Created At</th>
-                    <th style="padding: 10px; font-weight: 500;">Last Used</th>
-                    <th style="padding: 10px; font-weight: 500; text-align: center;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="admin-apikeys-table-body">
-                <tr><td colspan="5" style="text-align:center; padding:20px;">Loading API keys...</td></tr>
-            </tbody>
-        </table>
-    </div>
 </div>
-    <div id="admin-webhooks-panel" class="alerts-content-container">
-    <div class="payload-header" style="margin-bottom: 15px;">
-        <div>
-            <h2 style="margin-bottom: 5px;">Webhooks Subscriptions</h2>
-            <p style="font-size: 0.9em; color: var(--color-text-secondary); margin: 0;">Register and manage HTTP callbacks for real-time events.</p>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button id="btn-webhooks-refresh" class="mapper-button">Refresh List</button>
-            <button id="btn-webhooks-clear" class="danger-button">Clear All</button>
-        </div>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin-top:0;">Register New Webhook</h3>
-        <form id="webhook-register-form" style="display: flex; flex-direction: column; gap: 15px;">
-            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 15px;">
-                <div class="form-group" style="margin:0;">
-                    <label>Topic Pattern</label>
-                    <input type="text" id="webhook-topic" placeholder="factory/line1/#" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Webhook URL</label>
-                    <input type="url" id="webhook-url" placeholder="https://api.my-app.com/webhook" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label>Anti-flood (ms)</label>
-                    <input type="number" id="webhook-interval" value="1000" min="0" required style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
-                </div>
-            </div>
-            <button type="submit" class="mapper-button button-primary" style="align-self: flex-start; padding: 10px 20px;">Add Webhook</button>
-        </form>
-    </div>
-    <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-            <thead style="background-color: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border);">
-                <tr>
-                    <th style="padding: 10px; font-weight: 500;">ID</th>
-                    <th style="padding: 10px; font-weight: 500;">Topic Pattern</th>
-                    <th style="padding: 10px; font-weight: 500;">URL</th>
-                    <th style="padding: 10px; font-weight: 500;">Interval</th>
-                    <th style="padding: 10px; font-weight: 500;">Last Triggered</th>
-                    <th style="padding: 10px; text-align: right; font-weight: 500;">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="admin-webhooks-table-body">
-                <tr><td colspan="6" style="text-align:center; padding:20px;">Loading webhooks...</td></tr>
-            </tbody>
-        </table>
-    </div>
-    </div>

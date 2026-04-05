@@ -123,6 +123,28 @@ class MapperEngine {
         }
     }
 
+    /**
+     * Deletes a mapper version if it is not active.
+     * @param {string} versionId ID of the version to delete.
+     * @returns {boolean} True if deleted, false if active or not found.
+     */
+    deleteVersion(versionId) {
+        if (versionId === this.config.activeVersionId) {
+            this.engineLogger.warn(`[MapperEngine] Attempted to delete active version: ${versionId}`);
+            return false;
+        }
+
+        const initialLength = this.config.versions.length;
+        this.config.versions = this.config.versions.filter(v => v.id !== versionId);
+
+        if (this.config.versions.length < initialLength) {
+            this.saveMappings(this.config);
+            this.engineLogger.info(`[MapperEngine] Deleted version: ${versionId}`);
+            return true;
+        }
+        return false;
+    }
+
     getMappings() { return this.config; }
     getConfig() { return this.config; }
 
