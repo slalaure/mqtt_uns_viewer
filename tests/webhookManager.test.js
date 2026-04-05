@@ -5,11 +5,15 @@
  * Verifies database persistence, dynamic triggering based on topics, and the anti-flood mechanism.
  */
 
-const webhookManager = require('../core/webhookManager');
-const axios = require('axios');
-
 // --- Mock Dependencies ---
-jest.mock('axios');
+jest.mock('axios', () => {
+    const fn = jest.fn();
+    fn.post = jest.fn();
+    fn.get = jest.fn();
+    return fn;
+});
+const axios = require('axios');
+const webhookManager = require('../core/webhookManager');
 
 const createMockLogger = () => {
     const logger = {
@@ -32,13 +36,15 @@ describe('WebhookManager', () => {
         // Mock DuckDB Interface
         mockDb = {
             exec: jest.fn((query, cb) => { if (cb) cb(null); }),
-            run: jest.fn((query, params, cb) => {
-                const callback = typeof params === 'function' ? params : cb;
-                if (callback) callback(null);
+            run: jest.fn(function() {
+                const args = Array.from(arguments);
+                const cb = args.find(a => typeof a === 'function');
+                if (cb) cb(null);
             }),
-            all: jest.fn((query, params, cb) => {
-                const callback = typeof params === 'function' ? params : cb;
-                if (callback) callback(null, []);
+            all: jest.fn(function() {
+                const args = Array.from(arguments);
+                const cb = args.find(a => typeof a === 'function');
+                if (cb) cb(null, []);
             })
         };
 
@@ -88,7 +94,7 @@ describe('WebhookManager', () => {
 
         expect(mockDb.run).toHaveBeenCalledWith(
             expect.stringContaining('INSERT INTO webhooks'),
-            ['wh_1', 'alert/#', 'http://test.com', 'POST', 1000],
+            'wh_1', 'alert/#', 'http://test.com', 'POST', 1000,
             expect.any(Function)
         );
         expect(webhookManager.webhooks.length).toBe(1);
@@ -130,7 +136,7 @@ describe('WebhookManager', () => {
         // Verify DB update for last_triggered was called
         expect(mockDb.run).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE webhooks SET last_triggered'),
-            ['wh_test']
+            'wh_test'
         );
     });
 
@@ -188,5 +194,31 @@ describe('WebhookManager', () => {
             expect.objectContaining({ err: "Network timeout", url: 'http://api.broken/endpoint', correlationId: 'corr-123' }),
             expect.stringContaining('failed')
         );
+    });
+
+    test('should allow manual testing of a specific webhook', async () => {
+        webhookManager.init(mockDb, mockLogger);
+        
+        webhookManager.webhooks = [{
+            id: 'wh_manual',
+            topic: 'some/topic',
+            url: 'http://api.internal/test',
+            method: 'POST',
+            min_interval_ms: 1000,
+            active: true
+        }];
+
+        axios.mockResolvedValue({ status: 200 });
+
+        await webhookManager.testWebhook('wh_manual');
+
+        expect(axios).toHaveBeenCalledWith(expect.objectContaining({
+            url: 'http://api.internal/test',
+            data: expect.objectContaining({
+                topic: 'test/topic',
+                payload: expect.objectContaining({ test: true }),
+                correlationId: 'test-correlation-id'
+            })
+        }));
     });
 });

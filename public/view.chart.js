@@ -401,13 +401,14 @@ export function mountChartView() {
   subscribe("currentTopic", onCurrentTopicChange, true);
   subscribe("currentBrokerId", onCurrentBrokerIdChange);
 
-  // If the chart needs to be drawn immediately upon mounting
-  if (chartedVariables.size > 0 && !chartInstance) {
-    onGenerateChart();
+  // Hydrate from global state if something was selected in another view
+  if (state.currentTopic && state.currentBrokerId) {
+      onCurrentTopicChange(state.currentTopic);
+  } else if (chartedVariables.size > 0 && !chartInstance) {
+      onGenerateChart();
   }
 
-  isMounted = true;
-  console.log("[Chart View] Mounted.");
+  isMounted = true;  console.log("[Chart View] Mounted.");
 }
 
 /**

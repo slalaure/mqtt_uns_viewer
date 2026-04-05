@@ -5,20 +5,23 @@
  * Verifies ingestion (pseudo-publish) and webhook registration (pseudo-subscribe).
  */
 
-const HttpProvider = require('../connectors/http/index');
-const webhookManager = require('../core/webhookManager');
-
 // Mock dependencies
 jest.mock('../core/webhookManager');
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-12345678' }));
 
-const createMockLogger = () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    child: jest.fn().mockImplementation(() => createMockLogger())
-});
+const HttpProvider = require('../connectors/http/index');
+const webhookManager = require('../core/webhookManager');
+
+const createMockLogger = () => {
+    const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+    };
+    logger.child = jest.fn().mockReturnValue(logger);
+    return logger;
+};
 
 describe('HttpProvider', () => {
     let mockApp, mockContext, config, provider;
@@ -78,7 +81,7 @@ describe('HttpProvider', () => {
 
         handler(reqAllowed, res);
         expect(res.status).toHaveBeenCalledWith(200);
-        expect(mockContext.handleMessage).toHaveBeenCalledWith('test-http', 'factory/line1/temp', { val: 25 });
+        expect(mockContext.handleMessage).toHaveBeenCalledWith('test-http', 'factory/line1/temp', { val: 25 }, { connectorType: 'http', correlationId: null });
 
         // 2. Forbidden topic
         const reqForbidden = {

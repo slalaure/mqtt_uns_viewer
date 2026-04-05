@@ -5,11 +5,11 @@
  * Verifies topic resolution and legacy concept auto-migration.
  */
 
-const fs = require('fs');
-const semanticManager = require('../core/semantic/semanticManager');
-
 // Mock the fs module to avoid reading real files during the test
 jest.mock('fs');
+
+const fs = require('fs');
+const semanticManager = require('../core/semantic/semanticManager');
 
 describe('SemanticManager', () => {
     let mockContext;

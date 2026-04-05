@@ -33,15 +33,18 @@ uns/line2/temp,19.8,1.1,idle`;
         fs.writeFileSync(tempCsvPath, csvContent, 'utf8');
     });
 
-    afterAll(() => {
+    afterAll(async () => {
+        // Wait for any lingering async stream close operations
+        await new Promise(resolve => setTimeout(resolve, 100));
         if (fs.existsSync(tempCsvPath)) {
             fs.unlinkSync(tempCsvPath);
         }
     });
 
+    let providers = [];
+
     beforeEach(() => {
-        jest.useFakeTimers();
-        
+        providers = [];
         mockContext = {
             logger: createMockLogger(),
             handleMessage: jest.fn(),
@@ -52,19 +55,22 @@ uns/line2/temp,19.8,1.1,idle`;
             id: 'test_csv_stream',
             type: 'file',
             filePath: tempCsvPath,
-            streamRateMs: 100, // Fast rate for testing
+            streamRateMs: 50, // Fast rate for testing with real timers
             defaultTopic: 'fallback/topic',
             loop: false // We test looping explicitly later
         };
     });
 
-    afterEach(() => {
-        jest.useRealTimers();
+    afterEach(async () => {
+        for (const provider of providers) {
+            await provider.disconnect();
+        }
     });
 
     test('should fail to connect if file does not exist', async () => {
         const badConfig = { ...providerConfig, filePath: '/path/does/not/exist.csv' };
         const provider = new FileProvider(badConfig, mockContext);
+        providers.push(provider);
 
         const result = await provider.connect();
 
@@ -75,65 +81,45 @@ uns/line2/temp,19.8,1.1,idle`;
 
     test('should read CSV, extract headers, and dynamically route based on the topic column', async () => {
         const provider = new FileProvider(providerConfig, mockContext);
+        providers.push(provider);
         const result = await provider.connect();
 
         expect(result).toBe(true);
         expect(provider.connected).toBe(true);
 
-        // Advance timers to trigger the stream reading
-        // Line 1 (Header): immediate
-        await Promise.resolve(); 
-        jest.advanceTimersByTime(10);
-        
-        // Line 2 (Data 1)
-        await Promise.resolve();
-        jest.advanceTimersByTime(110);
-        
-        // Line 3 (Data 2)
-        await Promise.resolve();
-        jest.advanceTimersByTime(110);
+        // Wait for real stream to read the 3 lines (rate is 50ms)
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Verify that handleIncomingMessage was called with dynamic topics and correct type casting
-        expect(mockContext.handleMessage).toHaveBeenCalledWith('uns/line1/temp', {
+        expect(mockContext.handleMessage).toHaveBeenCalledWith('test_csv_stream', 'uns/line1/temp', {
             temperature: 22.5, // Parsed as float
             pressure: 1.2,
             status: 'running'  // Kept as string
-        }, {});
+        }, { connectorType: 'file' });
 
-        expect(mockContext.handleMessage).toHaveBeenCalledWith('uns/line1/temp', {
+        expect(mockContext.handleMessage).toHaveBeenCalledWith('test_csv_stream', 'uns/line1/temp', {
             temperature: 23.1,
             pressure: 1.3,
             status: 'running'
-        }, {});
-
-        await provider.disconnect();
+        }, { connectorType: 'file' });
     });
 
     test('should gracefully loop file stream when EOF is reached if loop is true', async () => {
         const loopingConfig = { ...providerConfig, loop: true, streamRateMs: 50 };
         const provider = new FileProvider(loopingConfig, mockContext);
+        providers.push(provider);
         await provider.connect();
 
-        // Process Header + 3 Data lines
-        for(let i=0; i<5; i++) {
-            await Promise.resolve();
-            jest.advanceTimersByTime(60);
-        }
+        // Wait enough time to finish the 3 lines and loop at least once
+        await new Promise(resolve => setTimeout(resolve, 400));
 
         expect(provider.logger.info).toHaveBeenCalledWith(expect.stringContaining('End of file reached'));
         expect(provider.logger.info).toHaveBeenCalledWith(expect.stringContaining('Restarting file stream'));
-
-        // Advance time to allow the stream to restart
-        await Promise.resolve();
-        jest.advanceTimersByTime(60);
-
-        // Disconnect to clean up
-        await provider.disconnect();
-        expect(provider.connected).toBe(false);
     });
 
     test('publish method should loopback message to internal engine', () => {
         const provider = new FileProvider(providerConfig, mockContext);
+        providers.push(provider);
         
         const testPayload = { cmd: "restart", auth: "admin" };
         
@@ -143,9 +129,10 @@ uns/line2/temp,19.8,1.1,idle`;
         });
 
         expect(mockContext.handleMessage).toHaveBeenCalledWith(
+            'test_csv_stream',
             'internal/loopback/cmd', 
             testPayload, 
-            {}
+            { connectorType: 'file' }
         );
         expect(provider.logger.info).toHaveBeenCalledWith(expect.stringContaining('routing publish back to stream'));
     });

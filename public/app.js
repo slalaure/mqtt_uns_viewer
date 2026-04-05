@@ -357,6 +357,30 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClock, 1000);
     updateClock();
 
+    // --- Reactive Topic Selection ---
+    subscribe('currentTopic', (topic) => {
+        if (!topic || !state.currentBrokerId) return;
+        
+        // 1. Sync Tree selection (Main Tree)
+        const node = document.querySelector(`#mqtt-tree .node-container[data-topic="${topic}"][data-broker-id="${state.currentBrokerId}"]`);
+        if (node && node !== selectedMainTreeNode) {
+            if (selectedMainTreeNode) selectedMainTreeNode.classList.remove('selected');
+            selectedMainTreeNode = node;
+            selectedMainTreeNode.classList.add('selected');
+            
+            // Expand parents
+            let parentLi = node.closest('li').parentElement.closest('li');
+            while (parentLi) {
+                parentLi.classList.remove('collapsed');
+                parentLi = parentLi.parentElement.closest('li');
+            }
+
+            // Sync Payload Viewer
+            const payload = node.dataset.payload;
+            mainPayloadViewer.display(state.currentBrokerId, topic, payload);
+        }
+    });
+
     /**
      * --- Tree Click Handler ---
      */

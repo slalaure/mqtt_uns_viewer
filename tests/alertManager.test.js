@@ -5,6 +5,11 @@
  * Verifies rule evaluation, VM sandbox isolation, and state transitions.
  */
 
+// Mock axios
+jest.mock('axios', () => ({
+    post: jest.fn().mockResolvedValue({ status: 200 })
+}));
+const axios = require('axios');
 const alertManager = require('../core/engine/alertManager');
 
 // Helper to create a fully mockable logger
@@ -171,5 +176,46 @@ describe('AlertManager', () => {
         // Should not insert an alert
         expect(mockDb.run).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO active_alerts'), expect.anything());
         expect(mockBroadcaster).not.toHaveBeenCalled();
+    });
+
+    test('should trigger a webhook if configured in notifications', async () => {
+        const webhookUrl = 'http://webhook.test/alert';
+        mockDb.all.mockImplementation((sql, ...args) => {
+            const cb = args[args.length - 1];
+            if (sql.includes('SELECT * FROM alert_rules')) {
+                cb(null, [{
+                    id: 'rule_webhook',
+                    name: 'Webhook Rule',
+                    topic_pattern: 'test/sensor',
+                    condition_code: 'return msg.payload.val > 50;',
+                    severity: 'critical',
+                    notifications: JSON.stringify({ webhook: webhookUrl })
+                }]);
+            } else if (sql.includes('SELECT id FROM active_alerts')) {
+                cb(null, []);
+            } else {
+                cb(null, []);
+            }
+        });
+
+        // Trigger processing
+        await alertManager.processMessage('default', 'test/sensor', { val: 75 }, 'trace-999');
+
+        // Wait for all async tasks (including triggerAlert -> executeWorkflow)
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Verify axios.post was called with correct data
+        expect(axios.post).toHaveBeenCalledWith(
+            webhookUrl,
+            expect.objectContaining({
+                text: expect.stringContaining('Webhook Rule')
+            })
+        );
+        expect(axios.post).toHaveBeenCalledWith(
+            webhookUrl,
+            expect.objectContaining({
+                text: expect.stringContaining('trace-999')
+            })
+        );
     });
 });

@@ -5,9 +5,6 @@
  * Verifies table creation, 25-item chunking, and UnprocessedItems handling.
  */
 
-const dynamoDbRepo = require('../storage/dynamoDbRepository');
-const { DynamoDBClient, BatchWriteItemCommand, CreateTableCommand } = require('@aws-sdk/client-dynamodb');
-
 // Mock AWS SDK v3
 jest.mock('@aws-sdk/client-dynamodb', () => {
     return {
@@ -19,13 +16,19 @@ jest.mock('@aws-sdk/client-dynamodb', () => {
     };
 });
 
-const createMockLogger = () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    child: jest.fn().mockImplementation(() => createMockLogger())
-});
+const dynamoDbRepo = require('../storage/dynamoDbRepository');
+const { DynamoDBClient, BatchWriteItemCommand, CreateTableCommand } = require('@aws-sdk/client-dynamodb');
+
+const createMockLogger = () => {
+    const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+    };
+    logger.child = jest.fn().mockReturnValue(logger);
+    return logger;
+};
 
 describe('DynamoDbRepository', () => {
     let mockLogger, mockConfig, mockDlqManager;
@@ -65,7 +68,7 @@ describe('DynamoDbRepository', () => {
 
     test('should chunk inserts into batches of 25', async () => {
         await dynamoDbRepo.init(mockLogger, mockConfig, mockDlqManager);
-        dynamoDbRepo.client.send.mockClear(); // Clear initialization calls
+        jest.clearAllMocks(); // Clear initialization calls
 
         // Create 60 messages
         for (let i = 0; i < 60; i++) {
@@ -98,9 +101,9 @@ describe('DynamoDbRepository', () => {
         // Mock DynamoDB returning some items as unprocessed (throttled)
         dynamoDbRepo.client.send.mockResolvedValueOnce({
             UnprocessedItems: {
-                'mqtt_test_events': [
-                    { PutRequest: { Item: { partition_key: { S: "fail1" } } } },
-                    { PutRequest: { Item: { partition_key: { S: "fail2" } } } }
+                'korelate_test_events': [
+                    { PutRequest: { Item: { id: { S: 'fail1' } } } },
+                    { PutRequest: { Item: { id: { S: 'fail2' } } } }
                 ]
             }
         });

@@ -5,19 +5,22 @@
  * Verifies sandbox execution, database requirement detection, and message routing.
  */
 
-const fs = require('fs');
-const mapperEngineFactory = require('../core/engine/mapperEngine');
-
 // Mock the file system
 jest.mock('fs');
 
+const fs = require('fs');
+const mapperEngineFactory = require('../core/engine/mapperEngine');
+
 // Helper to create a fully mockable logger
-const createMockLogger = () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    child: jest.fn().mockImplementation(() => createMockLogger())
-});
+const createMockLogger = () => {
+    const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn()
+    };
+    logger.child = jest.fn().mockReturnValue(logger);
+    return logger;
+};
 
 describe('MapperEngine', () => {
     let mockConnections, mockBroadcaster, mockLogger, mockReplacer, engine, mockSandboxPool;

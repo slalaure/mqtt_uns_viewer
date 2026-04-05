@@ -61,7 +61,7 @@ class WebhookManager {
                 INSERT INTO webhooks (id, topic, url, method, min_interval_ms, active, created_at)
                 VALUES (?, ?, ?, ?, ?, true, CURRENT_TIMESTAMP)
             `;
-            this.db.run(query, [id, topic, url, method, min_interval_ms], (err) => {
+            this.db.run(query, id, topic, url, method, min_interval_ms, (err) => {
                 if (err) {
                     this.logger.error({ err }, "Failed to add webhook to DB");
                     return reject(err);
@@ -74,7 +74,7 @@ class WebhookManager {
 
     async deleteWebhook(id) {
         return new Promise((resolve, reject) => {
-            this.db.run("DELETE FROM webhooks WHERE id = ?", [id], (err) => {
+            this.db.run("DELETE FROM webhooks WHERE id = ?", id, (err) => {
                 if (err) {
                     this.logger.error({ err }, "Failed to delete webhook from DB");
                     return reject(err);
@@ -111,7 +111,7 @@ class WebhookManager {
         for (const webhook of this.webhooks) {
             if (mqttMatch(webhook.topic, topic)) {
                 // Anti-flood check
-                const lastTime = this.lastTriggered.get(webhook.id) || 0;
+                const lastTime = this.lastTriggered.has(webhook.id) ? this.lastTriggered.get(webhook.id) : -Infinity;
                 if (now - lastTime < webhook.min_interval_ms) {
                     // Too fast, skip
                     continue;
@@ -122,6 +122,26 @@ class WebhookManager {
             }
         }
         return Promise.all(promises);
+    }
+
+    async testWebhook(id) {
+        const webhook = this.webhooks.find(w => w.id === id);
+        if (!webhook) {
+            // Check DB if not in active memory
+            return new Promise((resolve, reject) => {
+                this.db.all("SELECT * FROM webhooks WHERE id = ?", id, async (err, rows) => {
+                    if (err) return reject(err);
+                    if (rows.length === 0) return reject(new Error("Webhook not found"));
+                    try {
+                        const res = await this.executeWebhook(rows[0], "test/topic", { test: true, message: "Manual test trigger" }, "test-correlation-id");
+                        resolve(res);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            });
+        }
+        return this.executeWebhook(webhook, "test/topic", { test: true, message: "Manual test trigger" }, "test-correlation-id");
     }
 
     async executeWebhook(webhook, topic, payload, correlationId = null) {
@@ -144,7 +164,7 @@ class WebhookManager {
             this.logger.debug({ webhookId: webhook.id, status: response.status, correlationId }, `Webhook executed successfully`);
             
             // Update last_triggered in DB (async, don't wait)
-            this.db.run("UPDATE webhooks SET last_triggered = CURRENT_TIMESTAMP WHERE id = ?", [webhook.id]);
+            this.db.run("UPDATE webhooks SET last_triggered = CURRENT_TIMESTAMP WHERE id = ?", webhook.id);
             
         } catch (err) {
             this.logger.warn({ err: err.message, url: webhook.url, correlationId }, `Webhook ${webhook.id} failed`);

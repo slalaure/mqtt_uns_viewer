@@ -156,6 +156,8 @@ class PiSystemRepository extends BaseRepository {
             if (obj && typeof obj === 'object') {
                 if (obj.value !== undefined) return obj.value;
                 if (obj.val !== undefined) return obj.val;
+            } else if (typeof obj === 'number') {
+                return obj;
             }
             return payloadString;
         } catch (e) {

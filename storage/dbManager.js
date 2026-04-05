@@ -57,7 +57,7 @@ module.exports = (db, dbFile, dbWalFile, broadcast, logger, maxSizeMB, pruneChun
         
         const query = `DELETE FROM korelate_events WHERE rowid IN (SELECT rowid FROM korelate_events ORDER BY timestamp ASC LIMIT ?);`;
 
-        db.run(query, [rowsToDelete], (err) => {
+        db.run(query, rowsToDelete, (err) => {
             if (err) logger.error({ err }, "❌ Error during pruning:");
             logger.info("✅    -> Pruning complete. Reclaiming disk space...");
             

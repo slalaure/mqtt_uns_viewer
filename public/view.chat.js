@@ -80,6 +80,12 @@ let pendingApproval = null; // Store pending approval chunk
 // --- Deduplication Set ---
 let processedChunkIds = new Set();
 
+const onCurrentTopicChange = (topic) => {
+    // We don't need to do anything specific here as sendMessage 
+    // reads state.currentTopic directly, but having the subscription 
+    // ensures the reactive loop is consistent.
+};
+
 // --- Safe HTML Sanitization Wrapper ---
 const sanitizeHtml = (dirtyHtml) => {
     return window.DOMPurify ? window.DOMPurify.sanitize(dirtyHtml) : dirtyHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -181,6 +187,9 @@ export function mountChatView() {
     btnClear?.addEventListener('click', onClearClick);
     document.addEventListener('fullscreenchange', onFullscreenChange);
 
+    // Subscriptions
+    import('./state.js').then(m => m.subscribe('currentTopic', onCurrentTopicChange));
+
     isMounted = true;
     console.log("[Chat View] Mounted.");
 }
@@ -198,6 +207,9 @@ export function unmountChatView() {
     chatInput?.removeEventListener('keydown', onInputKeydown);
     btnClear?.removeEventListener('click', onClearClick);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
+
+    // Subscriptions
+    import('./state.js').then(m => m.unsubscribe('currentTopic', onCurrentTopicChange));
 
     // Stop active speech recognition or synthesis
     if (recognition && isListening) {

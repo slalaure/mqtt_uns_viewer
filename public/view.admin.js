@@ -877,11 +877,19 @@ function renderWebhooks(webhooks) {
             <td style="padding: 10px;"><a href="${w.url}" target="_blank" style="color: var(--color-primary); font-size: 0.9em;">${w.url}</a></td>
             <td style="padding: 10px;">${w.min_interval_ms}ms</td>
             <td style="padding: 10px; font-size: 0.9em;">${lastTriggered}</td>
-            <td style="padding: 10px; text-align: right;">
+            <td style="padding: 10px; text-align: right; display: flex; gap: 5px; justify-content: flex-end;">
+                <button class="tool-button button-primary btn-test-webhook" data-id="${w.id}">Test</button>
                 <button class="tool-button button-danger btn-delete-webhook" data-id="${w.id}">Delete</button>
             </td>
         `;
         webhooksTableBody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.btn-test-webhook').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            onTestWebhook(id);
+        });
     });
 
     document.querySelectorAll('.btn-delete-webhook').forEach(btn => {
@@ -890,6 +898,21 @@ function renderWebhooks(webhooks) {
             deleteWebhook(id);
         });
     });
+}
+
+async function onTestWebhook(id) {
+    try {
+        const res = await fetch(`api/admin/webhooks/${id}/test`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast("Test trigger sent. Check your webhook target.", "success");
+            setTimeout(loadWebhooks, 2000); // Reload to show updated last_triggered
+        } else {
+            showToast("Test failed: " + (data.error || "Unknown error"), "error");
+        }
+    } catch (e) {
+        showToast("Test request failed: " + e.message, "error");
+    }
 }
 
 async function onRegisterWebhook(e) {

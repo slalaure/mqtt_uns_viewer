@@ -76,7 +76,7 @@ const workerScript = `
                 const decoded = spBv10Codec.decodePayload(Buffer.from(task.payload));
                 parentPort.postMessage({ id: task.id, result: decoded });
             } else if (task.action === 'parse_json') {
-                const str = Buffer.isBuffer(task.payload) ? task.payload.toString('utf-8') : task.payload;
+                const str = Buffer.from(task.payload).toString('utf-8');
                 const parsed = JSON.parse(str);
                 parentPort.postMessage({ id: task.id, result: parsed });
             } else {
@@ -250,17 +250,21 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                 payloadStringForDb = JSON.stringify(payload, longReplacer);
             } else {
                 // Standard String/Buffer payload parsing
-                let tempPayloadString = Buffer.isBuffer(payload) ? payload.toString('utf-8') : payload;
-                payloadStringForWs = tempPayloadString;
+                const tempPayloadString = Buffer.isBuffer(payload) ? payload.toString('utf-8') : payload;
                 
                 try {
                     // [NEW] Offloaded JSON parsing to Worker Thread
                     payloadObjectForMapper = await workerPool.execute('parse_json', payload);
+                    
+                    // If parsing succeeded, we use the original string for DB/WS to preserve formatting/precision
+                    payloadStringForWs = tempPayloadString;
                     payloadStringForDb = tempPayloadString;
                 } catch (parseError) {
                      handlerLogger.debug({ err: parseError, topic }, `Received non-JSON payload. Storing as raw string.`);
+                     // Fallback: Wrap in an object so AlertManager/Mapper can still access it via msg.payload.raw_payload
                      payloadObjectForMapper = { raw_payload: tempPayloadString };
-                     payloadStringForDb = JSON.stringify(payloadObjectForMapper);
+                     payloadStringForWs = tempPayloadString; // Still show raw string in UI
+                     payloadStringForDb = JSON.stringify(payloadObjectForMapper); // Store as JSON in DB to satisfy JSON type
                 }
             }
 
@@ -279,6 +283,12 @@ async function handleMessage(providerId, topic, payload, options = {}) {
                 } catch (stringifyErr) {
                     handlerLogger.error({ err: stringifyErr }, "Failed to stringify enriched I3X payload");
                 }
+            } else if (payloadObjectForMapper && payloadObjectForMapper.raw_payload && Object.keys(payloadObjectForMapper).length === 1) {
+                // It's a wrapped raw payload, let's keep the raw string for DB if possible 
+                // but DuckDB JSON type requires it to be a valid JSON.
+                // If it's just a string like "42", it's valid JSON. 
+                // If it's a non-JSON string, it MUST be wrapped.
+                // Our fallback already set payloadStringForDb = JSON.stringify({raw_payload: ...})
             }
         }
 
@@ -332,6 +342,16 @@ function resetThrottling() {
 }
 
 /**
+ * Stops the throttling interval (used for tests).
+ */
+function stop() {
+    if (throttleResetTimer) {
+        clearInterval(throttleResetTimer);
+        throttleResetTimer = null;
+    }
+}
+
+/**
  * Initializes the Central Message Dispatcher.
  * @param {Object} appLogger Pino logger.
  * @param {Object} appConfig App configuration.
@@ -359,4 +379,4 @@ function init(appLogger, appConfig, appWsManager, appMapperEngine, appDataManage
     return handleMessage; 
 }
 
-module.exports = { init, setWorkerPool, resetThrottling };
+module.exports = { init, setWorkerPool, resetThrottling, stop };

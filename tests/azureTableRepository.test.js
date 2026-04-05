@@ -5,9 +5,6 @@
  * Verifies connection handling, batch limits (100 per partition), and DLQ fallback.
  */
 
-const azureTableRepo = require('../storage/azureTableRepository');
-const { TableClient } = require('@azure/data-tables');
-
 // Mock the Azure SDK
 jest.mock('@azure/data-tables', () => {
     const mockClientInstance = {
@@ -21,13 +18,19 @@ jest.mock('@azure/data-tables', () => {
     };
 });
 
-const createMockLogger = () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    child: jest.fn().mockImplementation(() => createMockLogger())
-});
+const azureTableRepo = require('../storage/azureTableRepository');
+const { TableClient } = require('@azure/data-tables');
+
+const createMockLogger = () => {
+    const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+    };
+    logger.child = jest.fn().mockReturnValue(logger);
+    return logger;
+};
 
 describe('AzureTableRepository', () => {
     let mockLogger, mockConfig, mockDlqManager;

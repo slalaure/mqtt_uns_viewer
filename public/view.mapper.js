@@ -190,8 +190,10 @@ export function mountMapperView() {
     modalBtnDeleteRule?.addEventListener('click', onDeleteRule);
     modalBtnDeletePrune?.addEventListener('click', onDeleteAndPrune);
 
-    // Re-render current selection if returning to the view
-    if (currentEditingSourceTopic && currentEditingBrokerId) {
+    // Re-render current selection if returning to the view or it was selected in another tab
+    if (state.currentTopic && state.currentBrokerId) {
+        onCurrentTopicChange(state.currentTopic);
+    } else if (currentEditingSourceTopic && currentEditingBrokerId) {
         renderTransformEditor(currentEditingBrokerId, currentEditingSourceTopic);
     }
 

@@ -5,19 +5,25 @@
  * Verifies PI Web API connection, StreamSets payload formatting, and DLQ fallback.
  */
 
+// Mock Axios
+jest.mock('axios', () => {
+    return {
+        create: jest.fn()
+    };
+});
 const piSystemRepo = require('../storage/piSystemRepository');
 const axios = require('axios');
 
-// Mock Axios
-jest.mock('axios');
-
-const createMockLogger = () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    child: jest.fn().mockImplementation(() => createMockLogger())
-});
+const createMockLogger = () => {
+    const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+    };
+    logger.child = jest.fn().mockReturnValue(logger);
+    return logger;
+};
 
 describe('PiSystemRepository', () => {
     let mockLogger, mockConfig, mockDlqManager;

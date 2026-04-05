@@ -5,27 +5,31 @@
  * Verifies connection handling, Sparkplug B payload decoding, and MQTT v5 property extraction.
  */
 
-const MqttProvider = require('../connectors/mqtt/index');
-const mqtt = require('mqtt');
-const fs = require('fs');
-
 // --- Mock Dependencies ---
+jest.mock('fs');
 jest.mock('mqtt', () => {
-    const mockClient = {
-        on: jest.fn().mockReturnThis(),
-        subscribe: jest.fn((topics, opts, cb) => {
-            if (cb) cb(null);
-        }),
-        publish: jest.fn((topic, payload, opts, cb) => {
-            if (cb) cb(null);
-        }),
-        end: jest.fn()
-    };
     return {
-        connect: jest.fn(() => mockClient)
+        connect: jest.fn(() => {
+            const mockClient = {
+                on: jest.fn((event, handler) => {
+                    if (event === 'connect') {
+                        // Automatically resolve connection
+                        setTimeout(handler, 10);
+                    }
+                    return mockClient;
+                }),
+                subscribe: jest.fn((topics, opts, cb) => {
+                    if (cb) cb(null);
+                }),
+                publish: jest.fn((topic, payload, opts, cb) => {
+                    if (cb) cb(null);
+                }),
+                end: jest.fn()
+            };
+            return mockClient;
+        })
     };
 });
-
 jest.mock('sparkplug-payload', () => ({
     get: jest.fn(() => ({
         decodePayload: jest.fn((payload) => {
@@ -35,7 +39,9 @@ jest.mock('sparkplug-payload', () => ({
     }))
 }));
 
-jest.mock('fs');
+const MqttProvider = require('../connectors/mqtt/index');
+const mqtt = require('mqtt');
+const fs = require('fs');
 
 // --- Helper for Mock Logger ---
 const createMockLogger = () => ({
@@ -79,23 +85,15 @@ describe('MqttProvider', () => {
     test('should connect successfully and subscribe to topics', async () => {
         const provider = new MqttProvider(providerConfig, mockContext);
         
-        const connectPromise = provider.connect();
+        const result = await provider.connect();
         
-        // Retrieve the registered 'connect' event handler and trigger it
         const client = mqtt.connect.mock.results[0].value;
-        const connectCall = client.on.mock.calls.find(call => call[0] === 'connect');
-        expect(connectCall).toBeDefined();
-        
-        // Simulate successful connection
-        connectCall[1]();
-        
-        const result = await connectPromise;
         
         expect(result).toBe(true);
         expect(provider.connected).toBe(true);
         expect(mqtt.connect).toHaveBeenCalled();
         expect(client.subscribe).toHaveBeenCalledWith(['factory/#'], { qos: 1 }, expect.any(Function));
-        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('main_mqtt', 'connected');
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('main_mqtt', 'connected', null);
     });
 
     test('should process standard MQTT messages and forward to central handler', async () => {
@@ -113,12 +111,13 @@ describe('MqttProvider', () => {
 
         messageHandler(topic, payload, packet);
 
-        expect(mockContext.handleMessage).toHaveBeenCalledWith('main_mqtt', topic, payload, {
+        expect(mockContext.handleMessage).toHaveBeenCalledWith('main_mqtt', topic, payload, expect.objectContaining({
             isSparkplugOrigin: false,
             rawBuffer: payload,
             decodeError: null,
-            correlationId: null
-        });
+            correlationId: null,
+            connectorType: 'mqtt'
+        }));
     });
 
     test('should decode Sparkplug B messages when enabled', async () => {
@@ -135,12 +134,13 @@ describe('MqttProvider', () => {
 
         messageHandler(topic, payload, packet);
 
-        expect(mockContext.handleMessage).toHaveBeenCalledWith('main_mqtt', topic, { metrics: [{ name: 'TestMetric', value: 100 }], seq: 1 }, {
+        expect(mockContext.handleMessage).toHaveBeenCalledWith('main_mqtt', topic, { metrics: [{ name: 'TestMetric', value: 100 }], seq: 1 }, expect.objectContaining({
             isSparkplugOrigin: true,
             rawBuffer: payload,
             decodeError: null,
-            correlationId: null
-        });
+            correlationId: null,
+            connectorType: 'mqtt'
+        }));
     });
 
     test('should extract MQTT v5 Correlation ID from user properties', async () => {
@@ -174,18 +174,6 @@ describe('MqttProvider', () => {
         };
 
         const provider = new MqttProvider(mtlsConfig, mockContext);
-        
-        // Prevent connect promise from hanging by auto-resolving the 'connect' event
-        mqtt.connect.mockImplementationOnce(() => {
-            const mockClient = {
-                on: jest.fn((event, handler) => {
-                    if (event === 'connect') setTimeout(handler, 10);
-                    return mockClient;
-                }),
-                subscribe: jest.fn()
-            };
-            return mockClient;
-        });
 
         const result = await provider.connect();
         

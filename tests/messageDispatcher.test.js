@@ -20,6 +20,12 @@ jest.mock('worker_threads', () => ({
 
 const messageDispatcher = require('../core/messageDispatcher');
 
+// Mock WebhookManager
+jest.mock('../core/webhookManager', () => ({
+    trigger: jest.fn().mockResolvedValue([])
+}));
+const webhookManager = require('../core/webhookManager');
+
 // Helper to create a fully mockable logger
 const createMockLogger = () => {
     const logger = {
@@ -72,6 +78,10 @@ describe('MessageDispatcher', () => {
             mockLogger, mockConfig, mockWsManager, mockMapperEngine, 
             mockDataManager, mockBroadcastDbStatus, mockAlertManager
         );
+    });
+
+    afterEach(() => {
+        messageDispatcher.stop();
     });
 
     test('should allow exactly 50 messages per second without throttling', async () => {
@@ -135,5 +145,19 @@ describe('MessageDispatcher', () => {
         expect(mockDataManager.insertMessage).toHaveBeenCalledWith(expect.objectContaining({
             correlationId: expect.any(String)
         }));
+    });
+
+    test('should trigger the WebhookManager for every message', async () => {
+        const providerId = 'mqtt_local';
+        const topic = 'sensors/data';
+        const payload = JSON.stringify({ value: 100 });
+
+        await handleMessage(providerId, topic, payload, { correlationId: 'my-trace-id' });
+
+        expect(webhookManager.trigger).toHaveBeenCalledWith(
+            'sensors/data',
+            expect.objectContaining({ value: 100 }),
+            'my-trace-id'
+        );
     });
 });

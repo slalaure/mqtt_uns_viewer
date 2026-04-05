@@ -5,11 +5,15 @@
  * Verifies prompt generation, agent loop execution, and tool integration.
  */
 
+// Mock axios to simulate LLM API responses
+jest.mock('axios', () => {
+    return {
+        post: jest.fn()
+    };
+});
+
 const axios = require('axios');
 const llmEngine = require('../core/engine/llmEngine');
-
-// Mock axios to simulate LLM API responses
-jest.mock('axios');
 
 // Helper to create a simple mock logger
 const createMockLogger = () => ({

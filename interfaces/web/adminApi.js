@@ -423,6 +423,15 @@ module.exports = (logger, db, dataManager, dataPath) => {
         }
     });
 
+    router.post('/webhooks/:id/test', async (req, res, next) => {
+        try {
+            await webhookManager.testWebhook(req.params.id);
+            res.json({ success: true });
+        } catch (err) {
+            next(err);
+        }
+    });
+
     router.delete('/webhooks/:id', async (req, res, next) => {
         try {
             await webhookManager.deleteWebhook(req.params.id);
