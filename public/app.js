@@ -287,9 +287,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let globalDbMin = 0;
     let globalDbMax = Date.now();
     let cachedI3xObjects = [];
-    
-    let mainTree, mapperTree, chartTree;
-    let mainPayloadViewer;
+    let allKnownTopicsState = new Map(); // [NEW] Keep track of all topics ever seen
+
+    let mainTree, mapperTree, chartTree;    let mainPayloadViewer;
     let selectedMainTreeNode = null; 
     let alertsEnabled = true;
 
@@ -571,96 +571,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 },
                 onOtherMessage: (message) => {
-                    try {
-                        switch(message.type) {
-                            case 'welcome':
-                                console.log(`[WS] Handshake successful. Client ID: ${message.clientId}`);
-                                window.wsClientId = message.clientId;
-                                break;
-                            case 'chat-stream':
-                                onChatStreamMessage(message);
-                                break;
-                            case 'alert-triggered':
-                                if (alertsEnabled) {
-                                    showGlobalAlert(message.alert);
-                                    refreshAlerts(); 
-                                }
-                                break;
-                            case 'alert-updated':
-                                if (alertsEnabled) refreshAlerts();
-                                break;
-                            case 'simulator-status': updateSimulatorStatuses(message.statuses); break;
-                            case 'db-bounds':
-                                globalDbMin = message.min; globalDbMax = message.max;
-                                setDbBounds(globalDbMin, globalDbMax); 
-                                updateChartSliderUI(globalDbMin, globalDbMax, true);
-                                updateHmiTimelineUI(globalDbMin, globalDbMax);
-                                break;
-                            case 'history-initial-data':
-                                allHistoryEntries = message.data.map(entry => ({ ...entry, sourceId: entry.source_id || entry.sourceId || 'default_connector', timestampMs: new Date(entry.timestamp).getTime() }));
-                                setHmiHistoryData(allHistoryEntries);
-                                setHistoryData(allHistoryEntries, true, false);
-                                populateTreesFromHistory();
-                                break;
-                            case 'history-range-data':
-                                const rangeEntries = message.data.map(entry => ({ ...entry, sourceId: entry.source_id || entry.sourceId || 'default_connector', timestampMs: new Date(entry.timestamp).getTime() }));
-                                allHistoryEntries = rangeEntries;
-                                setHmiHistoryData(allHistoryEntries);
-                                setHistoryData(allHistoryEntries, false, false, message.requestStart, message.requestEnd);
-                                updateChartSliderUI(globalDbMin, globalDbMax, false);
-                                refreshChart();
-                                populateTreesFromHistory(); 
-                                break;
-                            case 'tree-initial-state':
-                                if (mainTree) mainTree.rebuild(message.data);
-                                if (mapperTree) mapperTree.rebuild(message.data);
-                                if (chartTree) chartTree.rebuild(message.data);
-                                
-                                mainTree?.buildI3xTree(cachedI3xObjects);
-                                mapperTree?.buildI3xTree(cachedI3xObjects);
-                                chartTree?.buildI3xTree(cachedI3xObjects);
-                                
-                                colorAllMapperTrees(); colorChartTree();
-                                break;
-                            case 'topic-history-data': mainPayloadViewer.updateHistory(message.sourceId, message.topic, message.data); break;
-                            case 'db-status-update':
-                                if (historyTotalMessages) historyTotalMessages.textContent = message.totalMessages.toLocaleString();
-                                if (historyDbSize) historyDbSize.textContent = message.dbSizeMB.toFixed(2);
-                                if (historyDbLimit) historyDbLimit.textContent = message.dbLimitMB > 0 ? message.dbLimitMB : 'N/A';
-                                break;
-                            case 'pruning-status': if (pruningIndicator) pruningIndicator.classList.toggle('visible', message.status === 'started'); break;
-                            case 'mapper-config-update': updateMapperConfig(message.config); colorAllMapperTrees(); break;
-                            case 'mapped-topic-generated': addMappedTargetTopic(message.sourceId, message.topic); colorAllMapperTrees(); break;
-                            case 'mapper-metrics-update': updateMapperMetrics(message.metrics); break;
-                            
-                            case 'connector-status-all': 
-                                for (const sourceId of Object.keys(message.data)) {
-                                    if (!providersMap[sourceId]) {
-                                        const guessedType = guessProviderType(sourceId);
-                                        providersMap[sourceId] = guessedType;
-                                        
-                                        if (typeof addAvailableHistoryProvider === 'function') {
-                                            addAvailableHistoryProvider(sourceId, guessedType);
-                                        }
-                                        
-                                        import('./view.publish.js').then(m => {
-                                            if (m.addAvailablePublishProvider) {
-                                                m.addAvailablePublishProvider(sourceId, guessedType);
-                                            }
-                                        }).catch(err => { /* ignore */ });
-                                    }
-                                }
-                                renderBrokerStatuses(message.data); 
-                                break;
-
-                            case 'connector-status': 
-                                import('./view.mapper.js').then(m => {
-                                    if (m.addAvailableMapperProvider) m.addAvailableMapperProvider(message.sourceId, guessProviderType(message.sourceId));
-                                }).catch(err => { /* ignore */ });
-                                updateSingleBrokerStatus(message.sourceId, message.status, message.error); 
-                                break;
-                        }
-                    } catch (e) { console.error("Error processing message:", e, message); }
+                    if (!isAppInitialized) {
+                        messageBuffer.push(message);
+                        return; // DO NOT PROCESS BEFORE TREES EXIST
+                    }
+                    processWsMessage(message);
                 },
                 onSamplingWarning: () => showSamplingWarning(),
                 onError: (err) => console.error("Realtime Service Error:", err),
@@ -717,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try { if (mqttPatternToRegex(pattern).test(msg.topic)) { ignoreForTreeUpdate = true; break; } } catch (e) {}
             }
             if (!ignoreForTreeUpdate) {
+                allKnownTopicsState.set(`${msg.sourceId}|${msg.topic}`, msg); // [NEW] Keep track of live topics
                 const options = { enableAnimations: true };
                 const node = mainTree?.update(msg.sourceId, msg.topic, msg.payload, msg.timestamp, options);
                 mapperTree?.update(msg.sourceId, msg.topic, msg.payload, msg.timestamp);
@@ -785,9 +701,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     populateTreesFromHistory(); 
                     break;
                 case 'tree-initial-state':
-                    if (mainTree) mainTree.rebuild(message.data);
-                    if (mapperTree) mapperTree.rebuild(message.data);
-                    if (chartTree) chartTree.rebuild(message.data);
+                    message.data.forEach(entry => {
+                        allKnownTopicsState.set(`${entry.source_id || entry.sourceId}|${entry.topic}`, entry);
+                    });
+                    if (mainTree) mainTree.rebuild(Array.from(allKnownTopicsState.values()));
+                    if (mapperTree) mapperTree.rebuild(Array.from(allKnownTopicsState.values()));
+                    if (chartTree) chartTree.rebuild(Array.from(allKnownTopicsState.values()));
                     
                     mainTree?.buildI3xTree(cachedI3xObjects);
                     mapperTree?.buildI3xTree(cachedI3xObjects);
@@ -1179,13 +1098,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function populateTreesFromHistory() {
-        const uniqueTopicsMap = new Map();
+        const mergedTopicsMap = new Map(allKnownTopicsState);
         for (let i = allHistoryEntries.length - 1; i >= 0; i--) { 
             const entry = allHistoryEntries[i];
             const key = `${entry.sourceId}|${entry.topic}`; 
-            uniqueTopicsMap.set(key, entry);
+            mergedTopicsMap.set(key, entry);
         }
-        const entries = Array.from(uniqueTopicsMap.values());
+        const entries = Array.from(mergedTopicsMap.values());
         
         if (mainTree) mainTree.rebuild(entries);
         if (mapperTree) mapperTree.rebuild(entries);
