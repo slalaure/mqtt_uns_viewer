@@ -120,3 +120,10 @@
 - **Security Hardening**: Replaced vulnerable `exec('tail...')` call in Admin API with a native Node.js implementation (`readLastLines`). This eliminates potential shell injection risks.
 - **Performance Optimization**: Created `core/fsUtils.js` with a memory-efficient `readLastLines` utility that reads files backwards in chunks without loading the entire content into RAM.
 - **Validation**: Added `tests/test_fs_utils.js` to verify the correctness of the reverse-buffer file reading logic across edge cases (empty files, small files, large requests).
+
+## 2026-04-05 - InfluxDB Native Integration
+- **Historian Storage**: Added native support for **InfluxDB v2** as a Perennial Storage Option, serving alongside TimescaleDB for long-term Edge metrics retention.
+- **Storage Driver**: Created `storage/influxDbRepository.js` using pure HTTP (`axios`) to format Korelate payloads into InfluxDB Line Protocol without requiring heavy external SDKs.
+- **Integration**: Plumbed the new repository into `storage/dataManager.js`, allowing it to participate in the automated fan-out insertion process and leverage the centralized Dead Letter Queue (DLQ) in case of network failure.
+- **Configuration & UI**: Exposed all necessary configuration fields (`INFLUX_URL`, `INFLUX_TOKEN`, `INFLUX_ORG`, `INFLUX_BUCKET`) in `boot/config.js` and dynamically generated them in the First-Run Setup Wizard (`public/config.html`).
+- **Unit Testing**: Added exhaustive tests (`tests/influxDbRepository.test.js`) covering line protocol serialization escapes and DLQ fallback logic.

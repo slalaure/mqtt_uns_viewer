@@ -240,11 +240,33 @@
                             <select id="wiz-PERENNIAL_DRIVER" name="PERENNIAL_DRIVER">
                                 <option value="none">None (DuckDB Only)</option>
                                 <option value="timescale">TimescaleDB / PostgreSQL</option>
+                                <option value="influxdb">InfluxDB v2</option>
                                 <option value="azure_table">Azure Table Storage</option>
                                 <option value="dynamodb">AWS DynamoDB</option>
+                                <option value="aveva_pi">AVEVA PI System (PI Web API)</option>
                                 <option value="bigquery">Google BigQuery</option>
-                                <option value="aveva_pi">AVEVA PI System</option>
                             </select>
+                        </div>
+
+                        <div id="perennial-config-influxdb" class="conditional-group">
+                            <div class="wiz-grid-2">
+                                <div class="wiz-form-group" style="grid-column: span 2;">
+                                    <label>URL</label>
+                                    <input type="text" name="INFLUX_URL" placeholder="http://localhost:8086">
+                                </div>
+                                <div class="wiz-form-group" style="grid-column: span 2;">
+                                    <label>Token</label>
+                                    <input type="password" name="INFLUX_TOKEN" placeholder="Your InfluxDB API Token">
+                                </div>
+                                <div class="wiz-form-group">
+                                    <label>Organization</label>
+                                    <input type="text" name="INFLUX_ORG" placeholder="my-org">
+                                </div>
+                                <div class="wiz-form-group">
+                                    <label>Bucket</label>
+                                    <input type="text" name="INFLUX_BUCKET" placeholder="my-bucket">
+                                </div>
+                            </div>
                         </div>
 
                         <div id="perennial-config-timescale" class="conditional-group">

@@ -22,6 +22,7 @@ const azureTableRepo = require('./azureTableRepository');
 const dynamoDbRepo = require('./dynamoDbRepository');
 const piSystemRepo = require('./piSystemRepository');
 const bigQueryRepo = require('./bigQueryRepository');
+const influxDbRepo = require('./influxDbRepository');
 const dlqManager = require('./dlqManager');
 
 // --- Module-level State ---
@@ -57,6 +58,11 @@ function init(appConfig, appLogger, appMapperEngine, dbConnection, appBroadcastD
         timescaleRepo.init(appLogger, appConfig, dlqManager);
         registerRepository(timescaleRepo);
         perennialRepository = timescaleRepo;
+    } else if (config.PERENNIAL_DRIVER === 'influxdb') {
+        logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
+        influxDbRepo.init(appLogger, appConfig, dlqManager);
+        registerRepository(influxDbRepo);
+        perennialRepository = influxDbRepo;
     } else if (config.PERENNIAL_DRIVER === 'azure_table') {
         logger.info(`Perennial storage driver '${config.PERENNIAL_DRIVER}' is enabled. Initializing...`);
         azureTableRepo.init(appLogger, appConfig, dlqManager);
