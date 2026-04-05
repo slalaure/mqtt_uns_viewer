@@ -6,7 +6,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
+ * @copyright (c) 2025-2026 Sebastien Lalaurette
  *
  * [UPDATED] Fixed "Live Update" logic to properly tail incoming messages without requiring node selection.
  * [UPDATED] Fixed real-time queue flushing to prevent older messages from overwriting newer ones in the UI.

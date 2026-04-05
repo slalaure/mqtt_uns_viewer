@@ -107,3 +107,5 @@
     - *Module Mocking in Tests*: Fixed a `TypeError` in tests by mocking `messageDispatcher` early, preventing its Worker Pool from initializing and creating open handles that hang Jest.
     - *Interface Validation*: Used `instanceof BaseProvider` to ensure that even third-party modules follow the Korelate standardized interaction patterns.
 
+## 2026-04-05 - Global Maintenance
+- **Copyright Header Update**: Harmonized all JavaScript file headers to reflect the extended project lifespan: `(c) 2025-2026 Sebastien Lalaurette`.

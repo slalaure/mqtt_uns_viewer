@@ -20253,3 +20253,578 @@
     component: "DuckDBRepo"
 [19:50:54.641] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
     component: "DuckDBRepo"
+[19:50:56.643] INFO (47231): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:58.636] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:00.656] INFO (47231): ✅ 🦆 Batch inserted 68 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:02.638] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:04.642] INFO (47231): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:06.643] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:08.641] INFO (47231): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:10.642] INFO (47231): ✅ 🦆 Batch inserted 76 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:12.625] INFO (47231): 
+✅ Gracefully shutting down...
+[19:51:12.626] INFO (47231): Stopping all repository batch processors...
+    component: "DataManager"
+[19:51:12.626] INFO (47231): Stopped batch timer for DuckDBRepo. Flushing remaining queue (0 items)...
+    component: "DuckDBRepo"
+[19:51:14.122] INFO (47809): ✅ Loaded 3 custom data provider(s).
+[19:51:14.132] INFO (47809): ✅ 🦆 DuckDB database connected.
+[19:51:14.133] INFO (47809): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:51:14.135] INFO (47809): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:51:14.136] INFO (47809): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:51:14.141] INFO (47809): ✅ Applied 81 configuration setting(s) from database.
+[19:51:14.142] INFO (47809): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:51:14.142] INFO (47809): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:51:14.142] INFO (47809): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:51:14.144] INFO (47809): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:51:14.144] INFO (47809): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:51:14.144] INFO (47809): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:51:14.144] INFO (47809): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:51:14.145] INFO (47809): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:51:14.145] INFO (47809): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:51:14.145] INFO (47809): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:51:14.145] INFO (47809): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:51:14.145] INFO (47809): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:51:14.145] INFO (47809): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:51:14.145] INFO (47809): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:51:14.145] INFO (47809): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:51:14.145] INFO (47809): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:51:14.531] INFO (47809): Successfully resolved connector [opcua] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/opcua/index.js
+    component: "ConnectorManager"
+[19:51:14.531] INFO (47809): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:14.532] INFO (47809): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:51:14.532] WARN (47809): Found module at http, but it does not extend BaseProvider. Skipping...
+    component: "ConnectorManager"
+[19:51:14.534] INFO (47809): Successfully resolved connector [http] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/http/index.js
+    component: "ConnectorManager"
+[19:51:14.534] INFO (47809): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:51:14.535] INFO (47809): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:51:14.567] WARN (47809): Found module at mqtt, but it does not extend BaseProvider. Skipping...
+    component: "ConnectorManager"
+[19:51:14.567] INFO (47809): Successfully resolved connector [mqtt] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/mqtt/index.js
+    component: "ConnectorManager"
+[19:51:14.567] INFO (47809): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:51:14.567] INFO (47809): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:51:14.581] INFO (47809): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:51:14.581] INFO (47809): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:51:14.581] INFO (47809): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:51:14.582] INFO (47809): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:51:14.582] INFO (47809): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:51:14.582] INFO (47809): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:51:14.583] INFO (47809): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:51:14.583] INFO (47809): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:51:14.640] INFO (47809): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:51:14.640] INFO (47809): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:51:14.640] INFO (47809): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:51:14.642] INFO (47809): ✅ HTTP server started on http://localhost:8080
+[19:51:14.653] WARN (47809): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:14.997] INFO (47809): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:51:15.176] INFO (47809): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:51:16.026] INFO (47809): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:51:16.027] INFO (47809): ✅ ➡️ WebSocket client connected. Assigned ID: 02546317-06a7-44a7-8077-0c35dbc62395
+    component: "WebSocketManager"
+[19:51:16.027] INFO (47809): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:51:16.159] INFO (47809): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:16.662] WARN (47809): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:18.155] INFO (47809): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:18.516] INFO (47809): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:51:18.516] INFO (47809): ✅ ➡️ WebSocket client connected. Assigned ID: be636215-2830-40c5-8e49-a04994ea9a82
+    component: "WebSocketManager"
+[19:51:18.516] INFO (47809): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:51:20.181] INFO (47809): ✅ 🦆 Batch inserted 68 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:20.664] WARN (47809): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:22.171] INFO (47809): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:24.183] INFO (47809): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:26.188] INFO (47809): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:28.190] INFO (47809): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:28.672] WARN (47809): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:30.188] INFO (47809): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:32.195] INFO (47809): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:34.196] INFO (47809): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:36.194] INFO (47809): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:38.179] INFO (47809): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:38.680] WARN (47809): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:40.222] INFO (47809): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:42.185] INFO (47809): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:44.184] INFO (47809): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:46.198] INFO (47809): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:48.194] INFO (47809): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:48.685] WARN (47809): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:51:50.230] INFO (47809): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:52.204] INFO (47809): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:54.193] INFO (47809): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:56.201] INFO (47809): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:58.180] INFO (47809): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:51:58.689] WARN (47809): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:00.229] INFO (47809): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:02.209] INFO (47809): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:04.187] INFO (47809): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:04.993] INFO (47809): 
+✅ Gracefully shutting down...
+[19:52:04.993] INFO (47809): Stopping all repository batch processors...
+    component: "DataManager"
+[19:52:04.993] INFO (47809): Stopped batch timer for DuckDBRepo. Flushing remaining queue (4 items)...
+    component: "DuckDBRepo"
+[19:52:10.738] INFO (47833): ✅ Loaded 3 custom data provider(s).
+[19:52:10.748] INFO (47833): ✅ 🦆 DuckDB database connected.
+[19:52:10.749] INFO (47833): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:52:10.751] INFO (47833): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:52:10.752] INFO (47833): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:52:10.757] INFO (47833): ✅ Applied 81 configuration setting(s) from database.
+[19:52:10.758] INFO (47833): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:52:10.758] INFO (47833): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:52:10.758] INFO (47833): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:52:10.760] INFO (47833): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:52:10.760] INFO (47833): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:52:10.760] INFO (47833): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:52:10.761] INFO (47833): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:52:10.761] INFO (47833): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:52:10.761] INFO (47833): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:52:10.761] INFO (47833): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:52:10.761] INFO (47833): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:52:10.761] INFO (47833): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:52:10.761] INFO (47833): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:52:10.761] INFO (47833): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:52:10.762] INFO (47833): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:52:10.762] INFO (47833): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:52:11.144] INFO (47833): Successfully resolved connector [opcua] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/opcua/index.js
+    component: "ConnectorManager"
+[19:52:11.144] INFO (47833): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:11.145] INFO (47833): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:52:11.145] WARN (47833): Found module at http, but it does not extend BaseProvider. Skipping...
+    component: "ConnectorManager"
+[19:52:11.148] INFO (47833): Successfully resolved connector [http] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/http/index.js
+    component: "ConnectorManager"
+[19:52:11.148] INFO (47833): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:52:11.148] INFO (47833): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:52:11.179] WARN (47833): Found module at mqtt, but it does not extend BaseProvider. Skipping...
+    component: "ConnectorManager"
+[19:52:11.179] INFO (47833): Successfully resolved connector [mqtt] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/mqtt/index.js
+    component: "ConnectorManager"
+[19:52:11.179] INFO (47833): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:52:11.179] INFO (47833): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:52:11.192] INFO (47833): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:52:11.192] INFO (47833): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:52:11.192] INFO (47833): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:52:11.193] INFO (47833): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:52:11.193] INFO (47833): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:52:11.193] INFO (47833): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:52:11.194] INFO (47833): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:52:11.194] INFO (47833): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:52:11.248] INFO (47833): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:52:11.249] INFO (47833): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:52:11.249] INFO (47833): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:52:11.252] INFO (47833): ✅ HTTP server started on http://localhost:8080
+[19:52:11.262] WARN (47833): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:11.620] INFO (47833): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:52:11.806] INFO (47833): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:52:12.808] INFO (47833): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:13.266] WARN (47833): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:13.896] INFO (47833): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:52:13.898] INFO (47833): ✅ ➡️ WebSocket client connected. Assigned ID: 3ed01f4d-bd5a-4f23-8f20-d83934577ff1
+    component: "WebSocketManager"
+[19:52:13.898] INFO (47833): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:52:14.794] INFO (47833): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:16.778] INFO (47833): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:17.271] WARN (47833): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:18.783] INFO (47833): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:20.789] INFO (47833): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:22.786] INFO (47833): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:24.781] INFO (47833): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:25.276] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:26.799] INFO (47833): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:28.791] INFO (47833): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:30.795] INFO (47833): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:32.780] INFO (47833): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:34.788] INFO (47833): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:35.279] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:36.802] INFO (47833): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:38.789] INFO (47833): ✅ 🦆 Batch inserted 56 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:40.797] INFO (47833): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:42.800] INFO (47833): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:44.789] INFO (47833): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:45.283] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:46.805] INFO (47833): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:48.798] INFO (47833): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:50.811] INFO (47833): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:52.798] INFO (47833): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:54.800] INFO (47833): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:55.286] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:52:56.809] INFO (47833): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:52:58.812] INFO (47833): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:00.817] INFO (47833): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:02.811] INFO (47833): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:04.817] INFO (47833): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:05.290] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:53:06.819] INFO (47833): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:08.821] INFO (47833): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:10.828] INFO (47833): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:12.808] INFO (47833): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:14.813] INFO (47833): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:15.295] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:53:16.821] INFO (47833): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:18.821] INFO (47833): ✅ 🦆 Batch inserted 62 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:20.822] INFO (47833): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:22.811] INFO (47833): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:24.820] INFO (47833): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:25.300] WARN (47833): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:53:26.826] INFO (47833): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:28.833] INFO (47833): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:30.833] INFO (47833): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:32.824] INFO (47833): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:34.827] INFO (47833): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:35.305] ERROR (47833): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[19:53:36.830] INFO (47833): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:38.841] INFO (47833): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:40.836] INFO (47833): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:42.828] INFO (47833): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:44.825] INFO (47833): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:46.844] INFO (47833): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:48.847] INFO (47833): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:50.841] INFO (47833): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:52.828] INFO (47833): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:54.843] INFO (47833): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:56.837] INFO (47833): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:53:58.841] INFO (47833): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:00.839] INFO (47833): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:02.837] INFO (47833): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:04.828] INFO (47833): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:06.849] INFO (47833): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:08.835] INFO (47833): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:10.845] INFO (47833): ✅ 🦆 Batch inserted 47 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:12.833] INFO (47833): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:14.843] INFO (47833): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:16.848] INFO (47833): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:18.854] INFO (47833): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:20.847] INFO (47833): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:22.852] INFO (47833): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:24.846] INFO (47833): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:26.860] INFO (47833): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:28.867] INFO (47833): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:30.859] INFO (47833): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:32.839] INFO (47833): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:34.861] INFO (47833): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:36.851] INFO (47833): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:38.869] INFO (47833): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:40.863] INFO (47833): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:42.868] INFO (47833): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:44.854] INFO (47833): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:46.860] INFO (47833): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:48.872] INFO (47833): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:50.867] INFO (47833): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:52.857] INFO (47833): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:54.865] INFO (47833): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:56.873] INFO (47833): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:54:58.872] INFO (47833): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:00.875] INFO (47833): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:02.874] INFO (47833): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:04.866] INFO (47833): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:06.867] INFO (47833): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:08.882] INFO (47833): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:10.879] INFO (47833): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:12.861] INFO (47833): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:14.877] INFO (47833): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:16.877] INFO (47833): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:18.880] INFO (47833): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:20.872] INFO (47833): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:22.870] INFO (47833): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:24.871] INFO (47833): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:26.884] INFO (47833): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:28.880] INFO (47833): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:30.890] INFO (47833): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:32.867] INFO (47833): ✅ 🦆 Batch inserted 2 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:34.879] INFO (47833): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:36.881] INFO (47833): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:38.898] INFO (47833): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:40.881] INFO (47833): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:42.880] INFO (47833): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:44.889] INFO (47833): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:46.894] INFO (47833): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:55:48.902] INFO (47833): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"

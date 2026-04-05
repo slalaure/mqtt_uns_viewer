@@ -6,7 +6,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * @author Sebastien Lalaurette
- * @copyright (c) 2025 Sebastien Lalaurette
+ * @copyright (c) 2025-2026 Sebastien Lalaurette
  * * Base Repository Interface
  * All storage repositories (DuckDB, TimescaleDB, InfluxDB, etc.) should extend this class
  * to ensure a standardized interaction with the Data Manager and reduce boilerplate queue logic.
