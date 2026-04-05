@@ -1,0 +1,29 @@
+<div class="chart-tree-wrapper">
+    <div class="tree-controls">
+        <input type="text" id="chart-filter-input" placeholder="Filter topics...">
+        <button id="btn-chart-expand-all" class="tool-button" title="Expand All">▲</button>
+        <button id="btn-chart-collapse-all" class="tool-button" title="Collapse All">▼</button>
+    </div>
+    <div id="chart-tree" class="tree-container">
+        <!-- Tree rendered here -->
+    </div>
+</div>
+<div class="resizer" id="drag-handle-vertical-chart"></div>
+<div id="chart-payload-container" class="payload-container">
+    <div id="chart-payload-area">
+        <div class="payload-header">
+            <h2>Payload &amp; Variables</h2>
+        </div>
+        <div id="chart-payload-topic" class="payload-topic-display">Select a topic from the Chart tree.</div>
+        <chart-variable-list id="chart-variable-list"></chart-variable-list>
+    </div>
+    <div class="resizer-horizontal" id="drag-handle-horizontal-chart"></div>
+    <div id="chart-main-area">
+        <chart-config-bar></chart-config-bar>
+        <chart-time-slider></chart-time-slider>
+        <div id="chart-canvas-container">
+            <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
+            <canvas id="chart-canvas" style="display: none;"></canvas>
+        </div>
+    </div>
+</div>
