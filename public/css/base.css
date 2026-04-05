@@ -175,18 +175,18 @@ body.dark-mode .app-logo {
     border-radius: 12px;
     cursor: default;
 }
-.broker-dot {
+.connector-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background-color: var(--status-offline);
     box-shadow: 0 0 2px rgba(0,0,0,0.3);
 }
-.status-connected .broker-dot { background-color: var(--status-connected); box-shadow: 0 0 4px var(--status-connected); }
-.status-connecting .broker-dot { background-color: var(--status-connecting); animation: blink 1s infinite; }
-.status-error .broker-dot { background-color: var(--status-error); }
-.status-offline .broker-dot { background-color: var(--status-offline); }
-.status-disconnected .broker-dot { background-color: var(--status-offline); }
+.status-connected .connector-dot { background-color: var(--status-connected); box-shadow: 0 0 4px var(--status-connected); }
+.status-connecting .connector-dot { background-color: var(--status-connecting); animation: blink 1s infinite; }
+.status-error .connector-dot { background-color: var(--status-error); }
+.status-offline .connector-dot { background-color: var(--status-offline); }
+.status-disconnected .connector-dot { background-color: var(--status-offline); }
 @keyframes blink {
     50% { opacity: 0.5; }
 }

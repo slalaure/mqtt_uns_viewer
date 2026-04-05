@@ -23,7 +23,7 @@
         },
         {
             "name": "get_topics_list",
-            "description": "Returns a flat list of all unique MQTT topics currently known, including their broker ID. Useful for disambiguating identical topics across different brokers.",
+            "description": "Returns a flat list of all unique MQTT topics currently known, including their source ID. Useful for disambiguating identical topics across different brokers.",
             "category": "ENABLE_READ",
             "inputSchema": {
                 "type": "object",
@@ -52,7 +52,7 @@
                     },
                     "source_id": {
                         "type": "string",
-                        "description": "Optional. Filter by specific broker ID."
+                        "description": "Optional. Filter by specific source ID."
                     }
                 },
                 "required": [
@@ -81,7 +81,7 @@
                     },
                     "source_id": {
                         "type": "string",
-                        "description": "Optional. Filter by specific broker ID."
+                        "description": "Optional. Filter by specific source ID."
                     }
                 },
                 "required": [
@@ -126,7 +126,7 @@
                     },
                     "source_id": {
                         "type": "string",
-                        "description": "Optional broker ID."
+                        "description": "Optional source ID."
                     }
                 },
                 "required": [
@@ -149,7 +149,7 @@
                     },
                     "source_id": {
                         "type": "string",
-                        "description": "Optional. Filter by specific broker ID."
+                        "description": "Optional. Filter by specific source ID."
                     }
                 },
                 "required": [
@@ -174,7 +174,7 @@
                     },
                     "source_id": {
                         "type": "string",
-                        "description": "Optional. Broker ID."
+                        "description": "Optional. source ID."
                     }
                 },
                 "required": [
@@ -235,7 +235,7 @@
         },
         {
             "name": "publish_message",
-            "description": "Publish a NEW MQTT message. You MUST strictly follow the topic template and JSON schema from get_model_definition if applicable. Check 'Broker Permissions' in system prompt to choose the correct source_id.",
+            "description": "Publish a NEW MQTT message. You MUST strictly follow the topic template and JSON schema from get_model_definition if applicable. Check 'Source Permissions' in system prompt to choose the correct source_id.",
             "category": "ENABLE_PUBLISH",
             "inputSchema": {
                 "type": "object",

@@ -21,8 +21,8 @@ class AlertsActivePanel extends HTMLElement {
     }
 
     init(options = {}) {
-        this.isMultiProvider = options.isMultiBroker || false;
-        const bConfigs = options.brokerConfigs || [];
+        this.isMultiProvider = options.isMultiSource || false;
+        const bConfigs = options.providerConfigs || [];
         const pConfigs = options.dataProviders || [];
         this.availableProviders = [...bConfigs, ...pConfigs];
         this.render();
@@ -73,7 +73,7 @@ class AlertsActivePanel extends HTMLElement {
         const hideResolved = this.querySelector('#chk-hide-resolved')?.checked;
         const searchInput = this.querySelector('#alerts-search-input');
         const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
-        const providerFilterSelect = this.querySelector('#alerts-broker-filter');
+        const providerFilterSelect = this.querySelector('#alerts-source-filter');
         const providerVal = providerFilterSelect ? providerFilterSelect.value : 'all';
 
         let filteredAlerts = this.allActiveAlerts;
@@ -118,7 +118,7 @@ class AlertsActivePanel extends HTMLElement {
             let contentToModal = aiData.report || alert.analysis_result; 
             
             if (alert.status === 'analyzing') {
-                analysisHtml = `<div style="color:var(--color-primary); font-size:0.85em;"><span class="broker-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> Analyzing...</div>`;
+                analysisHtml = `<div style="color:var(--color-primary); font-size:0.85em;"><span class="connector-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> Analyzing...</div>`;
             } else if (aiData.action) {
                 analysisHtml = `
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -258,7 +258,7 @@ class AlertsActivePanel extends HTMLElement {
                 </div>
                 
                 <div class="alerts-controls" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <select id="alerts-broker-filter" style="width: auto; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg); color: var(--color-text); display: ${this.isMultiProvider ? 'block' : 'none'};">
+                    <select id="alerts-source-filter" style="width: auto; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg); color: var(--color-text); display: ${this.isMultiProvider ? 'block' : 'none'};">
                         ${providerOptions}
                     </select>
                     <input type="text" id="alerts-search-input" placeholder="Search alerts by topic, rule name or payload..." style="flex-grow: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg); color: var(--color-text);">
@@ -298,7 +298,7 @@ class AlertsActivePanel extends HTMLElement {
 
         this.querySelector('#chk-hide-resolved').onchange = () => this.renderTable();
         this.querySelector('#alerts-search-input').oninput = () => this.renderTable();
-        this.querySelector('#alerts-broker-filter').onchange = () => this.renderTable();
+        this.querySelector('#alerts-source-filter').onchange = () => this.renderTable();
         this.querySelector('#btn-alerts-refresh').onclick = () => this.loadActiveAlerts();
         this.querySelector('#btn-alerts-fullscreen').onclick = () => this.toggleFullscreen();
 

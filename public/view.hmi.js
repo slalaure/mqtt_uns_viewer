@@ -32,7 +32,7 @@ let currentMinTimestamp = 0;
 let currentMaxTimestamp = 0;
 let hmiSlider = null;
 let appBasePath = '/'; 
-let isMultiBroker = false;
+let isMultiSource = false;
 let isMounted = false; // Lifecycle flag
 
 // --- Performance Optimization & Chart State ---
@@ -202,7 +202,7 @@ export function onHmiViewShow() {
  */
 export function initHmiView(appConfig) {
     appBasePath = appConfig.basePath; 
-    isMultiBroker = appConfig.isMultiBroker; 
+    isMultiSource = appConfig.isMultiSource; 
     
     if (btnHmiFullscreen) {
         btnHmiFullscreen.innerHTML = '⛶ Maximize';
@@ -615,7 +615,7 @@ function flushUpdateQueue() {
             });
             
             if (isJson) {
-                const specificId = isMultiBroker ? `${sourceId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
+                const specificId = isMultiSource ? `${sourceId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');
                 const idsToTry = [specificId, genericId];
                 
@@ -737,7 +737,7 @@ async function fetchLastKnownState(timestamp) {
             });
 
             if (isJson) {
-                const specificId = isMultiBroker ? `${sourceId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
+                const specificId = isMultiSource ? `${sourceId}-${topic.replace(/\//g, '-')}` : topic.replace(/\//g, '-');
                 const genericId = topic.replace(/\//g, '-');         
                 try {
                     hmiContent.querySelectorAll(`[id="${specificId}"], [id="${genericId}"]`).forEach(groupElement => {

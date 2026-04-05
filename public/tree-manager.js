@@ -22,7 +22,7 @@ export function createTreeManager(rootElementOrId, options = {}) {
         onCheckboxClick, 
         showCheckboxes = false, 
         allowFolderCollapse = true,
-        isMultiBroker = false,
+        isMultiSource = false,
         providersMap = {} // Maps provider/broker ID to technology type (mqtt, opcua, file...)
     } = options;
 
@@ -257,14 +257,14 @@ export function createTreeManager(rootElementOrId, options = {}) {
          nodeMap.clear();
 
         const sortedEntries = entries.sort((a, b) => {
-            const brokerA = a.source_id || a.sourceId || 'default';
-            const brokerB = b.source_id || b.sourceId || 'default';
+            const sourceA = a.source_id || a.sourceId || 'default';
+            const sourceB = b.source_id || b.sourceId || 'default';
             
-            const typeA = getProviderType(brokerA);
-            const typeB = getProviderType(brokerB);
+            const typeA = getProviderType(sourceA);
+            const typeB = getProviderType(sourceB);
             
-            const strA = `${typeA}/${brokerA}/${a.topic}`;
-            const strB = `${typeB}/${brokerB}/${b.topic}`;
+            const strA = `${typeA}/${sourceA}/${a.topic}`;
+            const strB = `${typeB}/${sourceB}/${b.topic}`;
             return strA.localeCompare(strB);
         });
 

@@ -112,7 +112,7 @@ const onMapperUnsavedChange = (isUnsaved) => {
  * Initializes the Mapper View configuration (Called once on app start).
  */
 export async function initMapperView(callbacks) {
-    const { isMultiBroker: multiBrokerState, brokerConfigs: bConfigs, dataProviders: pConfigs, ...otherCallbacks } = callbacks;
+    const { isMultiSource: multiBrokerState, providerConfigs: bConfigs, dataProviders: pConfigs, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
     maxMappersLimit = callbacks.maxSavedMapperVersions || 0; 
     isMultiProvider = multiBrokerState || false;
@@ -170,7 +170,7 @@ function initializeElements() {
     payloadViewer = createPayloadViewer({
         topicEl: document.getElementById('mapper-payload-topic'),
         contentEl: document.getElementById('mapper-payload-content'),
-        isMultiBroker: isMultiProvider 
+        isMultiSource: isMultiProvider 
     });
 }
 
@@ -924,7 +924,7 @@ export function addAvailableMapperProvider(providerId, type = 'dynamic') {
     const newProvider = { id: providerId, type: type, publish: ['#'] };
     availableProviders.push(newProvider);
     
-    document.querySelectorAll('.target-broker-select').forEach(select => {
+    document.querySelectorAll('.target-source-select').forEach(select => {
         // Prevent duplicate options in existing selects
         const exists = Array.from(select.options).some(opt => opt.value === providerId);
         if (!exists) {

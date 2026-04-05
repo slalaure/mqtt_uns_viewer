@@ -99,8 +99,8 @@ const onRuleUnsavedChange = (isUnsaved) => {
  * Initializes the Alerts View DOM structure (Called once).
  */
 export async function initAlertsView(options = {}) {
-    isMultiProvider = options.isMultiBroker || false;
-    const bConfigs = options.brokerConfigs || [];
+    isMultiProvider = options.isMultiSource || false;
+    const bConfigs = options.providerConfigs || [];
     const pConfigs = options.dataProviders || [];
     availableProviders = [...bConfigs, ...pConfigs];
     
@@ -130,7 +130,7 @@ export async function initAlertsView(options = {}) {
     ruleEditorTitle = document.getElementById('rule-editor-title');
     btnFullscreen = document.getElementById('btn-alerts-fullscreen');
     searchInput = document.getElementById('alerts-search-input');
-    providerFilterSelect = document.getElementById('alerts-broker-filter');
+    providerFilterSelect = document.getElementById('alerts-source-filter');
 
     if (btnFullscreen) {
         btnFullscreen.innerHTML = '⛶ Maximize';
@@ -505,7 +505,7 @@ function renderActiveAlerts() {
         let contentToModal = aiData.report || alert.analysis_result; 
         
         if (alert.status === 'analyzing') {
-            analysisHtml = `<div style="color:var(--color-primary); font-size:0.85em;"><span class="broker-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> Analyzing...</div>`;
+            analysisHtml = `<div style="color:var(--color-primary); font-size:0.85em;"><span class="connector-dot" style="background:var(--color-primary); animation:blink 1s infinite;"></span> Analyzing...</div>`;
         } else if (aiData.action) {
             // If we have a structured action
             analysisHtml = `

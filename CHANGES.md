@@ -18,7 +18,13 @@
     - Exposed `AlertManager.purgeResolvedAlerts()` to allow database maintenance (Delete + Vacuum) via the Admin UI.
 - **Protocol-Agnostic Refactoring**:
     - Renamed `state.currentBrokerId` to `state.currentSourceId` in `public/state.js` to generalize across different data providers (MQTT, OPC UA, HTTP, etc.).
+    - Executed a comprehensive project-wide renaming to eradicate legacy "broker" terminology in favor of "source" (data origin) and "connector" (technical plugin).
+        - UI & CSS: `broker-dot` ➡️ `connector-dot`, `broker-name` ➡️ `source-name`.
+        - DOM Elements: `#alerts-broker-filter` ➡️ `#alerts-source-filter`, `.target-broker-select` ➡️ `.target-source-select`.
+        - JS Variables: `isMultiBroker` ➡️ `isMultiSource`, `brokerConfigs` ➡️ `providerConfigs`.
+        - AI Manifest: Updated descriptions to specify `source_id` instead of `broker ID`.
     - Updated all views (`view.chart.js`, `view.mapper.js`, `view.history.js`, `view.publish.js`) and `app.js` to subscribe to the new `currentSourceId`.
+
     - Standardized DOM data attributes in `tree-manager.js` to use `data-source-id` instead of `data-broker-id`.
 - **Chart View Fixes**:
     - **Tree Selection & Payloads**: Resolved the "No numeric properties found" bug by ensuring `tree-manager.js` correctly stringifies JSON payloads before storing them in the DOM `dataset`. Fixed selectors to match the new `data-source-id` attribute.

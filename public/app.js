@@ -276,8 +276,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let recentlyPrunedPatterns = new Set();
     const PRUNE_IGNORE_DURATION_MS = 10000;
     
-    let isMultiBroker = false;
-    let brokerConfigs = [];
+    let isMultiSource = false;
+    let providerConfigs = [];
     let dataProviders = [];
     let appBasePath = '/';
     let subscribedTopicPatterns = ['#'];
@@ -521,8 +521,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const appConfig = await configResponse.json();
             
             appBasePath = appConfig.basePath || '/';
-            isMultiBroker = appConfig.isMultiBroker || false;
-            brokerConfigs = appConfig.brokerConfigs || [];
+            isMultiSource = appConfig.isMultiSource || false;
+            providerConfigs = appConfig.providerConfigs || [];
             dataProviders = appConfig.dataProviders || [];
             alertsEnabled = appConfig.viewAlertsEnabled; 
             
@@ -866,7 +866,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.id = `connector-status-${sourceId}`;
         if (error) item.title = `Error: ${error}`; else item.title = `${sourceId}: ${status}`;
         
-        item.innerHTML = `<span class="broker-dot"></span><span class="broker-name">${sourceId}</span>`;
+        item.innerHTML = `<span class="connector-dot"></span><span class="source-name">${sourceId}</span>`;
         brokerStatusContainer.appendChild(item);
     }
 
@@ -903,12 +903,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } 
 
     async function finishInitialization(appConfig) {
-        if (brokerConfigs.length > 0) {
-            const allTopics = brokerConfigs.flatMap(b => b.topics || b.subscribe || []);
+        if (providerConfigs.length > 0) {
+            const allTopics = providerConfigs.flatMap(b => b.topics || b.subscribe || []);
             subscribedTopicPatterns = [...new Set(allTopics)];
         }
 
-        (appConfig.brokerConfigs || []).forEach(b => { providersMap[b.id] = b.type || 'mqtt'; });
+        (appConfig.providerConfigs || []).forEach(b => { providersMap[b.id] = b.type || 'mqtt'; });
         (appConfig.dataProviders || []).forEach(p => { providersMap[p.id] = p.type || 'file'; });
 
         // Set visibility of navigation buttons based on config
@@ -945,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 requestRangeCallback: requestHistoryRange,
                 colorChartTreeCallback: colorChartTree,
                 maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
-                isMultiBroker: isMultiBroker,
+                isMultiSource: isMultiSource,
                 makeResizable: makeResizable
             });
         }
@@ -956,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
             contentEl: document.getElementById('payload-content'),
             historyLogEl: document.getElementById('topic-history-log'),
             placeholderEl: document.querySelector('.topic-history-log .history-placeholder'),
-            isMultiBroker: isMultiBroker
+            isMultiSource: isMultiSource
         });
 
         mainTree = createTreeManager('mqtt-tree', {
@@ -965,7 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
             onCheckboxClick: handleMainTreeCheckboxClick,
             showCheckboxes: true,
             allowFolderCollapse: true,
-            isMultiBroker: isMultiBroker,
+            isMultiSource: isMultiSource,
             providersMap: providersMap
         });
 
@@ -985,7 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 node.classList.add('selected');
             },
             allowFolderCollapse: true,
-            isMultiBroker: isMultiBroker,
+            isMultiSource: isMultiSource,
             providersMap: providersMap
         });
 
@@ -1006,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     node.classList.add('selected');
                 },
                 allowFolderCollapse: true,
-                isMultiBroker: isMultiBroker,
+                isMultiSource: isMultiSource,
                 providersMap: providersMap
             });
         }
@@ -1020,8 +1020,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (appConfig.viewHistoryEnabled) {
             initHistoryView({
-                isMultiBroker: isMultiBroker,
-                brokerConfigs: brokerConfigs,
+                isMultiSource: isMultiSource,
+                providerConfigs: providerConfigs,
                 dataProviders: dataProviders,
                 requestRangeCallback: requestHistoryRange
             });
@@ -1042,8 +1042,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     setTimeout(() => recentlyPrunedPatterns.delete(pattern), PRUNE_IGNORE_DURATION_MS);
                 },
                 maxSavedMapperVersions: appConfig.maxSavedMapperVersions || 0,
-                isMultiBroker: isMultiBroker,
-                brokerConfigs: brokerConfigs,
+                isMultiSource: isMultiSource,
+                providerConfigs: providerConfigs,
                 dataProviders: dataProviders,
                 makeResizable: makeResizable
             });
@@ -1053,8 +1053,8 @@ document.addEventListener('DOMContentLoaded', () => {
             initPublishView({
                 subscribedTopics: subscribedTopicPatterns,
                 simulatorListContainer: simulatorControls,
-                isMultiBroker: isMultiBroker,
-                brokerConfigs: brokerConfigs,
+                isMultiSource: isMultiSource,
+                providerConfigs: providerConfigs,
                 dataProviders: dataProviders
             });
         }
@@ -1064,8 +1064,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (appConfig.viewAlertsEnabled) {
             initAlertsView({
-                isMultiBroker: isMultiBroker,
-                brokerConfigs: brokerConfigs
+                isMultiSource: isMultiSource,
+                providerConfigs: providerConfigs
             });
         }
 

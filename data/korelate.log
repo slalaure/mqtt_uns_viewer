@@ -16741,3 +16741,3515 @@
     component: "DuckDBRepo"
 [21:00:59.035] INFO (79369): ✅ 🦆 Batch inserted 23 messages into DuckDB.
     component: "DuckDBRepo"
+[18:58:31.298] INFO (40264): ✅ Loaded 3 custom data provider(s).
+[18:58:31.309] INFO (40264): ✅ 🦆 DuckDB database connected.
+[18:58:31.309] INFO (40264): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[18:58:31.311] INFO (40264): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[18:58:31.313] INFO (40264): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[18:58:31.318] INFO (40264): ✅ Applied 81 configuration setting(s) from database.
+[18:58:31.319] INFO (40264): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[18:58:31.320] INFO (40264): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[18:58:31.320] INFO (40264): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[18:58:31.322] INFO (40264): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[18:58:31.322] INFO (40264): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[18:58:31.322] INFO (40264): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[18:58:31.323] INFO (40264): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[18:58:31.323] INFO (40264): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[18:58:31.323] INFO (40264): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[18:58:31.323] INFO (40264): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[18:58:31.323] INFO (40264): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[18:58:31.323] INFO (40264): ✅ Data Manager initialized.
+    component: "DataManager"
+[18:58:31.323] INFO (40264): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[18:58:31.323] INFO (40264): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[18:58:31.323] INFO (40264): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[18:58:31.323] INFO (40264): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[18:58:32.159] INFO (40264): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:58:32.160] INFO (40264): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[18:58:32.167] INFO (40264): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[18:58:32.168] INFO (40264): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[18:58:32.241] INFO (40264): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[18:58:32.241] INFO (40264): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[18:58:32.262] INFO (40264): Simulator Manager initialized.
+    component: "SimulatorManager"
+[18:58:32.262] INFO (40264): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[18:58:32.263] INFO (40264): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[18:58:32.264] INFO (40264): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[18:58:32.264] INFO (40264): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[18:58:32.265] INFO (40264): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[18:58:32.266] INFO (40264): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[18:58:32.266] INFO (40264): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[18:58:32.392] INFO (40264): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[18:58:32.393] INFO (40264): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[18:58:32.393] INFO (40264): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[18:58:32.396] INFO (40264): ✅ HTTP server started on http://localhost:8080
+[18:58:32.411] WARN (40264): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:58:32.755] INFO (40264): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[18:58:32.936] INFO (40264): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[18:58:33.365] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:34.414] WARN (40264): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:58:35.359] INFO (40264): ✅ 🦆 Batch inserted 56 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:37.339] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:37.943] INFO (40264): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[18:58:37.943] INFO (40264): ✅ ➡️ WebSocket client connected. Assigned ID: b3178b28-23a9-4276-8820-465f7425c9ce
+    component: "WebSocketManager"
+[18:58:37.944] INFO (40264): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[18:58:38.419] WARN (40264): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:58:39.359] INFO (40264): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:41.352] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:43.345] INFO (40264): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:45.352] INFO (40264): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:46.426] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:58:47.383] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:49.367] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:51.363] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:53.345] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:55.379] INFO (40264): ✅ 🦆 Batch inserted 47 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:56.436] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:58:57.364] INFO (40264): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:58:59.376] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:01.365] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:03.370] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:05.373] INFO (40264): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:06.443] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:59:07.365] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:09.382] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:11.383] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:13.360] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:15.391] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:16.450] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:59:17.360] INFO (40264): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:19.391] INFO (40264): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:21.377] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:23.371] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:25.378] INFO (40264): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:26.455] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:59:27.377] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:29.393] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:31.391] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:33.370] INFO (40264): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:35.394] INFO (40264): ✅ 🦆 Batch inserted 46 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:36.461] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:59:37.379] INFO (40264): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:39.403] INFO (40264): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:41.386] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:43.381] INFO (40264): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:45.401] INFO (40264): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:46.468] WARN (40264): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[18:59:47.385] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:49.409] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:51.408] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:53.382] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:55.407] INFO (40264): ✅ 🦆 Batch inserted 47 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:56.477] ERROR (40264): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[18:59:57.379] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[18:59:59.424] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:01.403] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:03.404] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:05.411] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:07.403] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:09.422] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:11.419] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:13.401] INFO (40264): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:15.422] INFO (40264): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:17.395] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:19.430] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:21.411] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:23.408] INFO (40264): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:25.420] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:27.415] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:29.425] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:31.423] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:33.410] INFO (40264): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:35.431] INFO (40264): ✅ 🦆 Batch inserted 46 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:37.408] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:39.437] INFO (40264): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:41.424] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:43.421] INFO (40264): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:45.437] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:47.443] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:49.437] INFO (40264): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:51.435] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:53.416] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:55.451] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:57.418] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:00:59.446] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:01.439] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:03.435] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:05.436] INFO (40264): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:07.433] INFO (40264): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:09.448] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:11.447] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:13.426] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:15.463] INFO (40264): ✅ 🦆 Batch inserted 56 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:17.436] INFO (40264): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:19.456] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:21.447] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:23.448] INFO (40264): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:25.449] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:27.447] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:29.459] INFO (40264): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:31.458] INFO (40264): ✅ 🦆 Batch inserted 47 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:33.437] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:35.461] INFO (40264): ✅ 🦆 Batch inserted 46 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:37.444] INFO (40264): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:39.470] INFO (40264): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:41.454] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:43.453] INFO (40264): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:45.463] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:47.459] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:49.468] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:51.477] INFO (40264): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:53.453] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:55.475] INFO (40264): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:57.458] INFO (40264): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:01:59.483] INFO (40264): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:01.470] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:03.472] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:05.476] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:07.471] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:09.481] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:11.486] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:13.468] INFO (40264): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:15.488] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:17.466] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:19.495] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:21.480] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:23.480] INFO (40264): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:25.488] INFO (40264): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:27.484] INFO (40264): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:29.491] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:31.496] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:33.490] INFO (40264): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:35.500] INFO (40264): ✅ 🦆 Batch inserted 46 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:37.480] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:39.510] INFO (40264): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:41.492] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:43.494] INFO (40264): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:45.495] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:47.492] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:49.502] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:51.503] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:53.504] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:55.513] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:57.488] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:02:59.515] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:01.507] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:03.502] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:05.509] INFO (40264): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:07.506] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:09.515] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:11.524] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:13.494] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:15.524] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:17.501] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:19.529] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:21.521] INFO (40264): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:23.512] INFO (40264): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:25.519] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:27.521] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:29.524] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:31.529] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:33.518] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:35.538] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:37.511] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:39.543] INFO (40264): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:41.525] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:43.540] INFO (40264): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:45.534] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:47.527] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:49.539] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:51.544] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:53.524] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:55.550] INFO (40264): ✅ 🦆 Batch inserted 47 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:57.528] INFO (40264): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:03:59.554] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:01.542] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:03.562] INFO (40264): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:05.541] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:07.539] INFO (40264): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:09.548] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:11.564] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:13.539] INFO (40264): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:15.558] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:17.546] INFO (40264): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:19.564] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:21.559] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:23.561] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:25.563] INFO (40264): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:27.551] INFO (40264): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:29.580] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:31.571] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:33.550] INFO (40264): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:35.573] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:37.555] INFO (40264): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:39.583] INFO (40264): ✅ 🦆 Batch inserted 73 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:41.564] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:43.573] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:45.571] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:47.564] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:49.574] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:51.585] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:53.575] INFO (40264): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:55.588] INFO (40264): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:57.563] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:04:59.591] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:01.594] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:03.579] INFO (40264): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:05.575] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:07.585] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:09.595] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:11.590] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:13.586] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:15.605] INFO (40264): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:17.578] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:19.613] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:21.601] INFO (40264): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:23.588] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:25.593] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:27.603] INFO (40264): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:29.610] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:31.598] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:33.582] INFO (40264): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:35.609] INFO (40264): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:37.588] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:39.629] INFO (40264): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:41.603] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:43.612] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:45.597] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:47.602] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:49.619] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:51.619] INFO (40264): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:53.591] INFO (40264): ✅ 🦆 Batch inserted 9 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:55.628] INFO (40264): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:57.600] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:05:59.629] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:01.612] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:03.622] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:05.624] INFO (40264): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:07.617] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:09.633] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:11.630] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:13.609] INFO (40264): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:15.628] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:17.616] INFO (40264): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:19.635] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:21.625] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:23.633] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:25.626] INFO (40264): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:27.622] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:29.639] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:31.632] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:33.622] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:35.645] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:37.627] INFO (40264): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:39.646] INFO (40264): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:41.631] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:43.633] INFO (40264): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:45.657] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:47.638] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:49.646] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:51.660] INFO (40264): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:53.635] INFO (40264): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:55.656] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:57.631] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:06:59.681] INFO (40264): ✅ 🦆 Batch inserted 68 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:01.645] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:03.647] INFO (40264): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:05.660] INFO (40264): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:07.647] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:09.665] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:11.666] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:13.653] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:15.660] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:17.640] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:19.675] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:21.673] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:23.651] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:25.664] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:27.688] INFO (40264): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:29.687] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:31.694] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:33.665] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:35.685] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:37.663] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:39.691] INFO (40264): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:41.684] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:43.682] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:45.680] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:47.686] INFO (40264): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:49.686] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:51.697] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:53.668] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:55.697] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:57.667] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:07:59.690] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:01.687] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:03.680] INFO (40264): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:05.683] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:07.685] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:09.700] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:11.695] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:13.677] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:15.702] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:17.681] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:19.712] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:21.693] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:23.700] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:25.694] INFO (40264): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:27.694] INFO (40264): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:29.703] INFO (40264): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:31.706] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:33.687] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:35.726] INFO (40264): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:37.695] INFO (40264): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:39.718] INFO (40264): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:41.706] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:43.715] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:45.704] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:47.707] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:49.707] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:51.710] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:53.697] INFO (40264): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:55.714] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:57.704] INFO (40264): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:08:59.725] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:01.709] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:03.712] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:05.719] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:07.711] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:09.725] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:11.730] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:13.708] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:15.724] INFO (40264): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:17.706] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:19.739] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:21.717] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:23.719] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:25.731] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:27.727] INFO (40264): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:29.731] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:31.734] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:33.726] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:35.732] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:37.715] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:39.738] INFO (40264): ✅ 🦆 Batch inserted 68 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:41.723] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:43.717] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:45.721] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:47.723] INFO (40264): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:49.722] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:51.724] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:53.718] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:55.729] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:57.711] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:09:59.746] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:01.724] INFO (40264): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:03.727] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:05.718] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:07.733] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:09.739] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:11.737] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:13.727] INFO (40264): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:15.745] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:17.724] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:19.753] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:21.743] INFO (40264): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:23.733] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:25.737] INFO (40264): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:27.737] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:29.752] INFO (40264): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:31.744] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:33.735] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:35.762] INFO (40264): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:37.726] INFO (40264): ✅ 🦆 Batch inserted 9 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:39.757] INFO (40264): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:41.750] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:43.750] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:45.746] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:47.750] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:49.763] INFO (40264): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:51.755] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:53.742] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:55.754] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:57.742] INFO (40264): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:10:59.761] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:01.749] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:03.761] INFO (40264): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:05.761] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:07.752] INFO (40264): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:09.764] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:11.760] INFO (40264): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:13.753] INFO (40264): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:15.765] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:17.749] INFO (40264): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:19.770] INFO (40264): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:21.761] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:23.766] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:25.768] INFO (40264): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:27.768] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:29.776] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:31.779] INFO (40264): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:33.761] INFO (40264): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:35.782] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:37.759] INFO (40264): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:39.785] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:41.773] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:43.772] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:45.786] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:47.765] INFO (40264): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:49.789] INFO (40264): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:51.786] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:53.776] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:55.788] INFO (40264): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:57.769] INFO (40264): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:11:59.804] INFO (40264): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:01.787] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:03.778] INFO (40264): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:05.783] INFO (40264): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:07.784] INFO (40264): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:09.798] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:11.795] INFO (40264): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:13.778] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:15.798] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:17.780] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:19.803] INFO (40264): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:21.799] INFO (40264): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:23.793] INFO (40264): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:25.796] INFO (40264): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:27.798] INFO (40264): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:29.811] INFO (40264): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:31.805] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:33.786] INFO (40264): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:35.816] INFO (40264): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:37.788] INFO (40264): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:39.816] INFO (40264): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:41.807] INFO (40264): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:43.808] INFO (40264): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:45.805] INFO (40264): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:47.802] INFO (40264): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:49.817] INFO (40264): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:51.802] INFO (40264): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:53.704] INFO (40264): 
+✅ Gracefully shutting down...
+[19:12:53.704] INFO (40264): Stopping all repository batch processors...
+    component: "DataManager"
+[19:12:53.705] INFO (40264): Stopped batch timer for DuckDBRepo. Flushing remaining queue (11 items)...
+    component: "DuckDBRepo"
+[19:12:55.983] INFO (41269): ✅ Loaded 3 custom data provider(s).
+[19:12:55.992] INFO (41269): ✅ 🦆 DuckDB database connected.
+[19:12:55.992] INFO (41269): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:12:55.994] INFO (41269): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:12:55.995] INFO (41269): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:12:56.000] INFO (41269): ✅ Applied 81 configuration setting(s) from database.
+[19:12:56.001] INFO (41269): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:12:56.002] INFO (41269): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:12:56.002] INFO (41269): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:12:56.004] INFO (41269): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:12:56.004] INFO (41269): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:12:56.004] INFO (41269): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:12:56.005] INFO (41269): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:12:56.005] INFO (41269): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:12:56.005] INFO (41269): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:12:56.005] INFO (41269): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:12:56.005] INFO (41269): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:12:56.005] INFO (41269): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:12:56.005] INFO (41269): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:12:56.005] INFO (41269): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:12:56.005] INFO (41269): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:12:56.006] INFO (41269): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:12:56.766] INFO (41269): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:12:56.767] INFO (41269): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:12:56.775] INFO (41269): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:12:56.775] INFO (41269): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:12:56.851] INFO (41269): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:12:56.851] INFO (41269): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:12:56.871] INFO (41269): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:12:56.871] INFO (41269): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:12:56.872] INFO (41269): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:12:56.873] INFO (41269): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:12:56.873] INFO (41269): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:12:56.874] INFO (41269): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:12:56.875] INFO (41269): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:12:56.875] INFO (41269): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:12:57.002] INFO (41269): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:12:57.003] INFO (41269): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:12:57.003] INFO (41269): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:12:57.006] INFO (41269): ✅ HTTP server started on http://localhost:8080
+[19:12:57.018] WARN (41269): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:12:57.354] INFO (41269): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:12:57.541] INFO (41269): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:12:58.023] INFO (41269): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:12:58.472] INFO (41269): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:12:58.472] INFO (41269): ✅ ➡️ WebSocket client connected. Assigned ID: 165ba16b-9ab3-491c-9c66-2eb05a0e8d4d
+    component: "WebSocketManager"
+[19:12:58.473] INFO (41269): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:12:59.024] WARN (41269): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:12:59.757] ERROR (41269): [Frontend Error] error: Uncaught TypeError: Cannot read properties of null (reading 'querySelector')
+    frontend: {
+      "type": "error",
+      "message": "Uncaught TypeError: Cannot read properties of null (reading 'querySelector')",
+      "source": "http://localhost:8080/tree-manager.js",
+      "line": 161,
+      "column": 41,
+      "stack": "TypeError: Cannot read properties of null (reading 'querySelector')\n    at Object.update (http://localhost:8080/tree-manager.js:161:41)\n    at http://localhost:8080/app.js:564:41\n    at Map.forEach (<anonymous>)\n    at Object.onBatchProcessed (http://localhost:8080/app.js:556:35)\n    at RealtimeService.flushQueue (http://localhost:8080/services/realtime-service.js:131:28)\n    at http://localhost:8080/services/realtime-service.js:99:46",
+      "user": "admin",
+      "location": "http://localhost:8080/chart/",
+      "timestamp": "2026-04-05T17:12:59.735Z"
+    }
+[19:13:00.034] INFO (41269): ✅ 🦆 Batch inserted 71 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:01.698] INFO (41269): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:13:01.699] INFO (41269): ✅ ➡️ WebSocket client connected. Assigned ID: a705db4c-0971-4736-8f85-b46071bf60fb
+    component: "WebSocketManager"
+[19:13:01.699] INFO (41269): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:13:01.786] ERROR (41269): [Frontend Error] error: Uncaught TypeError: Cannot read properties of null (reading 'querySelector')
+    frontend: {
+      "type": "error",
+      "message": "Uncaught TypeError: Cannot read properties of null (reading 'querySelector')",
+      "source": "http://localhost:8080/tree-manager.js",
+      "line": 161,
+      "column": 41,
+      "stack": "TypeError: Cannot read properties of null (reading 'querySelector')\n    at Object.update (http://localhost:8080/tree-manager.js:161:41)\n    at http://localhost:8080/app.js:564:41\n    at Map.forEach (<anonymous>)\n    at Object.onBatchProcessed (http://localhost:8080/app.js:556:35)\n    at RealtimeService.flushQueue (http://localhost:8080/services/realtime-service.js:131:28)\n    at http://localhost:8080/services/realtime-service.js:99:46",
+      "user": "admin",
+      "location": "http://localhost:8080/chart/",
+      "timestamp": "2026-04-05T17:13:01.773Z"
+    }
+[19:13:02.036] INFO (41269): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:03.030] WARN (41269): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:13:04.040] INFO (41269): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:06.035] INFO (41269): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:07.238] INFO (41269): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:13:07.238] INFO (41269): ✅ ➡️ WebSocket client connected. Assigned ID: 50d4f9f7-a602-47c6-90d5-ab3ee2bde639
+    component: "WebSocketManager"
+[19:13:07.239] INFO (41269): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:13:08.031] INFO (41269): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:08.140] ERROR (41269): [Frontend Error] error: Uncaught TypeError: Cannot read properties of null (reading 'querySelector')
+    frontend: {
+      "type": "error",
+      "message": "Uncaught TypeError: Cannot read properties of null (reading 'querySelector')",
+      "source": "http://localhost:8080/tree-manager.js",
+      "line": 161,
+      "column": 41,
+      "stack": "TypeError: Cannot read properties of null (reading 'querySelector')\n    at Object.update (http://localhost:8080/tree-manager.js:161:41)\n    at http://localhost:8080/app.js:564:41\n    at Map.forEach (<anonymous>)\n    at Object.onBatchProcessed (http://localhost:8080/app.js:556:35)\n    at RealtimeService.flushQueue (http://localhost:8080/services/realtime-service.js:131:28)\n    at http://localhost:8080/services/realtime-service.js:99:46",
+      "user": "admin",
+      "location": "http://localhost:8080/tree/",
+      "timestamp": "2026-04-05T17:13:08.133Z"
+    }
+[19:13:10.047] INFO (41269): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:11.040] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:13:12.051] INFO (41269): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:14.034] INFO (41269): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:16.053] INFO (41269): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:18.036] INFO (41269): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:20.064] INFO (41269): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:21.045] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:13:22.055] INFO (41269): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:24.053] INFO (41269): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:26.050] INFO (41269): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:28.050] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:30.061] INFO (41269): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:31.052] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:13:32.064] INFO (41269): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:34.044] INFO (41269): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:36.057] INFO (41269): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:38.059] INFO (41269): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:40.081] INFO (41269): ✅ 🦆 Batch inserted 74 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:41.057] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:13:42.062] INFO (41269): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:44.054] INFO (41269): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:46.062] INFO (41269): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:48.056] INFO (41269): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:50.067] INFO (41269): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:51.061] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:13:52.075] INFO (41269): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:54.048] INFO (41269): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:56.079] INFO (41269): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:13:58.058] INFO (41269): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:00.086] INFO (41269): ✅ 🦆 Batch inserted 85 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:01.066] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:14:02.063] INFO (41269): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:04.067] INFO (41269): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:06.071] INFO (41269): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:08.065] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:10.087] INFO (41269): ✅ 🦆 Batch inserted 57 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:11.077] WARN (41269): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:14:12.078] INFO (41269): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:14.078] INFO (41269): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:16.076] INFO (41269): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:18.059] INFO (41269): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:20.102] INFO (41269): ✅ 🦆 Batch inserted 87 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:21.089] ERROR (41269): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[19:14:22.066] INFO (41269): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:24.071] INFO (41269): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:26.074] INFO (41269): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:28.076] INFO (41269): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:30.094] INFO (41269): ✅ 🦆 Batch inserted 62 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:32.087] INFO (41269): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:34.079] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:36.092] INFO (41269): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:38.074] INFO (41269): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:40.113] INFO (41269): ✅ 🦆 Batch inserted 71 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:42.096] INFO (41269): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:44.088] INFO (41269): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:46.092] INFO (41269): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:48.091] INFO (41269): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:50.108] INFO (41269): ✅ 🦆 Batch inserted 64 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:52.092] INFO (41269): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:54.088] INFO (41269): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:56.108] INFO (41269): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:14:58.081] INFO (41269): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:00.120] INFO (41269): ✅ 🦆 Batch inserted 68 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:02.107] INFO (41269): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:04.099] INFO (41269): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:06.107] INFO (41269): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:08.098] INFO (41269): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:10.125] INFO (41269): ✅ 🦆 Batch inserted 68 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:12.118] INFO (41269): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:14.098] INFO (41269): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:16.122] INFO (41269): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:18.096] INFO (41269): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:20.137] INFO (41269): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:22.120] INFO (41269): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:24.111] INFO (41269): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:26.114] INFO (41269): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:28.113] INFO (41269): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:30.140] INFO (41269): ✅ 🦆 Batch inserted 71 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:32.129] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:34.110] INFO (41269): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:36.131] INFO (41269): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:38.120] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:40.152] INFO (41269): ✅ 🦆 Batch inserted 76 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:42.123] INFO (41269): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:44.127] INFO (41269): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:46.125] INFO (41269): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:48.123] INFO (41269): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:50.147] INFO (41269): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:52.131] INFO (41269): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:54.118] INFO (41269): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:56.140] INFO (41269): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:15:58.124] INFO (41269): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:00.155] INFO (41269): ✅ 🦆 Batch inserted 78 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:02.130] INFO (41269): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:04.132] INFO (41269): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:06.142] INFO (41269): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:08.136] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:10.153] INFO (41269): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:12.153] INFO (41269): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:14.131] INFO (41269): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:16.152] INFO (41269): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:18.135] INFO (41269): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:20.175] INFO (41269): ✅ 🦆 Batch inserted 87 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:22.148] INFO (41269): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:24.157] INFO (41269): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:26.169] INFO (41269): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:28.160] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:30.178] INFO (41269): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:32.178] INFO (41269): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:34.158] INFO (41269): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:36.172] INFO (41269): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:37.152] INFO (41269): 
+✅ Gracefully shutting down...
+[19:16:37.152] INFO (41269): Stopping all repository batch processors...
+    component: "DataManager"
+[19:16:37.152] INFO (41269): Stopped batch timer for DuckDBRepo. Flushing remaining queue (5 items)...
+    component: "DuckDBRepo"
+[19:16:38.840] INFO (41574): ✅ Loaded 3 custom data provider(s).
+[19:16:38.850] INFO (41574): ✅ 🦆 DuckDB database connected.
+[19:16:38.851] INFO (41574): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:16:38.852] INFO (41574): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:16:38.853] INFO (41574): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:16:38.858] INFO (41574): ✅ Applied 81 configuration setting(s) from database.
+[19:16:38.859] INFO (41574): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:16:38.860] INFO (41574): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:16:38.860] INFO (41574): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:16:38.862] INFO (41574): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:16:38.862] INFO (41574): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:16:38.862] INFO (41574): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:16:38.863] INFO (41574): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:16:38.863] INFO (41574): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:16:38.863] INFO (41574): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:16:38.863] INFO (41574): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:16:38.863] INFO (41574): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:16:38.863] INFO (41574): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:16:38.864] INFO (41574): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:16:38.864] INFO (41574): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:16:38.864] INFO (41574): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:16:38.864] INFO (41574): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:16:39.620] INFO (41574): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:16:39.621] INFO (41574): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:16:39.628] INFO (41574): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:16:39.628] INFO (41574): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:16:39.691] INFO (41574): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:16:39.691] INFO (41574): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:16:39.710] INFO (41574): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:16:39.710] INFO (41574): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:16:39.710] INFO (41574): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:16:39.711] INFO (41574): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:16:39.712] INFO (41574): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:16:39.712] INFO (41574): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:16:39.713] INFO (41574): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:16:39.713] INFO (41574): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:16:39.820] INFO (41574): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:16:39.821] INFO (41574): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:16:39.821] INFO (41574): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:16:39.824] INFO (41574): ✅ HTTP server started on http://localhost:8080
+[19:16:39.849] WARN (41574): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:16:40.185] INFO (41574): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:16:40.369] INFO (41574): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:16:40.665] INFO (41574): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:16:40.666] INFO (41574): ✅ ➡️ WebSocket client connected. Assigned ID: 0059e3f3-a0a9-42fd-a4fd-e8fb1673dd8f
+    component: "WebSocketManager"
+[19:16:40.667] INFO (41574): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:16:40.876] INFO (41574): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:41.527] INFO (41574): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:16:41.527] INFO (41574): ✅ ➡️ WebSocket client connected. Assigned ID: 864e07a2-c7f5-4716-8a03-4ea0900d6f7a
+    component: "WebSocketManager"
+[19:16:41.528] INFO (41574): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:16:41.854] WARN (41574): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:16:42.879] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:44.880] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:45.858] WARN (41574): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:16:46.896] INFO (41574): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:48.882] INFO (41574): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:50.897] INFO (41574): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:52.874] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:53.863] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:16:54.907] INFO (41574): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:56.887] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:16:58.899] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:00.896] INFO (41574): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:02.890] INFO (41574): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:03.866] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:17:04.885] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:06.897] INFO (41574): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:08.905] INFO (41574): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:10.902] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:12.886] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:13.870] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:17:14.909] INFO (41574): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:16.909] INFO (41574): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:18.913] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:20.899] INFO (41574): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:22.912] INFO (41574): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:23.877] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:17:24.900] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:26.919] INFO (41574): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:28.922] INFO (41574): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:30.922] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:32.897] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:33.883] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:17:34.914] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:36.921] INFO (41574): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:38.923] INFO (41574): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:40.913] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:42.927] INFO (41574): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:43.889] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:17:44.912] INFO (41574): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:46.921] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:48.928] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:50.939] INFO (41574): ✅ 🦆 Batch inserted 56 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:52.907] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:53.898] WARN (41574): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:17:54.925] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:56.924] INFO (41574): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:17:58.936] INFO (41574): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:00.927] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:02.926] INFO (41574): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:03.907] ERROR (41574): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[19:18:04.924] INFO (41574): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:06.927] INFO (41574): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:08.934] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:10.943] INFO (41574): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:12.917] INFO (41574): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:14.931] INFO (41574): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:16.929] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:18.954] INFO (41574): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:20.923] INFO (41574): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:22.935] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:24.933] INFO (41574): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:26.940] INFO (41574): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:28.947] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:30.945] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:32.933] INFO (41574): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:34.944] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:36.940] INFO (41574): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:38.961] INFO (41574): ✅ 🦆 Batch inserted 71 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:40.944] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:42.940] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:44.944] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:46.682] INFO (41574): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:18:46.683] INFO (41574): ✅ ➡️ WebSocket client connected. Assigned ID: d45ba1ea-96d5-40bb-b69f-cb9abaea8028
+    component: "WebSocketManager"
+[19:18:46.683] INFO (41574): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:18:46.936] INFO (41574): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:48.957] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:50.953] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:52.943] INFO (41574): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:54.950] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:56.955] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:18:58.964] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:00.960] INFO (41574): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:02.949] INFO (41574): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:04.947] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:06.970] INFO (41574): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:08.961] INFO (41574): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:10.965] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:12.943] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:14.964] INFO (41574): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:16.959] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:18.969] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:20.968] INFO (41574): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:22.960] INFO (41574): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:24.958] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:26.978] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:28.984] INFO (41574): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:30.971] INFO (41574): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:32.954] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:34.981] INFO (41574): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:36.971] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:38.983] INFO (41574): ✅ 🦆 Batch inserted 61 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:40.968] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:42.978] INFO (41574): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:44.963] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:46.985] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:48.995] INFO (41574): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:50.992] INFO (41574): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:52.969] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:54.999] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:56.989] INFO (41574): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:19:59.004] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:00.996] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:02.994] INFO (41574): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:04.993] INFO (41574): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:06.997] INFO (41574): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:08.999] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:11.002] INFO (41574): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:12.982] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:15.010] INFO (41574): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:16.997] INFO (41574): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:19.006] INFO (41574): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:20.995] INFO (41574): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:22.991] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:25.007] INFO (41574): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:27.007] INFO (41574): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:29.020] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:31.012] INFO (41574): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:32.993] INFO (41574): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:35.014] INFO (41574): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:36.993] INFO (41574): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:39.029] INFO (41574): ✅ 🦆 Batch inserted 73 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:41.008] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:43.004] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:45.019] INFO (41574): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:47.014] INFO (41574): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:49.004] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:51.018] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:53.006] INFO (41574): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:55.026] INFO (41574): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:57.007] INFO (41574): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:20:59.032] INFO (41574): ✅ 🦆 Batch inserted 69 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:01.021] INFO (41574): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:03.022] INFO (41574): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:05.007] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:07.038] INFO (41574): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:09.027] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:11.023] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:13.011] INFO (41574): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:15.026] INFO (41574): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:17.008] INFO (41574): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:19.029] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:21.026] INFO (41574): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:23.015] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:25.017] INFO (41574): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:27.043] INFO (41574): ✅ 🦆 Batch inserted 52 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:29.036] INFO (41574): ✅ 🦆 Batch inserted 44 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:31.034] INFO (41574): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:33.011] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:35.027] INFO (41574): ✅ 🦆 Batch inserted 47 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:37.038] INFO (41574): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:39.041] INFO (41574): ✅ 🦆 Batch inserted 62 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:41.034] INFO (41574): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:43.036] INFO (41574): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:45.029] INFO (41574): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:47.042] INFO (41574): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:49.046] INFO (41574): ✅ 🦆 Batch inserted 54 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:51.039] INFO (41574): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:53.020] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:55.036] INFO (41574): ✅ 🦆 Batch inserted 55 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:57.031] INFO (41574): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:21:59.049] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:01.034] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:03.039] INFO (41574): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:05.038] INFO (41574): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:07.077] INFO (41574): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:09.051] INFO (41574): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:11.046] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:13.027] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:15.040] INFO (41574): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:17.045] INFO (41574): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:19.055] INFO (41574): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:21.041] INFO (41574): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:23.045] INFO (41574): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:25.059] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:27.066] INFO (41574): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:29.059] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:31.067] INFO (41574): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:33.038] INFO (41574): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:35.051] INFO (41574): ✅ 🦆 Batch inserted 45 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:37.060] INFO (41574): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:39.067] INFO (41574): ✅ 🦆 Batch inserted 62 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:41.054] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:43.053] INFO (41574): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:45.061] INFO (41574): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:47.094] INFO (41574): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:49.069] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:51.081] INFO (41574): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:53.053] INFO (41574): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:55.071] INFO (41574): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:57.079] INFO (41574): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:22:59.088] INFO (41574): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:01.071] INFO (41574): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:03.065] INFO (41574): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:05.084] INFO (41574): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:07.084] INFO (41574): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:09.081] INFO (41574): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:11.076] INFO (41574): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:12.294] INFO (41574): 
+✅ Gracefully shutting down...
+[19:23:12.295] INFO (41574): Stopping all repository batch processors...
+    component: "DataManager"
+[19:23:12.295] INFO (41574): Stopped batch timer for DuckDBRepo. Flushing remaining queue (10 items)...
+    component: "DuckDBRepo"
+[19:23:13.847] INFO (42215): ✅ Loaded 3 custom data provider(s).
+[19:23:13.857] INFO (42215): ✅ 🦆 DuckDB database connected.
+[19:23:13.857] INFO (42215): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:23:13.859] INFO (42215): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:23:13.860] INFO (42215): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:23:13.864] INFO (42215): ✅ Applied 81 configuration setting(s) from database.
+[19:23:13.865] INFO (42215): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:23:13.866] INFO (42215): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:23:13.866] INFO (42215): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:23:13.869] INFO (42215): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:23:13.869] INFO (42215): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:23:13.869] INFO (42215): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:23:13.870] INFO (42215): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:23:13.870] INFO (42215): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:23:13.870] INFO (42215): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:23:13.870] INFO (42215): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:23:13.870] INFO (42215): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:23:13.870] INFO (42215): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:23:13.870] INFO (42215): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:23:13.870] INFO (42215): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:23:13.870] INFO (42215): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:23:13.870] INFO (42215): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:23:14.658] INFO (42215): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:14.659] INFO (42215): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:23:14.666] INFO (42215): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:23:14.667] INFO (42215): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:23:14.740] INFO (42215): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:23:14.740] INFO (42215): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:23:14.761] INFO (42215): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:23:14.761] INFO (42215): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:23:14.762] INFO (42215): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:23:14.763] INFO (42215): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:23:14.763] INFO (42215): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:23:14.764] INFO (42215): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:23:14.765] INFO (42215): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:23:14.765] INFO (42215): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:23:14.886] INFO (42215): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:23:14.887] INFO (42215): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:23:14.887] INFO (42215): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:23:14.890] INFO (42215): ✅ HTTP server started on http://localhost:8080
+[19:23:14.902] WARN (42215): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:15.231] INFO (42215): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:23:15.403] INFO (42215): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:23:15.631] INFO (42215): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:23:15.638] INFO (42215): ✅ ➡️ WebSocket client connected. Assigned ID: 60734b6c-7ed2-4568-bda5-d950e8e4a875
+    component: "WebSocketManager"
+[19:23:15.638] INFO (42215): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:23:15.882] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:16.906] WARN (42215): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:17.884] INFO (42215): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:19.329] INFO (42215): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:23:19.329] INFO (42215): ✅ ➡️ WebSocket client connected. Assigned ID: 65478c91-bf05-411f-9908-7ac0556d9c44
+    component: "WebSocketManager"
+[19:23:19.330] INFO (42215): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:23:19.926] INFO (42215): ✅ 🦆 Batch inserted 69 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:20.912] WARN (42215): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:21.901] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:23.909] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:25.908] INFO (42215): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:27.900] INFO (42215): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:28.917] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:29.921] INFO (42215): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:31.914] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:33.910] INFO (42215): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:35.930] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:37.900] INFO (42215): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:38.928] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:39.936] INFO (42215): ✅ 🦆 Batch inserted 69 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:41.913] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:43.910] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:45.914] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:47.918] INFO (42215): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:48.936] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:49.924] INFO (42215): ✅ 🦆 Batch inserted 45 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:51.924] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:53.917] INFO (42215): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:55.926] INFO (42215): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:57.906] INFO (42215): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:23:58.942] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:23:59.940] INFO (42215): ✅ 🦆 Batch inserted 58 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:01.936] INFO (42215): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:03.925] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:05.919] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:07.918] INFO (42215): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:08.946] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:24:09.930] INFO (42215): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:11.940] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:13.928] INFO (42215): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:15.941] INFO (42215): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:17.917] INFO (42215): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:18.951] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:24:19.953] INFO (42215): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:21.941] INFO (42215): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:23.946] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:25.946] INFO (42215): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:27.934] INFO (42215): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:28.957] WARN (42215): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:24:29.955] INFO (42215): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:31.943] INFO (42215): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:33.940] INFO (42215): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:35.959] INFO (42215): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:37.923] INFO (42215): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:38.969] ERROR (42215): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[19:24:39.948] INFO (42215): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:41.944] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:43.947] INFO (42215): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:45.953] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:47.949] INFO (42215): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:49.971] INFO (42215): ✅ 🦆 Batch inserted 55 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:51.964] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:53.939] INFO (42215): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:55.958] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:57.943] INFO (42215): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:24:59.965] INFO (42215): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:01.949] INFO (42215): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:03.947] INFO (42215): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:05.954] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:07.952] INFO (42215): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:09.959] INFO (42215): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:11.965] INFO (42215): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:13.944] INFO (42215): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:15.970] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:17.951] INFO (42215): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:19.982] INFO (42215): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:21.962] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:23.963] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:25.963] INFO (42215): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:27.957] INFO (42215): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:29.980] INFO (42215): ✅ 🦆 Batch inserted 42 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:31.973] INFO (42215): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:33.955] INFO (42215): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:35.981] INFO (42215): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:37.955] INFO (42215): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:39.998] INFO (42215): ✅ 🦆 Batch inserted 69 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:41.967] INFO (42215): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:43.960] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:45.970] INFO (42215): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:47.966] INFO (42215): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:49.987] INFO (42215): ✅ 🦆 Batch inserted 45 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:51.980] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:53.968] INFO (42215): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:55.978] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:57.976] INFO (42215): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:25:59.999] INFO (42215): ✅ 🦆 Batch inserted 69 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:01.990] INFO (42215): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:03.984] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:05.985] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:07.999] INFO (42215): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:10.017] INFO (42215): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:12.007] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:13.996] INFO (42215): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:16.018] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:17.987] INFO (42215): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:20.037] INFO (42215): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:22.001] INFO (42215): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:22.118] INFO (42215): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:26:22.119] INFO (42215): ✅ ➡️ WebSocket client connected. Assigned ID: 62be5b42-8d91-4dfd-a730-fce0594d0348
+    component: "WebSocketManager"
+[19:26:22.120] INFO (42215): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:26:24.001] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:26.001] INFO (42215): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:28.011] INFO (42215): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:30.010] INFO (42215): ✅ 🦆 Batch inserted 45 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:32.009] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:33.997] INFO (42215): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:36.020] INFO (42215): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:37.999] INFO (42215): ✅ 🦆 Batch inserted 9 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:40.024] INFO (42215): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:42.022] INFO (42215): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:44.003] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:46.007] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:48.006] INFO (42215): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:50.043] INFO (42215): ✅ 🦆 Batch inserted 56 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:52.029] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:54.012] INFO (42215): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:56.031] INFO (42215): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:26:58.014] INFO (42215): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:00.030] INFO (42215): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:02.028] INFO (42215): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:04.030] INFO (42215): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:06.027] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:08.019] INFO (42215): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:10.050] INFO (42215): ✅ 🦆 Batch inserted 53 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:12.044] INFO (42215): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:14.017] INFO (42215): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:16.033] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:18.033] INFO (42215): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:20.061] INFO (42215): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:22.052] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:24.042] INFO (42215): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:26.043] INFO (42215): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:28.046] INFO (42215): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:30.056] INFO (42215): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:32.069] INFO (42215): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:34.044] INFO (42215): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:36.062] INFO (42215): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:38.048] INFO (42215): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:40.075] INFO (42215): ✅ 🦆 Batch inserted 60 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:42.068] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:44.054] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:46.059] INFO (42215): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:48.055] INFO (42215): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:50.073] INFO (42215): ✅ 🦆 Batch inserted 45 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:52.069] INFO (42215): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:54.045] INFO (42215): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:56.055] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:27:58.041] INFO (42215): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:00.077] INFO (42215): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:02.078] INFO (42215): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:04.059] INFO (42215): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:06.076] INFO (42215): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:08.059] INFO (42215): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:10.101] INFO (42215): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:12.075] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:14.058] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:16.078] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:18.053] INFO (42215): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:20.109] INFO (42215): ✅ 🦆 Batch inserted 69 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:22.087] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:24.069] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:26.073] INFO (42215): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:28.082] INFO (42215): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:30.081] INFO (42215): ✅ 🦆 Batch inserted 43 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:32.087] INFO (42215): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:34.087] INFO (42215): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:36.089] INFO (42215): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:38.067] INFO (42215): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:40.106] INFO (42215): ✅ 🦆 Batch inserted 78 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:42.083] INFO (42215): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:44.086] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:46.097] INFO (42215): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:48.089] INFO (42215): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:50.097] INFO (42215): ✅ 🦆 Batch inserted 64 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:52.101] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:54.087] INFO (42215): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:56.109] INFO (42215): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:28:58.084] INFO (42215): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:00.118] INFO (42215): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:02.111] INFO (42215): ✅ 🦆 Batch inserted 37 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:04.106] INFO (42215): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:06.107] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:08.105] INFO (42215): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:10.117] INFO (42215): ✅ 🦆 Batch inserted 71 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:12.117] INFO (42215): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:14.114] INFO (42215): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:16.122] INFO (42215): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:18.097] INFO (42215): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:20.155] INFO (42215): ✅ 🦆 Batch inserted 59 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:22.113] INFO (42215): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:24.129] INFO (42215): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:26.120] INFO (42215): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:28.105] INFO (42215): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:28.845] INFO (42215): 
+✅ Gracefully shutting down...
+[19:29:28.845] INFO (42215): Stopping all repository batch processors...
+    component: "DataManager"
+[19:29:28.845] INFO (42215): Stopped batch timer for DuckDBRepo. Flushing remaining queue (43 items)...
+    component: "DuckDBRepo"
+[19:29:30.172] INFO (42718): ✅ Loaded 3 custom data provider(s).
+[19:29:30.183] INFO (42718): ✅ 🦆 DuckDB database connected.
+[19:29:30.184] INFO (42718): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:29:30.186] INFO (42718): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:29:30.187] INFO (42718): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:29:30.192] INFO (42718): ✅ Applied 81 configuration setting(s) from database.
+[19:29:30.193] INFO (42718): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:29:30.195] INFO (42718): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:29:30.195] INFO (42718): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:29:30.198] INFO (42718): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:29:30.198] INFO (42718): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:29:30.198] INFO (42718): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:29:30.198] INFO (42718): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:29:30.198] INFO (42718): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:29:30.198] INFO (42718): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:29:30.198] INFO (42718): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:29:30.199] INFO (42718): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:29:30.199] INFO (42718): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:29:30.199] INFO (42718): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:29:30.199] INFO (42718): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:29:30.199] INFO (42718): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:29:30.199] INFO (42718): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:29:30.960] INFO (42718): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:29:30.961] INFO (42718): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:29:30.966] INFO (42718): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:29:30.966] INFO (42718): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:29:31.030] INFO (42718): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:29:31.030] INFO (42718): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:29:31.050] INFO (42718): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:29:31.050] INFO (42718): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:29:31.054] INFO (42718): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:29:31.055] INFO (42718): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:29:31.055] INFO (42718): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:29:31.056] INFO (42718): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:29:31.057] INFO (42718): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:29:31.057] INFO (42718): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:29:31.164] INFO (42718): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:29:31.165] INFO (42718): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:29:31.165] INFO (42718): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:29:31.168] INFO (42718): ✅ HTTP server started on http://localhost:8080
+[19:29:31.179] WARN (42718): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:29:31.533] INFO (42718): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:29:31.719] INFO (42718): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:29:32.200] INFO (42718): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:29:32.201] INFO (42718): ✅ ➡️ WebSocket client connected. Assigned ID: 58535eb9-c40a-48de-9384-a59b6e3d15e9
+    component: "WebSocketManager"
+[19:29:32.202] INFO (42718): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:29:32.247] INFO (42718): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:33.183] WARN (42718): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:29:33.410] INFO (42718): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:29:33.411] INFO (42718): ✅ ➡️ WebSocket client connected. Assigned ID: f4378b5a-ae6e-48e8-b46e-17ac175ed78b
+    component: "WebSocketManager"
+[19:29:33.411] INFO (42718): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:29:34.216] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:36.234] INFO (42718): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:37.187] WARN (42718): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:29:38.221] INFO (42718): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:40.239] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:42.214] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:44.229] INFO (42718): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:45.196] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:29:46.226] INFO (42718): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:48.220] INFO (42718): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:50.251] INFO (42718): ✅ 🦆 Batch inserted 66 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:52.233] INFO (42718): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:54.225] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:55.199] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:29:56.241] INFO (42718): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:29:58.231] INFO (42718): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:00.243] INFO (42718): ✅ 🦆 Batch inserted 80 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:02.226] INFO (42718): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:04.240] INFO (42718): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:05.206] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:30:06.242] INFO (42718): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:08.238] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:10.269] INFO (42718): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:12.245] INFO (42718): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:14.229] INFO (42718): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:15.215] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:30:16.255] INFO (42718): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:18.231] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:20.259] INFO (42718): ✅ 🦆 Batch inserted 81 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:22.241] INFO (42718): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:24.253] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:25.224] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:30:26.262] INFO (42718): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:28.252] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:30.267] INFO (42718): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:32.260] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:34.258] INFO (42718): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:35.228] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:30:36.259] INFO (42718): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:38.246] INFO (42718): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:40.276] INFO (42718): ✅ 🦆 Batch inserted 89 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:42.250] INFO (42718): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:44.263] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:45.232] WARN (42718): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:30:46.276] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:48.261] INFO (42718): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:50.281] INFO (42718): ✅ 🦆 Batch inserted 65 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:52.262] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:54.270] INFO (42718): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:55.241] ERROR (42718): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[19:30:56.276] INFO (42718): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:30:58.258] INFO (42718): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:00.299] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:02.271] INFO (42718): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:04.270] INFO (42718): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:06.277] INFO (42718): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:08.280] INFO (42718): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:10.294] INFO (42718): ✅ 🦆 Batch inserted 62 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:12.280] INFO (42718): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:14.268] INFO (42718): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:16.293] INFO (42718): ✅ 🦆 Batch inserted 51 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:18.270] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:20.319] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:22.287] INFO (42718): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:24.295] INFO (42718): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:26.289] INFO (42718): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:28.310] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:30.322] INFO (42718): ✅ 🦆 Batch inserted 74 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:32.302] INFO (42718): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:34.291] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:36.313] INFO (42718): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:38.289] INFO (42718): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:40.328] INFO (42718): ✅ 🦆 Batch inserted 80 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:42.296] INFO (42718): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:44.313] INFO (42718): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:46.315] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:48.299] INFO (42718): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:50.329] INFO (42718): ✅ 🦆 Batch inserted 75 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:52.305] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:54.301] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:56.321] INFO (42718): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:31:58.302] INFO (42718): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:00.334] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:02.310] INFO (42718): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:04.326] INFO (42718): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:06.319] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:08.309] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:10.337] INFO (42718): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:12.320] INFO (42718): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:14.314] INFO (42718): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:16.333] INFO (42718): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:18.317] INFO (42718): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:20.342] INFO (42718): ✅ 🦆 Batch inserted 80 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:22.311] INFO (42718): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:24.330] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:26.333] INFO (42718): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:28.323] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:30.350] INFO (42718): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:32.328] INFO (42718): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:34.316] INFO (42718): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:36.337] INFO (42718): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:38.320] INFO (42718): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:40.354] INFO (42718): ✅ 🦆 Batch inserted 91 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:42.316] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:44.332] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:46.340] INFO (42718): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:48.333] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:50.349] INFO (42718): ✅ 🦆 Batch inserted 65 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:52.332] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:54.335] INFO (42718): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:56.342] INFO (42718): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:32:58.327] INFO (42718): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:00.370] INFO (42718): ✅ 🦆 Batch inserted 88 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:02.329] INFO (42718): ✅ 🦆 Batch inserted 9 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:04.341] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:06.346] INFO (42718): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:08.342] INFO (42718): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:10.361] INFO (42718): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:12.340] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:14.340] INFO (42718): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:16.352] INFO (42718): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:18.337] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:20.380] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:22.344] INFO (42718): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:24.363] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:26.362] INFO (42718): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:28.362] INFO (42718): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:30.377] INFO (42718): ✅ 🦆 Batch inserted 64 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:32.354] INFO (42718): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:34.362] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:36.377] INFO (42718): ✅ 🦆 Batch inserted 49 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:38.351] INFO (42718): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:40.400] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:42.363] INFO (42718): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:44.371] INFO (42718): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:46.375] INFO (42718): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:48.365] INFO (42718): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:50.391] INFO (42718): ✅ 🦆 Batch inserted 76 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:52.369] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:54.365] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:56.394] INFO (42718): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:33:58.359] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:00.400] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:02.367] INFO (42718): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:04.383] INFO (42718): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:06.381] INFO (42718): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:08.391] INFO (42718): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:10.404] INFO (42718): ✅ 🦆 Batch inserted 73 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:12.381] INFO (42718): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:14.371] INFO (42718): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:16.393] INFO (42718): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:18.380] INFO (42718): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:20.402] INFO (42718): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:22.372] INFO (42718): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:24.387] INFO (42718): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:26.389] INFO (42718): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:28.402] INFO (42718): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:30.416] INFO (42718): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:32.391] INFO (42718): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:34.385] INFO (42718): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:36.396] INFO (42718): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:38.388] INFO (42718): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:40.423] INFO (42718): ✅ 🦆 Batch inserted 80 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:42.380] INFO (42718): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:34:42.858] INFO (42718): 
+✅ Gracefully shutting down...
+[19:34:42.858] INFO (42718): Stopping all repository batch processors...
+    component: "DataManager"
+[19:34:42.858] INFO (42718): Stopped batch timer for DuckDBRepo. Flushing remaining queue (18 items)...
+    component: "DuckDBRepo"
+[19:44:30.455] INFO (47231): ✅ Loaded 3 custom data provider(s).
+[19:44:30.465] INFO (47231): ✅ 🦆 DuckDB database connected.
+[19:44:30.465] INFO (47231): ✅ Alert Manager initialized (ES6 Class Mode).
+    component: "AlertManager"
+[19:44:30.467] INFO (47231): ✅ User Manager initialized: 'users' table ready.
+    component: "UserManager"
+[19:44:30.468] INFO (47231): Loaded 0 active webhooks.
+    component: "WebhookManager"
+[19:44:30.473] INFO (47231): ✅ Applied 81 configuration setting(s) from database.
+[19:44:30.474] INFO (47231): ✅ Sandbox Pool initialized with 4 workers (Max Memory: 100MB each).
+    component: "SandboxPool"
+[19:44:30.474] INFO (47231): Semantic Index built: 15 instances, 8 topic maps.
+    component: "SemanticManager"
+[19:44:30.474] INFO (47231): ✅ Semantic Manager initialized.
+    component: "SemanticManager"
+[19:44:30.476] INFO (47231): ✅ Mapper Engine: Loaded 1 versions. Active: v_1775290748982
+    component: "MapperEngine"
+[19:44:30.476] INFO (47231): ✅ Database connection injected into Mapper Engine.
+    component: "MapperEngine"
+[19:44:30.476] INFO (47231): ✅ Alert Manager: Sandbox Pool registered.
+    component: "AlertManager"
+[19:44:30.476] INFO (47231): ✅ DLQ Manager initialized. Target: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/dlq/failed_events.jsonl
+    component: "DLQManager"
+[19:44:30.476] INFO (47231): ✅ DLQ retry handler registered.
+    component: "DLQManager"
+[19:44:30.476] INFO (47231): ✅ 🦆 DuckDB Repository initialized.
+    component: "DuckDBRepo"
+[19:44:30.476] INFO (47231): Starting batch processor for DuckDBRepo (Size: 5000, Interval: 2000ms)
+    component: "DuckDBRepo"
+[19:44:30.476] INFO (47231): Perennial storage driver is set to 'none'. Only writing to default repositories.
+    component: "DataManager"
+[19:44:30.476] INFO (47231): ✅ Data Manager initialized.
+    component: "DataManager"
+[19:44:30.477] INFO (47231): ✅ WebSocket Manager initialized.
+    component: "WebSocketManager"
+[19:44:30.477] INFO (47231): Initializing Data Connectors Abstraction Layer...
+    component: "ConnectorManager"
+[19:44:30.477] INFO (47231): ✅ Central Message Dispatcher initialized (Protocol Agnostic).
+    component: "MessageDispatcher"
+[19:44:30.477] INFO (47231): Loading data connector plugin [opcua] for ID: factory_opc
+    component: "ConnectorManager"
+[19:44:31.233] INFO (47231): Successfully resolved connector [opcua] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/opcua/index.js
+    component: "ConnectorManager"
+[19:44:31.233] INFO (47231): Connecting to OPC UA server at opc.tcp://localhost:4840...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:44:31.234] INFO (47231): Loading data connector plugin [http] for ID: rest_ingest
+    component: "ConnectorManager"
+[19:44:31.234] WARN (47231): Found module at http, but it does not extend BaseProvider. Skipping...
+    component: "ConnectorManager"
+[19:44:31.238] INFO (47231): Successfully resolved connector [http] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/http/index.js
+    component: "ConnectorManager"
+[19:44:31.238] INFO (47231): Mounting HTTP routes for rest_ingest
+    component: "http-provider"
+    id: "rest_ingest"
+[19:44:31.238] INFO (47231): Loading data connector plugin [mqtt] for ID: mqttunsviewer.com
+    component: "ConnectorManager"
+[19:44:31.276] WARN (47231): Found module at mqtt, but it does not extend BaseProvider. Skipping...
+    component: "ConnectorManager"
+[19:44:31.277] INFO (47231): Successfully resolved connector [mqtt] from: /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/connectors/mqtt/index.js
+    component: "ConnectorManager"
+[19:44:31.277] INFO (47231): ✅ Configured with standard TLS (CA only).
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:44:31.277] INFO (47231): Connecting to mqtt://www.mqttunsviewer.com:1883...
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:44:31.298] INFO (47231): Simulator Manager initialized.
+    component: "SimulatorManager"
+[19:44:31.298] INFO (47231): Scanning /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/data/simulators for all simulators (simulator-*.js)...
+    component: "SimulatorManager"
+[19:44:31.298] INFO (47231): Found 5 simulator file(s).
+    component: "SimulatorManager"
+[19:44:31.299] INFO (47231): ✅ Scenario registered: [deathstar]
+    component: "SimulatorManager"
+[19:44:31.299] INFO (47231): ✅ Scenario registered: [hydrochem]
+    component: "SimulatorManager"
+[19:44:31.301] INFO (47231): ✅ Scenario registered: [paris_metro]
+    component: "SimulatorManager"
+[19:44:31.302] INFO (47231): ✅ Scenario registered: [stark]
+    component: "SimulatorManager"
+[19:44:31.302] INFO (47231): ✅ Scenario registered: [stress]
+    component: "SimulatorManager"
+[19:44:31.407] INFO (47231): ✅ [ChatAPI] Loaded AI Tools Manifest (36 tools).
+[19:44:31.408] INFO (47231): ✅ Alert Manager: AI Agent capabilities registered.
+    component: "AlertManager"
+[19:44:31.408] INFO (47231): ✅ [ChatAPI] Registered Internal Agent Runner with Alert Manager.
+[19:44:31.411] INFO (47231): ✅ HTTP server started on http://localhost:8080
+[19:44:31.422] WARN (47231): OPC UA connection backoff: retrying in 2000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:44:31.751] INFO (47231): ✅ Connected.
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:44:31.928] INFO (47231): ✅ Subscribed to topics
+    component: "mqtt-provider"
+    id: "mqttunsviewer.com"
+[19:44:32.487] INFO (47231): ✅ 🦆 Batch inserted 46 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:33.427] WARN (47231): OPC UA connection backoff: retrying in 4000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:44:34.492] INFO (47231): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:36.491] INFO (47231): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:37.433] WARN (47231): OPC UA connection backoff: retrying in 8000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:44:38.494] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:40.503] INFO (47231): ✅ 🦆 Batch inserted 89 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:42.490] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:44.500] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:45.434] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:44:46.517] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:48.511] INFO (47231): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:50.503] INFO (47231): ✅ 🦆 Batch inserted 65 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:52.022] INFO (47231): 🔄 HTTP Upgrade Request received on path: '/'
+    component: "WebSocketManager"
+[19:44:52.024] INFO (47231): ✅ ➡️ WebSocket client connected. Assigned ID: b66b55f3-37ee-4cca-b874-bf40be092a53
+    component: "WebSocketManager"
+[19:44:52.024] INFO (47231): [WS] Fetching initial data batch (LIMIT 200)...
+    component: "WebSocketManager"
+[19:44:52.504] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:54.502] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:55.439] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:44:56.513] INFO (47231): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:44:58.492] INFO (47231): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:00.525] INFO (47231): ✅ 🦆 Batch inserted 87 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:02.499] INFO (47231): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:04.510] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:05.441] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:45:06.513] INFO (47231): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:08.514] INFO (47231): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:10.524] INFO (47231): ✅ 🦆 Batch inserted 65 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:12.524] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:14.504] INFO (47231): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:15.444] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:45:16.523] INFO (47231): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:18.501] INFO (47231): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:20.531] INFO (47231): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:22.507] INFO (47231): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:24.521] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:25.449] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:45:26.521] INFO (47231): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:28.517] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:30.532] INFO (47231): ✅ 🦆 Batch inserted 66 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:32.518] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:34.515] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:35.450] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:45:36.532] INFO (47231): ✅ 🦆 Batch inserted 48 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:38.516] INFO (47231): ✅ 🦆 Batch inserted 7 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:40.527] INFO (47231): ✅ 🦆 Batch inserted 80 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:42.527] INFO (47231): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:44.528] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:45.453] WARN (47231): OPC UA connection backoff: retrying in 10000ms...
+    component: "opcua-provider"
+    id: "factory_opc"
+[19:45:46.526] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:48.526] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:50.550] INFO (47231): ✅ 🦆 Batch inserted 74 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:52.531] INFO (47231): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:54.525] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:55.457] ERROR (47231): ❌ Failed to connect to OPC UA server.
+    component: "opcua-provider"
+    id: "factory_opc"
+    err: {
+      "type": "Error",
+      "message": "The connection cannot be established with server opc.tcp://localhost:4840 .\nPlease check that the server is up and running or your network configuration.\nErr = (connect ECONNREFUSED ::1:4840\nconnect ECONNREFUSED 127.0.0.1:4840)",
+      "stack":
+          Error: The connection cannot be established with server opc.tcp://localhost:4840 .
+          Please check that the server is up and running or your network configuration.
+          Err = (connect ECONNREFUSED ::1:4840
+          connect ECONNREFUSED 127.0.0.1:4840)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:743:27
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-client/dist/private/client_base_impl.js:557:25
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/node-opcua-secure-channel/dist/source/client/client_secure_channel_layer.js:369:13
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:3682:19
+              at wrapper (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:272:20)
+              at replenish (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:442:29)
+              at /Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:452:13
+              at eachOfLimit (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:478:36)
+              at awaitable (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:212:32)
+              at eachOfSeries (/Users/sebastien.lalaurette@airliquide.com/Documents/perso/korelate/korelate/node_modules/async/dist/async.js:814:16)
+    }
+[19:45:56.542] INFO (47231): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:45:58.519] INFO (47231): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:00.549] INFO (47231): ✅ 🦆 Batch inserted 78 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:02.523] INFO (47231): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:04.539] INFO (47231): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:06.538] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:08.533] INFO (47231): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:10.553] INFO (47231): ✅ 🦆 Batch inserted 74 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:12.539] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:14.536] INFO (47231): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:16.547] INFO (47231): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:18.540] INFO (47231): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:20.548] INFO (47231): ✅ 🦆 Batch inserted 80 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:22.533] INFO (47231): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:24.545] INFO (47231): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:26.563] INFO (47231): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:28.539] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:30.569] INFO (47231): ✅ 🦆 Batch inserted 62 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:32.553] INFO (47231): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:34.543] INFO (47231): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:36.554] INFO (47231): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:38.545] INFO (47231): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:40.570] INFO (47231): ✅ 🦆 Batch inserted 81 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:42.542] INFO (47231): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:44.553] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:46.559] INFO (47231): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:48.551] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:50.571] INFO (47231): ✅ 🦆 Batch inserted 65 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:52.562] INFO (47231): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:54.558] INFO (47231): ✅ 🦆 Batch inserted 22 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:56.564] INFO (47231): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:46:58.544] INFO (47231): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:00.580] INFO (47231): ✅ 🦆 Batch inserted 90 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:02.551] INFO (47231): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:04.564] INFO (47231): ✅ 🦆 Batch inserted 27 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:06.574] INFO (47231): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:08.558] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:10.582] INFO (47231): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:12.564] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:14.565] INFO (47231): ✅ 🦆 Batch inserted 23 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:16.574] INFO (47231): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:18.572] INFO (47231): ✅ 🦆 Batch inserted 5 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:20.583] INFO (47231): ✅ 🦆 Batch inserted 88 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:22.560] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:24.572] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:26.582] INFO (47231): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:28.577] INFO (47231): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:30.588] INFO (47231): ✅ 🦆 Batch inserted 63 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:32.572] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:34.582] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:36.580] INFO (47231): ✅ 🦆 Batch inserted 39 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:38.569] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:40.591] INFO (47231): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:42.573] INFO (47231): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:44.581] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:46.582] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:48.582] INFO (47231): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:50.604] INFO (47231): ✅ 🦆 Batch inserted 65 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:52.580] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:54.574] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:56.592] INFO (47231): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:47:58.585] INFO (47231): ✅ 🦆 Batch inserted 13 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:00.587] INFO (47231): ✅ 🦆 Batch inserted 71 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:02.590] INFO (47231): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:04.581] INFO (47231): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:06.589] INFO (47231): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:08.579] INFO (47231): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:10.604] INFO (47231): ✅ 🦆 Batch inserted 83 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:12.586] INFO (47231): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:14.592] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:16.594] INFO (47231): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:18.580] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:20.608] INFO (47231): ✅ 🦆 Batch inserted 77 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:22.580] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:24.600] INFO (47231): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:26.596] INFO (47231): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:28.590] INFO (47231): ✅ 🦆 Batch inserted 18 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:30.602] INFO (47231): ✅ 🦆 Batch inserted 82 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:32.595] INFO (47231): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:34.587] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:36.604] INFO (47231): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:38.593] INFO (47231): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:40.613] INFO (47231): ✅ 🦆 Batch inserted 70 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:42.593] INFO (47231): ✅ 🦆 Batch inserted 16 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:44.596] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:46.603] INFO (47231): ✅ 🦆 Batch inserted 31 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:48.598] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:50.609] INFO (47231): ✅ 🦆 Batch inserted 73 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:52.594] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:54.589] INFO (47231): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:56.606] INFO (47231): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:48:58.602] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:00.609] INFO (47231): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:02.606] INFO (47231): ✅ 🦆 Batch inserted 8 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:04.602] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:06.609] INFO (47231): ✅ 🦆 Batch inserted 34 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:08.605] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:10.614] INFO (47231): ✅ 🦆 Batch inserted 73 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:12.613] INFO (47231): ✅ 🦆 Batch inserted 14 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:14.599] INFO (47231): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:16.610] INFO (47231): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:18.599] INFO (47231): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:20.622] INFO (47231): ✅ 🦆 Batch inserted 75 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:22.599] INFO (47231): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:24.599] INFO (47231): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:26.611] INFO (47231): ✅ 🦆 Batch inserted 46 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:28.600] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:30.605] INFO (47231): ✅ 🦆 Batch inserted 76 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:32.596] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:34.615] INFO (47231): ✅ 🦆 Batch inserted 21 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:36.612] INFO (47231): ✅ 🦆 Batch inserted 40 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:38.603] INFO (47231): ✅ 🦆 Batch inserted 17 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:40.633] INFO (47231): ✅ 🦆 Batch inserted 75 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:42.605] INFO (47231): ✅ 🦆 Batch inserted 9 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:44.616] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:46.613] INFO (47231): ✅ 🦆 Batch inserted 25 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:48.618] INFO (47231): ✅ 🦆 Batch inserted 29 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:50.629] INFO (47231): ✅ 🦆 Batch inserted 74 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:52.612] INFO (47231): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:54.616] INFO (47231): ✅ 🦆 Batch inserted 30 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:56.629] INFO (47231): ✅ 🦆 Batch inserted 33 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:49:58.622] INFO (47231): ✅ 🦆 Batch inserted 4 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:00.638] INFO (47231): ✅ 🦆 Batch inserted 78 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:02.627] INFO (47231): ✅ 🦆 Batch inserted 32 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:04.618] INFO (47231): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:06.624] INFO (47231): ✅ 🦆 Batch inserted 24 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:08.627] INFO (47231): ✅ 🦆 Batch inserted 28 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:10.631] INFO (47231): ✅ 🦆 Batch inserted 74 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:12.621] INFO (47231): ✅ 🦆 Batch inserted 10 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:14.618] INFO (47231): ✅ 🦆 Batch inserted 12 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:16.635] INFO (47231): ✅ 🦆 Batch inserted 50 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:18.615] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:20.640] INFO (47231): ✅ 🦆 Batch inserted 81 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:22.615] INFO (47231): ✅ 🦆 Batch inserted 2 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:24.633] INFO (47231): ✅ 🦆 Batch inserted 36 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:26.626] INFO (47231): ✅ 🦆 Batch inserted 41 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:28.623] INFO (47231): ✅ 🦆 Batch inserted 9 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:30.648] INFO (47231): ✅ 🦆 Batch inserted 79 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:32.623] INFO (47231): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:34.626] INFO (47231): ✅ 🦆 Batch inserted 15 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:36.638] INFO (47231): ✅ 🦆 Batch inserted 38 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:38.625] INFO (47231): ✅ 🦆 Batch inserted 20 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:40.639] INFO (47231): ✅ 🦆 Batch inserted 67 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:42.619] INFO (47231): ✅ 🦆 Batch inserted 6 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:44.639] INFO (47231): ✅ 🦆 Batch inserted 35 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:46.647] INFO (47231): ✅ 🦆 Batch inserted 26 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:48.631] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:50.647] INFO (47231): ✅ 🦆 Batch inserted 87 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:52.633] INFO (47231): ✅ 🦆 Batch inserted 11 messages into DuckDB.
+    component: "DuckDBRepo"
+[19:50:54.641] INFO (47231): ✅ 🦆 Batch inserted 19 messages into DuckDB.
+    component: "DuckDBRepo"

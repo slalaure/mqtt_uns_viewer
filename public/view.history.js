@@ -65,7 +65,7 @@ function showLoader() {
     if (historyLogContainer) {
         historyLogContainer.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px; color: var(--color-text-secondary);">
-                <div class="broker-dot" style="background-color: var(--color-primary); animation: blink 1s infinite;"></div>
+                <div class="connector-dot" style="background-color: var(--color-primary); animation: blink 1s infinite;"></div>
                 <span>Fetching data...</span>
             </div>
         `;
@@ -278,7 +278,7 @@ const onTopicStateChange = (topic) => {
     }
 };
 
-const onBrokerStateChange = (sourceId) => {
+const onSourceStateChange = (sourceId) => {
     if (sourceId && providerFilterSelect) {
         const exists = Array.from(providerFilterSelect.options).some(opt => opt.value === sourceId);
         if (exists) {
@@ -293,11 +293,11 @@ const onBrokerStateChange = (sourceId) => {
  * Initializes the History View DOM (Called once).
  */
 export function initHistoryView(options = {}) {
-    isMultiProvider = options.isMultiBroker || false;
+    isMultiProvider = options.isMultiSource || false;
     requestRangeCallback = options.requestRangeCallback || null; 
     
     // Merge brokers and new data providers for unified filtering
-    const bConfigs = options.brokerConfigs || [];
+    const bConfigs = options.providerConfigs || [];
     const pConfigs = options.dataProviders || [];
     availableProviders = [...bConfigs, ...pConfigs];
 
@@ -434,7 +434,7 @@ export function mountHistoryView() {
     providerFilterSelect?.addEventListener('change', onProviderChange);
 
     subscribe('currentTopic', onTopicStateChange, true);
-    subscribe('currentSourceId', onBrokerStateChange);
+    subscribe('currentSourceId', onSourceStateChange);
 
     // Initial render trigger
     renderFilteredHistory();
@@ -455,7 +455,7 @@ export function unmountHistoryView() {
     providerFilterSelect?.removeEventListener('change', onProviderChange);
 
     unsubscribe('currentTopic', onTopicStateChange, true);
-    unsubscribe('currentSourceId', onBrokerStateChange);
+    unsubscribe('currentSourceId', onSourceStateChange);
 
     isMounted = false;
     console.log("[History View] Unmounted & Cleaned up.");

@@ -357,12 +357,12 @@ class MapperEngine {
 
                                             this.updateMetrics(rule, target, topic, outputPayloadForMetrics, outputTopic, null, null, correlationId);
                                         } else {
-                                            const errorMessage = `Target broker '${targetConnectorId}' does not allow publishing to '${outputTopic}'. Check config.`;
+                                            const errorMessage = `Target connector '${targetConnectorId}' does not allow publishing to '${outputTopic}'. Check config.`;
                                             this.engineLogger.warn({ msg: errorMessage, correlationId });
                                             this.updateMetrics(rule, target, topic, null, null, errorMessage, null, correlationId);
                                         }
                                     } else {
-                                        const errorMessage = `Target broker '${targetConnectorId}' not found or not connected. Cannot publish.`;
+                                        const errorMessage = `Target connector '${targetConnectorId}' not found or not connected. Cannot publish.`;
                                         this.engineLogger.error({ msg: errorMessage, correlationId });
                                         this.updateMetrics(rule, target, topic, null, null, errorMessage, null, correlationId);
                                     }

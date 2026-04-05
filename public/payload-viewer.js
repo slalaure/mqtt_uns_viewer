@@ -20,14 +20,14 @@
  * @param {HTMLElement} elements.contentEl - The <pre> element for the content.
  * @param {HTMLElement} [elements.historyLogEl] - (Optional) The <ul> element for history.
  * @param {HTMLElement} [elements.placeholderEl] - (Optional) Placeholder for history.
- * @param {boolean} [elements.isMultiBroker] - (Optional) Whether to show broker IDs.
+ * @param {boolean} [elements.isMultiSource] - (Optional) Whether to show source IDs.
  */
 export function createPayloadViewer(elements) {
-    const { topicEl, contentEl, historyLogEl, placeholderEl, isMultiBroker = false } = elements;
+    const { topicEl, contentEl, historyLogEl, placeholderEl, isMultiSource = false } = elements;
 
     /**
      * Displays a payload in the main content area.
-     * @param {string} sourceId - The broker ID.
+     * @param {string} sourceId - The source ID.
      * @param {string} topic - The topic string.
      * @param {string} payload - The payload string.
      */
@@ -35,7 +35,7 @@ export function createPayloadViewer(elements) {
         if (topicEl) {
             if (topic) {
                 //  Conditionally show sourceId
-                topicEl.textContent = isMultiBroker ? `[${sourceId}] ${topic}` : topic;
+                topicEl.textContent = isMultiSource ? `[${sourceId}] ${topic}` : topic;
             } else {
                 topicEl.textContent = "No topic selected";
             }
@@ -57,7 +57,7 @@ export function createPayloadViewer(elements) {
 
     /**
      * Updates the recent history log for a topic.
-     * @param {string} sourceId - The broker ID.
+     * @param {string} sourceId - The source ID.
      * @param {string} topic - The topic string.
      * @param {Array} data - Array of history entries from the server.
      */
@@ -70,7 +70,7 @@ export function createPayloadViewer(elements) {
         }
 
         //  Create topic display string
-        const displayTopic = isMultiBroker ? `[${sourceId}] ${topic}` : topic;
+        const displayTopic = isMultiSource ? `[${sourceId}] ${topic}` : topic;
 
         if (!data || data.length === 0) {
             if (placeholderEl) {
@@ -95,10 +95,10 @@ export function createPayloadViewer(elements) {
             tsSpan.textContent = new Date(entry.timestamp).toLocaleTimeString('en-GB');
             div.appendChild(tsSpan);
 
-            // Add sourceId to history entry if multi-broker
-            if (isMultiBroker) {
+            // Add sourceId to history entry if multi-source
+            if (isMultiSource) {
                 const brokerSpan = document.createElement('span');
-                brokerSpan.className = 'history-entry-broker';
+                brokerSpan.className = 'history-entry-source';
                 brokerSpan.textContent = `[${entry.source_id}]`;
                 div.appendChild(brokerSpan);
             }

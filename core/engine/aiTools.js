@@ -391,7 +391,7 @@ class AiTools {
 
                     if (source_id) {
                         targetConnectorConfig = allProviders.find(b => b.id === source_id);
-                        if (!targetConnectorConfig) return resolve({ error: `Broker '${source_id}' not found.` });
+                        if (!targetConnectorConfig) return resolve({ error: `Source '${source_id}' not found.` });
                     } else {
                         const capableConnector = allProviders.find(b => {
                             const pubs = b.publish || ((b.type === 'file' || b.type === 'dynamic') ? ['#'] : []);
@@ -408,7 +408,7 @@ class AiTools {
                     if (!allowed) return resolve({ error: `Forbidden: Publishing to '${topic}' not allowed on '${usedConnectorId}'.` });
 
                     const connection = this.getConnectorConnection(usedConnectorId);
-                    if (!connection || !connection.connected) return resolve({ error: `Broker '${usedConnectorId}' disconnected.` });
+                    if (!connection || !connection.connected) return resolve({ error: `Source '${usedConnectorId}' disconnected.` });
 
                     let finalPayload = payload;
                     if (typeof payload === 'object') finalPayload = JSON.stringify(payload);

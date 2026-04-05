@@ -142,7 +142,7 @@ class MapperTargetEditor extends HTMLElement {
             brokerGroup.innerHTML = `<label style="margin-bottom:5px;">Target Provider:</label>`;
             
             const select = document.createElement('select');
-            select.className = 'target-broker-select';
+            select.className = 'target-source-select';
             select.style.width = "100%";
             select.innerHTML = `<option value="">Same as Source</option>`;
 

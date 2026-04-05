@@ -161,7 +161,7 @@ body.dark-mode #mqtt-tree .selected .node-name::before {
 }
 
 /*  Style for sourceId in topic history */
-.history-entry-broker {
+.history-entry-source {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.9em;
     color: var(--color-text-muted);

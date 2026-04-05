@@ -58,7 +58,7 @@ let isChartLive = true;
 let allChartConfigs = { configurations: [] };
 let currentConfigId = null;
 let maxChartsLimit = 0;
-let isMultiBroker = false;
+let isMultiSource = false;
 let chartSlider = null;
 let chartRefreshTimer = null;
 let isUserInteracting = false;
@@ -242,7 +242,7 @@ function initializeElements() {
     contentEl: document.getElementById("chart-payload-content"),
     historyLogEl: null,
     placeholderEl: null,
-    isMultiBroker: false,
+    isMultiSource: false,
   });
 }
 
@@ -253,14 +253,14 @@ export async function initChartView(callbacks) {
   const {
     displayPayload,
     maxSavedChartConfigs,
-    isMultiBroker: multiBrokerState,
+    isMultiSource: multiBrokerState,
     requestRangeCallback,
     getHistory,
     ...otherCallbacks
   } = callbacks;
   appCallbacks = { ...appCallbacks, ...otherCallbacks };
   maxChartsLimit = maxSavedChartConfigs || 0;
-  isMultiBroker = multiBrokerState || false;
+  isMultiSource = multiBrokerState || false;
 
   // Load the template
   try {

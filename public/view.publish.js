@@ -97,16 +97,16 @@ const onCurrentSourceIdChange = (sourceId) => {
  * @param {object} options
  * @param {string[]} options.subscribedTopics - List of subscribed topic patterns (fallback).
  * @param {HTMLElement} options.simulatorListContainer - The container for dynamic sim controls.
- * @param {boolean} options.isMultiBroker - Whether the app is in multi-broker mode.
- * @param {Array} options.brokerConfigs - List of broker config objects.
+ * @param {boolean} options.isMultiSource - Whether the app is in multi-source mode.
+ * @param {Array} options.sourceConfigs - List of broker config objects.
  */
 export function initPublishView(options) {
     subscribedTopics = options.subscribedTopics || [];
     simControlsContainer = options.simulatorListContainer;
-    isMultiProvider = options.isMultiBroker || false;
+    isMultiProvider = options.isMultiSource || false;
 
     // Merge legacy broker configs and new data provider configs
-    const bConfigs = options.brokerConfigs || [];
+    const bConfigs = options.sourceConfigs || [];
     const pConfigs = options.dataProviders || [];
     availableProviders = [...bConfigs, ...pConfigs];
 
