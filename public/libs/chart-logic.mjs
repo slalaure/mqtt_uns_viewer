@@ -130,15 +130,31 @@ export function getAxisHue(axisKey, axisIndex, enableSemantic = true) {
 }
 
 /**
+ * Helper to convert HSL to HEX so color pickers can consume it.
+ */
+export function hslToHex(h, s, l) {
+    l /= 100;
+    const a = s * Math.min(l, 1 - l) / 100;
+    const f = n => {
+        const k = (n + h / 30) % 12;
+        const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/**
  * Transforms raw points from different topics into Chart.js ready datasets.
  */
 export function buildChartDatasets(rawPointsMap, chartedVariables, options = {}) {
     const { useSmartAxis = true, connectNulls = false, distinctAxes = [] } = options;
     const datasets = [];
     const axisMap = new Map();
+    const axisCounters = new Map(); // Track how many variables on each axis for color variation
     const dynamicScales = {};
 
-    for (const [varId, { topic, path }] of chartedVariables.entries()) {
+    for (const [varId, varInfo] of chartedVariables.entries()) {
+        const { topic, path } = varInfo;
         const rawPoints = rawPointsMap.get(varId) || [];
         const topicParts = topic.split("/");
         const cleanPath = path.replace(/\[|\]/g, "");
@@ -149,15 +165,26 @@ export function buildChartDatasets(rawPointsMap, chartedVariables, options = {})
 
         // Determine Axis
         const axisKey = useSmartAxis ? guessGroupKey(topic, cleanPath) : varId;
-        if (!axisMap.has(axisKey)) axisMap.set(axisKey, `y${axisMap.size}`);
+        if (!axisMap.has(axisKey)) {
+            axisMap.set(axisKey, `y${axisMap.size}`);
+            axisCounters.set(axisKey, 0);
+        }
         const yAxisId = axisMap.get(axisKey);
+        const varIndexOnAxis = axisCounters.get(axisKey);
+        axisCounters.set(axisKey, varIndexOnAxis + 1);
 
         // Determine Color
         const axisIndex = distinctAxes.indexOf(axisKey);
-        const hue = getAxisHue(axisKey, axisIndex, useSmartAxis);
-        const color = chartedVariables.get(varId)?.color || `hsl(${hue}, 85%, 60%)`;
+        const hue = getAxisHue(axisKey, axisIndex >= 0 ? axisIndex : axisMap.size - 1, useSmartAxis);
+        
+        // Add variations (lightness/saturation) if multiple variables on same axis
+        const saturation = 85 - (varIndexOnAxis * 10);
+        const lightness = 60 + (varIndexOnAxis * 5);
+        const autoHex = hslToHex(hue, Math.max(30, saturation), Math.min(85, lightness));
+        const color = varInfo.color || autoHex;
 
         datasets.push({
+            varId: varId,
             label: label,
             data: rawPoints,
             borderColor: color,

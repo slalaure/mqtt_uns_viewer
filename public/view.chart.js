@@ -874,6 +874,13 @@ async function processChartData() {
       },
     );
 
+    // Sync UI color pickers with the dynamically generated colors
+    if (chartVariableList && typeof chartVariableList.setEffectiveColors === 'function') {
+      const effectiveColors = new Map();
+      datasets.forEach(ds => effectiveColors.set(ds.varId, ds.borderColor));
+      chartVariableList.setEffectiveColors(effectiveColors);
+    }
+
     // Apply UI-specific Scale styling
     const isDarkMode = document.body.classList.contains("dark-mode");
     const gridColor = isDarkMode

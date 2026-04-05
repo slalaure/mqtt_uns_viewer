@@ -23,7 +23,10 @@
 - **Chart View Fixes**:
     - **Tree Selection & Payloads**: Resolved the "No numeric properties found" bug by ensuring `tree-manager.js` correctly stringifies JSON payloads before storing them in the DOM `dataset`. Fixed selectors to match the new `data-source-id` attribute.
     - **Chart Rendering & Dates**: Fixed a bug where curves wouldn't display on initial load because the requested date range was 1970 (`timestamp = 0`). Now defaults to a 1-hour window.
-    - **Color Customization**: Fixed the color picker so that custom colors selected by the user override the auto-generated semantic Hues in `chart-logic.mjs`. Improved UX by adding `.var-color-picker` styling and immediate `oninput` state synchronization.
+    - **Color Customization & Smart Logic**: 
+        - Restored the "Smart Color" feature: variables now receive intelligent default colors based on semantic naming (e.g., Red for temperature, Blue for water/humidity) even when not manually set.
+        - Improved "Smart Axis" behavior: variables sharing the same axis now get slight color variations (saturation/lightness) instead of being identical, making them easier to distinguish.
+        - Fixed the color picker in `chart-variable-list.js` to correctly display and allow manual overrides without forcing a global default.
     - **Flexbox Resize & UI Oomph**: 
         - Resolved a display glitch when resizing the Chart View horizontally by forcing `min-height: 0` on containers and strict `100%` dimensions on the `<canvas>`.
         - Made the Chart configuration header (`chart-config-bar`) opaque and sticky to ensure it remains legible and "on top" when the view is resized or scrolled.

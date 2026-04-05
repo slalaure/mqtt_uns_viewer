@@ -109,5 +109,26 @@ describe('Chart Logic', () => {
             expect(datasets[0].borderColor).toBe(customColor);
             expect(datasets[0].backgroundColor).toBe(customColor);
         });
+
+        test('should provide color variation for variables on the same axis', () => {
+            const rawPointsMap = new Map([
+                ['var1', [{x: 100, y: 1}]],
+                ['var2', [{x: 100, y: 2}]]
+            ]);
+            // Both variables will share the 'temperature' axisKey
+            const chartedVariables = new Map([
+                ['var1', { topic: 'site1/room1', path: 'temperature' }],
+                ['var2', { topic: 'site1/room2', path: 'temperature' }]
+            ]);
+            
+            const { datasets } = buildChartDatasets(rawPointsMap, chartedVariables, {
+                useSmartAxis: true,
+                distinctAxes: ['temperature']
+            });
+
+            expect(datasets.length).toBe(2);
+            expect(datasets[0].yAxisID).toBe(datasets[1].yAxisID); // Same axis (temperature)
+            expect(datasets[0].borderColor).not.toBe(datasets[1].borderColor); // Different color variations
+        });
     });
 });

@@ -14,6 +14,7 @@ class ChartVariableList extends HTMLElement {
         this.chartedVariables = new Map(); // Inherited from parent to know what's checked
         this.currentTopic = null;
         this.currentSourceId = null;
+        this.effectiveColors = new Map(); // Store generated colors to sync UI with chart
     }
 
     connectedCallback() {
@@ -25,6 +26,11 @@ class ChartVariableList extends HTMLElement {
         this.currentSourceId = sourceId;
         this.variables = variables || [];
         this.chartedVariables = chartedVariablesMap || new Map();
+        this.renderList();
+    }
+
+    setEffectiveColors(colorsMap) {
+        this.effectiveColors = colorsMap || new Map();
         this.renderList();
     }
 
@@ -84,7 +90,8 @@ class ChartVariableList extends HTMLElement {
                 const info = this.chartedVariables.get(varId);
                 const colorInput = document.createElement('input');
                 colorInput.type = 'color';
-                colorInput.value = info.color || '#3366cc';
+                // Use user override if exists, otherwise fallback to the generated effective color, otherwise default blue.
+                colorInput.value = info.color || this.effectiveColors.get(varId) || '#3366cc';
                 colorInput.className = 'var-color-picker';
                 colorInput.title = 'Change line color';
                 colorInput.oninput = (e) => {
@@ -109,8 +116,7 @@ class ChartVariableList extends HTMLElement {
                     this.chartedVariables.set(varId, {
                         sourceId: this.currentSourceId,
                         topic: this.currentTopic,
-                        path: variable.path,
-                        color: '#3366cc' // Default color
+                        path: variable.path
                     });
                 } else {
                     this.chartedVariables.delete(varId);
