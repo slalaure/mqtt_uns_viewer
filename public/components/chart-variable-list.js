@@ -31,7 +31,25 @@ class ChartVariableList extends HTMLElement {
 
     setEffectiveColors(colorsMap) {
         this.effectiveColors = colorsMap || new Map();
-        this.renderList();
+        
+        // Update existing inputs without rebuilding the DOM to prevent closing the native color picker
+        const tbody = this.querySelector('tbody');
+        if (!tbody) return; // Not rendered yet
+
+        this.variables.forEach(variable => {
+            const varId = `${this.currentSourceId}::${this.currentTopic}::${variable.path}`;
+            const info = this.chartedVariables.get(varId);
+            if (info) {
+                const input = tbody.querySelector(`input.var-color-picker[data-var-id="${CSS.escape(varId)}"]`);
+                if (input) {
+                    // Only update the visual color if the user hasn't forced a manual color
+                    // and the input is not currently being interacted with.
+                    if (!info.color && document.activeElement !== input) {
+                        input.value = this.effectiveColors.get(varId) || '#3366cc';
+                    }
+                }
+            }
+        });
     }
 
 
@@ -90,6 +108,7 @@ class ChartVariableList extends HTMLElement {
                 const info = this.chartedVariables.get(varId);
                 const colorInput = document.createElement('input');
                 colorInput.type = 'color';
+                colorInput.dataset.varId = varId;
                 // Use user override if exists, otherwise fallback to the generated effective color, otherwise default blue.
                 colorInput.value = info.color || this.effectiveColors.get(varId) || '#3366cc';
                 colorInput.className = 'var-color-picker';

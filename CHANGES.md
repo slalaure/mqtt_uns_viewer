@@ -27,6 +27,7 @@
         - Restored the "Smart Color" feature: variables now receive intelligent default colors based on semantic naming (e.g., Red for temperature, Blue for water/humidity) even when not manually set.
         - Improved "Smart Axis" behavior: variables sharing the same axis now get slight color variations (saturation/lightness) instead of being identical, making them easier to distinguish.
         - Fixed the color picker in `chart-variable-list.js` to correctly display and allow manual overrides without forcing a global default.
+        - **Live Mode Color Picker Fix**: Prevented the native OS color picker from aggressively closing during live chart updates. The UI component (`chart-variable-list.js`) now patches DOM `<input type="color">` values directly rather than triggering a full re-render, ensuring the user can take their time selecting a custom color even when data is flowing.
     - **Flexbox Resize & UI Oomph**: 
         - Resolved a display glitch when resizing the Chart View horizontally by forcing `min-height: 0` on containers and strict `100%` dimensions on the `<canvas>`.
         - Made the Chart configuration header (`chart-config-bar`) opaque and sticky to ensure it remains legible and "on top" when the view is resized or scrolled.
