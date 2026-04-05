@@ -11,9 +11,10 @@
 - **Backend API Hardening**: 
     - Added missing `GET` and `PUT` routes in `interfaces/web/adminApi.js` for `/hmi-assets/:filename` and `/simulators/:filename` to allow reading and updating files from the Admin code editor.
     - Exposed `MapperEngine.deleteVersion()` to allow safe deletion of non-active mapper versions via the Admin UI.
-- **WIP: Alerts & Chart View Web Components Refactoring**:
+- **View Refactoring & Web Component Migration**:
+    - **Mapper View**: Successfully refactored `view.mapper.js` to follow the Managed View pattern. Extracted DOM to `view.mapper.html`. Resizer initialization and lifecycle management (mount/unmount) are now properly encapsulated.
     - **Alerts View**: Successfully split `view.alerts.js` into `<alerts-active-panel>` and `<alerts-rules-panel>`. DOM extracted to `view.alerts.html`.
-    - **Chart View (BROKEN STATE)**: Started refactoring `view.chart.js` to use `<chart-config-bar>`, `<chart-time-slider>`, and `<chart-variable-list>`. DOM extracted to `view.chart.html`. The view is currently broken: selecting a node in the tree shows "No numeric properties found in this payload" and chart generation fails. Needs further debugging on event bubbling and variable mapping logic.
+    - **Chart View**: Fully refactored to use `<chart-config-bar>`, `<chart-time-slider>`, and `<chart-variable-list>`. DOM extracted to `view.chart.html`.
     - Exposed `AlertManager.purgeResolvedAlerts()` to allow database maintenance (Delete + Vacuum) via the Admin UI.
 - **Protocol-Agnostic Refactoring**:
     - Renamed `state.currentBrokerId` to `state.currentSourceId` in `public/state.js` to generalize across different data providers (MQTT, OPC UA, HTTP, etc.).

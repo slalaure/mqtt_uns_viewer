@@ -1,0 +1,106 @@
+<div class="mapper-tree-wrapper">
+    <div class="tree-controls">
+        <input type="text" id="mapper-filter-input" placeholder="Filter topics...">
+        <button id="btn-mapper-expand-all" class="tool-button" title="Expand All">▲</button>
+        <button id="btn-mapper-collapse-all" class="tool-button" title="Collapse All">▼</button>
+    </div>
+    <div id="mapper-tree" class="tree-container">
+    </div>
+</div>
+<div class="resizer" id="drag-handle-vertical-mapper"></div>
+<div id="mapper-payload-container" class="payload-container">
+    <div id="mapper-payload-area" class="payload-main-area">
+        <div class="payload-header">
+            <h2>Payload (Source)</h2>
+        </div>
+        <div id="mapper-payload-topic" class="payload-topic-display">Select a topic from the Mapper tree.
+        </div>
+        <pre id="mapper-payload-content"></pre>
+    </div>
+    <div class="resizer-horizontal" id="drag-handle-horizontal-mapper"></div>
+    <div id="mapper-transform-area" class="topic-history-container">
+        <div class="mapper-controls">
+            <div class="form-group">
+                <label for="mapper-version-select">Active Version:</label>
+                <select id="mapper-version-select"></select>
+            </div>
+            <button id="mapper-save-button" class="tool-button button-primary">Save</button>
+            <button id="mapper-save-as-new-button" class="tool-button">Save as New...</button>
+            <span id="mapper-save-status"></span>
+        </div>
+        <div id="mapper-transform-placeholder" class="history-placeholder">
+            <p>Select a topic in the Mapper tree to create or edit its transformation rules.</p>
+        </div>
+        <form id="mapper-transform-form" style="display: none;">
+            <div class="mapper-transform-header">
+                <div class="form-group">
+                    <label for="mapper-source-topic">Source Topic (Pattern):</label>
+                    <input type="text" id="mapper-source-topic" readonly>
+                </div>
+                <button type="button" id="mapper-add-target-button" class="tool-button">Add Target</button>
+            </div>
+            <div id="mapper-targets-list">
+            </div>
+            <div id="mapper-targets-placeholder" class="history-placeholder" style="display: none;">
+                <p>No targets defined for this rule. Click "Add Target" to create one.</p>
+            </div>
+            <template id="mapper-target-template">
+                <div class="mapper-target-editor collapsed">
+                    <div class="target-editor-header">
+                        <div style="display:flex; align-items:center; gap:10px; flex-grow:1;">
+                            <button type="button" class="target-toggle-collapse" title="Toggle Details">▶</button>
+                            <input type="text" class="target-editor-title-input" title="Target Name" placeholder="Target Name">
+                        </div>
+                        <div class="target-editor-controls">
+                            <button type="button" class="target-save-maximized tool-button button-primary" style="display:none; margin-right:15px;">💾 Save Live</button>
+                            <button type="button" class="target-minimize-button tool-button" style="display:none; margin-right:15px;">✖ Minimize</button>
+                            <input type="checkbox" class="target-enabled-toggle">
+                            <label class="checkbox-label" style="margin-right: 15px;">Enabled</label>
+                            <button type="button" class="target-delete-button tool-button button-danger">Delete</button>
+                        </div>
+                    </div>
+                    <div class="target-editor-body">
+                        <div class="target-settings-row" style="display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px; padding-bottom:15px; border-bottom:1px dashed var(--color-border-secondary);">
+                            <div class="form-group routing-mode-group" style="flex:1; min-width: 250px; margin:0;">
+                                <label style="margin-bottom:5px;">Routing Mode:</label>
+                                <select class="routing-mode-select" style="width: 100%;">
+                                    <option value="ui">UI Defined (Publish single 'msg' to topics below)</option>
+                                    <option value="code">Code Defined (Return array of {topic, payload})</option>
+                                </select>
+                            </div>
+                            <div class="form-group target-topic-group" style="flex:2; min-width: 300px; margin:0;">
+                                <label style="margin-bottom:5px;">Target Topic(s) (comma-separated)</label>
+                                <input type="text" class="target-output-topic" placeholder="e.g., my_uns/facility/{{id}}">
+                            </div>
+                        </div>
+                        <div class="target-workspace">
+                            <div class="target-code-group">
+                                <div class="target-code-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                    <label class="target-code-label" style="margin:0;">Transform (JavaScript)</label>
+                                    <button type="button" class="target-maximize-code tool-button" style="font-size:0.8em; padding:4px 10px;">⛶ Maximize</button>
+                                </div>
+                                <div class="target-code-editor" spellcheck="false"></div>
+                            </div>
+                            <div class="target-side-panel">
+                                <div class="maximized-payload-ref">
+                                    <label style="margin:0 0 10px 0; font-weight:bold; border-bottom:1px solid var(--color-border); padding-bottom:5px;">Source Payload Reference</label>
+                                    <pre class="maximized-payload-content"></pre>
+                                </div>
+                                <div class="target-metrics">
+                                    <h5 class="target-metrics-title">Metrics</h5>
+                                    <div class="target-metrics-counter">Count: <span class="metric-count">0</span></div>
+                                    <div class="target-metrics-logs">
+                                        <h6 class="target-logs-title">Recent Executions:</h6>
+                                        <div class="target-logs-list">
+                                            <p class="history-placeholder">No executions yet.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </form>
+    </div>
+</div>

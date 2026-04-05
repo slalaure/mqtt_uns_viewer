@@ -945,7 +945,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 requestRangeCallback: requestHistoryRange,
                 colorChartTreeCallback: colorChartTree,
                 maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
-                isMultiBroker: isMultiBroker
+                isMultiBroker: isMultiBroker,
+                makeResizable: makeResizable
             });
         }
 
@@ -958,7 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isMultiBroker: isMultiBroker
         });
 
-        mainTree = createTreeManager(document.getElementById('mqtt-tree'), {
+        mainTree = createTreeManager('mqtt-tree', {
             treeId: 'main',
             onNodeClick: handleMainTreeClick,
             onCheckboxClick: handleMainTreeCheckboxClick,
@@ -968,7 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
             providersMap: providersMap
         });
 
-        mapperTree = createTreeManager(document.getElementById('mapper-tree'), {
+        mapperTree = createTreeManager('mapper-tree', {
             treeId: 'mapper',
             onNodeClick: (e, node, sourceId, topic) => {
                 if (!topic && node.dataset.isI3x !== "true") {
@@ -989,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (appConfig.viewChartEnabled) {
-            chartTree = createTreeManager(document.getElementById('chart-tree'), {
+            chartTree = createTreeManager('chart-tree', {
                 treeId: 'chart',
                 onNodeClick: (e, node, sourceId, topic) => {
                     if (!topic && node.dataset.isI3x !== "true") {
@@ -1032,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (appConfig.viewMapperEnabled) {
-            initMapperView({
+            await initMapperView({
                 pruneTopicFromFrontend: pruneTopicFromFrontend,
                 getSubscribedTopics: () => subscribedTopicPatterns,
                 colorAllTrees: colorAllMapperTrees,
@@ -1043,7 +1044,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 maxSavedMapperVersions: appConfig.maxSavedMapperVersions || 0,
                 isMultiBroker: isMultiBroker,
                 brokerConfigs: brokerConfigs,
-                dataProviders: dataProviders
+                dataProviders: dataProviders,
+                makeResizable: makeResizable
             });
         }
 
@@ -1084,10 +1086,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical'), direction: 'vertical', panelA: treeViewWrapper });
         makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal'), direction: 'horizontal', panelA: payloadMainArea, containerEl: payloadContainer });
-        makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-mapper'), direction: 'vertical', panelA: document.querySelector('.mapper-tree-wrapper') });
-        makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal-mapper'), direction: 'horizontal', panelA: document.getElementById('mapper-payload-area'), containerEl: document.getElementById('mapper-payload-container') });
-        makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-chart'), direction: 'vertical', panelA: document.querySelector('.chart-tree-wrapper') });
-        makeResizable({ resizerEl: document.getElementById('drag-handle-horizontal-chart'), direction: 'horizontal', panelA: document.getElementById('chart-payload-area'), containerEl: document.getElementById('chart-payload-container') });
         makeResizable({ resizerEl: document.getElementById('drag-handle-vertical-publish'), direction: 'vertical', panelA: document.querySelector('.publish-panel-wrapper') });
 
         livePayloadToggle?.addEventListener('change', (event) => {

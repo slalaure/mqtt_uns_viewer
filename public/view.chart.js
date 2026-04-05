@@ -276,6 +276,21 @@ export async function initChartView(callbacks) {
 
   initializeElements();
 
+  // Initialize resizers
+  if (appCallbacks.makeResizable) {
+    appCallbacks.makeResizable({
+      resizerEl: document.getElementById("drag-handle-vertical-chart"),
+      direction: "vertical",
+      panelA: document.querySelector(".chart-tree-wrapper"),
+    });
+    appCallbacks.makeResizable({
+      resizerEl: document.getElementById("drag-handle-horizontal-chart"),
+      direction: "horizontal",
+      panelA: document.getElementById("chart-payload-area"),
+      containerEl: document.getElementById("chart-payload-container"),
+    });
+  }
+
   if (configBar) {
     const typeSelect = configBar.getTypeSelect();
     if (typeSelect) {
@@ -643,9 +658,9 @@ function findNumericKeys(obj, path = "", list = []) {
   return list;
 }
 
-function renderVariableList(topic, brokerId, variables) {
+function renderVariableList(topic, sourceId, variables) {
   if (chartVariableList) {
-    chartVariableList.updateData(topic, brokerId, variables, chartedVariables);
+    chartVariableList.updateData(topic, sourceId, variables, chartedVariables);
   }
 }
 

@@ -15,7 +15,7 @@
  * [UPDATED] Smart fallback for dynamically created providers (e.g., CSV Parsers).
  */
 
-export function createTreeManager(rootElement, options = {}) {
+export function createTreeManager(rootElementOrId, options = {}) {
     const { 
         treeId, 
         onNodeClick, 
@@ -26,7 +26,13 @@ export function createTreeManager(rootElement, options = {}) {
         providersMap = {} // Maps provider/broker ID to technology type (mqtt, opcua, file...)
     } = options;
 
-    const rootNode = rootElement;
+    function getRootNode() {
+        if (typeof rootElementOrId === 'string') {
+            return document.getElementById(rootElementOrId);
+        }
+        return rootElementOrId;
+    }
+
     let nodeMap = new Map(); // Stores references to <li> elements by topic path
 
     // --- [NEW] I3X Mode State ---
@@ -54,17 +60,20 @@ export function createTreeManager(rootElement, options = {}) {
      * Organizes hierarchy by: Technology Type -> Provider ID -> Topic hierarchy
      */
     function update(sourceId, topic, payload, timestamp, updateOptions = {}) {
+        const rootNode = getRootNode();
+        if (!rootNode) return null;
+
         // Block live MQTT updates if we are currently viewing the I3X Semantic Model
         if (isI3xModeActive) return null;
 
         const { enableAnimations = false } = updateOptions;
         
-        const safeBrokerId = sourceId || 'default';
-        const providerType = getProviderType(safeBrokerId);
+        const safeSourceId = sourceId || 'default';
+        const providerType = getProviderType(safeSourceId);
         
         // Remove leading slashes to prevent empty parts
         const cleanTopic = topic.replace(/^\//, '');
-        const displayTopic = `${providerType}/${safeBrokerId}/${cleanTopic}`;
+        const displayTopic = `${providerType}/${safeSourceId}/${cleanTopic}`;
         
         const parts = displayTopic.split('/');
         let currentTopicPath = '';
@@ -126,7 +135,7 @@ export function createTreeManager(rootElement, options = {}) {
                     <span class="node-timestamp"></span>
                 `;
 
-                nodeContainer.dataset.sourceId = safeBrokerId;
+                nodeContainer.dataset.sourceId = safeSourceId;
                 nodeContainer.dataset.topic = nodeSpecificTopic; 
 
                 // Semantic drag and drop fallback for data endpoints
@@ -136,7 +145,7 @@ export function createTreeManager(rootElement, options = {}) {
                         const dragPayload = {
                             type: 'topic',
                             path: nodeSpecificTopic,
-                            sourceId: safeBrokerId
+                            sourceId: safeSourceId
                         };
                         e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
                         e.dataTransfer.effectAllowed = 'copy';
@@ -169,7 +178,7 @@ export function createTreeManager(rootElement, options = {}) {
                 nodeMap.set(currentTopicPath, li);
 
                 if (onNodeClick) {
-                    nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
+                    nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, safeSourceId, nodeSpecificTopic));
                 }
 
                 // Add double-click to toggle folders
@@ -182,7 +191,7 @@ export function createTreeManager(rootElement, options = {}) {
                 });
 
                 if (showCheckboxes && onCheckboxClick) {
-                     nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, safeBrokerId, nodeSpecificTopic));
+                     nodeContainer.querySelector('.node-filter-checkbox').addEventListener('click', (e) => onCheckboxClick(e, nodeContainer, safeSourceId, nodeSpecificTopic));
                 }
             }
 
@@ -231,16 +240,21 @@ export function createTreeManager(rootElement, options = {}) {
      * Wipes and rebuilds the tree from a list of topic entries.
      */
     function rebuild(entries) {
-        // Cache the raw MQTT state
-        lastMqttEntries = entries;
-        if (isI3xModeActive) return; // Do not rebuild MQTT tree if I3X mode is active
+         const rootNode = getRootNode();
+         if (!rootNode) return;
 
-        console.log(`[tree-manager ${treeId}] Rebuilding tree with ${entries.length} topics...`); 
-        const rootUl = rootNode.querySelector(':scope > ul');
-        if (rootUl) {
-            rootUl.innerHTML = '';
-        }
-        nodeMap.clear();
+         // Cache the raw MQTT state
+         lastMqttEntries = entries;
+         if (isI3xModeActive) return; // Do not rebuild MQTT tree if I3X mode is active
+
+         console.log(`[tree-manager ${treeId}] Rebuilding tree with ${entries.length} topics...`); 
+         const rootUl = rootNode.querySelector(':scope > ul');
+         if (rootUl) {
+             rootUl.innerHTML = '';
+         } else {
+             rootNode.innerHTML = '<ul></ul>';
+         }
+         nodeMap.clear();
 
         const sortedEntries = entries.sort((a, b) => {
             const brokerA = a.source_id || a.sourceId || 'default';
@@ -271,6 +285,8 @@ export function createTreeManager(rootElement, options = {}) {
      * Fetches instances from the I3X API and builds a hierarchical tree based on `parentId`.
      */
     async function setI3xMode(mode) {
+        const rootNode = getRootNode();
+        if (!rootNode) return;
         isI3xModeActive = mode;
         if (mode) {
             const rootUl = rootNode.querySelector(':scope > ul');
@@ -296,6 +312,8 @@ export function createTreeManager(rootElement, options = {}) {
      * resolving children and complex graph relationship edges.
      */
     function buildI3xTree(objects) {
+        const rootNode = getRootNode();
+        if (!rootNode) return;
         if (!objects || !Array.isArray(objects)) return;
 
         let rootUl = rootNode.querySelector(':scope > ul');
@@ -468,6 +486,8 @@ export function createTreeManager(rootElement, options = {}) {
      * Applies coloring logic to all nodes in this tree.
      */
     function colorTree(colorLogicFn) {
+        const rootNode = getRootNode();
+        if (!rootNode) return;
         rootNode.querySelectorAll('li > .node-container').forEach(nodeContainer => {
             const li = nodeContainer.closest('li');
             const sourceId = nodeContainer.dataset.sourceId;
@@ -479,6 +499,8 @@ export function createTreeManager(rootElement, options = {}) {
     }
 
     function toggleAllFolders(collapse) {
+        const rootNode = getRootNode();
+        if (!rootNode) return;
         const rootUl = rootNode.querySelector(':scope > ul');
         if (!rootUl) return;
         rootUl.querySelectorAll('.is-folder').forEach(folderLi => {
@@ -520,6 +542,8 @@ export function createTreeManager(rootElement, options = {}) {
     }
 
     function applyFilter(filterText) {
+        const rootNode = getRootNode();
+        if (!rootNode) return;
         const rootUl = rootNode.querySelector(':scope > ul');
         if (!rootUl) return; 
         const allNodes = rootUl.querySelectorAll(':scope > li');
@@ -535,6 +559,7 @@ export function createTreeManager(rootElement, options = {}) {
         toggleAllFolders,
         applyFilter,
         isTopicVisible: (targetLi) => {
+            const rootNode = getRootNode();
             let currentNode = targetLi;
             while (currentNode && currentNode !== rootNode) {
                 if (showCheckboxes) {

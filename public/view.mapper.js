@@ -9,11 +9,6 @@
  * @copyright (c) 2025 Sebastien Lalaurette
  *
  * View module for the Mapper tab.
- * [UPDATED] Protocol-agnostic data providers support (MQTT, OPC UA, FILE, etc.).
- * [UPDATED] Dynamic injection of new Data Providers to support loopback streams.
- * [UPDATED] Migrated to Proxy-based reactive state for unsaved changes tracking.
- * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
- * [UPDATED] Removed aggressive 'is-folder' check that prevented creating mapping rules on parent nodes.
  */
 
 // Import shared utilities and state
@@ -22,19 +17,19 @@ import { mqttPatternToClientRegex, trackEvent, showToast } from './utils.js';
 import { createPayloadViewer } from './payload-viewer.js';
 import './components/mapper-target-editor.js';
 
-// --- DOM Element Querying ---
-const mapperTransformPlaceholder = document.getElementById('mapper-transform-placeholder');
-const mapperTransformForm = document.getElementById('mapper-transform-form');
-const mapperVersionSelect = document.getElementById('mapper-version-select');
-const mapperSaveButton = document.getElementById('mapper-save-button');
-const mapperSaveAsNewButton = document.getElementById('mapper-save-as-new-button');
-const mapperSaveStatus = document.getElementById('mapper-save-status');
+// --- DOM Element References (Initialized on mount) ---
+let mapperViewContainer = null;
+let mapperTransformPlaceholder = null;
+let mapperTransformForm = null;
+let mapperVersionSelect = null;
+let mapperSaveButton = null;
+let mapperSaveAsNewButton = null;
+let mapperSaveStatus = null;
 
-const mapperSourceTopicInput = document.getElementById('mapper-source-topic');
-const mapperAddTargetButton = document.getElementById('mapper-add-target-button');
-const mapperTargetsList = document.getElementById('mapper-targets-list');
-const mapperTargetsPlaceholder = document.getElementById('mapper-targets-placeholder');
-const mapperTargetTemplate = document.getElementById('mapper-target-template');
+let mapperSourceTopicInput = null;
+let mapperAddTargetButton = null;
+let mapperTargetsList = null;
+let mapperTargetsPlaceholder = null;
 
 const deleteModalBackdrop = document.getElementById('delete-rule-modal-backdrop');
 const deleteModalTopic = document.getElementById('delete-modal-topic');
@@ -78,14 +73,8 @@ let availableProviders = []; // Store combined provider configs
 let aceEditors = new Map(); 
 let isDarkTheme = localStorage.getItem('theme') === 'dark'; 
 let isMounted = false;
-
-let payloadViewer = createPayloadViewer({
-    topicEl: document.getElementById('mapper-payload-topic'),
-    contentEl: document.getElementById('mapper-payload-content'),
-    historyLogEl: null, 
-    placeholderEl: null,
-    isMultiBroker: false 
-});
+let isTemplateLoaded = false;
+let payloadViewer = null;
 
 // --- Callbacks from main app.js ---
 let appCallbacks = {
@@ -93,6 +82,7 @@ let appCallbacks = {
     getSubscribedTopics: () => ['#'], 
     colorAllTrees: () => console.error("colorAllTrees callback not set"),
     addPruneIgnorePattern: () => console.error("addPruneIgnorePattern callback not set"),
+    makeResizable: () => console.error("makeResizable callback not set"),
 };
 
 export function setMapperTheme(isDark) {
@@ -121,22 +111,67 @@ const onMapperUnsavedChange = (isUnsaved) => {
 /**
  * Initializes the Mapper View configuration (Called once on app start).
  */
-export function initMapperView(callbacks) {
-    const { displayPayload, maxSavedMapperVersions, isMultiBroker: multiBrokerState, brokerConfigs: bConfigs, dataProviders: pConfigs, ...otherCallbacks } = callbacks;
+export async function initMapperView(callbacks) {
+    const { isMultiBroker: multiBrokerState, brokerConfigs: bConfigs, dataProviders: pConfigs, ...otherCallbacks } = callbacks;
     appCallbacks = { ...appCallbacks, ...otherCallbacks };
-    maxMappersLimit = maxSavedMapperVersions || 0; 
+    maxMappersLimit = callbacks.maxSavedMapperVersions || 0; 
     isMultiProvider = multiBrokerState || false;
 
     // Merge brokers and other providers
     availableProviders = [...(bConfigs || []), ...(pConfigs || [])];
+
+    // Load the template
+    try {
+        const response = await fetch('html/view.mapper.html');
+        const html = await response.text();
+        const container = document.getElementById('mapper-view');
+        if (container) {
+            container.innerHTML = html;
+            isTemplateLoaded = true;
+        }
+    } catch (error) {
+        console.error('Failed to load mapper template:', error);
+    }
+
+    initializeElements();
+
+    // Initialize resizers
+    if (appCallbacks.makeResizable) {
+        appCallbacks.makeResizable({ 
+            resizerEl: document.getElementById('drag-handle-vertical-mapper'), 
+            direction: 'vertical', 
+            panelA: document.querySelector('.mapper-tree-wrapper') 
+        });
+        appCallbacks.makeResizable({ 
+            resizerEl: document.getElementById('drag-handle-horizontal-mapper'), 
+            direction: 'horizontal', 
+            panelA: document.getElementById('mapper-payload-area'), 
+            containerEl: document.getElementById('mapper-payload-container') 
+        });
+    }
+
+    loadMapperConfig(); 
+}
+
+function initializeElements() {
+    mapperViewContainer = document.getElementById('mapper-view');
+    mapperTransformPlaceholder = document.getElementById('mapper-transform-placeholder');
+    mapperTransformForm = document.getElementById('mapper-transform-form');
+    mapperVersionSelect = document.getElementById('mapper-version-select');
+    mapperSaveButton = document.getElementById('mapper-save-button');
+    mapperSaveAsNewButton = document.getElementById('mapper-save-as-new-button');
+    mapperSaveStatus = document.getElementById('mapper-save-status');
+
+    mapperSourceTopicInput = document.getElementById('mapper-source-topic');
+    mapperAddTargetButton = document.getElementById('mapper-add-target-button');
+    mapperTargetsList = document.getElementById('mapper-targets-list');
+    mapperTargetsPlaceholder = document.getElementById('mapper-targets-placeholder');
 
     payloadViewer = createPayloadViewer({
         topicEl: document.getElementById('mapper-payload-topic'),
         contentEl: document.getElementById('mapper-payload-content'),
         isMultiBroker: isMultiProvider 
     });
-
-    loadMapperConfig(); 
 }
 
 /**
@@ -163,8 +198,11 @@ const onCurrentTopicChange = (topic) => {
     }
 };
 
-export function mountMapperView() {
+export async function mountMapperView() {
     if (isMounted) return;
+
+    // ensure elements are initialized if mount called after a long time or if elements lost
+    initializeElements();
 
     // --- Reactive State Subscriptions ---
     subscribe('mapperUnsaved', onMapperUnsavedChange);
@@ -198,6 +236,8 @@ export function mountMapperView() {
         renderTransformEditor(currentEditingSourceId, currentEditingSourceTopic);
     }
 
+    updateMapperVersionSelector();
+
     isMounted = true;
     console.log("[Mapper View] Mounted.");
 }
@@ -214,9 +254,7 @@ export function unmountMapperView() {
 
     // Clear the UI so it cleanly rebuilds on next mount
     if (mapperTargetsList) mapperTargetsList.innerHTML = '';
-    if (mapperTransformPlaceholder) mapperTransformPlaceholder.style.display = 'block';
-    if (mapperTransformForm) mapperTransformForm.style.display = 'none';
-
+    
     // Remove Event Listeners
     mapperSaveButton?.removeEventListener('click', onSave);
     mapperSaveAsNewButton?.removeEventListener('click', onSaveAsNew);
@@ -244,29 +282,26 @@ export function updateMapperMetrics(newMetrics) {
 export function updateMapperConfig(newConfig) {
     console.log("Received config update from server");
     mapperConfig = newConfig;
-    updateMapperVersionSelector();
+    if (isMounted) updateMapperVersionSelector();
     appCallbacks.colorAllTrees(); 
 }
 
 /**
  * Handle click on mapper tree node.
- * Restored capability to click on folder nodes to create wildcard rules.
  */
 export function handleMapperNodeClick(event, nodeContainer, sourceId, topic) {
-    const li = nodeContainer.closest('li');
+    if (!isMounted) return;
 
-    // Display payload info (folders usually won't have a payload, but that's fine)
+    // Display payload info
     const payload = nodeContainer.dataset.payload; 
-    payloadViewer.display(sourceId, topic, payload);
+    if (payloadViewer) payloadViewer.display(sourceId, topic, payload);
     currentEditingPayload = payload; // Save for maximized editor reference
 
     // Enable editor for the node
     currentEditingSourceId = sourceId;
     currentEditingSourceTopic = topic;
     
-    if (isMounted) {
-        renderTransformEditor(sourceId, topic);
-    }
+    renderTransformEditor(sourceId, topic);
 }
 
 export function getMapperConfig() {
@@ -321,7 +356,7 @@ async function loadMapperConfig() {
         if (!response.ok) throw new Error('Failed to fetch mapper config');
         
         mapperConfig = await response.json();
-        updateMapperVersionSelector();
+        if (isMounted) updateMapperVersionSelector();
         appCallbacks.colorAllTrees();
     } catch (error) {
         console.error('Error loading mapper config:', error);
@@ -362,25 +397,28 @@ function getRuleForTopic(sourceTopic, createIfMissing = false) {
 }
 
 function renderTransformEditor(sourceId, sourceTopic) {
-    mapperTransformPlaceholder.style.display = 'none';
-    mapperTransformForm.style.display = 'flex';
+    if (!isMounted) return;
+    if (mapperTransformPlaceholder) mapperTransformPlaceholder.style.display = 'none';
+    if (mapperTransformForm) mapperTransformForm.style.display = 'flex';
     
-    const displayTopic = isMultiProvider ? `[${sourceId}] ${sourceTopic}` : sourceTopic;
-    mapperSourceTopicInput.value = displayTopic; 
+    if (mapperSourceTopicInput) {
+        const displayTopic = isMultiProvider ? `[${sourceId}] ${sourceTopic}` : sourceTopic;
+        mapperSourceTopicInput.value = displayTopic; 
+    }
 
     aceEditors.forEach(editor => editor.destroy());
     aceEditors.clear();
-    mapperTargetsList.innerHTML = ''; 
+    if (mapperTargetsList) mapperTargetsList.innerHTML = ''; 
 
     const rule = getRuleForTopic(sourceTopic, false); 
     
     if (!rule || rule.targets.length === 0) {
-        mapperTargetsPlaceholder.style.display = 'block';
+        if (mapperTargetsPlaceholder) mapperTargetsPlaceholder.style.display = 'block';
     } else {
-        mapperTargetsPlaceholder.style.display = 'none';
+        if (mapperTargetsPlaceholder) mapperTargetsPlaceholder.style.display = 'none';
         rule.targets.forEach(target => {
             const targetEditor = createTargetEditor(rule, target);
-            mapperTargetsList.appendChild(targetEditor);
+            if (mapperTargetsList) mapperTargetsList.appendChild(targetEditor);
         });
     }
 
@@ -434,7 +472,6 @@ function generateUniqueTargetName(sourceTopic, rule) {
 
 /**
  * Creates the DOM for a single target editor.
- * [REFACTORED] Now uses MapperTargetEditor custom Web Component.
  */
 function createTargetEditor(rule, target) {
     const targetEditor = document.createElement('mapper-target-editor');
@@ -449,7 +486,7 @@ function createTargetEditor(rule, target) {
                 // Additional logic if needed
             },
             onDelete: (rule, target) => {
-                showPruneModal(rule, target, currentEditingBrokerId, currentEditingSourceTopic); 
+                showPruneModal(rule, target, currentEditingSourceId, currentEditingSourceTopic); 
             },
             onValidateTopic: (topicValue, isSourceSparkplug) => {
                 let warning = '';
@@ -551,7 +588,7 @@ function onAddTarget() {
 }
 
 function updateMetricsForEditor(sourceTopic) {
-    if (!sourceTopic || sourceTopic !== currentEditingSourceTopic) return;
+    if (!isMounted || !sourceTopic || sourceTopic !== currentEditingSourceTopic) return;
     
     const rule = getRuleForTopic(sourceTopic, false);
     if (!rule) return;
@@ -752,8 +789,8 @@ function onVersionChange() {
     if (currentEditingSourceTopic) {
         renderTransformEditor(currentEditingSourceId, currentEditingSourceTopic);
     } else {
-        mapperTransformPlaceholder.style.display = 'block';
-        mapperTransformForm.style.display = 'none';
+        if (mapperTransformPlaceholder) mapperTransformPlaceholder.style.display = 'block';
+        if (mapperTransformForm) mapperTransformForm.style.display = 'none';
     }
     appCallbacks.colorAllTrees();
 }
@@ -763,14 +800,14 @@ function onVersionChange() {
 function showPruneModal(rule, target, sourceId, topic) {
     deleteModalContext = { rule, target, sourceId, topic }; 
     const displayTopic = isMultiProvider ? `[${sourceId}] ${target.outputTopic}` : target.outputTopic;
-    deleteModalTopic.textContent = displayTopic;
+    if (deleteModalTopic) deleteModalTopic.textContent = displayTopic;
     let pattern = target.outputTopic; // Note: For prune, might need manual edit if multiple topics
-    deleteModalPattern.value = pattern;
-    deleteModalBackdrop.style.display = 'flex';
+    if (deleteModalPattern) deleteModalPattern.value = pattern;
+    if (deleteModalBackdrop) deleteModalBackdrop.style.display = 'flex';
 }
 
 function hidePruneModal() {
-    deleteModalBackdrop.style.display = 'none';
+    if (deleteModalBackdrop) deleteModalBackdrop.style.display = 'none';
     deleteModalContext = null;
 }
 
@@ -796,9 +833,9 @@ function onDeleteRule() {
         
         currentEditingSourceId = null; 
         currentEditingSourceTopic = null;
-        mapperTransformPlaceholder.style.display = 'block';
-        mapperTransformForm.style.display = 'none';
-        payloadViewer.clear(); 
+        if (mapperTransformPlaceholder) mapperTransformPlaceholder.style.display = 'block';
+        if (mapperTransformForm) mapperTransformForm.style.display = 'none';
+        if (payloadViewer) payloadViewer.clear(); 
     } else {
         renderTransformEditor(sourceId, topic); 
     }
@@ -812,11 +849,11 @@ async function onDeleteAndPrune() {
     if (!deleteModalContext) return;
 
     const { rule, target, sourceId, topic } = deleteModalContext;
-    const topicPattern = deleteModalPattern.value;
+    const topicPattern = deleteModalPattern ? deleteModalPattern.value : '';
 
     appCallbacks.addPruneIgnorePattern(topicPattern);
 
-    modalBtnDeletePrune.disabled = true;
+    if (modalBtnDeletePrune) modalBtnDeletePrune.disabled = true;
     showToast('Purging history...', 'info');
 
     try {
@@ -859,9 +896,9 @@ async function onDeleteAndPrune() {
         if(ruleWasRemoved) {
             currentEditingSourceId = null; 
             currentEditingSourceTopic = null;
-            mapperTransformPlaceholder.style.display = 'block';
-            mapperTransformForm.style.display = 'none';
-            payloadViewer.clear(); 
+            if (mapperTransformPlaceholder) mapperTransformPlaceholder.style.display = 'block';
+            if (mapperTransformForm) mapperTransformForm.style.display = 'none';
+            if (payloadViewer) payloadViewer.clear(); 
         } else {
             renderTransformEditor(sourceId, topic); 
         }
@@ -873,7 +910,7 @@ async function onDeleteAndPrune() {
         showToast(`Prune failed: ${err.message}`, 'error');
         hidePruneModal();
     } finally {
-            modalBtnDeletePrune.disabled = false;
+            if (modalBtnDeletePrune) modalBtnDeletePrune.disabled = false;
     }
 }
 
