@@ -88,3 +88,16 @@
     - *Circular Dependencies*: Resolved a circular dependency chain (`metricsManager` -> `dlqManager` -> `errorUtils` -> `metricsManager`) by implementing lazy-loading of modules in `core/errorUtils.js` and `core/metricsManager.js`.
     - *Jest Mocking & Module Caching*: Fixed an issue where `jest.spyOn` failed to track `logError` calls in `messageDispatcher` by switching from named imports to full module imports, ensuring the spy correctly intercepts the module property.
 
+## 2026-04-05 - Southbound Plugin Architecture (ConnectorManager)
+- **Plugin Loader Refactoring**: Transformed `connectors/connectorManager.js` into a robust, protocol-agnostic plugin loader.
+    - Implemented a hierarchical resolution strategy: 1. `korelate-plugin-${type}`, 2. `${type}`, 3. Internal connectors (`connectors/${type}/index.js`).
+    - Added strict interface validation ensuring all dynamically loaded plugins extend the `BaseProvider` class.
+    - Improved logging and error reporting for plugin resolution and instantiation failures.
+- **Resilience**: Added a fallback console logger to `ConnectorManager` to prevent crashes if methods are called before full system initialization (e.g., during unit tests).
+- **Unit Testing**: Created `tests/connectorManager.test.js` to verify the new resolution logic, external plugin priority, and interface validation.
+- **Core Logic Touched**: `connectors/connectorManager.js`, `boot/services.js`.
+- **Pitfalls & Solutions**:
+    - *Resolution Order*: Ensured `korelate-plugin-` prefix is checked BEFORE internal connectors to allow users to override built-in providers without modifying the core codebase.
+    - *Module Mocking in Tests*: Fixed a `TypeError` in tests by mocking `messageDispatcher` early, preventing its Worker Pool from initializing and creating open handles that hang Jest.
+    - *Interface Validation*: Used `instanceof BaseProvider` to ensure that even third-party modules follow the Korelate standardized interaction patterns.
+
