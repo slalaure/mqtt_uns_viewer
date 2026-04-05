@@ -6,7 +6,8 @@
  * [UPDATED] Extracted LLM API calls and Prompt generation to llmEngine.
  * [UPDATED] Implemented exponential backoff for 429 Rate Limit errors.
  * [UPDATED] Extracted Tool Implementations to core/engine/aiTools.js.
- * [NEW] Added /tool/execute POST endpoint for external MCP integration.
+ * [NEW] Added WebSocket support for real-time bi-directional chat.
+ * [NEW] Added detailed diagnostic logging for troubleshooting.
  */
 const express = require('express');
 const fs = require('fs');
@@ -76,11 +77,12 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
     ];
 
     // --- Helper to send chunks via HTTP AND WebSocket ---
-    const sendChunk = (res, type, content, clientId) => {
+    const sendChunk = (res, streamState, content, clientId, chunkType = null) => {
         if (clientId && !activeStreams.has(clientId)) return;
 
         const chunkId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-        const chunkData = { type, content, id: chunkId };
+        const finalChunkType = chunkType || streamState;
+        const chunkData = { type: streamState, chunkType: finalChunkType, content, id: chunkId };
 
         if (res && !res.writableEnded && res.writable) {
             const jsonStr = JSON.stringify(chunkData);
@@ -89,11 +91,15 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
         }
         
         if (clientId) {
+            const streamInfo = activeStreams.get(clientId);
+            logger.debug({ clientId, streamState, chunkType: finalChunkType, chunkId }, "[ChatAPI] Sending chunk to WebSocket");
             wsManager.sendToClient(clientId, {
                 type: 'chat-stream',
-                chunkType: type,
+                sessionId: streamInfo?.sessionId, 
+                streamState: streamState, 
+                chunkType: finalChunkType, 
                 content: content,
-                id: chunkId 
+                chunkId: chunkId 
             });
         }
     };
@@ -101,7 +107,7 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
     // --- User Scoped Session Directory Helper ---
     const getUserChatsDir = (req) => {
         let basePath;
-        if (req.user && req.user.id) {
+        if (req && req.user && req.user.id) {
             basePath = path.join(SESSIONS_DIR, req.user.id, 'chats');
         } else {
             basePath = path.join(DATA_PATH, 'sessions', 'global', 'chats');
@@ -110,6 +116,256 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
             try { fs.mkdirSync(basePath, { recursive: true }); } catch (e) {}
         }
         return basePath;
+    };
+
+    /**
+     * Core Completion Handler
+     * Used by both HTTP POST and WebSocket messages.
+     */
+    const handleCompletion = async (payload, user, res = null, clientId = null) => {
+        const { messages, sessionId, autoApproveSession, approvedToolCallIds } = payload;
+
+        logger.info({ clientId, sessionId, messageCount: messages?.length }, "[ChatAPI] Handling completion request");
+
+        if (!messages || !Array.isArray(messages)) {
+            const err = new Error("Missing or invalid messages.");
+            if (res) res.status(400).json({ error: err.message });
+            else if (clientId) sendChunk(null, 'error', err.message, clientId);
+            return;
+        }
+
+        if (!config.LLM_API_KEY) {
+            const err = new Error("LLM_API_KEY is not configured.");
+            logger.error(err.message);
+            if (res) res.status(500).json({ error: err.message });
+            else if (clientId) sendChunk(null, 'error', err.message, clientId);
+            return;
+        }
+
+        // Setup Abort Controller for this request
+        const abortController = new AbortController();
+        if (clientId) {
+            activeStreams.set(clientId, { abortController, res, sessionId });
+        } else {
+            // Internal temporary ID for HTTP if no clientId
+            const tempId = `http_${Date.now()}`;
+            activeStreams.set(tempId, { abortController, res, sessionId });
+        }
+
+        // --- HTTP Streaming Setup ---
+        if (res) {
+            res.setHeader('Content-Type', 'application/x-ndjson');
+            res.setHeader('Cache-Control', 'no-cache, no-transform');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            if (res.flushHeaders) res.flushHeaders();
+
+            // Padding to force Proxy buffer flush
+            const padding = " ".repeat(4096); 
+            res.write(`{"type":"ping","content":"padding_ignored"}${padding}\n`);
+            if (res.flush) res.flush();
+        }
+
+        sendChunk(res, 'start', 'Processing request...', clientId);
+
+        try {
+            // --- SECURITY: Build Broker Context ---
+            const allProviders = config.DATA_PROVIDERS || [];
+            const connectorContext = allProviders.map(b => {
+                let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
+                if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
+                return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
+            }).join('\n');
+
+            // --- PREPARE TOOLS & CONTEXT ---
+            const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
+
+            let contextText = "";
+            if (payload.context) {
+                const { currentTopic, currentSourceId } = payload.context;
+                contextText = `\n\nUSER CURRENT VIEW CONTEXT:\n- Current Source: ${currentSourceId || 'None'}\n- Current Topic: ${currentTopic || 'None'}`;
+            }
+
+            const systemPromptText = llmEngine.generateChatSystemPrompt(
+                toolsManifest.system_prompt_template,
+                connectorContext,
+                toolsContext
+            ) + contextText;
+
+            const systemMessage = { role: "system", content: systemPromptText };
+            const safeUserMessages = messages.filter(m => m.role !== 'system');
+            
+            let conversation = [systemMessage, ...safeUserMessages];
+            
+            // --- AGENT LOOP ---
+            let turnCount = 0;
+            let finalMessageSent = false;
+
+            while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
+                if (abortController.signal.aborted) {
+                    throw new Error("Generation cancelled by user.");
+                }
+
+                turnCount++;
+                logger.info({ clientId, turnCount }, "[ChatAPI] Starting Turn");
+                sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`, clientId);
+
+                let message;
+                
+                // Check if we are resuming an interrupted session (awaiting approval)
+                if (turnCount === 1 && conversation.length > 0) {
+                    const lastMsg = conversation[conversation.length - 1];
+                    if (lastMsg.role === 'assistant' && lastMsg.tool_calls) {
+                        message = conversation.pop(); // Pop it so it acts like it just came from the LLM
+                        logger.info({ clientId }, "[ChatAPI] Resuming tool execution from history");
+                        sendChunk(res, 'status', 'Resuming tool execution...', clientId);
+                    }
+                }
+
+                // Wrap LLM Call in Exponential Backoff Retry Loop
+                let retryCount = 0;
+                while (!message) {
+                    try {
+                        logger.debug({ clientId, model: config.LLM_MODEL }, "[ChatAPI] Fetching chat completion from upstream LLM");
+                        message = await llmEngine.fetchChatCompletion(
+                            conversation,
+                            config,
+                            enabledTools,
+                            abortController.signal
+                        );
+                    } catch (err) {
+                        if (err.response && err.response.status === 429 && retryCount < MAX_RETRIES_429) {
+                            retryCount++;
+                            const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
+                            logger.warn(`[ChatAPI] 429 Rate Limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`);
+                            sendChunk(res, 'status', `Rate limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`, clientId);
+                            await sleep(delay);
+                        } else {
+                            throw err; // Re-throw if not 429 or max retries exceeded
+                        }
+                    }
+                }
+
+                // Case 1: The model wants to call tools
+                if (message.tool_calls && message.tool_calls.length > 0) {
+                    logger.info({ clientId, toolCount: message.tool_calls.length }, "[ChatAPI] LLM requested tool calls");
+                    
+                    // --- VALIDATION / APPROVAL CHECK ---
+                    let requiresApproval = false;
+                    let pendingSensitiveCalls = [];
+                    if (!autoApproveSession) {
+                        for (const toolCall of message.tool_calls) {
+                            if (SENSITIVE_TOOLS.includes(toolCall.function.name) && 
+                                (!approvedToolCallIds || !approvedToolCallIds.includes(toolCall.id))) {
+                                requiresApproval = true;
+                                pendingSensitiveCalls.push(toolCall);
+                            }
+                        }
+                    }
+
+                    if (requiresApproval) {
+                        logger.info({ clientId, pendingTools: pendingSensitiveCalls.map(t => t.function.name) }, "[ChatAPI] Approval required for sensitive tools");
+                        sendChunk(res, 'chunk', message.content || "", clientId, 'text'); // [FIX] Added 'text'
+                        sendChunk(res, 'message', message, clientId); 
+                        sendChunk(res, 'approval_required', { toolCalls: pendingSensitiveCalls }, clientId);
+                        finalMessageSent = true; 
+                        break; 
+                    }
+
+                    conversation.push(message); 
+                    
+                    for (const toolCall of message.tool_calls) {
+                        if (abortController.signal.aborted) throw new Error("Generation cancelled by user.");
+
+                        const fnName = toolCall.function.name;
+                        logger.info({ clientId, tool: fnName }, "[ChatAPI] Executing tool");
+                        sendChunk(res, 'chunk', fnName, clientId, 'tool_start'); // [FIX] streamState='chunk', chunkType='tool_start'
+                        
+                        let result;
+                        let duration = 0;
+                        const startTime = Date.now();
+                        
+                        try {
+                            if (toolImplementations[fnName]) { 
+                                let args = {};
+                                try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
+                                result = await toolImplementations[fnName](args, user);
+                                result = JSON.stringify(result);
+                            } else {
+                                result = JSON.stringify({ error: "Tool not implemented on server." });
+                            }
+                        } catch (err) {
+                            logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
+                            result = JSON.stringify({ error: err.message });
+                        }
+                        
+                        duration = Date.now() - startTime;
+                        logger.debug({ clientId, tool: fnName, duration }, "[ChatAPI] Tool execution completed");
+                        sendChunk(res, 'chunk', { name: fnName, result: "Done", duration }, clientId, 'tool_result'); // [FIX]
+
+                        conversation.push({
+                            tool_call_id: toolCall.id,
+                            role: "tool",
+                            name: fnName,
+                            content: result
+                        });
+                    }
+                } 
+                // Case 2: The model generated a final text response
+                else {
+                    logger.info({ clientId }, "[ChatAPI] LLM generated final response");
+                    sendChunk(res, 'chunk', message.content, clientId, 'text'); // [FIX] streamState='chunk', chunkType='text'
+                    
+                    // Auto-save history BEFORE sending 'done' to prevent race condition
+                    if (sessionId) {
+                        try {
+                            const chatsDir = getUserChatsDir({ user });
+                            const filePath = path.join(chatsDir, `${sessionId}.json`);
+                            conversation.push(message);
+                            // Ensure synchronous write so the file is complete when the frontend fetches it
+                            fs.writeFileSync(filePath, JSON.stringify(conversation.filter(m => m.role !== 'system'), null, 2));
+                        } catch (e) {
+                            logger.error({ err: e }, "[ChatAPI] Error saving chat session to disk");
+                        }
+                    }
+                    
+                    sendChunk(res, 'done', 'Generation finished', clientId);
+                    finalMessageSent = true;
+                }
+            }
+
+            if (!finalMessageSent) {
+                logger.warn({ clientId }, "[ChatAPI] Max agent turns reached");
+                sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
+            }
+
+        } catch (error) {
+            if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
+                logger.error({ 
+                    err: error.message, 
+                    status: error.response?.status, 
+                    data: error.response?.data 
+                }, "❌ [ChatAPI] Upstream LLM Error");
+            }
+
+            if (error.message === "Generation cancelled by user." || error.code === 'ERR_CANCELED') {
+                sendChunk(res, 'status', '⛔ Generation Stopped by User', clientId);
+            } else if (error.response) {
+                 const apiMsg = error.response.data?.error?.message || "Unknown Upstream Error";
+                 sendChunk(res, 'error', `API Error ${error.response.status}: ${apiMsg}`, clientId);
+            } else {
+                 const msg = error.message;
+                 if (msg.includes("timeout")) {
+                    sendChunk(res, 'error', "The AI took too long to respond (Timeout).", clientId);
+                } else {
+                    sendChunk(res, 'error', msg, clientId);
+                }
+            }
+        } finally {
+            if (clientId) activeStreams.delete(clientId);
+            if (res) res.end();
+        }
     };
 
     // --- Session Management Routes ---
@@ -151,13 +407,19 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
         if (!filePath.startsWith(chatsDir)) return res.status(403).json({error: "Invalid path"});
         if (fs.existsSync(filePath)) {
             try {
-                const history = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                res.json(history);
+                const fileContent = fs.readFileSync(filePath, 'utf8');
+                // Guard against empty files from previous crash
+                if (!fileContent.trim()) {
+                    return res.json({ id: req.params.id, messages: [] });
+                }
+                const history = JSON.parse(fileContent);
+                res.json({ id: req.params.id, messages: history });
             } catch (e) {
-                next(e);
+                logger.error({ err: e, path: filePath }, "[ChatAPI] Failed to parse session file, returning empty array.");
+                res.json({ id: req.params.id, messages: [] });
             }
         } else {
-            res.json([]);
+            res.json({ id: req.params.id, messages: [] });
         }
     });
 
@@ -202,16 +464,6 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
         }
     });
 
-    router.get('/history', (req, res, next) => {
-        req.params.id = 'default';
-        const chatsDir = getUserChatsDir(req);
-        const filePath = path.join(chatsDir, `default.json`);
-        if (fs.existsSync(filePath)) {
-            try { res.json(JSON.parse(fs.readFileSync(filePath, 'utf8'))); } 
-            catch (e) { next(e); }
-        } else { res.json([]); }
-    });
-
     const getEnabledToolsInfo = () => {
         const enabledTools = [];
         const descriptions = [];
@@ -246,7 +498,8 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
     // Executes the agent loop autonomously (no HTTP res needed)
     // Returns Promise<String> with the final response
     const runInternalAgent = async (systemPrompt, userPrompt, correlationId = null) => {
-        const allProviders = config.DATA_PROVIDERS || [];        const connectorContext = allProviders.map(b => {
+        const allProviders = config.DATA_PROVIDERS || [];
+        const connectorContext = allProviders.map(b => {
             let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
             if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
             return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
@@ -296,202 +549,32 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
     });
 
     // --- HTTP POST Endpoint (Standard Chat) ---
-    router.post('/completion', async (req, res, next) => {
-        const { messages, clientId } = req.body; 
-
-        if (!messages) return res.status(400).json({ error: "Missing messages." });
-        if (!config.LLM_API_KEY) {
-            const err = new Error("LLM_API_KEY is not configured.");
-            err.status = 500;
-            return next(err);
-        }
-        
-        // Setup Abort Controller for this request
-        const abortController = new AbortController();
-        if (clientId) {
-            activeStreams.set(clientId, { abortController, res });
-        }
-
-        // Set Headers for Streaming Response
-        res.setHeader('Content-Type', 'application/x-ndjson');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        if (res.flushHeaders) res.flushHeaders();
-
-        // Padding to force Proxy buffer flush
-        const padding = " ".repeat(4096); 
-        res.write(`{"type":"ping","content":"padding_ignored"}${padding}\n`);
-        if (res.flush) res.flush();
-
-        sendChunk(res, 'status', 'Processing request...', clientId);
-
-        // --- SECURITY: Build Broker Context ---
-        const allProviders = config.DATA_PROVIDERS || [];        const connectorContext = allProviders.map(b => {
-            let pubRules = (b.publish && b.publish.length > 0) ? JSON.stringify(b.publish) : "READ-ONLY";
-            if ((b.type === 'file' || b.type === 'dynamic') && (!b.publish || b.publish.length === 0)) pubRules = '["#"]';
-            return `- Provider '${b.id}' [${b.type || 'mqtt'}]: Publish Allowed=${pubRules}`;
-        }).join('\n');
-
-        // --- PREPARE TOOLS & CONTEXT ---
-        const { tools: enabledTools, context: toolsContext } = getEnabledToolsInfo();
-
-        const systemPromptText = llmEngine.generateChatSystemPrompt(
-            toolsManifest.system_prompt_template,
-            connectorContext,
-            toolsContext
-        );
-
-        const systemMessage = { role: "system", content: systemPromptText };
-        const safeUserMessages = messages.filter(m => m.role !== 'system');
-        
-        let conversation = [systemMessage, ...safeUserMessages];
-        
-        // --- AGENT LOOP ---
-        let turnCount = 0;
-        let finalMessageSent = false;
-
-        try {
-            while (turnCount < MAX_AGENT_TURNS && !finalMessageSent) {
-                if (abortController.signal.aborted) {
-                    throw new Error("Generation cancelled by user.");
-                }
-
-                turnCount++;
-                sendChunk(res, 'status', turnCount === 1 ? 'Thinking...' : `Analyzing results (Turn ${turnCount})...`, clientId);
-
-                let message;
-                
-                // Check if we are resuming an interrupted session (awaiting approval)
-                if (turnCount === 1 && conversation.length > 0) {
-                    const lastMsg = conversation[conversation.length - 1];
-                    if (lastMsg.role === 'assistant' && lastMsg.tool_calls) {
-                        message = conversation.pop(); // Pop it so it acts like it just came from the LLM
-                        sendChunk(res, 'status', 'Resuming tool execution...', clientId);
-                    }
-                }
-
-                // Wrap LLM Call in Exponential Backoff Retry Loop
-                let retryCount = 0;
-                while (!message) {
-                    try {
-                        message = await llmEngine.fetchChatCompletion(
-                            conversation,
-                            config,
-                            enabledTools,
-                            abortController.signal
-                        );
-                    } catch (err) {
-                        if (err.response && err.response.status === 429 && retryCount < MAX_RETRIES_429) {
-                            retryCount++;
-                            const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
-                            logger.warn(`[ChatAPI] 429 Rate Limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`);
-                            sendChunk(res, 'status', `Rate limit hit. Retrying in ${(delay/1000).toFixed(1)}s...`, clientId);
-                            await sleep(delay);
-                        } else {
-                            throw err; // Re-throw if not 429 or max retries exceeded
-                        }
-                    }
-                }
-
-                // Case 1: The model wants to call tools
-                if (message.tool_calls && message.tool_calls.length > 0) {
-                    // --- VALIDATION / APPROVAL CHECK ---
-                    let requiresApproval = false;
-                    let pendingSensitiveCalls = [];
-                    if (!req.body.autoApproveSession) {
-                        for (const toolCall of message.tool_calls) {
-                            if (SENSITIVE_TOOLS.includes(toolCall.function.name) && 
-                                (!req.body.approvedToolCallIds || !req.body.approvedToolCallIds.includes(toolCall.id))) {
-                                requiresApproval = true;
-                                pendingSensitiveCalls.push(toolCall);
-                            }
-                        }
-                    }
-
-                    if (requiresApproval) {
-                        sendChunk(res, 'message', message, clientId); 
-                        sendChunk(res, 'approval_required', { toolCalls: pendingSensitiveCalls }, clientId);
-                        finalMessageSent = true; 
-                        break; 
-                    }
-
-                    conversation.push(message); 
-                    
-                    for (const toolCall of message.tool_calls) {
-                        if (abortController.signal.aborted) throw new Error("Generation cancelled by user.");
-
-                        const fnName = toolCall.function.name;
-                        sendChunk(res, 'tool_start', { name: fnName }, clientId);
-                        
-                        let result;
-                        let duration = 0;
-                        const startTime = Date.now();
-                        
-                        try {
-                            if (toolImplementations[fnName]) { 
-                                let args = {};
-                                try { args = JSON.parse(toolCall.function.arguments); } catch(e) {}
-                                result = await toolImplementations[fnName](args, req.user);
-                                result = JSON.stringify(result);
-                            } else {
-                                result = JSON.stringify({ error: "Tool not implemented on server." });
-                            }
-                        } catch (err) {
-                            logger.error({ err }, `[ChatAPI] Tool error ${fnName}`);
-                            result = JSON.stringify({ error: err.message });
-                        }
-                        
-                        duration = Date.now() - startTime;
-                        sendChunk(res, 'tool_result', { name: fnName, result: "Done", duration }, clientId);
-
-                        conversation.push({
-                            tool_call_id: toolCall.id,
-                            role: "tool",
-                            name: fnName,
-                            content: result
-                        });
-                    }
-                } 
-                // Case 2: The model generated a final text response
-                else {
-                    sendChunk(res, 'message', message, clientId);
-                    finalMessageSent = true;
-                }
-            }
-
-            if (!finalMessageSent) {
-                sendChunk(res, 'error', "Max agent turns reached. Stopping execution.", clientId);
-            }
-
-        } catch (error) {
-            if (error.message !== "Generation cancelled by user." && error.code !== 'ERR_CANCELED') {
-                logger.error({ 
-                    err: error.message, 
-                    status: error.response?.status, 
-                    data: error.response?.data 
-                }, "❌ [ChatAPI] Upstream LLM Error");
-            }
-
-            if (error.message === "Generation cancelled by user." || error.code === 'ERR_CANCELED') {
-                sendChunk(res, 'status', '⛔ Generation Stopped by User', clientId);
-            } else if (error.response) {
-                 const apiMsg = error.response.data?.error?.message || "Unknown Upstream Error";
-                 sendChunk(res, 'error', `API Error ${error.response.status}: ${apiMsg}`, clientId);
-            } else {
-                 const msg = error.message;
-                 if (msg.includes("timeout")) {
-                    sendChunk(res, 'error', "The AI took too long to respond (Timeout).", clientId);
-                } else {
-                    sendChunk(res, 'error', msg, clientId);
-                }
-            }
-        } finally {
-            if (clientId) activeStreams.delete(clientId);
-            res.end();
-        }
+    router.post('/completion', async (req, res) => {
+        await handleCompletion(req.body, req.user, res, req.body.clientId);
     });
 
-    return router;
+    // --- WebSocket Handlers ---
+    const handleWsMessage = async (data, clientId, ws) => {
+        logger.info({ clientId, hasDataUser: !!data.user }, "[ChatAPI] Received chat_message via WebSocket");
+        // Fallback user if not authenticated via upgrade, use the one sent by the frontend
+        const user = ws.user || data.user || { id: 'anonymous', role: 'viewer', username: 'Anonymous' };
+        await handleCompletion(data, user, null, clientId);
+    };
+
+    const handleWsStop = (data, clientId) => {
+        logger.info({ clientId }, "[ChatAPI] Received chat_stop via WebSocket");
+        if (clientId && activeStreams.has(clientId)) {
+            const stream = activeStreams.get(clientId);
+            if (stream.abortController) {
+                stream.abortController.abort();
+            }
+            activeStreams.delete(clientId);
+        }
+    };
+
+    return {
+        router,
+        handleWsMessage,
+        handleWsStop
+    };
 };

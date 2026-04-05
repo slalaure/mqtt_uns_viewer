@@ -280,7 +280,12 @@ function createRouter(deps) {
     router.use('/api/tools', ipFilterMiddleware, require('./toolsApi')(logger));
     
     if (config.VIEW_CHAT_ENABLED) {
-        router.use('/api/chat', ipFilterMiddleware, require('./chatApi')(db, logger, config, getConnectorConnection, simulatorManager, wsManager, mapperEngine));
+        const chatApi = require('./chatApi')(db, logger, config, getConnectorConnection, simulatorManager, wsManager, mapperEngine);
+        router.use('/api/chat', ipFilterMiddleware, chatApi.router);
+        
+        // Register WebSocket handlers for bi-directional chat
+        wsManager.registerHandler('chat_message', chatApi.handleWsMessage);
+        wsManager.registerHandler('chat_stop', chatApi.handleWsStop);
     }
     
     if (config.VIEW_CONFIG_ENABLED) {

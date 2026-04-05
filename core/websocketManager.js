@@ -27,6 +27,7 @@ let getConnectorStatuses = null;
 
 // Map to store clients by ID: Map<string, WebSocket>
 const clients = new Map();
+const messageHandlers = new Map(); // [NEW] External handlers for specific message types
 
 // Maximum bytes a single WS client can buffer before we start dropping messages
 const MAX_WS_BUFFER_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -37,6 +38,15 @@ let droppedMessagesCount = 0;
 const escapeSQL = (str) => {
     if (typeof str !== 'string') return str;
     return str.replace(/'/g, "''");
+}
+
+/**
+ * Registers an external handler for a specific WebSocket message type.
+ * @param {string} type - Message type (e.g., 'chat_message').
+ * @param {function} handler - Function to call: (data, clientId, ws) => void.
+ */
+function registerHandler(type, handler) {
+    messageHandlers.set(type, handler);
 }
 
 /**
@@ -75,6 +85,13 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         // 1. Assign a Unique ID to this client
         const clientId = crypto.randomUUID();
         clients.set(clientId, ws);
+        
+        // [NEW] Attach session user if available from upgrade request
+        if (req.user) {
+            ws.user = req.user;
+            logger.info({ clientId, username: req.user.username }, "✅ WebSocket client authenticated");
+        }
+        
         logger.info(`✅ ➡️ WebSocket client connected. Assigned ID: ${clientId}`);
 
         // 2. Send Welcome Message with ID (Handshake)
@@ -138,6 +155,14 @@ function initWebSocketManager(server, database, appLogger, basePath, getDbCallba
         ws.on('message', (message) => {
             try {
                 const parsedMessage = JSON.parse(message);
+                logger.debug({ type: parsedMessage.type, clientId }, "📥 Received WebSocket message");
+
+                // --- [NEW] Check for external handlers ---
+                if (messageHandlers.has(parsedMessage.type)) {
+                    const handler = messageHandlers.get(parsedMessage.type);
+                    handler(parsedMessage, clientId, ws);
+                    return;
+                }
 
                 // --- History Range Query ---
                 if (parsedMessage.type === 'get-history-range') {
@@ -347,5 +372,6 @@ module.exports = {
     resetDroppedMessagesCount,
     getWss,
     getActiveConnectionsCount,
+    registerHandler,
     close
 };

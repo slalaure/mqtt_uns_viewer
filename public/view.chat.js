@@ -28,6 +28,7 @@ export function initChatView(basePath) {
         window.addEventListener('send-chat-message', (e) => {
             sendWebSocketMessage({
                 type: 'chat_message',
+                user: window.currentUser, // [FIX] Send user context to correctly route session files
                 ...e.detail
             });
         });
@@ -60,6 +61,10 @@ export function unmountChatView() {
  */
 export function onChatStreamMessage(data) {
     if (chatWidget) {
+        // [NEW] WebSocket envelope 'type' is 'chat-stream', but component expects 'start'|'chunk'|'done'|'error'
+        if (data.streamState) {
+            data.type = data.streamState;
+        }
         chatWidget.onStreamMessage(data);
     }
 }
