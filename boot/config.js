@@ -114,6 +114,8 @@ function loadConfig(logger, paths) {
         PORT: process.env.PORT || 8080,
         DUCKDB_MAX_SIZE_MB: process.env.DUCKDB_MAX_SIZE_MB ? parseInt(process.env.DUCKDB_MAX_SIZE_MB, 10) : null,
         DUCKDB_PRUNE_CHUNK_SIZE: process.env.DUCKDB_PRUNE_CHUNK_SIZE ? parseInt(process.env.DUCKDB_PRUNE_CHUNK_SIZE, 10) : 500,
+        DLQ_MAX_SIZE_MB: process.env.DLQ_MAX_SIZE_MB ? parseInt(process.env.DLQ_MAX_SIZE_MB, 10) : 50,
+        DLQ_PRUNE_CHUNK_SIZE: process.env.DLQ_PRUNE_CHUNK_SIZE ? parseInt(process.env.DLQ_PRUNE_CHUNK_SIZE, 10) : 1000,
         DB_INSERT_BATCH_SIZE: process.env.DB_INSERT_BATCH_SIZE ? parseInt(process.env.DB_INSERT_BATCH_SIZE, 10) : 5000,
         DB_BATCH_INTERVAL_MS: process.env.DB_BATCH_INTERVAL_MS ? parseInt(process.env.DB_BATCH_INTERVAL_MS, 10) : 2000,
         PERENNIAL_DRIVER: process.env.PERENNIAL_DRIVER?.trim() || 'none',
@@ -245,6 +247,12 @@ async function mergeConfigFromDb(config, db, logger) {
                         break;
                     case 'DUCKDB_MAX_SIZE_MB':
                         config.DUCKDB_MAX_SIZE_MB = parseInt(val, 10);
+                        break;
+                    case 'DLQ_MAX_SIZE_MB':
+                        config.DLQ_MAX_SIZE_MB = parseInt(val, 10);
+                        break;
+                    case 'DLQ_PRUNE_CHUNK_SIZE':
+                        config.DLQ_PRUNE_CHUNK_SIZE = parseInt(val, 10);
                         break;
                     case 'LLM_API_URL':
                         config.LLM_API_URL = val;

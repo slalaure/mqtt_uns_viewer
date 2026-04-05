@@ -62,6 +62,61 @@ function registerRetryHandler(handler) {
 }
 
 /**
+ * Checks if the DLQ file exceeds the maximum allowed size and prunes the oldest lines.
+ */
+function checkAndPrune() {
+    if (!fs.existsSync(DLQ_FILE_PATH)) return;
+    
+    const maxMB = config?.DLQ_MAX_SIZE_MB || 50;
+    if (!maxMB || maxMB <= 0) return;
+
+    try {
+        const stats = fs.statSync(DLQ_FILE_PATH);
+        const sizeMB = stats.size / (1024 * 1024);
+
+        if (sizeMB > maxMB) {
+            const chunkSize = config?.DLQ_PRUNE_CHUNK_SIZE || 1000;
+            // Adaptive multiplier: If we are significantly over the limit, prune more aggressively
+            let multiplier = 1;
+            const overLimitRatio = sizeMB / maxMB;
+            if (overLimitRatio > 2.0) multiplier = 20;
+            else if (overLimitRatio > 1.5) multiplier = 10;
+            else if (overLimitRatio > 1.2) multiplier = 5;
+            else if (overLimitRatio > 1.1) multiplier = 2;
+
+            const linesToDelete = chunkSize * multiplier;
+            logger.warn(`⚠️ DLQ file size (${sizeMB.toFixed(2)} MB) exceeded limit (${maxMB} MB). Pruning oldest ${linesToDelete} messages to prevent OS failure...`);
+            
+            const content = fs.readFileSync(DLQ_FILE_PATH, 'utf8');
+            const lines = content.split('\n');
+            
+            if (lines.length > 0 && lines[lines.length - 1] === '') {
+                lines.pop();
+            }
+
+            if (lines.length <= linesToDelete) {
+                clear();
+                return;
+            }
+
+            const remainingLines = lines.slice(linesToDelete);
+            const newContent = remainingLines.join('\n') + '\n';
+            fs.writeFileSync(DLQ_FILE_PATH, newContent, 'utf8');
+            
+            logger.info(`✅ DLQ pruned successfully. Dropped ${linesToDelete} oldest batches. Remaining batches: ${remainingLines.length}.`);
+        }
+    } catch (err) {
+        logError({
+            logger,
+            err,
+            code: 'DLQ_PRUNE_ERROR',
+            message: "❌ FATAL ERROR: Failed to prune DLQ file.",
+            context: {}
+        });
+    }
+}
+
+/**
  * Appends a batch of failed messages to the DLQ file.
  * [UPDATED] Now accepts repoName to allow targeted retries.
  * @param {Array} batch - Array of message objects.
@@ -86,6 +141,9 @@ function push(batch, repoName = 'unknown') {
         
         fs.appendFileSync(DLQ_FILE_PATH, content, 'utf8');
         logger.warn({ repoName, count: batch.length }, `📥 Pushed messages to DLQ due to failure in ${repoName}.`);
+        
+        // Enforce max disk size limit immediately after pushing
+        checkAndPrune();
     } catch (err) {
         logError({
             logger,
@@ -134,6 +192,9 @@ function startRetryJob() {
     
     // Check every 30 seconds for messages ready to be retried
     retryTimer = setInterval(async () => {
+        // Enforce max disk size limits periodically in case push is inactive
+        checkAndPrune();
+        
         if (!retryHandler) return;
         
         const envelopes = getMessages();
@@ -207,10 +268,21 @@ function clear() {
     }
 }
 
+/**
+ * Stops the retry job and clears the interval.
+ */
+function stop() {
+    if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = null;
+    }
+}
+
 module.exports = {
     init,
     push,
     getMessages,
     clear,
+    stop,
     registerRetryHandler
 };

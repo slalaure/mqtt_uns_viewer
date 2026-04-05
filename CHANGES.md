@@ -1,5 +1,15 @@
 # Korelate Changelog (AI Memory Bank)
 
+## 2026-04-05 - Edge Resource Hardening & DLQ Pruning
+- **DLQ Pruning**: Implemented `checkAndPrune` in `storage/dlqManager.js` to enforce a maximum disk-size limit (`DLQ_MAX_SIZE_MB`) for the DLQ. Prevents OS failure in edge deployments during extended offline periods by automatically dropping the oldest batches.
+- **Adaptive Pruning Multiplier**: Adopted DuckDB's adaptive multiplier approach in `dlqManager.js` to aggressively prune if the disk size significantly exceeds the threshold.
+- **Config**: Added `DLQ_MAX_SIZE_MB` and `DLQ_PRUNE_CHUNK_SIZE` to `boot/config.js` with database merging support.
+- **Testing**: Added unit test `tests/dlqManager.test.js` to ensure the pruning algorithm drops the correct amount of lines based on the threshold. Added `stop()` to `dlqManager` to properly clear the retry interval and prevent Jest from hanging.
+- **Core Logic Touched**: `storage/dlqManager.js`, `boot/config.js`, `tests/dlqManager.test.js`.
+- **Pitfalls & Solutions**:
+    - *Test Stability*: The DLQ retry timer created in `init()` was causing the unit tests to hang because the interval wasn't cleared. Fixed by exposing a `stop()` method and calling it in `afterEach()`.
+    - *Aggressive Multiplier Deletion*: Testing the prune logic with very small file sizes (`0.001 MB`) inadvertently caused the adaptive multiplier to jump to `20`, generating a target prune of `100` lines which immediately deleted the entire file. Tweaked the payload sizes and limits in the test to verify a partial deletion instead.
+
 ## 2026-04-05 - Test Suite Cleanup & Sandbox Validation
 - **Major Test Fixes**: Resolved systemic failures across multiple test files (`mqttProvider`, `opcuaProvider`, `piSystemRepository`, `llmEngine`, etc.) caused by incorrect `axios` mocking and ESM/CommonJS interop issues with `node-opcua` and `hexy`.
 - **Sandbox Security**: Created `tests/sandbox.test.js` to formally verify that user-provided code (Mapper/Alerts) is strictly isolated (no `require`, no `fs`, enforced timeouts).
