@@ -138,3 +138,6 @@
 ## 2026-04-05 - RBAC Unit Testing
 - **Security Validation**: Added exhaustive unit tests (`tests/authMiddleware.test.js`) covering the `requireRole` middleware to ensure privilege escalation is strictly blocked (e.g. Viewer attempting to reach Admin routes).
 - **Database Role Assertions**: Added `tests/userManager.test.js` to guarantee that all new users (Local or Google) fallback to the 'viewer' role by default, and that the Admin API successfully delegates to the `updateUserRole` database schema.
+
+## 2026-04-05 - Fix AI Chat Widget Initialization
+- **Race Condition Resolved**: Fixed a bug where `ai-chat-widget.js` would fail to load its subcomponents and event listeners because `app.js` called `init()` before the asynchronous HTML template fetch completed. Moved DOM hydration logic into an `async init(basePath)` method.

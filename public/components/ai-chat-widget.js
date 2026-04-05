@@ -38,19 +38,21 @@ class AiChatWidget extends HTMLElement {
         this.processedChunkIds = new Set();
     }
 
-    async connectedCallback() {
+    connectedCallback() {
+        // Wait for init() to be called by app.js so we have the correct basePath before fetching templates.
+    }
+
+    async init(basePath) {
         if (this.isMounted) return;
+
+        this.appBasePath = basePath || '';
+        if (this.appBasePath === '/') this.appBasePath = '';
+        if (this.appBasePath.endsWith('/')) this.appBasePath = this.appBasePath.slice(0, -1);
+
         await this.render();
         this.setupEventListeners();
         this.initVoice();
         this.initTTS();
-        this.isMounted = true;
-    }
-
-    init(basePath) {
-        this.appBasePath = basePath || '';
-        if (this.appBasePath === '/') this.appBasePath = '';
-        if (this.appBasePath.endsWith('/')) this.appBasePath = this.appBasePath.slice(0, -1);
         
         const sessionList = this.querySelector('chat-session-list');
         if (sessionList) {
@@ -62,6 +64,7 @@ class AiChatWidget extends HTMLElement {
         }
         
         this.loadSessions();
+        this.isMounted = true;
     }
 
     async render() {
