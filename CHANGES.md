@@ -1,3 +1,6 @@
+## 2026-04-05 - Alert Creation Routing Hotfix
+- **[HOTFIX] Alert Creation Routing**: Fixed a bug where clicking "Create Alert Rule" from the Tree view navigated to the default Alerts Dashboard instead of opening the Rule Creation modal. Reversing the execution order in `public/app.js` ensures the Alerts View DOM is fully mounted and event listeners (including the Ace editor) are attached *before* simulating the tab switch and populating the code editor.
+
 ## 2026-04-05 - AI Chat Restoration & WebSocket Bi-directional Flow
 - **Fixed AI Chat Communication**: Resolved a critical breakage where chat messages were sent via WebSocket by the frontend but ignored by the backend due to missing handlers.
 - **WebSocket Plugin Architecture**: Enhanced `core/websocketManager.js` with a `registerHandler` mechanism, allowing external APIs (like Chat) to plug into the real-time event loop without bloating the core manager.

@@ -449,10 +449,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnCreateAlert.onclick = () => {
                     let parsed = null;
                     try { parsed = JSON.parse(payload); } catch(e) {}
-                    openCreateRuleModal(topic, parsed); 
                     state.activeView = 'alerts';
-                };
-            }
+                    openCreateRuleModal(topic, parsed);
+                };            }
         }
 
         sendWebSocketMessage({ type: 'get-topic-history', sourceId: sourceId, topic: topic });
