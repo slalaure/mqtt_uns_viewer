@@ -113,7 +113,7 @@ function registerScenario(name, factory) {
  * @param {string} name - The name of the scenario to start.
  * @returns {object} { status: 'running' | 'already running' | 'not found' }
  */
-function startSimulator(name) {
+function startSimulator(name, sourceId = null) {
     if (activeSimulations.has(name)) {
         mainLogger.warn(`Simulator [${name}] is already running.`);
         return { status: 'already running' };
@@ -129,14 +129,19 @@ function startSimulator(name) {
         // Create a new logger instance for this specific simulation
         const scenarioLogger = mainLogger.child({ scenario: name });
 
+        // Wrap the publish callback to inject the chosen sourceId
+        const customPublish = (topic, payload, isBinary) => {
+            mainPublish(topic, payload, isBinary, sourceId);
+        };
+
         // Create the scenario instance by calling the factory
-        const simulationInstance = factory(scenarioLogger, mainPublish, mainSparkplugEnabled);
+        const simulationInstance = factory(scenarioLogger, customPublish, mainSparkplugEnabled);
 
         // Store the instance and start it
         activeSimulations.set(name, simulationInstance);
         simulationInstance.start();
 
-        mainLogger.info(`🚀 Simulator [${name}] started.`);
+        mainLogger.info(`🚀 Simulator [${name}] started on provider [${sourceId || 'primary'}].`);
         return { status: 'running' };
     } catch (err) {
         mainLogger.error({ err, scenario: name }, "❌ Failed to start simulation scenario.");

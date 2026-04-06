@@ -260,7 +260,8 @@ function createRouter(deps) {
             res.json({ statuses: simulatorManager.getStatuses() });
         });
         router.post('/api/simulator/start/:name', auth.requireAdmin, (req, res) => {
-            const r = simulatorManager.startSimulator(req.params.name);
+            const { sourceId } = req.body || {};
+            const r = simulatorManager.startSimulator(req.params.name, sourceId);
             wsManager.broadcast(JSON.stringify({ type: 'simulator-status', statuses: simulatorManager.getStatuses() }));
             res.json(r);
         });

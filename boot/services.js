@@ -124,8 +124,8 @@ function initServices(server, app, db, config, logger, paths, state) {
     });
 
     // 8. Initialize Simulators
-    simulatorManager.init(logger, (topic, payload) => {
-        const conn = state.getPrimaryConnection();
+    simulatorManager.init(logger, (topic, payload, isBinary, sourceId) => {
+        const conn = sourceId ? state.getConnectorConnection(sourceId) : state.getPrimaryConnection();
         if (conn && conn.connected) {
             conn.publish(topic, payload, { qos: 1 });
         }

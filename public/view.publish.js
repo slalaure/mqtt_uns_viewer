@@ -106,12 +106,12 @@ export function initPublishView(options) {
     isMultiProvider = options.isMultiSource || false;
 
     // Merge legacy broker configs and new data provider configs
-    const bConfigs = options.sourceConfigs || [];
+    const bConfigs = options.providerConfigs || [];
     const pConfigs = options.dataProviders || [];
     availableProviders = [...bConfigs, ...pConfigs];
 
     // ---  Multi-Provider Selector (Build DOM once) ---
-    if (isMultiProvider && availableProviders.length > 0) {
+    if (availableProviders.length > 0) {
         const firstFormGroup = publishForm?.querySelector('.form-group');
         
         const providerGroup = document.createElement('div');
@@ -123,6 +123,10 @@ export function initPublishView(options) {
         
         providerSelectElement = document.createElement('select');
         providerSelectElement.id = 'publish-provider-select';
+        
+        if (availableProviders.length === 1) {
+            providerSelectElement.disabled = true;
+        }
 
         availableProviders.forEach(provider => {
             // Implicitly allow dynamic files to act as loopback streams
@@ -152,6 +156,19 @@ export function initPublishView(options) {
             } else {
                 publishForm.prepend(providerGroup);
             }
+        }
+        
+        providerSelectElement.addEventListener('change', (e) => {
+            state.currentSourceId = e.target.value;
+            validatePublishPermissions();
+        });
+        
+        // Add a visual note for the Simulator target
+        const simPanel = document.querySelector('.simulator-panel-wrapper');
+        if (simPanel) {
+            const simHeader = simPanel.querySelector('h2');
+            const note = document.getElementById('sim-target-note');
+            if (note) note.remove();
         }
     }
 
@@ -435,7 +452,7 @@ function updateControlUI(controlEl, status) {
 export function updateSimulatorStatuses(statuses) {
     if (!simControlsContainer || !simulatorControlTemplate) return;
     simControlsContainer.innerHTML = '';
-    
+
     if (Object.keys(statuses).length === 0) {
         simControlsContainer.innerHTML = '<p class="history-placeholder">No simulators are available.</p>';
         return;
@@ -447,25 +464,60 @@ export function updateSimulatorStatuses(statuses) {
         const startBtn = controlEl.querySelector('.btn-start-sim');
         const stopBtn = controlEl.querySelector('.btn-stop-sim');
 
+        // Add a dropdown to select the target provider for this specific simulator
+        const providerSelect = document.createElement('select');
+        providerSelect.className = 'simulator-provider-select';
+        providerSelect.style.marginLeft = '10px';
+        providerSelect.style.marginRight = '10px';
+        providerSelect.style.padding = '4px 8px';
+        providerSelect.style.fontSize = '0.85em';
+
+        if (availableProviders.length <= 1) {
+            providerSelect.disabled = true;
+        }
+
+        availableProviders.forEach(provider => {
+            const option = document.createElement('option');
+            option.value = provider.id;
+            const isReadOnly = (!provider.publish || provider.publish.length === 0);
+            option.textContent = `${isReadOnly ? '🔒 ' : ''}${provider.id}`;
+            if (isReadOnly) option.disabled = true;
+            providerSelect.appendChild(option);
+        });
+
+        if (status === 'running') {
+            providerSelect.disabled = true;
+        }
+
         nameEl.textContent = formatSimName(name);
-        updateControlUI(controlEl, status); 
+        nameEl.parentNode.insertBefore(providerSelect, nameEl.nextSibling);
+
+        updateControlUI(controlEl, status);
 
         startBtn.addEventListener('click', () => {
-            fetch(`api/simulator/start/${name}`, { method: 'POST' });
-            showToast(`Starting simulator: ${formatSimName(name)}`, 'info');
+            const selectedSourceId = providerSelect.value;
+            fetch(`api/simulator/start/${name}`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sourceId: selectedSourceId })
+            });
+            showToast(`Starting simulator: ${formatSimName(name)} on ${selectedSourceId}`, 'info');
             trackEvent(`simulator_start_${name}`);
+            providerSelect.disabled = true;
         });
 
         stopBtn.addEventListener('click', () => {
             fetch(`api/simulator/stop/${name}`, { method: 'POST' });
             showToast(`Stopping simulator: ${formatSimName(name)}`, 'info');
             trackEvent(`simulator_stop_${name}`);
+            if (availableProviders.length > 1) {
+                providerSelect.disabled = false;
+            }
         });
 
         simControlsContainer.appendChild(controlEl);
     }
 }
-
 /**
  * Dynamically adds a new data provider to the dropdown selector (e.g., when a CSV parser is started).
  */

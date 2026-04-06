@@ -1,3 +1,8 @@
+## 2026-04-05 - Publish View Multi-Source UX Fixes
+- **Data Provider Visibility**: Resolved a UX issue in the Publish view where users couldn't see or select the target data provider. 
+    - **Manual Publish**: The 'Target Provider' dropdown is now always visible. If only a single broker/provider is configured, the dropdown renders in a disabled (read-only) state to clearly indicate the destination. Fixed a parameter mismatch (`sourceConfigs` vs `providerConfigs`) that caused the dropdown to fail to populate legacy MQTT brokers.
+    - **Simulators**: Replaced the global target note with a dynamic dropdown selector for *each* individual simulator. Users can now independently route data from different simulators to different connectors (e.g., sending `deathstar` telemetry to `factory_opc` while `hydrochem` publishes to `mqttunsviewer.com`). The backend `simulatorManager` was updated to accept a `sourceId` on startup and inject it dynamically into the simulation scenario factory.
+
 ## 2026-04-05 - Alert Creation Routing Hotfix
 - **[HOTFIX] Alert Creation Routing**: Fixed a bug where clicking "Create Alert Rule" from the Tree view navigated to the default Alerts Dashboard instead of opening the Rule Creation modal. Reversing the execution order in `public/app.js` ensures the Alerts View DOM is fully mounted and event listeners (including the Ace editor) are attached *before* simulating the tab switch and populating the code editor.
 
