@@ -5,14 +5,6 @@
 import { confirmModal, trackEvent, makeResizable, showToast } from './utils.js';
 import { state } from './state.js';
 
-// --- Global Error Suppression ---
-window.addEventListener('error', (e) => {
-    if (e.message && e.message.includes('ResizeObserver loop')) {
-        e.stopImmediatePropagation();
-        e.preventDefault();
-    }
-}, true);
-
 // --- State ---
 let currentModel = null;
 let currentSelection = { type: null, id: null, ref: null }; 
@@ -27,22 +19,6 @@ let syncTimeout = null;
 
 // --- DOM Elements ---
 let el = {};
-
-function loadVisNetwork() {
-    return new Promise((resolve) => {
-        if (window.vis) return resolve();
-        const script = document.createElement('script');
-        script.src = (document.querySelector('base')?.getAttribute('href') || '/') + 'libs/vis-network.min.js';
-        script.onload = () => resolve();
-        script.onerror = () => {
-            const cdn = document.createElement('script');
-            cdn.src = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
-            cdn.onload = () => resolve();
-            document.head.appendChild(cdn);
-        };
-        document.head.appendChild(script);
-    });
-}
 
 export async function initModelerView() {
     if (templatePromise) return templatePromise;
@@ -66,15 +42,12 @@ export async function initModelerView() {
             ];
             ids.forEach(id => el[id] = document.getElementById(id));
 
-            // Resizers
-            // Left Resizer: Sidebar (Panel A)
             makeResizable({ 
                 resizerEl: document.getElementById('drag-handle-vertical-modeler-1'), 
                 direction: 'vertical', 
                 panelA: document.querySelector('.modeler-sidebar') 
             });
             
-            // Right Resizer: Custom handler to avoid flex:1 conflicts
             const resizer2 = document.getElementById('drag-handle-vertical-modeler-2');
             const rightPanel = document.querySelector('.modeler-graph-sidebar');
             let isDraggingRight = false;
@@ -99,21 +72,8 @@ export async function initModelerView() {
                 if (isDraggingRight) {
                     isDraggingRight = false;
                     document.body.style.cursor = 'default';
-                    if (networkGraph) networkGraph.setSize();
                 }
             });
-
-            await loadVisNetwork();
-
-            if (window.ResizeObserver) {
-                const ro = new ResizeObserver(() => {
-                    if (networkGraph) {
-                        networkGraph.setSize();
-                        networkGraph.redraw();
-                    }
-                });
-                ro.observe(document.querySelector('.modeler-graph-sidebar'));
-            }
 
             isModelerInitialized = true;
             if (state.activeView === 'modeler') mountModelerView();
@@ -142,10 +102,7 @@ export function mountModelerView() {
         isPhysicsEnabled = !isPhysicsEnabled;
         el['btn-toggle-physics'].innerHTML = isPhysicsEnabled ? "⚛️ Freeze" : "❄️ Unfreeze";
         if (networkGraph) {
-            networkGraph.setOptions({ 
-                physics: { enabled: isPhysicsEnabled },
-                interaction: { dragNodes: true } 
-            });
+            networkGraph.setPhysics(isPhysicsEnabled);
         }
     };
 
@@ -194,7 +151,16 @@ function renderRegistry() {
     const createNode = (id, name, type, icon) => {
         if (query && !name.toLowerCase().includes(query) && !id.toLowerCase().includes(query)) return null;
         const div = document.createElement('div');
-        div.className = `modeler-node ${currentSelection.id === id ? 'selected' : ''}`;
+        const isSelected = String(currentSelection.id) === String(id);
+        
+        div.className = `modeler-node ${isSelected ? 'selected' : ''}`;
+        if (isSelected) {
+            div.style.backgroundColor = "rgba(0, 123, 255, 0.2)";
+            div.style.borderLeft = "4px solid #007bff";
+            div.style.color = "#007bff";
+            div.style.fontWeight = "bold";
+        }
+        
         div.innerHTML = `<span class="node-icon">${icon}</span> <span class="node-label" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</span>`;
         div.onclick = () => selectItem(type, id);
         return div;
@@ -230,8 +196,9 @@ function selectItem(type, id) {
     el['modeler-welcome'].style.display = 'none';
     el['modeler-content'].style.display = 'flex';
     
-    document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
     renderRegistry();
+    
+    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(i => i.oninput = null);
     
     el['modeler-edit-displayname'].value = ref.displayName || '';
     el['modeler-edit-id'].textContent = id;
@@ -241,7 +208,10 @@ function selectItem(type, id) {
     renderSchemaItems();
     renderRelationships();
     
-    setTimeout(() => { drawGraph(); }, 100);
+    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(i => i.oninput = syncStateFromForm);
+
+    // Render graph natively
+    drawGraph();
 }
 
 function renderSchemaItems() {
@@ -263,15 +233,13 @@ function addSchemaRow(data = {}) {
         <input type="text" placeholder="ID" class="modern-input" style="flex:2; font-family:monospace;" value="${data.id || ''}" data-key="id">
         <input type="text" placeholder="Label" class="modern-input" style="flex:3;" value="${data.title || ''}" data-key="title">
         <select class="modern-input" style="flex:2;" data-key="type">${options}</select>
-        <input type="text" placeholder="Unit (Opt.)" class="modern-input" style="flex:1.5;" value="${data.unit || ''}" data-key="unit" title="Unit of measurement">
+        <input type="text" placeholder="Unit (Opt.)" class="modern-input" style="flex:1.5;" value="${data.unit || ''}" data-key="unit">
         <button class="btn-delete-row">✖</button>
     `;
     row.querySelectorAll('input, select').forEach(i => i.oninput = syncStateFromForm);
     row.querySelector('.btn-delete-row').onclick = () => { row.remove(); syncStateFromForm(); };
     container.appendChild(row);
 }
-
-// --- i3X Relationships Logic ---
 
 function renderRelationships() {
     el['container-relationships'].innerHTML = '';
@@ -289,11 +257,9 @@ function addRelationshipRow(data = {}) {
     const row = document.createElement('div');
     row.className = 'schema-item-row';
     
-    // i3X standard relationship types
     const types = ['HasParent', 'HasChildren', 'HasComponent', 'ComponentOf', 'InstanceOf', 'SuppliesTo', 'SuppliesFrom'];
     const typeOptions = types.map(t => `<option value="${t}" ${data.type === t ? 'selected' : ''}>${t}</option>`).join('');
     
-    // Available targets (all other instances)
     const targetOptions = (currentModel?.instances || [])
         .filter(i => i.elementId !== currentSelection.id)
         .map(i => `<option value="${i.elementId}" ${data.target === i.elementId ? 'selected' : ''}>${i.displayName || i.elementId}</option>`)
@@ -320,7 +286,6 @@ function syncStateFromForm() {
     ref.isaLevel = el['field-isa-level'].value;
     ref.namespaceUri = el['field-namespace'].value;
 
-    // Sync Schema
     const properties = {};
     const rows = [...el['container-properties'].children];
     rows.forEach(row => {
@@ -333,17 +298,7 @@ function syncStateFromForm() {
     });
     ref.schema = { type: "object", properties };
 
-    // Update node label without breaking layout
-    if (networkGraph) {
-        let icon = '📦';
-        if (currentSelection.type === 'namespace') icon = '🌐';
-        if (currentSelection.type === 'objectType') icon = '📃';
-        try {
-            networkGraph.body.data.nodes.update({ id: 'self', label: `${icon} ${ref.displayName || ref.elementId || ref.uri}` });
-        } catch(e) {}
-    }
-
-    renderRegistry(); // Updates left panel highlighting immediately
+    renderRegistry();
     el['btn-modeler-save'].classList.add('btn-unsaved');
 }
 
@@ -375,80 +330,401 @@ function setEditMode(mode) {
     el['btn-mode-json'].classList.toggle('active', mode === 'json');
     el['modeler-form-view'].style.display = mode === 'form' ? 'block' : 'none';
     el['modeler-json-view'].style.display = mode === 'json' ? 'block' : 'none';
-    if (mode === 'json') { initAce(); updateAce(); }
+    if (mode === 'json') { 
+        if (!aceEditor) {
+            aceEditor = ace.edit(el['modeler-ace-editor']);
+            aceEditor.setTheme(state.isDarkMode ? "ace/theme/tomorrow_night" : "ace/theme/chrome");
+            aceEditor.session.setMode("ace/mode/json");
+        }
+        aceEditor.setValue(JSON.stringify(currentSelection.ref, null, 2), -1);
+    }
 }
 
-function initAce() {
-    if (aceEditor) return;
-    aceEditor = ace.edit(el['modeler-ace-editor']);
-    aceEditor.setTheme(state.isDarkMode ? "ace/theme/tomorrow_night" : "ace/theme/chrome");
-    aceEditor.session.setMode("ace/mode/json");
+// ============================================================================
+// NATIVE KORELATE GRAPH ENGINE (SVG Force-Directed)
+// 100% Dependency Free, Built for Stability and Performance
+// ============================================================================
+
+class KorelateGraph {
+    constructor(container, data, options) {
+        this.container = container;
+        this.container.innerHTML = '';
+        this.options = options || {};
+        this.isPhysicsEnabled = this.options.physicsEnabled ?? true;
+        this.onDoubleClick = this.options.onDoubleClick || (()=>{});
+        
+        // Setup SVG
+        this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        this.svg.style.width = '100%';
+        this.svg.style.height = '100%';
+        this.svg.style.display = 'block';
+        this.svg.style.userSelect = 'none';
+        
+        this.svg.innerHTML = `
+            <defs>
+                <marker id="korelate-arrow" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#888" />
+                </marker>
+            </defs>
+            <g class="edges"></g>
+            <g class="nodes"></g>
+        `;
+        this.container.appendChild(this.svg);
+        this.edgesGroup = this.svg.querySelector('.edges');
+        this.nodesGroup = this.svg.querySelector('.nodes');
+
+        this.nodes = [];
+        this.edges = [];
+        this.nodeMap = new Map();
+        
+        this.draggedNode = null;
+        this.dragOffset = {x: 0, y: 0};
+        this.lastClick = { id: null, time: 0 };
+        this.animFrame = null;
+
+        this.initData(data);
+        this.bindEvents();
+        
+        if (this.isPhysicsEnabled) this.start();
+        else this.render();
+    }
+
+    initData(data) {
+        const width = this.container.clientWidth || 400;
+        const height = this.container.clientHeight || 400;
+        const cx = width / 2;
+        const cy = height / 2;
+
+        data.nodes.forEach((n) => {
+            const node = {
+                id: n.id,
+                label: n.label,
+                x: cx + (Math.random() - 0.5) * 150,
+                y: cy + (Math.random() - 0.5) * 150,
+                vx: 0, vy: 0,
+                width: 140, height: 36,
+                color: n.color || '#fff',
+                fontColor: n.fontColor || '#333',
+                isCenter: n.id === 'self'
+            };
+            this.nodes.push(node);
+            this.nodeMap.set(node.id, node);
+
+            // Create SVG Elements
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            g.setAttribute('class', 'korelate-node');
+            g.setAttribute('cursor', 'pointer');
+            g.dataset.id = node.id;
+            
+            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute('width', node.width);
+            rect.setAttribute('height', node.height);
+            rect.setAttribute('x', -node.width/2);
+            rect.setAttribute('y', -node.height/2);
+            rect.setAttribute('rx', 6);
+            rect.setAttribute('fill', node.color);
+            rect.setAttribute('stroke', node.isCenter ? '#0056b3' : '#999');
+            rect.setAttribute('stroke-width', node.isCenter ? '2' : '1');
+            
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('fill', node.fontColor);
+            text.setAttribute('font-size', '12px');
+            text.setAttribute('font-family', 'sans-serif');
+            text.setAttribute('pointer-events', 'none');
+            
+            // Simple truncation
+            let shortLabel = node.label;
+            if (shortLabel.length > 20) shortLabel = shortLabel.substring(0, 18) + '...';
+            text.textContent = shortLabel;
+            
+            g.appendChild(rect);
+            g.appendChild(text);
+            this.nodesGroup.appendChild(g);
+            node.el = g;
+        });
+
+        data.edges.forEach(e => {
+            const source = this.nodeMap.get(e.from);
+            const target = this.nodeMap.get(e.to);
+            if (source && target) {
+                const edge = { source, target, label: e.label || '' };
+                this.edges.push(edge);
+                
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute('stroke', '#888');
+                line.setAttribute('stroke-width', '2');
+                line.setAttribute('marker-end', 'url(#korelate-arrow)');
+                
+                const labelBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                labelBg.setAttribute('fill', state.isDarkMode ? '#1e1e1e' : '#fff');
+                labelBg.setAttribute('rx', '3');
+                
+                const labelText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                labelText.setAttribute('text-anchor', 'middle');
+                labelText.setAttribute('dominant-baseline', 'central');
+                labelText.setAttribute('fill', '#888');
+                labelText.setAttribute('font-size', '10px');
+                labelText.setAttribute('font-family', 'sans-serif');
+                labelText.textContent = edge.label;
+                
+                this.edgesGroup.appendChild(line);
+                this.edgesGroup.appendChild(labelBg);
+                this.edgesGroup.appendChild(labelText);
+                
+                edge.lineEl = line;
+                edge.labelBg = labelBg;
+                edge.labelEl = labelText;
+            }
+        });
+    }
+
+    bindEvents() {
+        this.svg.addEventListener('mousedown', (e) => {
+            const targetG = e.target.closest('.korelate-node');
+            if (targetG && targetG.dataset.id) {
+                const node = this.nodeMap.get(targetG.dataset.id);
+                if (node) {
+                    const now = Date.now();
+                    if (this.lastClick.id === node.id && (now - this.lastClick.time) < 300) {
+                        this.onDoubleClick(node.id);
+                        return;
+                    }
+                    this.lastClick = { id: node.id, time: now };
+                    
+                    this.draggedNode = node;
+                    const pt = this.getSVGPoint(e);
+                    this.dragOffset = { x: node.x - pt.x, y: node.y - pt.y };
+                    node.vx = 0; node.vy = 0;
+                }
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (this.draggedNode) {
+                const pt = this.getSVGPoint(e);
+                this.draggedNode.x = pt.x + this.dragOffset.x;
+                this.draggedNode.y = pt.y + this.dragOffset.y;
+                this.draggedNode.vx = 0;
+                this.draggedNode.vy = 0;
+                this.render(); // Always render while dragging
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            this.draggedNode = null;
+        });
+    }
+
+    getSVGPoint(evt) {
+        const pt = this.svg.createSVGPoint();
+        pt.x = evt.clientX;
+        pt.y = evt.clientY;
+        return pt.matrixTransform(this.svg.getScreenCTM().inverse());
+    }
+
+    setPhysics(enabled) {
+        this.isPhysicsEnabled = enabled;
+        if (enabled) this.start();
+        else this.stop();
+    }
+
+    start() {
+        if (!this.animFrame) this.loop();
+    }
+
+    stop() {
+        if (this.animFrame) {
+            cancelAnimationFrame(this.animFrame);
+            this.animFrame = null;
+        }
+    }
+
+    destroy() {
+        this.stop();
+        this.container.innerHTML = '';
+    }
+
+    loop() {
+        if (this.isPhysicsEnabled) {
+            this.applyForces();
+        }
+        this.render();
+        if (this.isPhysicsEnabled) {
+            this.animFrame = requestAnimationFrame(() => this.loop());
+        } else {
+            this.animFrame = null;
+        }
+    }
+
+    applyForces() {
+        const width = this.container.clientWidth || 400;
+        const height = this.container.clientHeight || 400;
+        const cx = width / 2;
+        const cy = height / 2;
+        
+        const kRepel = 6000; 
+        const kSpring = 0.05; 
+        const springLen = 140;
+        const damping = 0.75; 
+
+        // 1. Node Repulsion
+        for (let i = 0; i < this.nodes.length; i++) {
+            for (let j = i + 1; j < this.nodes.length; j++) {
+                const n1 = this.nodes[i];
+                const n2 = this.nodes[j];
+                let dx = n1.x - n2.x;
+                let dy = n1.y - n2.y;
+                let dsq = dx*dx + dy*dy;
+                if (dsq === 0) { dx = Math.random()-0.5; dy = Math.random()-0.5; dsq = dx*dx+dy*dy; }
+                if (dsq < 90000) {
+                    const d = Math.sqrt(dsq);
+                    const force = kRepel / dsq;
+                    const fx = (dx/d) * force;
+                    const fy = (dy/d) * force;
+                    n1.vx += fx; n1.vy += fy;
+                    n2.vx -= fx; n2.vy -= fy;
+                }
+            }
+        }
+
+        // 2. Edge Attraction
+        this.edges.forEach(e => {
+            const n1 = e.source;
+            const n2 = e.target;
+            let dx = n2.x - n1.x;
+            let dy = n2.y - n1.y;
+            let d = Math.sqrt(dx*dx + dy*dy);
+            if (d === 0) d = 0.1;
+            const force = (d - springLen) * kSpring;
+            const fx = (dx/d) * force;
+            const fy = (dy/d) * force;
+            n1.vx += fx; n1.vy += fy;
+            n2.vx -= fx; n2.vy -= fy;
+        });
+
+        // 3. Gravity and Integration
+        this.nodes.forEach(n => {
+            n.vx += (cx - n.x) * 0.01;
+            n.vy += (cy - n.y) * 0.01;
+            
+            n.vx *= damping;
+            n.vy *= damping;
+            
+            if (Math.abs(n.vx) < 0.05) n.vx = 0;
+            if (Math.abs(n.vy) < 0.05) n.vy = 0;
+
+            if (n !== this.draggedNode) {
+                n.x += n.vx;
+                n.y += n.vy;
+            }
+            
+            // Bounds
+            n.x = Math.max(n.width/2 + 10, Math.min(width - n.width/2 - 10, n.x));
+            n.y = Math.max(n.height/2 + 10, Math.min(height - n.height/2 - 10, n.y));
+        });
+    }
+
+    render() {
+        this.nodes.forEach(n => {
+            n.el.setAttribute('transform', `translate(${n.x},${n.y})`);
+        });
+        
+        this.edges.forEach(e => {
+            e.lineEl.setAttribute('x1', e.source.x);
+            e.lineEl.setAttribute('y1', e.source.y);
+            e.lineEl.setAttribute('x2', e.target.x);
+            e.lineEl.setAttribute('y2', e.target.y);
+            
+            if (e.label) {
+                const mx = (e.source.x + e.target.x) / 2;
+                const my = (e.source.y + e.target.y) / 2;
+                e.labelEl.setAttribute('x', mx);
+                e.labelEl.setAttribute('y', my);
+                
+                // Background behind text
+                const bbox = e.labelEl.getBBox ? e.labelEl.getBBox() : { width: e.label.length * 6, height: 12 };
+                const w = Math.max(bbox.width + 8, 20);
+                e.labelBg.setAttribute('x', mx - w/2);
+                e.labelBg.setAttribute('y', my - 8);
+                e.labelBg.setAttribute('width', w);
+                e.labelBg.setAttribute('height', 16);
+            }
+        });
+    }
 }
-
-function updateAce() { if (aceEditor) aceEditor.setValue(JSON.stringify(currentSelection.ref, null, 2), -1); }
-
-// --- Graph ---
 
 function drawGraph() {
     const graphDiv = el['relationship-graph'];
-    if (!window.vis || !graphDiv) return;
-
-    // Ensure container has height
-    if (graphDiv.clientHeight === 0) {
-        graphDiv.style.minHeight = '300px';
-    }
+    if (!graphDiv) return;
 
     const item = currentSelection.ref;
     if (!item) return;
 
     const isDark = state.isDarkMode;
-    const nodesData = [{ id: 'self', label: item.displayName || 'Selected', shape: 'box', color: '#007bff', font: { color: '#fff', size: 14 }, margin: 10 }];
-    const edgesData = [];
+    const nodes = [{ id: 'self', label: item.displayName || 'Selected', color: '#007bff', fontColor: '#fff' }];
+    const edges = [];
 
     const addNode = (id, label, icon, group) => {
-        if (!nodesData.find(n => n.id === id)) {
+        if (!nodes.find(n => n.id === id)) {
             let color = isDark ? '#333' : '#eee';
             let fontColor = isDark ? '#fff' : '#333';
-            if (group === 'self') { color = '#007bff'; fontColor = '#fff'; }
-            if (group === 'type') { color = '#28a745'; fontColor = '#fff'; }
             if (group === 'ns') { color = '#3b82f6'; fontColor = '#fff'; }
-            nodesData.push({ id, label: `${icon} ${label}`, shape: 'box', color: color, font: { color: fontColor, size: 14 }, margin: 10 });
+            else if (group === 'type') { color = '#28a745'; fontColor = '#fff'; }
+            nodes.push({ id, label: `${icon} ${label}`, color, fontColor });
         }
     };
 
     if (item.namespaceUri) {
         addNode('ns', item.namespaceUri.split('/').pop(), '🌐', 'ns');
-        edgesData.push({ from: 'self', to: 'ns', label: 'belongs to', arrows: 'to', dashes: true });
+        edges.push({ from: 'self', to: 'ns', label: 'belongs to' });
     }
 
-    if (item.relationships) {
-        Object.entries(item.relationships).forEach(([rel, targets]) => {
-            const list = Array.isArray(targets) ? targets : [targets];
-            list.forEach(tId => {
-                const tObj = currentModel.instances.find(i => i.elementId === tId);
-                const label = tObj ? (tObj.displayName || tId) : tId;
-                addNode(`rel-${tId}`, label, '📦', 'inst');
-                edgesData.push({ from: 'self', to: `rel-${tId}`, label: rel, arrows: 'to' });
+    if (currentSelection.type === 'instance') {
+        if (item.parentId && item.parentId !== '/') {
+            const p = currentModel.instances.find(i => i.elementId === item.parentId);
+            addNode('parent', p ? (p.displayName || p.elementId) : item.parentId, '📦', 'inst');
+            edges.push({ from: 'self', to: 'parent', label: 'ChildOf' });
+        }
+        if (item.typeId) {
+            const t = currentModel.objectTypes.find(ot => ot.elementId === item.typeId);
+            addNode('type', t ? (t.displayName || t.elementId) : item.typeId, '📃', 'type');
+            edges.push({ from: 'self', to: 'type', label: 'InstanceOf' });
+        }
+        if (item.relationships) {
+            Object.entries(item.relationships).forEach(([rel, targets]) => {
+                const list = Array.isArray(targets) ? targets : [targets];
+                list.forEach(tId => {
+                    const tObj = currentModel.instances.find(i => i.elementId === tId);
+                    const label = tObj ? (tObj.displayName || tId) : tId;
+                    addNode(`rel-${tId}`, label, '📦', 'inst');
+                    edges.push({ from: 'self', to: `rel-${tId}`, label: rel });
+                });
             });
+        }
+    } else if (currentSelection.type === 'objectType') {
+        const instances = currentModel.instances.filter(i => i.typeId === item.elementId).slice(0, 10);
+        instances.forEach(i => {
+            addNode(`inst-${i.elementId}`, i.displayName || i.elementId, '📦', 'inst');
+            edges.push({ from: `inst-${i.elementId}`, to: 'self', label: 'Implements' });
         });
     }
 
-    const data = { nodes: new vis.DataSet(nodesData), edges: new vis.DataSet(edgesData) };
-    const options = {
-        physics: { 
-            enabled: isPhysicsEnabled, 
-            solver: 'barnesHut', 
-            barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 100 } 
-        },
-        interaction: { hover: true, zoomView: true, dragView: true, dragNodes: true }
-    };
-
-    if (!networkGraph) {
-        networkGraph = new vis.Network(graphDiv, data, options);
-    } else {
-        networkGraph.setOptions(options);
-        networkGraph.setData(data);
+    if (networkGraph) {
+        networkGraph.destroy();
     }
+    
+    networkGraph = new KorelateGraph(graphDiv, { nodes, edges }, {
+        physicsEnabled: isPhysicsEnabled,
+        onDoubleClick: (nid) => {
+            if (nid === 'parent') selectItem('instance', item.parentId);
+            else if (nid === 'type') selectItem('objectType', item.typeId);
+            else if (nid === 'ns') selectItem('namespace', item.namespaceUri);
+            else if (nid.startsWith('rel-')) selectItem('instance', nid.replace('rel-', ''));
+            else if (nid.startsWith('inst-')) selectItem('instance', nid.replace('inst-', ''));
+        }
+    });
 }
 
 // --- CRUD ---

@@ -1,3 +1,13 @@
+## 2026-04-06 - Replacing Vis-Network with Custom SVG KorelateGraph Engine
+- **Architectural Shift**: Removed the `vis-network` dependency completely from the Modeler view. The library demonstrated catastrophic conflicts with the SPA lifecycle, Vue/Proxy-like reactive state, and Flexbox `display: none` DOM rendering, leading to "ghost canvas" click interception and frozen nodes.
+- **KorelateGraph Engine**: Built a 100% dependency-free, native SVG Force-Directed graph engine (`KorelateGraph`) directly into `public/view.modeler.js`.
+- **Features Implemented Natively**:
+  - **Custom Physics**: Hooke's law springs and Coulomb repulsion computed manually in a `requestAnimationFrame` loop.
+  - **Flawless Interaction**: Native SVG DOM events handle Drag & Drop perfectly, eliminating coordinates desync caused by CSS flexbox delays.
+  - **Freeze Toggle**: Pauses the physics integration loop instantly without breaking drag events.
+  - **Double-Click Navigation**: Seamlessly jumps to parent/type/linked nodes.
+- **Result**: The Modeler Dependency Graph is now extremely fast, visually stable, and completely immune to external library bugs.
+
 ## 2026-04-06 - CDM Modeler V3 Refactoring (i3X Compliance)
 - **3-Column IDE Layout**: Refactored the Modeler view into a Master-Detail-Graph layout using native resizers and Flexbox.
 - **i3X Relationships Editor**: Added a dedicated section to manage semantic relationships (HasParent, HasComponent, SuppliesTo, etc.) directly from the UI, syncing securely with the backend JSON.

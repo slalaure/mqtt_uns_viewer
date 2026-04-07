@@ -287,7 +287,7 @@ Korelate provides a native, northbound implementation of the **I3X (Industrial I
 Korelate includes a powerful graphical editor to define your plant's semantic hierarchy and metadata.
 * **Concept Definition:** Map industrial concepts to physical MQTT topics.
 * **Data Governance & Security:** Explicitly tag data nodes with **Sensitivity Levels** (Public, Internal, Confidential, Secret) and **Privacy/Compliance** flags (GDPR, Health/HDS, Financial/PCI).
-* **Graph Visualization:** Explore relationships beyond simple hierarchies (e.g., "Machine A SuppliesTo Tank B") using an interactive Vis-Network graph.
+* **Graph Visualization:** Explore relationships beyond simple hierarchies (e.g., "Machine A SuppliesTo Tank B") using an interactive, 100% dependency-free native SVG Force-Directed graph engine (KorelateGraph).
 * **I3X Compatibility:** Seamlessly bridge legacy tag names to a standardized I3X element structure.
 
 ### 11. AI Safety & Governance (Admin)
