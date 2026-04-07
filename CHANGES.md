@@ -1,3 +1,14 @@
+## 2026-04-06 - CDM Modeler V3 Refactoring (i3X Compliance)
+- **3-Column IDE Layout**: Refactored the Modeler view into a Master-Detail-Graph layout using native resizers and Flexbox.
+- **i3X Relationships Editor**: Added a dedicated section to manage semantic relationships (HasParent, HasComponent, SuppliesTo, etc.) directly from the UI, syncing securely with the backend JSON.
+- **Schema Simplification**: Merged "Properties" and "Telemetry" into a single "Object Schema Attributes" list, aligning with the i3X JSON Schema standard where dynamic/static properties are not strictly segregated.
+- **Dependency Graph**: Re-implemented the `vis-network` graph to show full semantic dependencies (Namespaces, Parents, Types, and custom relations).
+- **Simulation Model Overhaul**: Rewrote `data/uns_model.json` to exhaustively map Stark Industries and HyDroChem-AG simulators, including complex topological relationships.
+- **Core Logic Touched**: `public/view.modeler.js`, `public/html/view.modeler.html`, `data/uns_model.json`.
+- **Pitfalls & Solutions**:
+    - *ResizeObserver Loops*: `vis-network` triggered infinite layout loops in Flexbox. Fixed by explicitly sizing the container, binding the right resizer to the graph panel (`panelB`), and suppressing benign ResizeObserver errors globally.
+    - *Graph Interactivity*: Frequent auto-saves reset the physics engine. Decoupled graph redrawing from text input and added a "Freeze/Unfreeze" toggle to allow manual node positioning.
+
 ## 2026-04-05 - Publish View Multi-Source UX Fixes
 - **Data Provider Visibility**: Resolved a UX issue in the Publish view where users couldn't see or select the target data provider. 
     - **Manual Publish**: The 'Target Provider' dropdown is now always visible. If only a single broker/provider is configured, the dropdown renders in a disabled (read-only) state to clearly indicate the destination. Fixed a parameter mismatch (`sourceConfigs` vs `providerConfigs`) that caused the dropdown to fail to populate legacy MQTT brokers.

@@ -1,142 +1,131 @@
 <div class="modeler-container" style="display: flex; height: 100%; width: 100%; overflow: hidden; background-color: var(--color-bg);">
-    <div class="modeler-sidebar" style="flex: 0 0 320px; min-width: 200px; background-color: var(--color-bg-secondary); display: flex; flex-direction: column;">
+    <!-- PANEL 1: REGISTRY -->
+    <div class="modeler-sidebar" style="width: 300px; min-width: 150px; background-color: var(--color-bg-secondary); display: flex; flex-direction: column; border-right: 1px solid var(--color-border); flex-shrink: 0;">
         <div style="padding: 15px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-tertiary);">
-            <h2 style="margin: 0 0 10px 0; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center;">
-                CDM Explorer
-                <div class="modeler-actions" style="display: flex; gap: 5px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h2 style="margin: 0; font-size: 1.1em; color: var(--color-text);">CDM Registry</h2>
+                <div style="display: flex; gap: 5px;">
                     <button id="btn-modeler-refresh" class="tool-button" title="Reload Model">↻</button>
-                    <button id="btn-modeler-save" class="tool-button button-primary" title="Save Model to Server">💾 Save</button>
+                    <button id="btn-modeler-save" class="tool-button button-primary" title="Save All Changes">💾 Save</button>
                 </div>
-            </h2>
-            <div style="display: flex; gap: 5px;">
-                <button id="btn-add-namespace" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Namespace</button>
-                <button id="btn-add-type" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Type</button>
-                <button id="btn-add-instance" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Object</button>
             </div>
-            <div id="modeler-status" style="margin-top: 8px; font-size: 0.8em; font-weight: bold; text-align: center;"></div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 5px;">
+                    <button id="btn-add-namespace" class="tool-button" style="flex: 1; font-size: 0.85em;">+ NS</button>
+                    <button id="btn-add-type" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Type</button>
+                    <button id="btn-add-instance" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Obj</button>
+                </div>
+                <input type="text" id="modeler-search" placeholder="Search models..." class="modern-input" style="padding: 6px 10px; font-size: 0.85em;">
+            </div>
         </div>
-        <div class="tree-container" id="modeler-tree-container" style="flex: 1; padding: 10px; overflow-y: auto;">
-        </div>
+        <div class="tree-container" id="modeler-tree-container" style="flex: 1; padding: 10px; overflow-y: auto;"></div>
     </div>
     
-    <div class="resizer" id="drag-handle-vertical-modeler"></div>
+    <div class="resizer" id="drag-handle-vertical-modeler-1"></div>
 
-    <div class="modeler-main-area" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;">
+    <!-- PANEL 2: EDITOR -->
+    <div class="modeler-main-editor" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 300px; background-color: var(--color-bg);">
         <div id="modeler-welcome" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-text-secondary);">
             <div style="font-size: 4em; margin-bottom: 20px; filter: grayscale(1) opacity(0.5);">🏗️</div>
             <h2 style="margin-bottom: 10px;">CDM Modeler</h2>
-            <p>Define your Core Data Model, sensitivity levels, and privacy rules.</p>
+            <p>Select a model to edit or create a new one.</p>
         </div>
-        <div id="modeler-content" style="display: none; flex-direction: column; height: 100%;">
-            <div id="modeler-graph-wrapper" style="flex: 0 0 350px; min-height: 150px; background-color: var(--color-bg-tertiary); position: relative; display: block; overflow: hidden;">
-                <div style="position: absolute; top: 10px; left: 15px; z-index: 10; font-size: 0.85em; font-weight: bold; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 1px;">Relationship Graph</div>
-                <div id="relationship-graph" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
-            </div>
-            
-            <div class="resizer-horizontal" id="drag-handle-horizontal-modeler"></div>
 
-            <div id="modeler-form-wrapper" style="flex: 1; padding: 25px; background-color: var(--color-bg); overflow-y: auto; min-height: 150px;">
-                <form id="modeler-form" style="max-width: 800px; margin: 0 auto; background: var(--color-bg-secondary); padding: 25px; border-radius: 8px; border: 1px solid var(--color-border); box-shadow: 0 4px 12px var(--color-shadow);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--color-border-secondary);">
-                        <div>
-                            <h2 id="modeler-form-title" style="margin: 0 0 5px 0; color: var(--color-text);">Edit Item</h2>
-                            <div id="modeler-form-subtitle" style="font-size: 0.85em; color: var(--color-text-muted); font-family: monospace;"></div>
+        <div id="modeler-content" style="display: none; flex-direction: column; height: 100%;">
+            <div style="padding: 15px 25px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-secondary); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <div style="flex: 1;">
+                    <input type="text" id="modeler-edit-displayname" class="inline-edit-header" placeholder="Model Name">
+                    <div id="modeler-edit-id" style="font-size: 0.8em; color: var(--color-text-muted); font-family: monospace; margin-top: 2px;"></div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <div class="toggle-group" style="display: flex; background: var(--color-bg-tertiary); padding: 3px; border-radius: 6px; border: 1px solid var(--color-border);">
+                        <button id="btn-mode-form" class="toggle-button active">Form</button>
+                        <button id="btn-mode-json" class="toggle-button">JSON</button>
+                    </div>
+                    <button id="btn-modeler-delete" class="tool-button button-danger">🗑️</button>
+                </div>
+            </div>
+
+            <div id="modeler-form-view" style="flex: 1; overflow-y: auto; padding: 25px;">
+                <div class="editor-section">
+                    <h3 class="section-title">Identity & Context</h3>
+                    <div class="grid-form">
+                        <div class="form-group">
+                            <label class="modern-label">ISA-95 Level</label>
+                            <select id="field-isa-level" class="modern-input">
+                                <option value="Enterprise">Enterprise</option>
+                                <option value="Site">Site</option>
+                                <option value="Area">Area</option>
+                                <option value="Line">Line / Cell</option>
+                                <option value="Equipment">Equipment</option>
+                                <option value="Sensor">Sensor</option>
+                            </select>
                         </div>
-                        <button type="button" id="btn-modeler-delete" class="tool-button button-danger">🗑️ Delete</button>
+                        <div class="form-group">
+                            <label class="modern-label">Namespace URI</label>
+                            <select id="field-namespace" class="modern-input"></select>
+                        </div>
                     </div>
-                    <div id="modeler-dynamic-fields" style="display: flex; flex-direction: column; gap: 15px;">
+                </div>
+
+                <div class="editor-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 class="section-title" style="margin:0;">i3X Relationships</h3>
+                        <button id="btn-add-relationship" class="tool-button" style="padding: 2px 8px;">+ Add</button>
                     </div>
-                    <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--color-border-secondary); display: flex; justify-content: flex-end; gap: 10px;">
-                        <button type="submit" class="tool-button button-primary" style="padding: 8px 20px;">Apply Changes</button>
+                    <div id="container-relationships" class="schema-items-container"></div>
+                </div>
+
+                <div class="editor-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 class="section-title" style="margin:0;">Object Schema Attributes</h3>
+                        <button id="btn-add-property" class="tool-button" style="padding: 2px 8px;">+ Add Attribute</button>
                     </div>
-                </form>
+                    <div id="container-properties" class="schema-items-container"></div>
+                </div>
+            </div>
+
+            <div id="modeler-json-view" style="display: none; flex: 1; position: relative;">
+                <div id="modeler-ace-editor" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;"></div>
             </div>
         </div>
     </div>
+
+    <div class="resizer" id="drag-handle-vertical-modeler-2"></div>
+
+    <!-- PANEL 3: GRAPH -->
+    <div class="modeler-graph-sidebar" style="width: 400px; min-width: 150px; background-color: var(--color-bg-secondary); display: flex; flex-direction: column; border-left: 1px solid var(--color-border); flex-shrink: 0; position: relative;">
+        <div style="padding: 15px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); z-index: 10; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 0.8em; text-transform: uppercase; color: var(--color-text-secondary);">Dependency Graph</h2>
+            <button id="btn-toggle-physics" class="tool-button" title="Toggle Auto-Layout (Physics)" style="font-size: 0.75em; padding: 2px 6px;">⚛️ Freeze</button>
+        </div>
+        <div style="flex: 1; position: relative; background-color: var(--color-bg-tertiary); overflow: hidden; min-height: 200px;">
+            <div id="relationship-graph" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+        </div>
+    </div>
 </div>
+
 <style>
-    /* Modeler Tree Specific Styles */
-    .modeler-tree ul {
-        list-style-type: none;
-        padding-left: 20px;
-        margin: 0;
-    }
-    .modeler-tree > ul {
-        padding-left: 0;
-    }
-    .modeler-tree li {
-        margin: 2px 0;
-        position: relative;
-    }
-    .modeler-node {
-        display: flex;
-        align-items: center;
-        padding: 4px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        user-select: none;
-        border: 1px solid transparent;
-        transition: background-color 0.2s;
-        color: var(--color-text);
-        font-size: 0.9em;
-    }
-    .modeler-node:hover {
-        background-color: var(--color-bg-accent);
-    }
-    .modeler-node.selected {
-        background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
-        border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
-        color: var(--color-primary);
-        font-weight: 500;
-    }
-    .node-toggle {
-        width: 16px;
-        text-align: center;
-        margin-right: 4px;
-        color: var(--color-text-muted);
-        cursor: pointer;
-        display: inline-block;
-        transition: transform 0.2s;
-    }
-    .node-toggle.collapsed {
-        transform: rotate(-90deg);
-    }
-    .node-icon {
-        margin-right: 6px;
-        font-size: 1.1em;
-    }
-    .modeler-tree li > ul.collapsed {
-        display: none;
-    }
-    /* Vis-Network custom styles */
-    .vis-network {
-        outline: none; /* Remove focus ring */
-    }
-    /* Form Enhancements */
-    .modern-input {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid var(--color-border);
-        border-radius: 6px;
-        background-color: var(--color-bg);
-        color: var(--color-text);
-        font-family: inherit;
-        font-size: 0.95em;
-        box-sizing: border-box;
-        transition: border-color 0.2s;
-    }
-    .modern-input:focus {
-        outline: none;
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
-    }
-    .modern-label {
-        display: block;
-        margin-bottom: 6px;
-        font-size: 0.85em;
-        font-weight: 600;
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    .inline-edit-header { background: transparent; border: none; font-size: 1.4em; font-weight: 700; color: var(--color-text); width: 100%; outline: none; border-bottom: 2px solid transparent; }
+    .inline-edit-header:focus { border-bottom: 2px solid var(--color-primary); }
+    .editor-section { margin-bottom: 20px; background: var(--color-bg-secondary); padding: 15px; border-radius: 8px; border: 1px solid var(--color-border); }
+    .section-title { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-primary); margin-bottom: 12px; font-weight: 700; }
+    .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .toggle-button { background: transparent; border: none; color: var(--color-text-muted); padding: 4px 10px; font-size: 0.8em; cursor: pointer; border-radius: 4px; }
+    .toggle-button.active { background: var(--color-bg); color: var(--color-primary); font-weight: bold; }
+    .schema-item-row { display: flex; gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid var(--color-border-secondary); }
+    .modern-input { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); color: var(--color-text); font-size: 0.9em; }
+    .modern-label { display: block; margin-bottom: 4px; font-size: 0.75em; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; }
+    .btn-delete-row { background: transparent; border: none; color: var(--color-text-muted); cursor: pointer; padding: 4px; }
+    .btn-delete-row:hover { color: var(--color-danger); }
+    
+    /* Guaranteed Highlight CSS */
+    .modeler-node { display: flex; align-items: center; padding: 6px 10px; border-radius: 5px; cursor: pointer; color: var(--color-text); font-size: 0.9em; margin-bottom: 1px; border-left: 3px solid transparent; transition: all 0.2s; }
+    .modeler-node:hover { background-color: var(--color-bg-accent); }
+    .modeler-node.selected { 
+        background-color: rgba(0, 123, 255, 0.15) !important; 
+        border-left: 3px solid #007bff !important; 
+        color: #007bff !important; 
+        font-weight: bold !important; 
     }
 </style>

@@ -2,293 +2,320 @@
   "namespaces": [
     {
       "uri": "https://cesmii.org/i3x",
-      "displayName": "I3X Core"
-    },
-    {
-      "uri": "https://galactic-empire.mil/uns",
-      "displayName": "Galactic Empire UNS"
-    },
-    {
-      "uri": "https://hydrochem-ag.com/uns",
-      "displayName": "HyDroChem-AG Industrial UNS"
-    },
-    {
-      "uri": "https://ratp.fr/uns",
-      "displayName": "RATP Paris Métro UNS"
+      "displayName": "i3X Standard Core"
     },
     {
       "uri": "https://stark-industries.com/uns",
-      "displayName": "Stark Industries UNS"
+      "displayName": "Stark Industries (Malibu)"
+    },
+    {
+      "uri": "https://hydrochem-ag.com/uns",
+      "displayName": "HyDroChem-AG (Frankfurt)"
     }
   ],
   "objectTypes": [
     {
-      "elementId": "Organization",
-      "displayName": "Organization",
+      "elementId": "SiteType",
+      "displayName": "Manufacturing Site",
       "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "headquarters": { "type": "string" }
+          "location": { "type": "string", "title": "Geographic Location" }
         }
       }
     },
     {
-      "elementId": "Site",
-      "displayName": "Physical Site",
+      "elementId": "LineType",
+      "displayName": "Production Line",
       "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
         "properties": {
-          "location": { "type": "string" },
-          "site_type": { "type": "string", "enum": ["Manufacturing", "R&D", "Logistics", "Transit"] }
+          "status": { "type": "string", "title": "Line Status" },
+          "active_wo": { "type": "string", "title": "Active Work Order" }
         }
       }
     },
     {
-      "elementId": "Area",
-      "displayName": "Production Area",
+      "elementId": "RobotArmType",
+      "displayName": "Robotic Assembly Arm",
+      "namespaceUri": "https://stark-industries.com/uns",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "speed": { "type": "number", "title": "Motor Speed", "unit": "rpm" },
+          "temp": { "type": "number", "title": "Motor Temperature", "unit": "°C" },
+          "status": { "type": "string", "title": "Status" }
+        }
+      }
+    },
+    {
+      "elementId": "LaserWelderType",
+      "displayName": "Precision Laser Welder",
+      "namespaceUri": "https://stark-industries.com/uns",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "temp": { "type": "number", "title": "Laser Temperature", "unit": "°C" },
+          "status": { "type": "string", "title": "Status" }
+        }
+      }
+    },
+    {
+      "elementId": "CNCMillType",
+      "displayName": "5-Axis CNC Mill",
+      "namespaceUri": "https://stark-industries.com/uns",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "vibration": { "type": "number", "title": "Spindle Vibration", "unit": "mm/s" },
+          "load": { "type": "number", "title": "Motor Load", "unit": "%" },
+          "status": { "type": "string", "title": "Status" }
+        }
+      }
+    },
+    {
+      "elementId": "GasTankType",
+      "displayName": "Industrial Gas Tank",
       "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
         "properties": {
-          "status": { "type": "string" },
-          "supervisor": { "type": "string" }
+          "level": { "type": "number", "title": "Fill Level", "unit": "%" },
+          "pressure": { "type": "number", "title": "Internal Pressure", "unit": "bar" },
+          "status": { "type": "string", "title": "Status" }
         }
       }
     },
     {
-      "elementId": "Equipment",
-      "displayName": "General Equipment",
+      "elementId": "PowerMeterType",
+      "displayName": "Facility Power Meter",
       "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
         "properties": {
-          "model": { "type": "string" },
-          "serial_number": { "type": "string" },
-          "status": { "type": "string" }
+          "voltage": { "type": "number", "title": "Voltage", "unit": "V" },
+          "current": { "type": "number", "title": "Current", "unit": "A" },
+          "power": { "type": "number", "title": "Active Power", "unit": "kW" },
+          "pf": { "type": "number", "title": "Power Factor" },
+          "status": { "type": "string", "title": "Status" }
         }
       }
     },
     {
-      "elementId": "TransportLine",
-      "displayName": "Transit Line",
-      "namespaceUri": "https://ratp.fr/uns",
+      "elementId": "PowerModulatorType",
+      "displayName": "Arc Reactor Modulator",
+      "namespaceUri": "https://stark-industries.com/uns",
       "schema": {
         "type": "object",
         "properties": {
-          "line_number": { "type": "string" },
-          "status": { "type": "string" },
-          "message": { "type": "string" }
+          "output": { "type": "number", "title": "Energy Output", "unit": "MW" },
+          "stability": { "type": "number", "title": "Core Stability", "unit": "%" },
+          "status": { "type": "string", "title": "Containment Status" }
         }
       }
     },
     {
-      "elementId": "MetroTrain",
-      "displayName": "Metro Trainset",
-      "namespaceUri": "https://ratp.fr/uns",
+      "elementId": "CleanRoomType",
+      "displayName": "Clean Room Environment",
+      "namespaceUri": "https://cesmii.org/i3x",
       "schema": {
         "type": "object",
         "properties": {
-          "train_id": { "type": "string" },
-          "line": { "type": "string" },
-          "passengers": { "type": "number" },
-          "capacity": { "type": "number" },
-          "occupancy_percent": { "type": "number" },
-          "speed": { "type": "number" },
-          "status": { "type": "string" }
+          "humidity": { "type": "number", "title": "Relative Humidity", "unit": "%RH" },
+          "pressure_pa": { "type": "number", "title": "Differential Pressure", "unit": "Pa" },
+          "hvac_vfd_speed_pct": { "type": "number", "title": "HVAC Fan Speed", "unit": "%" },
+          "status": { "type": "string", "title": "Environment Status" }
         }
       }
     },
     {
-      "elementId": "MetroStation",
-      "displayName": "Metro Station",
-      "namespaceUri": "https://ratp.fr/uns",
+      "elementId": "DryingOvenType",
+      "displayName": "Industrial Drying Oven",
+      "namespaceUri": "https://hydrochem-ag.com/uns",
       "schema": {
         "type": "object",
         "properties": {
-          "station_id": { "type": "string" },
-          "passengers": { "type": "number" },
-          "capacity": { "type": "number" },
-          "air_quality": {
-            "type": "object",
-            "properties": {
-              "co2": { "type": "number" },
-              "pm2_5": { "type": "number" }
-            }
-          }
+          "temp_c": { "type": "number", "title": "Internal Temperature", "unit": "°C" },
+          "fan_vfd_speed_pct": { "type": "number", "title": "Circulation Fan Speed", "unit": "%" },
+          "web_speed_m_min": { "type": "number", "title": "Conveyor Web Speed", "unit": "m/min" },
+          "status": { "type": "string", "title": "Oven Status" }
         }
       }
-    }
-  ],
-  "relationshipTypes": [
-    {
-      "elementId": "HasParent",
-      "displayName": "HasParent",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasChildren"
     },
     {
-      "elementId": "HasChildren",
-      "displayName": "HasChildren",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasParent"
-    },
-    {
-      "elementId": "HasComponent",
-      "displayName": "HasComponent",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "ComponentOf"
-    },
-    {
-      "elementId": "ComponentOf",
-      "displayName": "ComponentOf",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasComponent"
-    },
-    {
-      "elementId": "Monitors",
-      "displayName": "Monitors",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "MonitoredBy"
-    },
-    {
-      "elementId": "Supplies",
-      "displayName": "Supplies",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "SuppliedBy"
+      "elementId": "ChillerPlantType",
+      "displayName": "Central Chiller Plant",
+      "namespaceUri": "https://hydrochem-ag.com/uns",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "supply_temp_c": { "type": "number", "title": "Glycol Supply Temp", "unit": "°C" },
+          "status": { "type": "string", "title": "Compressor Status" }
+        }
+      }
     }
   ],
   "instances": [
     {
-      "elementId": "Galactic_Empire",
-      "displayName": "Galactic Empire",
-      "typeId": "Organization",
-      "parentId": "/",
-      "isComposition": true,
-      "namespaceUri": "https://galactic-empire.mil/uns"
+      "elementId": "stark_malibu_hq",
+      "displayName": "Stark Malibu Headquarters",
+      "typeId": "SiteType",
+      "isaLevel": "Site",
+      "description": "Main R&D and Mk-Series Assembly Facility"
     },
     {
-      "elementId": "Death_Star_01",
-      "displayName": "Death Star I",
-      "typeId": "Site",
-      "parentId": "Galactic_Empire",
-      "isComposition": true,
-      "namespaceUri": "https://galactic-empire.mil/uns"
+      "elementId": "assembly_line_01",
+      "displayName": "Suit Assembly Line 01",
+      "typeId": "LineType",
+      "parentId": "stark_malibu_hq",
+      "isaLevel": "Line",
+      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/#"
     },
     {
-      "elementId": "Superlaser",
-      "displayName": "Kyber Superlaser",
-      "typeId": "Equipment",
-      "parentId": "Death_Star_01",
-      "isComposition": true,
-      "namespaceUri": "https://galactic-empire.mil/uns",
-      "topic_mapping": "galactic_empire/death_star/weapon_systems/superlaser/charge"
+      "elementId": "power_modulator_01",
+      "displayName": "Arc Reactor Modulator",
+      "typeId": "PowerModulatorType",
+      "parentId": "stark_malibu_hq",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/power_modulator_01",
+      "relationships": {
+        "SuppliesPowerTo": ["assembly_line_01"]
+      }
     },
     {
-      "elementId": "Main_Reactor",
-      "displayName": "Hypermatter Reactor",
-      "typeId": "Equipment",
-      "parentId": "Death_Star_01",
-      "isComposition": true,
-      "namespaceUri": "https://galactic-empire.mil/uns",
-      "topic_mapping": "galactic_empire/death_star/power_systems/main_reactor/output"
+      "elementId": "power_meter_01",
+      "displayName": "Facility Main Feed Meter",
+      "typeId": "PowerMeterType",
+      "parentId": "stark_malibu_hq",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/power_meter_01",
+      "relationships": {
+        "Monitors": ["power_modulator_01"]
+      }
     },
     {
-      "elementId": "HyDroChem_AG",
-      "displayName": "HyDroChem-AG",
-      "typeId": "Organization",
-      "parentId": "/",
-      "isComposition": true,
-      "namespaceUri": "https://hydrochem-ag.com/uns"
+      "elementId": "robot_arm_01",
+      "displayName": "Heavy Duty Arm (Core Cell)",
+      "typeId": "RobotArmType",
+      "parentId": "assembly_line_01",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/robot_arm_01",
+      "relationships": {
+        "ReceivesPowerFrom": ["power_modulator_01"]
+      }
     },
     {
-      "elementId": "Frankfurt_Plant",
-      "displayName": "Frankfurt Industriepark",
-      "typeId": "Site",
-      "parentId": "HyDroChem_AG",
-      "isComposition": true,
-      "namespaceUri": "https://hydrochem-ag.com/uns"
+      "elementId": "laser_welder_01",
+      "displayName": "Titanium Laser Welder",
+      "typeId": "LaserWelderType",
+      "parentId": "assembly_line_01",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/laser_welder_01",
+      "relationships": {
+        "ReceivesGasFrom": ["gas_tank_argon"]
+      }
     },
     {
-      "elementId": "Coating_Line_2",
-      "displayName": "PEM Coating Line 02",
-      "typeId": "Area",
-      "parentId": "Frankfurt_Plant",
-      "isComposition": true,
-      "namespaceUri": "https://hydrochem-ag.com/uns",
+      "elementId": "cnc_mill_05",
+      "displayName": "5-Axis CNC (Casing)",
+      "typeId": "CNCMillType",
+      "parentId": "assembly_line_01",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/cnc_mill_05"
+    },
+    {
+      "elementId": "gas_tank_argon",
+      "displayName": "Argon Shielding Gas",
+      "typeId": "GasTankType",
+      "parentId": "stark_malibu_hq",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/gas_tank_argon",
+      "relationships": {
+        "SuppliesGasTo": ["laser_welder_01"]
+      }
+    },
+    {
+      "elementId": "gas_tank_nitrogen",
+      "displayName": "Nitrogen Purge Gas",
+      "typeId": "GasTankType",
+      "parentId": "stark_malibu_hq",
+      "isaLevel": "Equipment",
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/gas_tank_nitrogen",
+      "relationships": {
+        "SuppliesGasTo": ["clean_room_01"]
+      }
+    },
+    {
+      "elementId": "clean_room_01",
+      "displayName": "Class 100 Clean Room",
+      "typeId": "CleanRoomType",
+      "parentId": "assembly_line_01",
+      "isaLevel": "Area",
+      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/clean_room_01/#",
+      "relationships": {
+        "Contains": ["robot_arm_01", "laser_welder_01"]
+      }
+    },
+    {
+      "elementId": "hydrochem_frankfurt",
+      "displayName": "HyDroChem Frankfurt Plant",
+      "typeId": "SiteType",
+      "isaLevel": "Site",
+      "description": "Hydrogen PEM Membrane Production"
+    },
+    {
+      "elementId": "coating_line_2",
+      "displayName": "Coating Line 2",
+      "typeId": "LineType",
+      "parentId": "hydrochem_frankfurt",
+      "isaLevel": "Line",
       "topic_mapping": "frankfurt/mes/operations/line_2/status"
     },
     {
-      "elementId": "Drying_Oven_L2",
-      "displayName": "Industrial Drying Oven",
-      "typeId": "Equipment",
-      "parentId": "Coating_Line_2",
-      "isComposition": true,
-      "namespaceUri": "https://hydrochem-ag.com/uns",
-      "topic_mapping": "frankfurt/ot/line_2/drying_oven/telemetry"
+      "elementId": "hydrochem_main_power",
+      "displayName": "Frankfurt Grid Feed",
+      "typeId": "PowerMeterType",
+      "parentId": "hydrochem_frankfurt",
+      "isaLevel": "Equipment",
+      "topic_mapping": "frankfurt/ot/infrastructure/main_power/telemetry",
+      "relationships": {
+        "SuppliesPowerTo": ["chiller_plant", "cleanroom_A", "drying_oven_l2"]
+      }
     },
     {
-      "elementId": "RATP_Network",
-      "displayName": "RATP Paris",
-      "typeId": "Organization",
-      "parentId": "/",
-      "isComposition": true,
-      "namespaceUri": "https://ratp.fr/uns"
+      "elementId": "chiller_plant",
+      "displayName": "Utility Chiller Plant",
+      "typeId": "ChillerPlantType",
+      "parentId": "hydrochem_frankfurt",
+      "isaLevel": "Equipment",
+      "topic_mapping": "frankfurt/ot/utilities/chiller_plant/telemetry",
+      "relationships": {
+        "ProvidesCoolingTo": ["cleanroom_A", "coating_line_2"]
+      }
     },
     {
-      "elementId": "Metro_Line_1",
-      "displayName": "Ligne 1",
-      "typeId": "TransportLine",
-      "parentId": "RATP_Network",
-      "isComposition": true,
-      "namespaceUri": "https://ratp.fr/uns",
-      "topic_mapping": "ratp/uns/line/1/status"
+      "elementId": "cleanroom_A",
+      "displayName": "BMS Cleanroom A",
+      "typeId": "CleanRoomType",
+      "parentId": "hydrochem_frankfurt",
+      "isaLevel": "Area",
+      "topic_mapping": "frankfurt/ot/bms/cleanroom_A/telemetry",
+      "relationships": {
+        "Contains": ["coating_line_2"]
+      }
     },
     {
-      "elementId": "Train_MP05_05",
-      "displayName": "Train MP05-05",
-      "typeId": "MetroTrain",
-      "parentId": "Metro_Line_1",
-      "isComposition": true,
-      "namespaceUri": "https://ratp.fr/uns",
-      "topic_mapping": "ratp/uns/line/1/train/MP05-05/telemetry"
-    },
-    {
-      "elementId": "Stark_Industries",
-      "displayName": "Stark Industries",
-      "typeId": "Organization",
-      "parentId": "/",
-      "isComposition": true,
-      "namespaceUri": "https://stark-industries.com/uns"
-    },
-    {
-      "elementId": "Malibu_Facility",
-      "displayName": "Malibu R&D Center",
-      "typeId": "Site",
-      "parentId": "Stark_Industries",
-      "isComposition": true,
-      "namespaceUri": "https://stark-industries.com/uns"
-    },
-    {
-      "elementId": "Arc_Reactor_Feed",
-      "displayName": "Main Arc Reactor Feed",
-      "typeId": "Equipment",
-      "parentId": "Malibu_Facility",
-      "isComposition": true,
-      "namespaceUri": "https://stark-industries.com/uns",
-      "topic_mapping": "stark_industries/malibu_facility/bms/main_power_feed"
-    },
-    {
-      "elementId": "Robot_Arm_01",
-      "displayName": "Dum-E Robotic Arm",
-      "typeId": "Equipment",
-      "parentId": "Malibu_Facility",
-      "isComposition": true,
-      "namespaceUri": "https://stark-industries.com/uns",
-      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/palladium_core_cell/robotic_arm_01/speed"
+      "elementId": "drying_oven_l2",
+      "displayName": "Drying Oven (PEM Curing)",
+      "typeId": "DryingOvenType",
+      "parentId": "coating_line_2",
+      "isaLevel": "Equipment",
+      "topic_mapping": "frankfurt/ot/line_2/drying_oven/telemetry",
+      "relationships": {
+        "ReceivesPowerFrom": ["hydrochem_main_power"]
+      }
     }
-  ],
-  "legacy_concepts": []
+  ]
 }

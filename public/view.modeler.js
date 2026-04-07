@@ -1,759 +1,493 @@
 /**
  * @license Apache License, Version 2.0 (the "License")
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * @author Sebastien Lalaurette
- * @copyright (c) 2025-2026 Sebastien Lalaurette
- *
- * Semantic Modeler View Module
- * Provides an advanced, dynamic GUI to explore and edit the uns_model.json
- * according to I3X specifications. 
- * Integrates vis-network for interactive Relationship Graphs.
- * [UPDATED] Implemented View Lifecycle Teardown (mount/unmount) to prevent memory leaks.
  */
 
 import { confirmModal, trackEvent, makeResizable, showToast } from './utils.js';
+import { state } from './state.js';
+
+// --- Global Error Suppression ---
+window.addEventListener('error', (e) => {
+    if (e.message && e.message.includes('ResizeObserver loop')) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+    }
+}, true);
 
 // --- State ---
 let currentModel = null;
 let currentSelection = { type: null, id: null, ref: null }; 
 let isModelerInitialized = false;
-let isMounted = false; // Lifecycle flag
-let expandedNodes = new Set(); 
+let isMounted = false;
 let networkGraph = null; 
+let aceEditor = null;
+let editMode = 'form'; 
+let isPhysicsEnabled = true;
+let templatePromise = null;
+let syncTimeout = null;
 
 // --- DOM Elements ---
-let treeContainer, graphContainer, btnRefresh, btnSave, statusMsg;
-let formContainer, welcomeScreen, mainContent, formTitle, formSubtitle, dynamicFields, btnDelete;
-let btnAddNamespace, btnAddType, btnAddInstance;
+let el = {};
 
-/**
- * Robust loader for vis-network with CDN fallback.
- */
 function loadVisNetwork() {
     return new Promise((resolve) => {
         if (window.vis) return resolve();
-        const loadScript = (src) => {
-            return new Promise((res) => {
-                const script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.src = src;
-                script.onload = () => res(true);
-                script.onerror = () => res(false);
-                document.head.appendChild(script);
-            });
+        const script = document.createElement('script');
+        script.src = (document.querySelector('base')?.getAttribute('href') || '/') + 'libs/vis-network.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => {
+            const cdn = document.createElement('script');
+            cdn.src = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
+            cdn.onload = () => resolve();
+            document.head.appendChild(cdn);
         };
-        const basePath = document.querySelector('base')?.getAttribute('href') || '/';
-        const localPath = basePath + 'libs/vis-network.min.js';
-        const cdnPath = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
-
-        loadScript(localPath).then(success => {
-            if (success) {
-                console.log("✅ vis-network library loaded from local libs.");
-                resolve();
-            } else {
-                console.warn("⚠️ Failed to load local vis-network.min.js. Trying CDN fallback...");
-                loadScript(cdnPath).then(cdnSuccess => {
-                    if (cdnSuccess) {
-                        console.log("✅ vis-network library loaded from CDN.");
-                    } else {
-                        console.error("❌ Failed to load vis-network from both local and CDN.");
-                    }
-                    resolve();
-                });
-            }
-        });
+        document.head.appendChild(script);
     });
 }
 
-/**
- * Initializes the Modeler View DOM elements (Called once).
- */
 export async function initModelerView() {
-    const container = document.getElementById('modeler-view');
-    if (!container || isModelerInitialized) return;
+    if (templatePromise) return templatePromise;
 
-    try {
-        const response = await fetch('html/view.modeler.html');
-        if (!response.ok) throw new Error('Failed to load modeler template');
-        container.innerHTML = await response.text();
+    templatePromise = (async () => {
+        const container = document.getElementById('modeler-view');
+        if (!container || isModelerInitialized) return;
 
-        // Bind DOM elements
-        treeContainer = document.getElementById('modeler-tree-container');
-        graphContainer = document.getElementById('relationship-graph');
-        btnRefresh = document.getElementById('btn-modeler-refresh');
-        btnSave = document.getElementById('btn-modeler-save');
-        statusMsg = document.getElementById('modeler-status');
-        welcomeScreen = document.getElementById('modeler-welcome');
-        mainContent = document.getElementById('modeler-content');
-        formContainer = document.getElementById('modeler-form');
-        formTitle = document.getElementById('modeler-form-title');
-        formSubtitle = document.getElementById('modeler-form-subtitle');
-        dynamicFields = document.getElementById('modeler-dynamic-fields');
-        btnDelete = document.getElementById('btn-modeler-delete');
-        btnAddNamespace = document.getElementById('btn-add-namespace');
-        btnAddType = document.getElementById('btn-add-type');
-        btnAddInstance = document.getElementById('btn-add-instance');
+        try {
+            const response = await fetch('html/view.modeler.html');
+            container.innerHTML = await response.text();
 
-        // Initialize Resizers
-        makeResizable({
-            resizerEl: document.getElementById('drag-handle-vertical-modeler'),
-            direction: 'vertical',
-            panelA: document.querySelector('.modeler-sidebar')
-        });
+            const ids = [
+                'modeler-tree-container', 'relationship-graph', 'btn-modeler-refresh', 'btn-modeler-save',
+                'modeler-welcome', 'modeler-content', 'btn-modeler-delete', 'btn-add-namespace', 
+                'btn-add-type', 'btn-add-instance', 'modeler-search', 'modeler-edit-displayname',
+                'modeler-edit-id', 'btn-mode-form', 'btn-mode-json', 'modeler-form-view',
+                'modeler-json-view', 'modeler-ace-editor', 'field-isa-level', 'field-namespace',
+                'container-properties', 'container-relationships',
+                'btn-add-property', 'btn-add-relationship', 'btn-toggle-physics'
+            ];
+            ids.forEach(id => el[id] = document.getElementById(id));
 
-        makeResizable({
-            resizerEl: document.getElementById('drag-handle-horizontal-modeler'),
-            direction: 'horizontal',
-            panelA: document.getElementById('modeler-graph-wrapper'),
-            containerEl: document.getElementById('modeler-content')
-        });
+            // Resizers
+            // Left Resizer: Sidebar (Panel A)
+            makeResizable({ 
+                resizerEl: document.getElementById('drag-handle-vertical-modeler-1'), 
+                direction: 'vertical', 
+                panelA: document.querySelector('.modeler-sidebar') 
+            });
+            
+            // Right Resizer: Custom handler to avoid flex:1 conflicts
+            const resizer2 = document.getElementById('drag-handle-vertical-modeler-2');
+            const rightPanel = document.querySelector('.modeler-graph-sidebar');
+            let isDraggingRight = false;
+            
+            resizer2.addEventListener('mousedown', (e) => {
+                isDraggingRight = true;
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            });
+            
+            window.addEventListener('mousemove', (e) => {
+                if (!isDraggingRight) return;
+                const containerRect = document.querySelector('.modeler-container').getBoundingClientRect();
+                let newWidth = containerRect.right - e.clientX;
+                if (newWidth < 150) newWidth = 150;
+                if (newWidth > 800) newWidth = 800;
+                rightPanel.style.width = `${newWidth}px`;
+                rightPanel.style.flexBasis = `${newWidth}px`;
+            });
+            
+            window.addEventListener('mouseup', () => {
+                if (isDraggingRight) {
+                    isDraggingRight = false;
+                    document.body.style.cursor = 'default';
+                    if (networkGraph) networkGraph.setSize();
+                }
+            });
 
-        await loadVisNetwork();
+            await loadVisNetwork();
 
-        isModelerInitialized = true;
-        console.log("✅ Semantic Modeler V3 (Vis-Network) Initialized");
-    } catch (err) {
-        console.error("Error initializing Modeler View:", err);
-        container.innerHTML = `<div style="padding:20px; color:var(--color-danger);">Error loading Modeler Interface. Check console.</div>`;
-    }
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(() => {
+                    if (networkGraph) {
+                        networkGraph.setSize();
+                        networkGraph.redraw();
+                    }
+                });
+                ro.observe(document.querySelector('.modeler-graph-sidebar'));
+            }
+
+            isModelerInitialized = true;
+            if (state.activeView === 'modeler') mountModelerView();
+        } catch (err) { console.error("Modeler Init Error:", err); }
+    })();
+
+    return templatePromise;
 }
 
-// --- Named Event Handlers ---
-const onAddNamespace = () => createNewItem('namespace');
-const onAddType = () => createNewItem('objectType');
-const onAddInstance = () => createNewItem('instance');
-const onWindowResize = () => { if (networkGraph) networkGraph.fit(); };
-
-/**
- * Mounts the view (attaches event listeners, loads data).
- */
 export function mountModelerView() {
     if (isMounted || !isModelerInitialized) return;
 
-    btnRefresh?.addEventListener('click', loadModel);
-    btnSave?.addEventListener('click', saveModelToServer);
-    btnAddNamespace?.addEventListener('click', onAddNamespace);
-    btnAddType?.addEventListener('click', onAddType);
-    btnAddInstance?.addEventListener('click', onAddInstance);
-    formContainer?.addEventListener('submit', handleFormSubmit);
-    btnDelete?.addEventListener('click', handleDeleteItem);
-    window.addEventListener('resize', onWindowResize);
+    el['btn-modeler-refresh'].onclick = loadModel;
+    el['btn-modeler-save'].onclick = saveModelToServer;
+    el['btn-add-namespace'].onclick = () => createItem('namespace');
+    el['btn-add-type'].onclick = () => createItem('objectType');
+    el['btn-add-instance'].onclick = () => createItem('instance');
+    el['modeler-search'].oninput = renderRegistry;
+    el['btn-modeler-delete'].onclick = handleDelete;
+    el['btn-mode-form'].onclick = () => setEditMode('form');
+    el['btn-mode-json'].onclick = () => setEditMode('json');
+    el['btn-add-property'].onclick = () => addSchemaRow();
+    el['btn-add-relationship'].onclick = () => addRelationshipRow();
+    
+    el['btn-toggle-physics'].onclick = () => {
+        isPhysicsEnabled = !isPhysicsEnabled;
+        el['btn-toggle-physics'].innerHTML = isPhysicsEnabled ? "⚛️ Freeze" : "❄️ Unfreeze";
+        if (networkGraph) {
+            networkGraph.setOptions({ 
+                physics: { enabled: isPhysicsEnabled },
+                interaction: { dragNodes: true } 
+            });
+        }
+    };
+
+    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(input => {
+        input.oninput = syncStateFromForm;
+    });
 
     loadModel();
     isMounted = true;
-    console.log("[Modeler View] Mounted.");
 }
 
-/**
- * Legacy wrapper for router compatibility.
- */
-export function onModelerViewShow() {
-    mountModelerView();
-}
+export function onModelerViewShow() { mountModelerView(); }
 
-/**
- * Unmounts the view (removes listeners, destroys vis-network).
- */
 export function unmountModelerView() {
     if (!isMounted) return;
-
-    // Clean up vis-network instance
-    if (networkGraph) {
-        networkGraph.destroy();
-        networkGraph = null;
-    }
-
-    btnRefresh?.removeEventListener('click', loadModel);
-    btnSave?.removeEventListener('click', saveModelToServer);
-    btnAddNamespace?.removeEventListener('click', onAddNamespace);
-    btnAddType?.removeEventListener('click', onAddType);
-    btnAddInstance?.removeEventListener('click', onAddInstance);
-    formContainer?.removeEventListener('submit', handleFormSubmit);
-    btnDelete?.removeEventListener('click', handleDeleteItem);
-    window.removeEventListener('resize', onWindowResize);
-
+    if (networkGraph) { networkGraph.destroy(); networkGraph = null; }
+    if (aceEditor) { aceEditor.destroy(); aceEditor = null; }
     isMounted = false;
-    console.log("[Modeler View] Unmounted & Cleaned up.");
 }
 
-// --- 1. Model Loading & Tree Building ---
+// --- Logic ---
+
 async function loadModel() {
     try {
         const res = await fetch('api/env/model');
-        if (!res.ok) throw new Error("Failed to load model from server");
         currentModel = await res.json();
-        currentModel.namespaces = currentModel.namespaces || [];
-        currentModel.objectTypes = currentModel.objectTypes || [];
-        currentModel.instances = currentModel.instances || [];
-        renderTree();
-        if (currentSelection.id) {
-            selectItem(currentSelection.type, currentSelection.id);
-        } else {
-            clearEditor();
-        }
-    } catch (e) {
-        showToast(e.message, 'error');
-    }
+        renderRegistry();
+        populateNamespaces();
+        if (currentSelection.id) selectItem(currentSelection.type, currentSelection.id);
+    } catch (e) { showToast("Load error", "error"); }
 }
 
-function renderTree() {
-    if (!treeContainer) return;
-    treeContainer.innerHTML = '';
-    const rootUl = document.createElement('ul');
-    rootUl.className = 'modeler-tree';
+function populateNamespaces() {
+    if (!el['field-namespace']) return;
+    el['field-namespace'].innerHTML = (currentModel?.namespaces || []).map(ns => 
+        `<option value="${ns.uri}">${ns.displayName}</option>`
+    ).join('');
+}
 
-    const typesByNamespace = new Map();
-    const instancesByType = new Map();
-    const instancesByParent = new Map();
+function renderRegistry() {
+    if (!el['modeler-tree-container']) return;
+    const query = el['modeler-search'].value.toLowerCase();
+    const container = el['modeler-tree-container'];
+    container.innerHTML = '';
 
-    currentModel.objectTypes.forEach(t => {
-        if (!typesByNamespace.has(t.namespaceUri)) typesByNamespace.set(t.namespaceUri, []);
-        typesByNamespace.get(t.namespaceUri).push(t);
-    });
-
-    currentModel.instances.forEach(inst => {
-        if (!instancesByType.has(inst.typeId)) instancesByType.set(inst.typeId, []);
-        instancesByType.get(inst.typeId).push(inst);
-        const pid = (inst.parentId === '/' || !inst.parentId) ? 'root' : inst.parentId;
-        if (!instancesByParent.has(pid)) instancesByParent.set(pid, []);
-        instancesByParent.get(pid).push(inst);
-    });
-
-    const buildInstanceNode = (inst) => {
-        const li = document.createElement('li');
-        const children = instancesByParent.get(inst.elementId) || [];
-        const hasChildren = children.length > 0 || inst.isComposition;
-        const isExp = expandedNodes.has(inst.elementId);
-        const toggleClass = isExp ? '' : 'collapsed';
-        const toggleIcon = hasChildren ? '▼' : '&nbsp;';
-
-        const nodeDiv = document.createElement('div');
-        nodeDiv.className = `modeler-node ${currentSelection.id === inst.elementId ? 'selected' : ''}`;
-        nodeDiv.innerHTML = `
-            <span class="node-toggle ${toggleClass}">${toggleIcon}</span>
-            <span class="node-icon" style="color: #64748b;">📦</span>
-            <span class="node-label">${inst.displayName || inst.elementId}</span>
-        `;
-
-        nodeDiv.onclick = (e) => {
-            if (e.target.classList.contains('node-toggle') && hasChildren) {
-                const ul = li.querySelector(':scope > ul');
-                if (ul) {
-                    ul.classList.toggle('collapsed');
-                    e.target.classList.toggle('collapsed');
-                    if (ul.classList.contains('collapsed')) expandedNodes.delete(inst.elementId);
-                    else expandedNodes.add(inst.elementId);
-                }
-                return;
-            }
-            selectItem('instance', inst.elementId);
-        };
-
-        li.appendChild(nodeDiv);
-        if (hasChildren) {
-            const ul = document.createElement('ul');
-            ul.className = toggleClass;
-            children.forEach(child => ul.appendChild(buildInstanceNode(child)));
-            li.appendChild(ul);
-        }
-        return li;
+    const createNode = (id, name, type, icon) => {
+        if (query && !name.toLowerCase().includes(query) && !id.toLowerCase().includes(query)) return null;
+        const div = document.createElement('div');
+        div.className = `modeler-node ${currentSelection.id === id ? 'selected' : ''}`;
+        div.innerHTML = `<span class="node-icon">${icon}</span> <span class="node-label" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</span>`;
+        div.onclick = () => selectItem(type, id);
+        return div;
     };
 
-    currentModel.namespaces.forEach(ns => {
-        const nsLi = document.createElement('li');
-        const types = typesByNamespace.get(ns.uri) || [];
-        const isExp = expandedNodes.has(ns.uri);
-        const nodeDiv = document.createElement('div');
-        nodeDiv.className = `modeler-node ${currentSelection.id === ns.uri ? 'selected' : ''}`;
-        nodeDiv.innerHTML = `
-            <span class="node-toggle ${isExp ? '' : 'collapsed'}">${types.length > 0 ? '▼' : '&nbsp;'}</span>
-            <span class="node-icon" style="color: #3b82f6;">🌐</span>
-            <span class="node-label">${ns.displayName}</span>
-        `;
+    const section = (title, items, type, icon) => {
+        if (!items || items.length === 0) return;
+        const h = document.createElement('div');
+        h.style = "font-size:0.7em; text-transform:uppercase; color:var(--color-text-muted); margin: 15px 0 5px 5px; font-weight:700; letter-spacing:1px;";
+        h.textContent = title;
+        container.appendChild(h);
+        items.forEach(item => {
+            const id = item.uri || item.elementId;
+            const node = createNode(id, item.displayName || id, type, icon);
+            if (node) container.appendChild(node);
+        });
+    };
 
-        nodeDiv.onclick = (e) => {
-            if (e.target.classList.contains('node-toggle') && types.length > 0) {
-                const ul = nsLi.querySelector(':scope > ul');
-                if (ul) {
-                    ul.classList.toggle('collapsed');
-                    e.target.classList.toggle('collapsed');
-                    if (ul.classList.contains('collapsed')) expandedNodes.delete(ns.uri);
-                    else expandedNodes.add(ns.uri);
-                }
-                return;
-            }
-            selectItem('namespace', ns.uri);
-        };
-        nsLi.appendChild(nodeDiv);
-
-        if (types.length > 0) {
-            const typeUl = document.createElement('ul');
-            typeUl.className = isExp ? '' : 'collapsed';
-            types.forEach(t => {
-                const tLi = document.createElement('li');
-                const rootInstancesOfType = (instancesByType.get(t.elementId) || []).filter(i => i.parentId === '/' || !i.parentId);
-                const isTExp = expandedNodes.has(t.elementId);
-                const tDiv = document.createElement('div');
-                tDiv.className = `modeler-node ${currentSelection.id === t.elementId ? 'selected' : ''}`;
-                tDiv.innerHTML = `
-                    <span class="node-toggle ${isTExp ? '' : 'collapsed'}">${rootInstancesOfType.length > 0 ? '▼' : '&nbsp;'}</span>
-                    <span class="node-icon" style="color: #22c55e;">📃</span>
-                    <span class="node-label">${t.displayName}</span>
-                `;
-                tDiv.onclick = (e) => {
-                    if (e.target.classList.contains('node-toggle') && rootInstancesOfType.length > 0) {
-                        const ul = tLi.querySelector(':scope > ul');
-                        if (ul) {
-                            ul.classList.toggle('collapsed');
-                            e.target.classList.toggle('collapsed');
-                            if (ul.classList.contains('collapsed')) expandedNodes.delete(t.elementId);
-                            else expandedNodes.add(t.elementId);
-                        }
-                        return;
-                    }
-                    selectItem('objectType', t.elementId);
-                };
-                tLi.appendChild(tDiv);
-                if (rootInstancesOfType.length > 0) {
-                    const instUl = document.createElement('ul');
-                    instUl.className = isTExp ? '' : 'collapsed';
-                    rootInstancesOfType.forEach(inst => instUl.appendChild(buildInstanceNode(inst)));
-                    tLi.appendChild(instUl);
-                }
-                typeUl.appendChild(tLi);
-            });
-            nsLi.appendChild(typeUl);
-        }
-        rootUl.appendChild(nsLi);
-    });
-    treeContainer.appendChild(rootUl);
+    section('Namespaces', currentModel.namespaces, 'namespace', '🌐');
+    section('Object Types', currentModel.objectTypes, 'objectType', '📃');
+    section('Instances', currentModel.instances, 'instance', '📦');
 }
 
-// --- 2. Selection & Graph Drawing ---
 function selectItem(type, id) {
     let ref = null;
     if (type === 'namespace') ref = currentModel.namespaces.find(n => n.uri === id);
     if (type === 'objectType') ref = currentModel.objectTypes.find(t => t.elementId === id);
     if (type === 'instance') ref = currentModel.instances.find(i => i.elementId === id);
-    if (!ref) {
-        clearEditor();
-        return;
-    }
+
+    if (!ref) return;
     currentSelection = { type, id, ref };
-    document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
-    renderTree(); 
-    welcomeScreen.style.display = 'none';
-    mainContent.style.display = 'flex';
     
-    setTimeout(() => {
-        drawRelationshipGraph();
-    }, 100);
-    renderForm();
+    el['modeler-welcome'].style.display = 'none';
+    el['modeler-content'].style.display = 'flex';
+    
+    document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
+    renderRegistry();
+    
+    el['modeler-edit-displayname'].value = ref.displayName || '';
+    el['modeler-edit-id'].textContent = id;
+    el['field-isa-level'].value = ref.isaLevel || 'Equipment';
+    el['field-namespace'].value = ref.namespaceUri || (type === 'namespace' ? ref.uri : '');
+
+    renderSchemaItems();
+    renderRelationships();
+    
+    setTimeout(() => { drawGraph(); }, 100);
 }
 
-/**
- * Draws an interactive Relationship Graph using vis-network.
- */
-function drawRelationshipGraph() {
-    if (!window.vis || !graphContainer) return;
-    const item = currentSelection.ref;
-    if (!item) return;
-
-    const isDark = document.body.classList.contains('dark-mode');
-    const colors = {
-        center:   { background: '#007bff', border: '#0056b3', font: '#ffffff' },
-        instance: { background: isDark ? '#333333' : '#ffffff', border: '#6c757d', font: isDark ? '#ffffff' : '#333333' },
-        type:     { background: isDark ? '#1a3b2b' : '#e6f4ea', border: '#28a745', font: isDark ? '#ffffff' : '#333333' },
-        namespace:{ background: isDark ? '#1a2b4b' : '#e0f0ff', border: '#007bff', font: isDark ? '#ffffff' : '#333333' },
-        flow:     { background: isDark ? '#3d2b1a' : '#fff3e0', border: '#e67e22', font: isDark ? '#ffffff' : '#333333' }
-    };
-
-    let nodesData = [];
-    let edgesData = [];
-
-    const addNode = (id, label, group, nodeType) => {
-        if (!nodesData.find(n => n.id === id)) {
-            let icon = '📦';
-            if (nodeType === 'namespace') icon = '🌐';
-            if (nodeType === 'objectType') icon = '📃';
-            const style = (group === 'center') ? colors.center : (colors[group] || colors.instance);
-            nodesData.push({
-                id: id,
-                label: `${icon} ${label.length > 20 ? label.substring(0, 18) + '...' : label}`,
-                title: label, 
-                color: style,
-                shape: 'box',
-                font: { color: style.font, face: 'system-ui, -apple-system, sans-serif' },
-                nodeType: nodeType 
-            });
-        }
-    };
-
-    const addEdge = (from, to, label, type = 'hierarchy') => {
-        const isFlow = label.toLowerCase().includes('suppl');
-        edgesData.push({
-            from: from,
-            to: to,
-            label: label,
-            arrows: 'to',
-            font: { 
-                size: 10, 
-                align: 'horizontal', 
-                color: isFlow ? '#e67e22' : (isDark ? '#aaaaaa' : '#666666'),
-                background: isDark ? '#1a1a1a' : '#f4f7f9'
-            },
-            color: { color: isFlow ? '#e67e22' : (isDark ? '#555555' : '#cccccc') },
-            dashes: type === 'reference',
-            width: isFlow ? 2 : 1
-        });
-    };
-
-    const centerId = currentSelection.id;
-    addNode(centerId, item.displayName || item.elementId || item.uri, 'center', currentSelection.type);
-
-    if (currentSelection.type === 'instance') {
-        // 1. Hierarchy: Parent
-        if (item.parentId && item.parentId !== '/') {
-            const parent = currentModel.instances.find(i => i.elementId === item.parentId);
-            if (parent) {
-                addNode(parent.elementId, parent.displayName || parent.elementId, 'instance', 'instance');
-                addEdge(parent.elementId, centerId, 'HasParent');
-            }
-        }
-        // 2. Type Definition
-        if (item.typeId) {
-            const typeRef = currentModel.objectTypes.find(t => t.elementId === item.typeId);
-            if (typeRef) {
-                addNode(typeRef.elementId, typeRef.displayName || typeRef.elementId, 'type', 'objectType');
-                addEdge(centerId, typeRef.elementId, 'InstanceOf', 'reference');
-            }
-        }
-        // 3. Hierarchy: Children
-        const children = currentModel.instances.filter(i => i.parentId === item.elementId);
-        children.forEach(c => {
-            addNode(c.elementId, c.displayName || c.elementId, 'instance', 'instance');
-            addEdge(centerId, c.elementId, 'HasChildren');
-        });
-
-        // 4. Graph Relationships
-        if (item.relationships) {
-            for (const [relType, targets] of Object.entries(item.relationships)) {
-                // Skip hierarchical keys already handled
-                if (['HasParent', 'HasChildren', 'HasComponent', 'ComponentOf'].includes(relType)) continue;
-                
-                const targetList = Array.isArray(targets) ? targets : [targets];
-                targetList.forEach(targetId => {
-                    const targetObj = currentModel.instances.find(inst => inst.elementId === targetId);
-                    if (targetObj) {
-                        addNode(targetObj.elementId, targetObj.displayName || targetObj.elementId, 'instance', 'instance');
-                        addEdge(centerId, targetObj.elementId, relType);
-                    }
-                });
-            }
-        }
-        
-        // 5. Find incoming relationships (Reverse Lookup)
-        currentModel.instances.forEach(other => {
-            if (other.elementId === item.elementId || !other.relationships) return;
-            for (const [relType, targets] of Object.entries(other.relationships)) {
-                const targetList = Array.isArray(targets) ? targets : [targets];
-                if (targetList.includes(item.elementId)) {
-                    addNode(other.elementId, other.displayName || other.elementId, 'instance', 'instance');
-                    addEdge(other.elementId, centerId, relType);
-                }
-            }
-        });
-    } 
-    else if (currentSelection.type === 'objectType') {
-        if (item.namespaceUri) {
-            const ns = currentModel.namespaces.find(n => n.uri === item.namespaceUri);
-            if (ns) {
-                addNode(ns.uri, ns.displayName || ns.uri, 'namespace', 'namespace');
-                addEdge(centerId, ns.uri, 'InNamespace', 'reference');
-            }
-        }
-        const instances = currentModel.instances.filter(i => i.typeId === item.elementId).slice(0, 15);
-        instances.forEach(c => {
-            addNode(c.elementId, c.displayName || c.elementId, 'instance', 'instance');
-            addEdge(c.elementId, centerId, 'InstanceOf', 'reference');
-        });
-    }
-    else if (currentSelection.type === 'namespace') {
-        const types = currentModel.objectTypes.filter(t => t.namespaceUri === item.uri).slice(0, 15);
-        types.forEach(t => {
-            addNode(t.elementId, t.displayName || t.elementId, 'type', 'objectType');
-            addEdge(t.elementId, centerId, 'InNamespace', 'reference');
-        });
-    }
-
-    const data = { 
-        nodes: new vis.DataSet(nodesData), 
-        edges: new vis.DataSet(edgesData) 
-    };
-
-    const options = {
-        physics: {
-            enabled: true,
-            solver: 'forceAtlas2Based',
-            forceAtlas2Based: {
-                gravitationalConstant: -50,
-                centralGravity: 0.01,
-                springLength: 100,
-                springConstant: 0.08,
-                damping: 0.4,
-                avoidOverlap: 0.5
-            }
-        },
-        interaction: {
-            dragNodes: true,
-            dragView: true,
-            zoomView: true,
-            hover: true
-        }
-    };
-
-    if (networkGraph) {
-        networkGraph.destroy();
-    }
-    networkGraph = new vis.Network(graphContainer, data, options);
-    networkGraph.on("click", function (params) {
-        if (params.nodes.length > 0) {
-            const clickedNodeId = params.nodes[0];
-            const clickedNode = data.nodes.get(clickedNodeId);
-            if (clickedNode && clickedNode.nodeType && clickedNodeId !== currentSelection.id) {
-                selectItem(clickedNode.nodeType, clickedNodeId);
-            }
-        }
+function renderSchemaItems() {
+    el['container-properties'].innerHTML = '';
+    const schema = currentSelection.ref.schema || {};
+    const props = schema.properties || {};
+    Object.entries(props).forEach(([key, val]) => {
+        addSchemaRow({ id: key, ...val });
     });
 }
 
-// --- 3. Form Editor ---
-function renderForm() {
-    const { type, id, ref: itemData } = currentSelection;
-    if (!itemData) return;
+function addSchemaRow(data = {}) {
+    const container = el['container-properties'];
+    const row = document.createElement('div');
+    row.className = 'schema-item-row';
+    const types = ['string', 'number', 'boolean', 'integer', 'object', 'array'];
+    const options = types.map(t => `<option value="${t}" ${data.type === t ? 'selected' : ''}>${t}</option>`).join('');
+    row.innerHTML = `
+        <input type="text" placeholder="ID" class="modern-input" style="flex:2; font-family:monospace;" value="${data.id || ''}" data-key="id">
+        <input type="text" placeholder="Label" class="modern-input" style="flex:3;" value="${data.title || ''}" data-key="title">
+        <select class="modern-input" style="flex:2;" data-key="type">${options}</select>
+        <input type="text" placeholder="Unit (Opt.)" class="modern-input" style="flex:1.5;" value="${data.unit || ''}" data-key="unit" title="Unit of measurement">
+        <button class="btn-delete-row">✖</button>
+    `;
+    row.querySelectorAll('input, select').forEach(i => i.oninput = syncStateFromForm);
+    row.querySelector('.btn-delete-row').onclick = () => { row.remove(); syncStateFromForm(); };
+    container.appendChild(row);
+}
 
-    formTitle.textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-    formSubtitle.textContent = id;
-    dynamicFields.innerHTML = '';
+// --- i3X Relationships Logic ---
 
-    const createInput = (label, name, value, required = false, typeInput = 'text') => `
-        <div>
-            <label class="modern-label">${label} ${required ? '<span style="color:var(--color-danger)">*</span>' : ''}</label>
-            <input type="${typeInput}" name="${name}" value="${value || ''}" class="modern-input" ${required ? 'required' : ''}>
-        </div>
+function renderRelationships() {
+    el['container-relationships'].innerHTML = '';
+    const rels = currentSelection.ref.relationships || {};
+    Object.entries(rels).forEach(([relType, targets]) => {
+        const targetList = Array.isArray(targets) ? targets : [targets];
+        targetList.forEach(targetId => {
+            addRelationshipRow({ type: relType, target: targetId });
+        });
+    });
+}
+
+function addRelationshipRow(data = {}) {
+    const container = el['container-relationships'];
+    const row = document.createElement('div');
+    row.className = 'schema-item-row';
+    
+    // i3X standard relationship types
+    const types = ['HasParent', 'HasChildren', 'HasComponent', 'ComponentOf', 'InstanceOf', 'SuppliesTo', 'SuppliesFrom'];
+    const typeOptions = types.map(t => `<option value="${t}" ${data.type === t ? 'selected' : ''}>${t}</option>`).join('');
+    
+    // Available targets (all other instances)
+    const targetOptions = (currentModel?.instances || [])
+        .filter(i => i.elementId !== currentSelection.id)
+        .map(i => `<option value="${i.elementId}" ${data.target === i.elementId ? 'selected' : ''}>${i.displayName || i.elementId}</option>`)
+        .join('');
+
+    row.innerHTML = `
+        <select class="modern-input" style="flex:2;" data-key="rel-type">${typeOptions}</select>
+        <select class="modern-input" style="flex:3;" data-key="rel-target">
+            <option value="">-- Select Target --</option>
+            ${targetOptions}
+        </select>
+        <button class="btn-delete-row">✖</button>
     `;
 
-    if (type === 'namespace') {
-        dynamicFields.innerHTML = `
-            ${createInput('Namespace URI', 'uri', itemData.uri, true)}
-            ${createInput('Display Name', 'displayName', itemData.displayName, true)}
-        `;
-    } else if (type === 'objectType') {
-        const nsOptions = currentModel.namespaces.map(ns => 
-            `<option value="${ns.uri}" ${itemData.namespaceUri === ns.uri ? 'selected' : ''}>${ns.displayName}</option>`
-        ).join('');
-
-        dynamicFields.innerHTML = `
-            ${createInput('Element ID', 'elementId', itemData.elementId, true)}
-            ${createInput('Display Name', 'displayName', itemData.displayName, true)}
-            <div>
-                <label class="modern-label">Namespace URI *</label>
-                <select name="namespaceUri" class="modern-input" required>${nsOptions}</select>
-            </div>
-            <div>
-                <label class="modern-label">JSON Schema</label>
-                <textarea name="schema" class="modern-input" rows="6" style="font-family:monospace; resize:vertical;">${itemData.schema ? JSON.stringify(itemData.schema, null, 2) : '{}'}</textarea>
-            </div>
-        `;
-    } else if (type === 'instance') {
-        const typeOptions = currentModel.objectTypes.map(t => 
-            `<option value="${t.elementId}" ${itemData.typeId === t.elementId ? 'selected' : ''}>${t.displayName} (${t.elementId})</option>`
-        ).join('');
-
-        const parentOptions = `<option value="/">-- Root Level --</option>` + currentModel.instances
-            .filter(i => i.elementId !== itemData.elementId) 
-            .map(i => `<option value="${i.elementId}" ${itemData.parentId === i.elementId ? 'selected' : ''}>${i.displayName}</option>`).join('');
-
-        dynamicFields.innerHTML = `
-            ${createInput('Element ID', 'elementId', itemData.elementId, true)}
-            ${createInput('Display Name', 'displayName', itemData.displayName, true)}
-            <div style="display:flex; gap: 15px;">
-                <div style="flex:1;">
-                    <label class="modern-label">Type Definition *</label>
-                    <select name="typeId" class="modern-input" required>${typeOptions}</select>
-                </div>
-                <div style="flex:1;">
-                    <label class="modern-label">Parent Instance</label>
-                    <select name="parentId" class="modern-input">${parentOptions}</select>
-                </div>
-            </div>
-            <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px; background: var(--color-bg); padding: 10px; border-radius: 4px; border: 1px solid var(--color-border);">
-                <input type="checkbox" name="isComposition" id="chk-comp" ${itemData.isComposition ? 'checked' : ''} style="width: 18px; height: 18px;">
-                <label for="chk-comp" style="margin:0; cursor:pointer; font-weight: 500;">Is Composition (Contains nested components)</label>
-            </div>
-            <div style="margin-top: 20px; padding: 15px; background: var(--color-bg-tertiary); border-radius: 6px; border: 1px solid var(--color-border);">
-                <label class="modern-label" style="color: var(--color-primary); margin-bottom: 10px; display: block;">Data Governance & Security</label>
-                <div style="display:flex; gap: 15px;">
-                    <div style="flex:1;">
-                        <label class="modern-label">Sensitivity Level</label>
-                        <select name="sensitivity" class="modern-input">
-                            <option value="public" ${itemData.sensitivity === 'public' ? 'selected' : ''}>🟢 Public</option>
-                            <option value="internal" ${(!itemData.sensitivity || itemData.sensitivity === 'internal') ? 'selected' : ''}>🟡 Internal</option>
-                            <option value="confidential" ${itemData.sensitivity === 'confidential' ? 'selected' : ''}>🟠 Confidential</option>
-                            <option value="secret" ${itemData.sensitivity === 'secret' ? 'selected' : ''}>🔴 Secret</option>
-                        </select>
-                    </div>
-                    <div style="flex:1;">
-                        <label class="modern-label">Privacy / Compliance</label>
-                        <select name="privacy" class="modern-input">
-                            <option value="none" ${(!itemData.privacy || itemData.privacy === 'none') ? 'selected' : ''}>None</option>
-                            <option value="basic" ${itemData.privacy === 'basic' ? 'selected' : ''}>Basic Privacy</option>
-                            <option value="gdpr" ${itemData.privacy === 'gdpr' ? 'selected' : ''}>⚖️ GDPR / PII</option>
-                            <option value="health" ${itemData.privacy === 'health' ? 'selected' : ''}>🏥 Health Data (HDS/HIPAA)</option>
-                            <option value="financial" ${itemData.privacy === 'financial' ? 'selected' : ''}>💰 Financial / PCI</option>
-                            <option value="sensitive" ${itemData.privacy === 'sensitive' ? 'selected' : ''}>🛡️ Highly Sensitive (Religion/Opinions)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--color-border);">
-                <label class="modern-label" style="color: var(--color-primary);">MQTT Topic Mapping Pattern</label>
-                <div style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:8px;">Link this object to a raw MQTT topic stream to receive live data.</div>
-                <input type="text" name="topic_mapping" class="modern-input" value="${itemData.topic_mapping || ''}" placeholder="e.g. factory/line1/machineA/#">
-            </div>
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--color-border);">
-                <label class="modern-label">Custom Graph Relationships (JSON Object)</label>
-                <div style="font-size:0.85em; color:var(--color-text-secondary); margin-bottom:8px;">Define non-hierarchical links like 'SuppliesTo'. Format: {"RelType": "TargetId" or ["T1", "T2"]}</div>
-                <textarea name="relationships" class="modern-input" rows="4" style="font-family:monospace; resize:vertical;">${itemData.relationships ? JSON.stringify(itemData.relationships, null, 2) : '{}'}</textarea>
-            </div>
-        `;
-    }
+    row.querySelectorAll('select').forEach(i => i.onchange = syncRelationshipsAndRedraw);
+    row.querySelector('.btn-delete-row').onclick = () => { row.remove(); syncRelationshipsAndRedraw(); };
+    container.appendChild(row);
 }
 
-function handleFormSubmit(e) {
-    e.preventDefault();
-    if (!currentSelection.type) return;
-    const formData = new FormData(e.target);
-    const { type, ref } = currentSelection;
+function syncStateFromForm() {
+    if (!currentSelection.ref) return;
+    const ref = currentSelection.ref;
+    ref.displayName = el['modeler-edit-displayname'].value;
+    ref.isaLevel = el['field-isa-level'].value;
+    ref.namespaceUri = el['field-namespace'].value;
 
-    for (let [key, value] of formData.entries()) {
-        if (key === 'schema' || key === 'relationships') {
-            try { 
-                value = JSON.parse(value); 
-            } catch(err) { 
-                showToast(`Invalid JSON in ${key}`, 'error'); 
-                return; 
-            }
-        }
-        if (key === 'isComposition') value = true;
-        if (value === "" || (typeof value === 'object' && Object.keys(value).length === 0)) delete ref[key];
-        else ref[key] = value;
-    }
+    // Sync Schema
+    const properties = {};
+    const rows = [...el['container-properties'].children];
+    rows.forEach(row => {
+        const id = row.querySelector('[data-key="id"]').value.trim();
+        if (!id) return;
+        const item = { title: row.querySelector('[data-key="title"]').value, type: row.querySelector('[data-key="type"]').value };
+        const unitEl = row.querySelector('[data-key="unit"]');
+        if (unitEl && unitEl.value) item.unit = unitEl.value;
+        properties[id] = item;
+    });
+    ref.schema = { type: "object", properties };
 
-    if (type === 'instance' && !formData.has('isComposition')) {
-        ref.isComposition = false;
-    }
-    if (type === 'instance' && ref.parentId === '/') {
-        delete ref.parentId;
-    }
-
-    renderTree();
-    drawRelationshipGraph(); 
-    showToast("Changes applied locally. Remember to Save to Server.", 'info');
-    btnSave.classList.add('btn-unsaved'); 
-}
-
-// --- 4. Creation, Deletion & Persistence ---
-function createNewItem(type) {
-    const newItem = {};
-    if (type === 'namespace') {
-        newItem.uri = `https://namespace.local/${Date.now()}`;
-        newItem.displayName = "New Namespace";
-        currentModel.namespaces.push(newItem);
-        expandedNodes.add(newItem.uri);
-        selectItem(type, newItem.uri);
-    } else if (type === 'objectType') {
-        newItem.elementId = `NewType_${Date.now()}`;
-        newItem.displayName = "New Object Type";
-        newItem.namespaceUri = currentModel.namespaces[0]?.uri || "";
-        newItem.schema = { type: "object" };
-        currentModel.objectTypes.push(newItem);
-        expandedNodes.add(newItem.elementId);
-        selectItem(type, newItem.elementId);
-    } else if (type === 'instance') {
-        newItem.elementId = `instance_${Date.now()}`;
-        newItem.displayName = "New Instance";
-        newItem.typeId = currentModel.objectTypes[0]?.elementId || "";
-        newItem.isComposition = false;
-        if (currentSelection.type === 'instance') {
-            newItem.parentId = currentSelection.id;
-            expandedNodes.add(currentSelection.id);
-        }
-        currentModel.instances.push(newItem);
-        selectItem(type, newItem.elementId);
-    }
-    btnSave.classList.add('btn-unsaved');
-}
-
-async function handleDeleteItem() {
-    const isConfirmed = await confirmModal('Delete Item', 'Are you sure you want to remove this item from the model?', 'Delete', true);
-    if (!isConfirmed) return;
-
-    const { type, id } = currentSelection;
-    if (type === 'namespace') {
-        currentModel.namespaces = currentModel.namespaces.filter(n => n.uri !== id);
-    } else if (type === 'objectType') {
-        currentModel.objectTypes = currentModel.objectTypes.filter(t => t.elementId !== id);
-    } else if (type === 'instance') {
-        currentModel.instances = currentModel.instances.filter(i => i.elementId !== id);
-    }
-
-    btnSave.classList.add('btn-unsaved');
-    clearEditor();
-    renderTree();
-}
-
-function clearEditor() {
-    currentSelection = { type: null, id: null, ref: null };
-    if (welcomeScreen) welcomeScreen.style.display = 'flex';
-    if (mainContent) mainContent.style.display = 'none';
-    document.querySelectorAll('.modeler-node').forEach(n => n.classList.remove('selected'));
+    // Update node label without breaking layout
     if (networkGraph) {
-        networkGraph.destroy();
-        networkGraph = null;
+        let icon = '📦';
+        if (currentSelection.type === 'namespace') icon = '🌐';
+        if (currentSelection.type === 'objectType') icon = '📃';
+        try {
+            networkGraph.body.data.nodes.update({ id: 'self', label: `${icon} ${ref.displayName || ref.elementId || ref.uri}` });
+        } catch(e) {}
+    }
+
+    renderRegistry(); // Updates left panel highlighting immediately
+    el['btn-modeler-save'].classList.add('btn-unsaved');
+}
+
+function syncRelationshipsAndRedraw() {
+    if (!currentSelection.ref) return;
+    const relationships = {};
+    [...el['container-relationships'].children].forEach(row => {
+        const type = row.querySelector('[data-key="rel-type"]').value;
+        const target = row.querySelector('[data-key="rel-target"]').value;
+        if (!type || !target) return;
+        if (!relationships[type]) relationships[type] = [];
+        relationships[type].push(target);
+    });
+    currentSelection.ref.relationships = relationships;
+    syncStateFromForm();
+    drawGraph();
+}
+
+function setEditMode(mode) {
+    if (editMode === 'json' && mode === 'form') {
+        try {
+            const updated = JSON.parse(aceEditor.getValue());
+            Object.assign(currentSelection.ref, updated);
+            selectItem(currentSelection.type, currentSelection.id);
+        } catch(e) { showToast("Fix JSON first", "error"); return; }
+    }
+    editMode = mode;
+    el['btn-mode-form'].classList.toggle('active', mode === 'form');
+    el['btn-mode-json'].classList.toggle('active', mode === 'json');
+    el['modeler-form-view'].style.display = mode === 'form' ? 'block' : 'none';
+    el['modeler-json-view'].style.display = mode === 'json' ? 'block' : 'none';
+    if (mode === 'json') { initAce(); updateAce(); }
+}
+
+function initAce() {
+    if (aceEditor) return;
+    aceEditor = ace.edit(el['modeler-ace-editor']);
+    aceEditor.setTheme(state.isDarkMode ? "ace/theme/tomorrow_night" : "ace/theme/chrome");
+    aceEditor.session.setMode("ace/mode/json");
+}
+
+function updateAce() { if (aceEditor) aceEditor.setValue(JSON.stringify(currentSelection.ref, null, 2), -1); }
+
+// --- Graph ---
+
+function drawGraph() {
+    const graphDiv = el['relationship-graph'];
+    if (!window.vis || !graphDiv) return;
+
+    // Ensure container has height
+    if (graphDiv.clientHeight === 0) {
+        graphDiv.style.minHeight = '300px';
+    }
+
+    const item = currentSelection.ref;
+    if (!item) return;
+
+    const isDark = state.isDarkMode;
+    const nodesData = [{ id: 'self', label: item.displayName || 'Selected', shape: 'box', color: '#007bff', font: { color: '#fff', size: 14 }, margin: 10 }];
+    const edgesData = [];
+
+    const addNode = (id, label, icon, group) => {
+        if (!nodesData.find(n => n.id === id)) {
+            let color = isDark ? '#333' : '#eee';
+            let fontColor = isDark ? '#fff' : '#333';
+            if (group === 'self') { color = '#007bff'; fontColor = '#fff'; }
+            if (group === 'type') { color = '#28a745'; fontColor = '#fff'; }
+            if (group === 'ns') { color = '#3b82f6'; fontColor = '#fff'; }
+            nodesData.push({ id, label: `${icon} ${label}`, shape: 'box', color: color, font: { color: fontColor, size: 14 }, margin: 10 });
+        }
+    };
+
+    if (item.namespaceUri) {
+        addNode('ns', item.namespaceUri.split('/').pop(), '🌐', 'ns');
+        edgesData.push({ from: 'self', to: 'ns', label: 'belongs to', arrows: 'to', dashes: true });
+    }
+
+    if (item.relationships) {
+        Object.entries(item.relationships).forEach(([rel, targets]) => {
+            const list = Array.isArray(targets) ? targets : [targets];
+            list.forEach(tId => {
+                const tObj = currentModel.instances.find(i => i.elementId === tId);
+                const label = tObj ? (tObj.displayName || tId) : tId;
+                addNode(`rel-${tId}`, label, '📦', 'inst');
+                edgesData.push({ from: 'self', to: `rel-${tId}`, label: rel, arrows: 'to' });
+            });
+        });
+    }
+
+    const data = { nodes: new vis.DataSet(nodesData), edges: new vis.DataSet(edgesData) };
+    const options = {
+        physics: { 
+            enabled: isPhysicsEnabled, 
+            solver: 'barnesHut', 
+            barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 100 } 
+        },
+        interaction: { hover: true, zoomView: true, dragView: true, dragNodes: true }
+    };
+
+    if (!networkGraph) {
+        networkGraph = new vis.Network(graphDiv, data, options);
+    } else {
+        networkGraph.setOptions(options);
+        networkGraph.setData(data);
+    }
+}
+
+// --- CRUD ---
+
+async function handleDelete() {
+    const { type, id } = currentSelection;
+    if (await confirmModal(`Delete ${type}`, `Remove "${id}"?`, "Delete", true)) {
+        if (type === 'namespace') currentModel.namespaces = currentModel.namespaces.filter(n => n.uri !== id);
+        else if (type === 'objectType') currentModel.objectTypes = currentModel.objectTypes.filter(t => t.elementId !== id);
+        else currentModel.instances = currentModel.instances.filter(i => i.elementId !== id);
+        el['modeler-welcome'].style.display = 'flex';
+        el['modeler-content'].style.display = 'none';
+        currentSelection = { type: null, id: null, ref: null };
+        renderRegistry();
+    }
+}
+
+function createItem(type) {
+    const id = `new_${type}_${Date.now()}`;
+    const newItem = { displayName: `New ${type}`, description: "", isaLevel: "Equipment" };
+    if (type === 'namespace') { newItem.uri = `https://local/${Date.now()}`; currentModel.namespaces.push(newItem); selectItem(type, newItem.uri); }
+    else {
+        newItem.elementId = id; newItem.namespaceUri = currentModel.namespaces[0]?.uri || "";
+        if (type === 'objectType') { newItem.schema = { type: "object", properties: {} }; currentModel.objectTypes.push(newItem); }
+        else { newItem.typeId = currentModel.objectTypes[0]?.elementId || ""; currentModel.instances.push(newItem); }
+        selectItem(type, id);
     }
 }
 
 async function saveModelToServer() {
-    trackEvent('modeler_save_model');
-    btnSave.disabled = true;
-    btnSave.textContent = "Saving...";
-
-    try {
-        const response = await fetch('api/env/model', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(currentModel)
-        });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || "Save failed");
-        }
-
-        btnSave.classList.remove('btn-unsaved');
-        showToast("Model deployed to server.", 'success');
-        if (window.appCallbacks && window.appCallbacks.refreshSemanticTrees) {
-            window.appCallbacks.refreshSemanticTrees();
-        }
-    } catch (e) {
-        showToast(e.message, 'error');
-    } finally {
-        btnSave.disabled = false;
-        btnSave.innerHTML = "💾 Save";
+    if (editMode === 'json' && aceEditor) {
+        try { Object.assign(currentSelection.ref, JSON.parse(aceEditor.getValue())); } catch(e) { return showToast("Invalid JSON", "error"); }
     }
+    el['btn-modeler-save'].disabled = true;
+    try {
+        const res = await fetch('api/env/model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentModel) });
+        if (!res.ok) throw new Error();
+        showToast("Model saved", "success");
+        el['btn-modeler-save'].classList.remove('btn-unsaved');
+    } catch (e) { showToast("Save error", "error"); }
+    finally { el['btn-modeler-save'].disabled = false; }
 }
