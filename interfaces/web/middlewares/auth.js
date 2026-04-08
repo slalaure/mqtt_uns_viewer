@@ -8,6 +8,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 // --- Module-level State ---
 let config = null;
 let logger = null;
+let _userManager = null;
 
 /**
  * Configures Passport and Session management.
@@ -21,6 +22,7 @@ let logger = null;
 function configureAuth(app, appConfig, appLogger, userManager, sessionsPath, basePath) {
     config = appConfig;
     logger = appLogger;
+    _userManager = userManager;
 
     // 1. Session Middleware using embedded DuckDB Store
     const sessionStore = userManager.createSessionStore(session);
@@ -88,15 +90,49 @@ function configureAuth(app, appConfig, appLogger, userManager, sessionsPath, bas
  * Middleware to check if user is authenticated.
  * Includes fallback to legacy Basic Auth and allows public assets.
  */
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
     if (req.isAuthenticated()) return next();
     
-    // 1. Allow public assets
+    // 1. API Key Auth
+    let providedKey = null;
+    const authHeader = req.headers['authorization'];
+    const keyHeader = req.headers['x-api-key'];
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        providedKey = authHeader.substring(7);
+    } else if (keyHeader) {
+        providedKey = keyHeader;
+    }
+
+    if (providedKey && _userManager) {
+        try {
+            const keyRecord = await _userManager.verifyApiKey(providedKey);
+            if (keyRecord) {
+                // Attach a mock user for API key requests so downstream requireRole works if needed
+                req.user = { 
+                    id: keyRecord.id, 
+                    username: keyRecord.name, 
+                    role: 'admin', // API keys currently act as Admin by default
+                    isApiKey: true,
+                    scopes: keyRecord.scopes 
+                };
+                req.isAuthenticated = () => true;
+                return next();
+            } else {
+                return res.status(401).json({ error: "Unauthorized: Invalid API key." });
+            }
+        } catch (err) {
+            if (logger) logger.error({ err }, "Error verifying API key");
+            return res.status(500).json({ error: "Internal Server Error" });
+        }
+    }
+
+    // 2. Allow public assets
     const ext = path.extname(req.path).toLowerCase();
     const allowedExts = ['.css', '.js', '.mjs', '.svg', '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.gltf', '.glb', '.bin'];
     if (allowedExts.includes(ext)) return next();
 
-    // 2. Fallback to Legacy Basic Auth
+    // 3. Fallback to Legacy Basic Auth
     if (config && config.HTTP_USER && config.HTTP_PASSWORD) {
         const credentials = basicAuth(req);
         if (credentials && credentials.name === config.HTTP_USER && credentials.pass === config.HTTP_PASSWORD) {
@@ -106,15 +142,15 @@ function authMiddleware(req, res, next) {
         return res.status(401).send('Authentication required.');
     }
 
-    // 3. Allow login/auth routes
+    // 4. Allow login/auth routes
     if (req.path.startsWith('/auth') || req.path === '/login') {
         return next();
     }
 
-    // 4. Force Authentication
+    // 5. Force Authentication
     // If it's an API/XHR request, return 401 JSON.
     if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.path.startsWith('/api/')) {
-        return res.status(401).json({ error: 'Unauthorized. Please log in.' });
+        return res.status(401).json({ error: 'Unauthorized. Please log in or provide a valid API key.' });
     }
 
     // If it's a browser request (HTML), redirect to the login page.

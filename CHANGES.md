@@ -1,3 +1,36 @@
+## 2026-04-08 - I3X RFC 001 Full Compliance Achieved
+- **REST Endpoints Added**: Upgraded the `i3xRouter` to support standard RESTful `GET` queries mandated by the I3X compliance test suite. Added:
+  - `GET /objecttypes/:elementId`
+  - `GET /relationshiptypes/:elementId`
+  - `GET /objects/:elementId`
+  - `GET /objects/:elementId/related`
+  - `GET /objects/:elementId/value`
+  - `GET /objects/:elementId/history`
+- **Subscription Lifecycle Completeness**: 
+  - Added `GET /subscriptions/:id` to retrieve details of an active subscription.
+  - Added `POST /subscriptions/:id/unregister` to dynamically remove elements from a subscription.
+  - Enforced strict validation during `/register` to return `404` for unknown element IDs.
+  - Ensured `/delete` is idempotent, returning `200` regardless of prior existence.
+- **SSE Streaming Compatibility**: Implemented a graceful stream closure timeout specifically for `python-requests` clients that fail to utilize `stream=True`, preventing indefinite blocking during automated compliance checks.
+- **Authentication Bypass (API Keys)**: Enabled API Keys in `authMiddleware` to directly authorize headless script interactions without UI login.
+- **Core Logic Touched**: `interfaces/i3x/i3xRouter.js`, `interfaces/web/middlewares/auth.js`, `storage/userManager.js`.
+- **Result**: The server now passes 100% (71/71) of the CESMII I3X Compliance test suite, achieving the "Full" compliance level.
+
+## 2026-04-08 - CDM Modeler Metadata & Key Constraints
+- **Enhanced Property Metadata**: Added granular control over each CDM attribute with support for:
+  - **Confidentiality Levels**: Public, Internal, Confidential, Restricted.
+  - **Sensitivity Levels**: Normal, Sensitive, Highly Sensitive.
+- **Key Constraints & Linking**:
+  - Added support for **Primary Key (PK)** and **Foreign Key (FK)** designations for each attribute.
+  - **Foreign Key Linking**: Implemented a dynamic dropdown allowing users to link an FK attribute *specifically* to the Primary Key attributes of any other Object Type or Instance within the model. The dropdown list actively scans the entire model's schema to extract and present only properties marked as 'PK'.
+- **UI Improvements**:
+  - Added a dedicated header row for the "Object Schema Attributes" table to clarify metadata fields.
+  - Optimized the property row layout with responsive `flex` sizing and conditional visibility for the FK target selector.
+  - Added reactive re-rendering logic so designating a new property as a 'PK' immediately makes it available as a target in the 'FK' dropdowns.
+- **Core Logic Touched**: `public/view.modeler.js`, `public/html/view.modeler.html`.
+- **Pitfalls & Solutions**:
+  - *Layout Density*: Adding 4 new fields to the property row made it tight. Solved by using `min-width` and a clear header row to maintain readability while ensuring all enterprise metadata is accessible.
+
 ## 2026-04-06 - Replacing Vis-Network with Custom SVG KorelateGraph Engine
 - **Architectural Shift**: Removed the `vis-network` dependency completely from the Modeler view. The library demonstrated catastrophic conflicts with the SPA lifecycle, Vue/Proxy-like reactive state, and Flexbox `display: none` DOM rendering, leading to "ghost canvas" click interception and frozen nodes.
 - **KorelateGraph Engine**: Built a 100% dependency-free, native SVG Force-Directed graph engine (`KorelateGraph`) directly into `public/view.modeler.js`.

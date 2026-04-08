@@ -361,6 +361,21 @@ function updateUserRole(userId, newRole) {
     });
 }
 
+function verifyApiKey(apiKey) {
+    return new Promise((resolve, reject) => {
+        db.all("SELECT * FROM api_keys WHERE api_key = ?", apiKey, (err, rows) => {
+            if (err) return reject(err);
+            if (rows && rows.length > 0) {
+                // Update last_used_at async
+                db.run("UPDATE api_keys SET last_used_at = current_timestamp WHERE id = ?", rows[0].id);
+                resolve(rows[0]);
+            } else {
+                resolve(null);
+            }
+        });
+    });
+}
+
 module.exports = {
     init,
     createSessionStore,
@@ -372,5 +387,6 @@ module.exports = {
     verifyPassword,
     getAllUsers,
     deleteUser,
-    updateUserRole
+    updateUserRole,
+    verifyApiKey
 };
