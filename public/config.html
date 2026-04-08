@@ -488,52 +488,78 @@
     </main>
 
     <div id="provider-help-modal" class="builder-modal-overlay" style="z-index: 10001;">
-        <div class="builder-modal" style="max-width: 750px;">
+        <div class="builder-modal" style="max-width: 850px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid var(--color-border); padding-bottom:10px;">
-                <h3 style="margin:0;">Data Providers Guide & Examples</h3>
+                <h3 style="margin:0; color: var(--color-primary);">🔌 Data Providers Guide & Realistic Examples</h3>
                 <button type="button" id="btn-close-provider-help" style="background:none; border:none; color:var(--color-text); font-size:1.5em; cursor:pointer;">&times;</button>
             </div>
             
             <div style="font-size:0.95em; line-height:1.6;">
-                <p>Data Providers are the "Southbound" connectors that bring data into Korelate's Unified Namespace (UNS).</p>
+                <p>Data Providers (or <em>Southbound Connectors</em>) are the bridges that funnel external telemetry into Korelate's internal <strong>Unified Namespace (UNS)</strong>. You can configure as many providers as you need, mixing different industrial protocols.</p>
                 
-                <h4 style="color:var(--color-primary); margin-top:20px;">Common Fields</h4>
-                <ul>
-                    <li><strong>Provider ID</strong>: A unique internal name (e.g., <code>main_broker</code>). Avoid spaces.</li>
-                    <li><strong>Subscribe Topics</strong>: A comma-separated list of topics or NodeIDs to listen to. Use <code>#</code> for all MQTT topics.</li>
-                    <li><strong>Publish Topics</strong>: Topics you are allowed to write back to. Leave empty for read-only access.</li>
+                <h4 style="color:var(--color-primary); margin-top:20px; border-bottom:1px solid var(--color-border-secondary); padding-bottom:5px;">1. Universal Security & Routing Fields</h4>
+                <ul style="margin-bottom: 20px;">
+                    <li><strong>Provider ID</strong>: A unique technical name for internal routing (e.g., <code>factory_emqx_main</code> or <code>bms_opcua_01</code>). Do not use spaces.</li>
+                    <li><strong>Subscribe Topics</strong>: A comma-separated list defining exactly what data to ingest. <strong>Syntax changes completely depending on the chosen protocol (see below)!</strong></li>
+                    <li><strong>Publish Allowed Topics</strong>: A security sandbox. List the topics this connector is authorized to write <em>back</em> to (e.g., for sending commands to PLCs). Leave empty to enforce strict <strong>Read-Only</strong> access.</li>
                 </ul>
 
-                <h4 style="color:var(--color-primary); margin-top:20px;">Protocol Examples</h4>
+                <h4 style="color:var(--color-primary); margin-top:20px; border-bottom:1px solid var(--color-border-secondary); padding-bottom:5px;">2. Protocol-Specific Configurations</h4>
                 
-                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
-                    <strong>📡 MQTT Broker</strong><br>
-                    - <em>Host</em>: <code>broker.emqx.io</code> or <code>192.168.1.50</code><br>
-                    - <em>Port</em>: <code>1883</code> (TCP) or <code>8883</code> (TLS)<br>
-                    - <em>Subscribe</em>: <code>factory/line1/#</code>, <code>telemetry/+</code>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #3498db;">
+                        <strong style="font-size:1.1em;">📡 MQTT Broker (Standard IoT)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects to standard brokers like Mosquitto, EMQX, or AWS IoT.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Host & Port</strong>: <code>broker.hivemq.com</code> / <code>1883</code> (TCP) or <code>8883</code> (TLS).</li>
+                            <li><strong>Subscribe</strong>: Uses MQTT wildcards. Example: <code>enterprise/site/area/#</code> (all subtopics), or <code>factory/+/temp</code> (single level).</li>
+                            <li><strong>Security</strong>: Upload Certificates (.crt/.key) if MTLS is required by your IT department.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #e74c3c;">
+                        <strong style="font-size:1.1em;">⚙️ OPC UA Server (Industrial)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects directly to PLCs or SCADA gateways (e.g., Kepware, Ignition).</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Endpoint URL</strong>: <code>opc.tcp://10.0.0.55:4840</code>.</li>
+                            <li><strong>Subscribe</strong>: You MUST provide exact <strong>NodeIDs</strong>, not topics! Example: <code>ns=1;s=Temperature</code>, <code>ns=2;i=1045</code>.</li>
+                            <li><strong>Behavior</strong>: Korelate automatically subscribes, polls data at the sampling interval, and wraps the value, quality, and timestamp in JSON.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #9b59b6;">
+                        <strong style="font-size:1.1em;">🔗 I3X Server (RFC 001)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects to another compliant Unified Namespace (like another Korelate instance) via REST/SSE.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Base URL</strong>: <code>http://remote-korelate:8080/api/i3x</code>.</li>
+                            <li><strong>Subscribe</strong>: Use <strong>Element IDs</strong> defined in the remote CDM. Example: <code>Pump-001</code>, <code>CNC-Machine-5</code>.</li>
+                            <li><strong>Behavior</strong>: Establishes a persistent Server-Sent Events (SSE) stream for real-time contextual data.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #2ecc71;">
+                        <strong style="font-size:1.1em;">📥 HTTP Webhook (Ingest API)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Opens a REST endpoint for systems that can only push HTTP POST requests (e.g., ERPs, old sensors).</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Path Prefix</strong>: <code>/api/ingest/erp</code>.</li>
+                            <li><strong>Usage</strong>: The remote system must POST to: <code>http://&lt;korelate-ip&gt;:8080/api/ingest/erp/my/custom/topic</code> with a JSON body.</li>
+                        </ul>
+                    </div>
                 </div>
 
-                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
-                    <strong>🔗 I3X Server (RFC 001)</strong><br>
-                    - <em>Base URL</em>: <code>http://another-korelate:8080/api/i3x</code><br>
-                    - <em>Subscribe</em>: <code>Pump-001</code>, <code>CNC-Machine-5</code> (Element IDs)
-                </div>
-
-                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
-                    <strong>⚙️ OPC UA Server</strong><br>
-                    - <em>Endpoint</em>: <code>opc.tcp://localhost:4840</code><br>
-                    - <em>Subscribe</em>: <code>ns=1;s=Temperature</code>, <code>ns=2;i=1234</code>
-                </div>
-
-                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
-                    <strong>📥 HTTP Webhook</strong><br>
-                    - <em>Path Prefix</em>: <code>/api/ingest/sensors</code><br>
-                    - <em>Usage</em>: Send POST to <code>http://korelate:8080/api/ingest/sensors/my-topic</code>
+                <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f1c40f;">
+                    <strong style="font-size:1.1em;">📁 Local File Stream (Simulation/Playback)</strong>
+                    <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Reads a CSV or JSONL file from disk and streams it line-by-line into the UNS as if it were live data. Perfect for testing AI models or UI dashboards without real hardware.</p>
+                    <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                        <li><strong>File Path</strong>: <code>data/test_data.csv</code>.</li>
+                        <li><strong>Stream Rate</strong>: <code>1000</code> (emits one row every 1000ms).</li>
+                        <li><strong>Routing</strong>: If your CSV has a column named <code>topic</code>, Korelate uses it. Otherwise, it uses the fallback topic you provide.</li>
+                    </ul>
                 </div>
             </div>
             
-            <div style="display:flex; justify-content:flex-end; margin-top:20px;">
-                <button type="button" class="tool-button" onclick="document.getElementById('provider-help-modal').style.display='none'">Close</button>
+            <div style="display:flex; justify-content:flex-end; margin-top:20px; border-top:1px solid var(--color-border); padding-top:15px;">
+                <button type="button" class="tool-button" onclick="document.getElementById('provider-help-modal').style.display='none'">Got it, close</button>
             </div>
         </div>
     </div>
