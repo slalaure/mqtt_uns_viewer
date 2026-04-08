@@ -277,6 +277,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const t = provTypeSelect.value;
         document.getElementById('prov-group-mqtt').classList.toggle('active', t === 'mqtt');
         document.getElementById('prov-group-opcua').classList.toggle('active', t === 'opcua');
+        document.getElementById('prov-group-modbus').classList.toggle('active', t === 'modbus');
+        document.getElementById('prov-group-s7').classList.toggle('active', t === 's7');
+        document.getElementById('prov-group-eip').classList.toggle('active', t === 'eip');
+        document.getElementById('prov-group-bacnet').classList.toggle('active', t === 'bacnet');
+        document.getElementById('prov-group-knx').classList.toggle('active', t === 'knx');
         document.getElementById('prov-group-i3x').classList.toggle('active', t === 'i3x');
         document.getElementById('prov-group-http').classList.toggle('active', t === 'http');
         document.getElementById('prov-group-file').classList.toggle('active', t === 'file');
@@ -311,6 +316,32 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (p.type === 'opcua') {
                 document.getElementById('prov-opcua-url').value = p.endpointUrl || '';
                 document.getElementById('prov-opcua-user').value = p.username || '';
+            } else if (p.type === 'modbus') {
+                document.getElementById('prov-modbus-host').value = p.host || '';
+                document.getElementById('prov-modbus-port').value = p.port || '';
+                document.getElementById('prov-modbus-unit').value = p.unitId || '';
+                document.getElementById('prov-modbus-rate').value = p.pollingInterval || '';
+            } else if (p.type === 's7') {
+                document.getElementById('prov-s7-host').value = p.host || '';
+                document.getElementById('prov-s7-port').value = p.port || '';
+                document.getElementById('prov-s7-rack').value = p.rack || '';
+                document.getElementById('prov-s7-slot').value = p.slot || '';
+                document.getElementById('prov-s7-rate').value = p.pollingInterval || '';
+            } else if (p.type === 'eip') {
+                document.getElementById('prov-eip-host').value = p.host || '';
+                document.getElementById('prov-eip-port').value = p.port || '';
+                document.getElementById('prov-eip-route').value = p.routing ? JSON.stringify(p.routing) : '';
+                document.getElementById('prov-eip-rate').value = p.pollingInterval || '';
+            } else if (p.type === 'bacnet') {
+                document.getElementById('prov-bacnet-host').value = p.host || '';
+                document.getElementById('prov-bacnet-port').value = p.port || '';
+                document.getElementById('prov-bacnet-target').value = p.targetDeviceIp || '';
+                document.getElementById('prov-bacnet-broadcast').value = p.broadcastAddress || '';
+                document.getElementById('prov-bacnet-rate').value = p.pollingInterval || '';
+            } else if (p.type === 'knx') {
+                document.getElementById('prov-knx-host').value = p.host || '';
+                document.getElementById('prov-knx-port').value = p.port || '';
+                document.getElementById('prov-knx-phys').value = p.physAddr || '';
             } else if (p.type === 'i3x') {
                 document.getElementById('prov-i3x-url').value = p.baseUrl || '';
                 document.getElementById('prov-i3x-key').value = p.apiKey || '';
@@ -382,6 +413,35 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (editingProviderIndex >= 0 && providersList[editingProviderIndex].password) {
                 newProv.password = providersList[editingProviderIndex].password; 
             }
+        } else if (type === 'modbus') {
+            newProv.host = document.getElementById('prov-modbus-host').value.trim();
+            if (document.getElementById('prov-modbus-port').value) newProv.port = parseInt(document.getElementById('prov-modbus-port').value);
+            if (document.getElementById('prov-modbus-unit').value) newProv.unitId = parseInt(document.getElementById('prov-modbus-unit').value);
+            if (document.getElementById('prov-modbus-rate').value) newProv.pollingInterval = parseInt(document.getElementById('prov-modbus-rate').value);
+        } else if (type === 's7') {
+            newProv.host = document.getElementById('prov-s7-host').value.trim();
+            if (document.getElementById('prov-s7-port').value) newProv.port = parseInt(document.getElementById('prov-s7-port').value);
+            if (document.getElementById('prov-s7-rack').value) newProv.rack = parseInt(document.getElementById('prov-s7-rack').value);
+            if (document.getElementById('prov-s7-slot').value) newProv.slot = parseInt(document.getElementById('prov-s7-slot').value);
+            if (document.getElementById('prov-s7-rate').value) newProv.pollingInterval = parseInt(document.getElementById('prov-s7-rate').value);
+        } else if (type === 'eip') {
+            newProv.host = document.getElementById('prov-eip-host').value.trim();
+            if (document.getElementById('prov-eip-port').value) newProv.port = parseInt(document.getElementById('prov-eip-port').value);
+            if (document.getElementById('prov-eip-rate').value) newProv.pollingInterval = parseInt(document.getElementById('prov-eip-rate').value);
+            const routeStr = document.getElementById('prov-eip-route').value.trim();
+            if (routeStr) {
+                try { newProv.routing = JSON.parse(routeStr); } catch(e) {}
+            }
+        } else if (type === 'bacnet') {
+            newProv.host = document.getElementById('prov-bacnet-host').value.trim();
+            newProv.targetDeviceIp = document.getElementById('prov-bacnet-target').value.trim();
+            newProv.broadcastAddress = document.getElementById('prov-bacnet-broadcast').value.trim();
+            if (document.getElementById('prov-bacnet-port').value) newProv.port = parseInt(document.getElementById('prov-bacnet-port').value);
+            if (document.getElementById('prov-bacnet-rate').value) newProv.pollingInterval = parseInt(document.getElementById('prov-bacnet-rate').value);
+        } else if (type === 'knx') {
+            newProv.host = document.getElementById('prov-knx-host').value.trim();
+            newProv.physAddr = document.getElementById('prov-knx-phys').value.trim();
+            if (document.getElementById('prov-knx-port').value) newProv.port = parseInt(document.getElementById('prov-knx-port').value);
         } else if (type === 'i3x') {
             newProv.baseUrl = document.getElementById('prov-i3x-url').value.trim();
             newProv.apiKey = document.getElementById('prov-i3x-key').value.trim();

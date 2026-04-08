@@ -62,5 +62,12 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "jest": "^30.3.0"
+  },
+  "optionalDependencies": {
+    "modbus-serial": "^8.0.12",
+    "nodes7": "^0.3.12",
+    "ethernet-ip": "^2.0.0",
+    "node-bacnet": "^0.2.7",
+    "knx": "^2.3.9"
   }
 }

@@ -497,6 +497,33 @@
                         </ul>
                     </div>
 
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #1abc9c;">
+                        <strong style="font-size:1.1em;">🔡 Modbus TCP (Industrial)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Legacy protocol for PLCs and sensors.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Unit ID</strong>: Slave ID (usually 1).</li>
+                            <li><strong>Subscribe</strong>: Use <code>Addr:Len::Topic</code>. Example: <code>40001:1::factory/temp</code> (Holding Register 1).</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #34495e;">
+                        <strong style="font-size:1.1em;">⚙️ Siemens S7 (S7-Comm)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Native connection to Siemens S7-300/1200/1500.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Rack/Slot</strong>: Usually 0/1 or 0/2.</li>
+                            <li><strong>Subscribe</strong>: Use <code>Tag::Topic</code>. Example: <code>DB1,REAL4::factory/pressure</code>.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #d35400;">
+                        <strong style="font-size:1.1em;">🔌 EtherNet/IP (CIP)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Rockwell (Allen-Bradley) and Omron automation.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Routing</strong>: JSON array like <code>[1, 0]</code> (Port 1, Slot 0).</li>
+                            <li><strong>Subscribe</strong>: Use <code>CIP_Tag::Topic</code>. Example: <code>MyTag[0]::factory/vibration</code>.</li>
+                        </ul>
+                    </div>
+
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #e74c3c;">
                         <strong style="font-size:1.1em;">⚙️ OPC UA Server (Industrial)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects directly to PLCs or SCADA gateways (e.g., Kepware, Ignition).</p>
@@ -504,6 +531,25 @@
                             <li><strong>Endpoint URL</strong>: <code>opc.tcp://10.0.0.55:4840</code>.</li>
                             <li><strong>Subscribe</strong>: You MUST provide exact <strong>NodeIDs</strong>, not topics! Example: <code>ns=1;s=Temperature</code>, <code>ns=2;i=1045</code>.</li>
                             <li><strong>Behavior</strong>: Korelate automatically subscribes, polls data at the sampling interval, and wraps the value, quality, and timestamp in JSON.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f39c12;">
+                        <strong style="font-size:1.1em;">🏢 BACnet/IP (Building Automation)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects to BMS systems, HVAC, and smart building controllers.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Target IP</strong>: IP of the specific BACnet device (e.g. <code>192.168.1.15</code>).</li>
+                            <li><strong>Subscribe</strong>: Use <code>Type:Instance:Property</code> format. Example: <code>0:1:85</code> (Analog Input 1, Present Value).</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f1c40f;">
+                        <strong style="font-size:1.1em;">💡 KNX/IP (Building Automation)</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Event-driven standard for commercial building lighting, blinds, and HVAC.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Gateway IP</strong>: IP of the KNX IP Router/Interface.</li>
+                            <li><strong>Subscribe</strong>: Use <code>GroupAddress:DPT</code> format. Example: <code>1/1/1:DPT1.001</code> (Switch On/Off).</li>
+                            <li><strong>Behavior</strong>: Listens directly to GroupValueWrite events on the bus instead of polling.</li>
                         </ul>
                     </div>
 
@@ -560,6 +606,11 @@
                     <select id="prov-type">
                         <option value="mqtt">MQTT Broker</option>
                         <option value="opcua">OPC UA Server</option>
+                        <option value="modbus">Modbus TCP</option>
+                        <option value="s7">Siemens S7 (S7-Comm)</option>
+                        <option value="eip">EtherNet/IP (CIP)</option>
+                        <option value="bacnet">BACnet/IP (BMS)</option>
+                        <option value="knx">KNX/IP (Gateway)</option>
                         <option value="i3x">I3X Server (RFC 001)</option>
                         <option value="http">HTTP Webhook (Ingest)</option>
                         <option value="file">File Stream (CSV/JSONL)</option>
@@ -645,6 +696,65 @@
                         <div class="wiz-form-group"><label>Password (Optional)</label><input type="password" id="prov-opcua-pass"></div>
                     </div>
                     <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For OPC UA, 'Subscribe Topics' should be NodeIDs (e.g. <code>ns=1;s=Temperature</code>).</p>
+                </div>
+
+                <div id="prov-group-modbus" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Host IP</label><input type="text" id="prov-modbus-host" placeholder="192.168.1.10"></div>
+                        <div class="wiz-form-group"><label>Port</label><input type="number" id="prov-modbus-port" placeholder="502"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Unit ID (Slave ID)</label><input type="number" id="prov-modbus-unit" placeholder="1"></div>
+                        <div class="wiz-form-group"><label>Polling Rate (ms)</label><input type="number" id="prov-modbus-rate" placeholder="1000"></div>
+                    </div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For Modbus, 'Subscribe Topics' should map Addresses to UNS Topics: <code>Address:Length::UNS/Topic</code> (e.g. <code>40001:16::factory/temp</code>).</p>
+                </div>
+
+                <div id="prov-group-s7" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Host IP</label><input type="text" id="prov-s7-host" placeholder="192.168.1.11"></div>
+                        <div class="wiz-form-group"><label>Port</label><input type="number" id="prov-s7-port" placeholder="102"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Rack</label><input type="number" id="prov-s7-rack" placeholder="0"></div>
+                        <div class="wiz-form-group"><label>Slot</label><input type="number" id="prov-s7-slot" placeholder="1"></div>
+                    </div>
+                    <div class="wiz-form-group"><label>Polling Rate (ms)</label><input type="number" id="prov-s7-rate" placeholder="1000"></div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For S7-Comm, 'Subscribe Topics' should map S7 Tags to UNS Topics: <code>S7_Tag::UNS/Topic</code> (e.g. <code>DB1,REAL4::factory/pressure</code>).</p>
+                </div>
+
+                <div id="prov-group-eip" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Host IP</label><input type="text" id="prov-eip-host" placeholder="192.168.1.12"></div>
+                        <div class="wiz-form-group"><label>Port</label><input type="number" id="prov-eip-port" placeholder="44818"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Routing (JSON Array)</label><input type="text" id="prov-eip-route" placeholder="[1, 0]" title="[Port, Slot]"></div>
+                        <div class="wiz-form-group"><label>Polling Rate (ms)</label><input type="number" id="prov-eip-rate" placeholder="1000"></div>
+                    </div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For EtherNet/IP, 'Subscribe Topics' should map CIP Tags to UNS Topics: <code>CIP_Tag::UNS/Topic</code> (e.g. <code>MyArray[0]::factory/flow</code>).</p>
+                </div>
+
+                <div id="prov-group-bacnet" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Target Device IP</label><input type="text" id="prov-bacnet-target" placeholder="192.168.1.15"></div>
+                        <div class="wiz-form-group"><label>Broadcast Address</label><input type="text" id="prov-bacnet-broadcast" placeholder="255.255.255.255"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Local Listen IP (Host)</label><input type="text" id="prov-bacnet-host" placeholder="0.0.0.0"></div>
+                        <div class="wiz-form-group"><label>Local Port</label><input type="number" id="prov-bacnet-port" placeholder="47808"></div>
+                    </div>
+                    <div class="wiz-form-group"><label>Polling Rate (ms)</label><input type="number" id="prov-bacnet-rate" placeholder="5000"></div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For BACnet, 'Subscribe Topics' should map <code>Type:Instance:Property</code> to UNS Topics (e.g. <code>0:1:85::bms/room1/temp</code> for AnalogInput 1 PresentValue).</p>
+                </div>
+
+                <div id="prov-group-knx" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Gateway IP</label><input type="text" id="prov-knx-host" placeholder="192.168.1.5"></div>
+                        <div class="wiz-form-group"><label>Port</label><input type="number" id="prov-knx-port" placeholder="3671"></div>
+                    </div>
+                    <div class="wiz-form-group"><label>Physical Address (Optional)</label><input type="text" id="prov-knx-phys" placeholder="1.1.128"></div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: KNX is event-driven. 'Subscribe Topics' should map <code>GroupAddress:DPT</code> to UNS Topics (e.g. <code>1/1/1:DPT1.001::bms/light/1</code>).</p>
                 </div>
 
                 <div id="prov-group-i3x" class="conditional-group">

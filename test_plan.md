@@ -51,6 +51,11 @@ Ce document décrit la stratégie et les scénarios de test pour garantir la sta
 * **I3X Provider (`i3xProvider.test.js`)**
     * *Subscription* : Vérifier la connexion à un serveur I3X distant, la création d'une souscription et la réception de données via le flux SSE.
     * *Write* : Vérifier l'écriture de données vers un serveur distant via `PUT /value`.
+* **Industrial Providers (Modbus, S7, EIP, BACnet, KNX)**
+    * *Polling* (Modbus/S7/EIP/BACnet) : Vérifier que le cycle de lecture périodique injecte bien les données dans le dispatcher.
+    * *Events* (KNX) : Vérifier la réaction immédiate aux télégrammes de groupe sans polling.
+    * *Mapping Syntax* : Valider le parsing des syntaxes complexes (`Addr:Len::Topic`).
+    * *Missing Libs* : Vérifier que l'absence d'une lib optionnelle ne bloque pas le démarrage du serveur.
 
 ### 1.4. I3X & Semantic Manager (`semanticManager.test.js`)
 * *Indexation* : Vérifier que les relations (ex: `SuppliesTo`) sont bien indexées en mémoire (aller et retour).

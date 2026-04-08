@@ -105,6 +105,18 @@ To handle environments ranging from a few updates a minute to thousands of messa
     * Optional connector.
     * "Fire-and-forget" batched ingestion for long-term archival and compliance.
 
+### 🔌 Connectivity & Protocols (Southbound)
+Korelate acts as a high-performance protocol gateway, bringing data from various industrial and building sources into a unified context:
+*   **📡 MQTT & Sparkplug B**: Native high-performance support with auto-decoding.
+*   **⚙️ OPC UA**: Direct connection to industrial PLCs (Kepware, Ignition, etc.).
+*   **🔡 Modbus TCP**: Legacy support for industrial automation.
+*   **⚙️ Siemens S7**: Native S7-Comm protocol for Siemens PLCs.
+*   **🔌 EtherNet/IP**: CIP protocol for Rockwell and Omron systems.
+*   **🏢 BACnet/IP**: Standard for Building Management Systems (BMS).
+*   **💡 KNX/IP**: Event-driven automation for commercial buildings.
+*   **🔗 I3X (RFC 001)**: Inter-server communication with other UNS nodes.
+*   **📥 HTTP Webhooks**: RESTful ingestion for ERPs and legacy software.
+
 ---
 
 ## 🐳 Installation & Deployment

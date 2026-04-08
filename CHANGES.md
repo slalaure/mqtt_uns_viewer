@@ -1,3 +1,15 @@
+## 2026-04-08 - Industrial Connectors Expansion
+- **New Data Providers**: Added 4 new native industrial protocols to Korelate's Southbound connector library (`connectors/`):
+  - 📡 **Modbus TCP**: Uses `modbus-serial`. Supports Coil, Holding, Input, and Discrete mapping via simple Address parsing (e.g., `40001:16::factory/temp`).
+  - ⚙️ **Siemens S7 (S7-Comm)**: Uses `nodes7`. Connects over TCP 102 to S7-300/400/1200/1500 PLCs with direct tag mapping (e.g., `DB1,REAL4::factory/pressure`).
+  - 🔌 **EtherNet/IP (CIP)**: Uses `ethernet-ip`. Connects to Allen-Bradley/Omron PLCs with CIP Tag mapping.
+  - 🏢 **BACnet/IP**: Uses `node-bacnet`. Connects to Building Management Systems (BMS), HVACs, and sensors. Maps `ObjectType:Instance:PropertyId` to the UNS (e.g., `0:1:85::bms/room1/temp`).
+  - 💡 **KNX/IP**: Uses `knx`. Connects to home and building automation systems via IP Gateways. Event-driven mapping using Group Addresses and DPTs (e.g., `1/1/1:DPT1.001::bms/light`).
+- **Dynamic Imports**: These libraries are massive and very specific. They are built as *optional dependencies*. If a user configures a Modbus PLC but hasn't installed the library, Korelate won't crash; it will log a clear error asking the user to run `npm install modbus-serial`.
+- **UI Integrations**: 
+  - Added all 4 protocols to the `config.html` Wizard with dynamic conditional forms for Host, Port, Rack, Slot, and Routing paths.
+  - Updated the Data Providers Guide (Help Modal) to reflect these new industrial capabilities.
+
 ## 2026-04-08 - I3X Client Connector & UI Hierarchy Improvements
 - **UNS Model Migration**: Moved the JSON Import/Export features for `uns_model.json` from the generic Configuration page directly into the CDM Modeler view. This centralizes all schema management in a single logical workspace.
 - **I3X Client Support**: Added a new data connector (`connectors/i3x/index.js`) allowing Korelate to act as an I3X client. It can:
