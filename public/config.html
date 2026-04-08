@@ -199,7 +199,10 @@
                 </div>
 
                 <div class="wizard-step" id="wiz-step-2">
-                    <h2>Data Providers</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h2 style="margin:0;">Data Providers</h2>
+                        <button type="button" id="btn-provider-help" class="tool-button" title="Data Providers Guide">ℹ️ Help</button>
+                    </div>
                     <p class="step-desc">Define your connections to MQTT brokers, OPC UA servers, or API webhooks.</p>
                     
                     <div id="providers-list-container">
@@ -484,9 +487,63 @@
 
     </main>
 
+    <div id="provider-help-modal" class="builder-modal-overlay" style="z-index: 10001;">
+        <div class="builder-modal" style="max-width: 750px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid var(--color-border); padding-bottom:10px;">
+                <h3 style="margin:0;">Data Providers Guide & Examples</h3>
+                <button type="button" id="btn-close-provider-help" style="background:none; border:none; color:var(--color-text); font-size:1.5em; cursor:pointer;">&times;</button>
+            </div>
+            
+            <div style="font-size:0.95em; line-height:1.6;">
+                <p>Data Providers are the "Southbound" connectors that bring data into Korelate's Unified Namespace (UNS).</p>
+                
+                <h4 style="color:var(--color-primary); margin-top:20px;">Common Fields</h4>
+                <ul>
+                    <li><strong>Provider ID</strong>: A unique internal name (e.g., <code>main_broker</code>). Avoid spaces.</li>
+                    <li><strong>Subscribe Topics</strong>: A comma-separated list of topics or NodeIDs to listen to. Use <code>#</code> for all MQTT topics.</li>
+                    <li><strong>Publish Topics</strong>: Topics you are allowed to write back to. Leave empty for read-only access.</li>
+                </ul>
+
+                <h4 style="color:var(--color-primary); margin-top:20px;">Protocol Examples</h4>
+                
+                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
+                    <strong>📡 MQTT Broker</strong><br>
+                    - <em>Host</em>: <code>broker.emqx.io</code> or <code>192.168.1.50</code><br>
+                    - <em>Port</em>: <code>1883</code> (TCP) or <code>8883</code> (TLS)<br>
+                    - <em>Subscribe</em>: <code>factory/line1/#</code>, <code>telemetry/+</code>
+                </div>
+
+                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
+                    <strong>🔗 I3X Server (RFC 001)</strong><br>
+                    - <em>Base URL</em>: <code>http://another-korelate:8080/api/i3x</code><br>
+                    - <em>Subscribe</em>: <code>Pump-001</code>, <code>CNC-Machine-5</code> (Element IDs)
+                </div>
+
+                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
+                    <strong>⚙️ OPC UA Server</strong><br>
+                    - <em>Endpoint</em>: <code>opc.tcp://localhost:4840</code><br>
+                    - <em>Subscribe</em>: <code>ns=1;s=Temperature</code>, <code>ns=2;i=1234</code>
+                </div>
+
+                <div style="background:var(--color-bg-tertiary); padding:12px; border-radius:6px; margin-bottom:10px;">
+                    <strong>📥 HTTP Webhook</strong><br>
+                    - <em>Path Prefix</em>: <code>/api/ingest/sensors</code><br>
+                    - <em>Usage</em>: Send POST to <code>http://korelate:8080/api/ingest/sensors/my-topic</code>
+                </div>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; margin-top:20px;">
+                <button type="button" class="tool-button" onclick="document.getElementById('provider-help-modal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="provider-builder-modal" class="builder-modal-overlay">
         <div class="builder-modal">
-            <h3 id="provider-modal-title">Add Data Provider</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 id="provider-modal-title" style="margin:0; border:none;">Add Data Provider</h3>
+                <button type="button" class="tool-button btn-help-trigger" title="Data Providers Guide">ℹ️ Help</button>
+            </div>
             <form id="provider-builder-form">
                 <div class="wiz-form-group">
                     <label>Provider ID (Unique Name)</label>
