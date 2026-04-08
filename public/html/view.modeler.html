@@ -5,6 +5,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h2 style="margin: 0; font-size: 1.1em; color: var(--color-text);">CDM Registry</h2>
                 <div style="display: flex; gap: 5px;">
+                    <button id="btn-modeler-help" class="tool-button" title="CDM Modeler Guide">ℹ️ Help</button>
                     <button id="btn-modeler-refresh" class="tool-button" title="Reload Model">↻</button>
                     <button id="btn-modeler-save" class="tool-button button-primary" title="Save All Changes">💾 Save</button>
                 </div>
@@ -51,15 +52,22 @@
                     <h3 class="section-title">Identity & Context</h3>
                     <div class="grid-form">
                         <div class="form-group">
-                            <label class="modern-label">ISA-95 Level</label>
-                            <select id="field-isa-level" class="modern-input">
-                                <option value="Enterprise">Enterprise</option>
-                                <option value="Site">Site</option>
-                                <option value="Area">Area</option>
-                                <option value="Line">Line / Cell</option>
-                                <option value="Equipment">Equipment</option>
-                                <option value="Sensor">Sensor</option>
-                            </select>
+                            <label class="modern-label" title="Standardized hierarchy level (ISA-95 for Industry, Brick Schema for Buildings, etc.)">Hierarchy Level (Optional)</label>
+                            <input type="text" id="field-isa-level" class="modern-input" list="hierarchy-levels" placeholder="e.g. Site, Area, Building..." title="Leave empty if not applicable">
+                            <datalist id="hierarchy-levels">
+                                <!-- ISA-95 (Industrial) -->
+                                <option value="Enterprise">
+                                <option value="Site">
+                                <option value="Area">
+                                <option value="Line">
+                                <option value="WorkCell">
+                                <option value="Equipment">
+                                <!-- Brick Schema (Buildings) -->
+                                <option value="Building">
+                                <option value="Floor">
+                                <option value="Room">
+                                <option value="Zone">
+                            </datalist>
                         </div>
                         <div class="form-group">
                             <label class="modern-label">Namespace URI</label>
@@ -81,6 +89,17 @@
                         <h3 class="section-title" style="margin:0;">Object Schema Attributes</h3>
                         <button id="btn-add-property" class="tool-button" style="padding: 2px 8px;">+ Add Attribute</button>
                     </div>
+                    <div style="display: flex; gap: 8px; padding: 0 6px 8px 6px; border-bottom: 1px solid var(--color-border); margin-bottom: 5px; font-size: 0.7em; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase;">
+                        <div style="flex:1.5; min-width: 60px;">ID</div>
+                        <div style="flex:2.5; min-width: 80px;">Label / Title</div>
+                        <div style="flex:1.5; min-width: 80px;">Type</div>
+                        <div style="flex:1; min-width: 50px;">Key</div>
+                        <div style="flex:2; min-width: 100px;">FK Link</div>
+                        <div style="flex:1.5; min-width: 80px;">Confid.</div>
+                        <div style="flex:1.5; min-width: 80px;">Sensit.</div>
+                        <div style="flex:1; min-width: 40px;">Unit</div>
+                        <div style="width: 25px;"></div>
+                    </div>
                     <div id="container-properties" class="schema-items-container"></div>
                 </div>
             </div>
@@ -100,6 +119,48 @@
             <button id="btn-toggle-physics" class="tool-button" title="Toggle Auto-Layout (Physics)" style="font-size: 0.75em; padding: 2px 6px;">⚛️ Freeze</button>
         </div>
         <div id="relationship-graph" style="flex: 1; background-color: var(--color-bg-tertiary); overflow: hidden; min-height: 300px; width: 100%;"></div>
+    </div>
+</div>
+
+<!-- HELP MODAL -->
+<div id="modeler-help-modal" class="modal-backdrop" style="display:none; z-index: 3000;">
+    <div class="help-modal-content" style="background: var(--color-bg); padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--color-border);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px; align-items:center;">
+            <h2 style="margin:0; color: var(--color-primary);">📚 CDM & UNS Modeler Guide</h2>
+            <button id="btn-close-modeler-help" style="background:none; border:none; font-size:1.5em; cursor:pointer; color: var(--color-text-muted);">&times;</button>
+        </div>
+        
+        <p style="color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 20px;">
+            The <strong>Common Data Model (CDM)</strong> Modeler allows you to structure your raw data streams into a contextualized <strong>Unified Namespace (UNS)</strong>. This model is 100% compliant with the <strong>I3X (RFC 001)</strong> standard, making it fully interoperable with compliant edge and cloud systems.
+        </p>
+
+        <h3 style="color: var(--color-text); margin-bottom: 10px; border-bottom: 1px solid var(--color-border); padding-bottom: 5px;">Key Concepts</h3>
+        <ul style="color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 20px; padding-left: 20px;">
+            <li><strong>Object Types</strong>: The blueprints or classes for your logical entities (e.g., <code>PumpType</code>, <code>HVAC_Unit</code>, <code>Microservice</code>). They define the expected attributes.</li>
+            <li><strong>Instances (Objects)</strong>: The actual physical or logical entities in your system (e.g., <code>Pump-001</code>). They inherit from an <em>Object Type</em> and are mapped to real-time streams from your Data Providers (MQTT, OPC-UA, HTTP, APIs).</li>
+            <li><strong>Relationships</strong>: Links connecting instances together to form your digital twin graph (e.g., <code>Pump-001</code> &rarr; <em>HasComponent</em> &rarr; <code>Motor-A</code>).</li>
+        </ul>
+
+        <h3 style="color: var(--color-text); margin-bottom: 10px; border-bottom: 1px solid var(--color-border); padding-bottom: 5px;">Agnostic Hierarchies</h3>
+        <p style="color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 20px;">
+            Korelate is highly flexible and domain-agnostic. The "Hierarchy Level" field is entirely optional and depends on your industry context:
+            <br>&bull; <strong>Manufacturing / IT-OT</strong>: Use the <strong>ISA-95</strong> standard (Enterprise &rarr; Site &rarr; Area &rarr; Line &rarr; Cell).
+            <br>&bull; <strong>Smart Buildings (BMS)</strong>: Use <strong>Brick Schema</strong> or standard topologies (Building &rarr; Floor &rarr; Room &rarr; Zone).
+            <br>&bull; <strong>Other Domains</strong>: Leave it blank or define your own custom levels.
+        </p>
+
+        <div style="background: rgba(0, 123, 255, 0.1); border-left: 4px solid #007bff; padding: 15px; border-radius: 4px; margin-top: 25px;">
+            <h3 style="margin: 0 0 10px 0; color: #007bff; display: flex; align-items: center; gap: 8px;">
+                <span>🤖</span> AI Assistant Integration
+            </h3>
+            <p style="margin: 0; color: var(--color-text); line-height: 1.5; font-size: 0.95em;">
+                Building a complex model from scratch can be tedious. You can rely on the <strong>Korelate AI Chat</strong> to do the heavy lifting! 
+                Open the Chat and ask:<br><br>
+                <em style="color: var(--color-text-secondary);">"Create a complete CDM model for an HVAC system based on these fields: temp, humidity, setpoint."</em><br>
+                <em style="color: var(--color-text-secondary);">"Generate a standard building hierarchy (Site -> Building -> Floor) and link the instances."</em><br><br>
+                The AI will automatically generate the Namespaces, Types, Instances, and Relationships, and apply them directly to this view.
+            </p>
+        </div>
     </div>
 </div>
 

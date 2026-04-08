@@ -38,7 +38,8 @@ export async function initModelerView() {
                 'modeler-edit-id', 'btn-mode-form', 'btn-mode-json', 'modeler-form-view',
                 'modeler-json-view', 'modeler-ace-editor', 'field-isa-level', 'field-namespace',
                 'container-properties', 'container-relationships',
-                'btn-add-property', 'btn-add-relationship', 'btn-toggle-physics'
+                'btn-add-property', 'btn-add-relationship', 'btn-toggle-physics',
+                'modeler-help-modal', 'btn-modeler-help', 'btn-close-modeler-help'
             ];
             ids.forEach(id => el[id] = document.getElementById(id));
 
@@ -88,6 +89,16 @@ export function mountModelerView() {
 
     el['btn-modeler-refresh'].onclick = loadModel;
     el['btn-modeler-save'].onclick = saveModelToServer;
+    el['btn-modeler-help'].onclick = () => el['modeler-help-modal'].style.display = 'flex';
+    el['btn-close-modeler-help'].onclick = () => el['modeler-help-modal'].style.display = 'none';
+    
+    // Close modal if clicked outside the content area
+    el['modeler-help-modal'].onclick = (e) => {
+        if (e.target === el['modeler-help-modal']) {
+            el['modeler-help-modal'].style.display = 'none';
+        }
+    };
+
     el['btn-add-namespace'].onclick = () => createItem('namespace');
     el['btn-add-type'].onclick = () => createItem('objectType');
     el['btn-add-instance'].onclick = () => createItem('instance');
@@ -202,7 +213,7 @@ function selectItem(type, id) {
     
     el['modeler-edit-displayname'].value = ref.displayName || '';
     el['modeler-edit-id'].textContent = id;
-    el['field-isa-level'].value = ref.isaLevel || 'Equipment';
+    el['field-isa-level'].value = ref.isaLevel || '';
     el['field-namespace'].value = ref.namespaceUri || (type === 'namespace' ? ref.uri : '');
 
     renderSchemaItems();
@@ -228,16 +239,75 @@ function addSchemaRow(data = {}) {
     const row = document.createElement('div');
     row.className = 'schema-item-row';
     const types = ['string', 'number', 'boolean', 'integer', 'object', 'array'];
-    const options = types.map(t => `<option value="${t}" ${data.type === t ? 'selected' : ''}>${t}</option>`).join('');
+    const typeOptions = types.map(t => `<option value="${t}" ${data.type === t ? 'selected' : ''}>${t}</option>`).join('');
+    
+    const keyTypes = ['-', 'PK', 'FK'];
+    const keyTypeOptions = keyTypes.map(t => `<option value="${t}" ${data.keyType === t ? 'selected' : ''}>${t}</option>`).join('');
+    
+    const confLevels = ['Public', 'Internal', 'Confidential', 'Restricted'];
+    const confOptions = confLevels.map(t => `<option value="${t}" ${data.confidentiality === t ? 'selected' : ''}>${t}</option>`).join('');
+    
+    const sensLevels = ['Normal', 'Sensitive', 'Highly Sensitive'];
+    const sensOptions = sensLevels.map(t => `<option value="${t}" ${data.sensitivity === t ? 'selected' : ''}>${t}</option>`).join('');
+
+    const fkTargets = [];
+    const extractPKs = (entities, prefix) => {
+        (entities || []).forEach(entity => {
+            const props = entity.schema?.properties || {};
+            Object.entries(props).forEach(([propId, propDef]) => {
+                if (propDef.keyType === 'PK') {
+                    fkTargets.push({
+                        id: `${entity.elementId}.${propId}`,
+                        label: `${prefix}: ${entity.displayName || entity.elementId} → ${propDef.title || propId}`
+                    });
+                }
+            });
+        });
+    };
+    extractPKs(currentModel.objectTypes, 'Type');
+    extractPKs(currentModel.instances, 'Obj');
+
+    const fkTargetOptions = `<option value="">-- Link to PK --</option>` + fkTargets.map(t => `<option value="${t.id}" ${data.fkTarget === t.id ? 'selected' : ''}>${t.label}</option>`).join('');
+
     row.innerHTML = `
-        <input type="text" placeholder="ID" class="modern-input" style="flex:2; font-family:monospace;" value="${data.id || ''}" data-key="id">
-        <input type="text" placeholder="Label" class="modern-input" style="flex:3;" value="${data.title || ''}" data-key="title">
-        <select class="modern-input" style="flex:2;" data-key="type">${options}</select>
-        <input type="text" placeholder="Unit (Opt.)" class="modern-input" style="flex:1.5;" value="${data.unit || ''}" data-key="unit">
+        <input type="text" placeholder="ID" class="modern-input" style="flex:1.5; font-family:monospace; min-width: 60px;" value="${data.id || ''}" data-key="id">
+        <input type="text" placeholder="Label" class="modern-input" style="flex:2.5; min-width: 80px;" value="${data.title || ''}" data-key="title">
+        <select class="modern-input" style="flex:1.5; min-width: 80px;" data-key="type">${typeOptions}</select>
+        
+        <select class="modern-input" style="flex:1; min-width: 50px; background: var(--color-bg-tertiary);" data-key="keyType" title="Key Type (PK/FK)">${keyTypeOptions}</select>
+        <select class="modern-input" style="flex:2; min-width: 100px; display: ${data.keyType === 'FK' ? 'block' : 'none'}; border: 1px solid var(--color-primary);" data-key="fkTarget">${fkTargetOptions}</select>
+        
+        <select class="modern-input" style="flex:1.5; min-width: 80px;" data-key="confidentiality" title="Confidentiality">${confOptions}</select>
+        <select class="modern-input" style="flex:1.5; min-width: 80px;" data-key="sensitivity" title="Sensitivity">${sensOptions}</select>
+        
+        <input type="text" placeholder="Unit" class="modern-input" style="flex:1; min-width: 40px;" value="${data.unit || ''}" data-key="unit">
         <button class="btn-delete-row">✖</button>
     `;
-    row.querySelectorAll('input, select').forEach(i => i.oninput = syncStateFromForm);
-    row.querySelector('.btn-delete-row').onclick = () => { row.remove(); syncStateFromForm(); };
+
+    const keyTypeSelect = row.querySelector('[data-key="keyType"]');
+    const fkTargetSelect = row.querySelector('[data-key="fkTarget"]');
+    
+    keyTypeSelect.onchange = (e) => {
+        fkTargetSelect.style.display = e.target.value === 'FK' ? 'block' : 'none';
+        syncStateFromForm();
+        
+        // Re-render the form to update all rows in case a PK was just changed,
+        // so other rows can see it in their FK dropdowns immediately
+        if (e.target.value === 'PK' || data.keyType === 'PK') {
+            renderSchemaItems();
+        }
+    };
+
+    row.querySelectorAll('input, select').forEach(i => {
+        if (i !== keyTypeSelect) i.oninput = syncStateFromForm;
+        if (i === fkTargetSelect) i.onchange = syncStateFromForm;
+    });
+    row.querySelector('.btn-delete-row').onclick = () => { 
+        const wasPK = keyTypeSelect.value === 'PK';
+        row.remove(); 
+        syncStateFromForm(); 
+        if (wasPK) renderSchemaItems(); // Re-render to remove from FK lists
+    };
     container.appendChild(row);
 }
 
@@ -283,7 +353,11 @@ function syncStateFromForm() {
     if (!currentSelection.ref) return;
     const ref = currentSelection.ref;
     ref.displayName = el['modeler-edit-displayname'].value;
-    ref.isaLevel = el['field-isa-level'].value;
+    if (el['field-isa-level'].value) {
+        ref.isaLevel = el['field-isa-level'].value;
+    } else {
+        delete ref.isaLevel;
+    }
     ref.namespaceUri = el['field-namespace'].value;
 
     const properties = {};
@@ -291,7 +365,18 @@ function syncStateFromForm() {
     rows.forEach(row => {
         const id = row.querySelector('[data-key="id"]').value.trim();
         if (!id) return;
-        const item = { title: row.querySelector('[data-key="title"]').value, type: row.querySelector('[data-key="type"]').value };
+        const item = { 
+            title: row.querySelector('[data-key="title"]').value, 
+            type: row.querySelector('[data-key="type"]').value,
+            keyType: row.querySelector('[data-key="keyType"]').value,
+            confidentiality: row.querySelector('[data-key="confidentiality"]').value,
+            sensitivity: row.querySelector('[data-key="sensitivity"]').value
+        };
+
+        if (item.keyType === 'FK') {
+            item.fkTarget = row.querySelector('[data-key="fkTarget"]').value;
+        }
+
         const unitEl = row.querySelector('[data-key="unit"]');
         if (unitEl && unitEl.value) item.unit = unitEl.value;
         properties[id] = item;

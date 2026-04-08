@@ -111,6 +111,11 @@ Ce document décrit la stratégie et les scénarios de test pour garantir la sta
 * **Scenario A : DLQ Replay** : Aller dans Admin -> DB. Simuler des erreurs en base, voir le compteur DLQ monter, cliquer sur "Replay", vérifier que les messages sont réintégrés.
 * **Scenario B : System Logs** : Vérifier la lecture asynchrone des 500 dernières lignes du fichier `korelate.log`.
 
+### 3.10. CDM Modeler & Semantic Metadata
+* **Scenario A : Gestion des Propriétés** : Créer un nouvel objet, ajouter une propriété avec Label, Type et Unité.
+* **Scenario B : Métadonnées de Sécurité** : Définir des niveaux de Confidentialité (ex: "Restricted") et de Sensibilité (ex: "Highly Sensitive"). Vérifier la persistance après sauvegarde.
+* **Scenario C : Contraintes de Clé (PK/FK)** : Définir une propriété comme Primary Key. Définir une autre comme Foreign Key et sélectionner un objet cible dans le menu "Link to". Vérifier la visibilité conditionnelle du sélecteur FK.
+
 ---
 
 ## 4. Tests de Résilience (Chaos & Load Testing)
