@@ -50,6 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const providersListContainer = document.getElementById('providers-list-container');
     const btnAddProvider = document.getElementById('btn-add-provider');
     const providerModal = document.getElementById('provider-builder-modal');
+    const providerHelpModal = document.getElementById('provider-help-modal');
+    const btnProviderHelp = document.getElementById('btn-provider-help');
+    const btnCloseProviderHelp = document.getElementById('btn-close-provider-help');
     const providerBuilderForm = document.getElementById('provider-builder-form');
     const provTypeSelect = document.getElementById('prov-type');
     const btnProvCancel = document.getElementById('btn-prov-cancel');
@@ -330,6 +333,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnProvCancel.onclick = () => { providerModal.style.display = 'none'; };
     btnAddProvider.onclick = () => openProviderModal(-1);
+
+    document.querySelectorAll('.btn-help-trigger, #btn-provider-help').forEach(btn => {
+        btn.onclick = () => { providerHelpModal.style.display = 'flex'; };
+    });
+    btnCloseProviderHelp.onclick = () => { providerHelpModal.style.display = 'none'; };
+    providerHelpModal.onclick = (e) => { if (e.target === providerHelpModal) providerHelpModal.style.display = 'none'; };
 
     providerBuilderForm.onsubmit = (e) => {
         e.preventDefault();
