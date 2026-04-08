@@ -1,5 +1,6 @@
 # Environment variables
 .env
+.env.bkp
 
 # Node.js dependencies
 node_modules/
@@ -8,37 +9,44 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-docker-compose-eds.yml
-.env.bkp
-data/mappings.json
-data/charts.json
-data/certs/c6a0532ed5a30983c508428c51444b8568f8a6ceeff135dd90f069b1fcf99201-certificate.pem.crt
-data/certs/c6a0532ed5a30983c508428c51444b8568f8a6ceeff135dd90f069b1fcf99201-private.pem.key
-data/certs/c6a0532ed5a30983c508428c51444b8568f8a6ceeff135dd90f069b1fcf99201-public.pem.key
-data/certs/certificate.pem.crt
-data/certs/private.pem.key
+*.log
+data/*.log
+data/*.log.*
+server_*.log
+
+# Databases
+*.duckdb
+*.duckdb.wal
+data/*.duckdb
+data/*.duckdb.wal
 data/dlq/
 data/sessions/
-data/mqtt_events.duckdb
-data/mqtt_events.duckdb.wal
-build_docker_image.sh
-.repomix/config/repomixtestbundle-repomix.config.json
-repomix-output.xml
-.repomix/bundles.json
-repomix/
 sessions/
 ai_history/*
+
+# Python Virtual Environments
+venv/
+.venv/
+
+# Configurations & Certificates
+docker-compose-eds.yml
+docker-compose.yml.demo
+data/mappings.json
+data/charts.json
+data/certs/*.crt
+data/certs/*.key
+data/simulators/simulator-alat.js
+
+# Build & Test outputs
 playwright-report/
 test-results/
+.repomix/
+repomix-output.xml
+repomix/
 repomix.config.json
-docker-compose.yml.demo
-data/simulators/simulator-alat.js
-data/korelate.log
-data/korelate_events.log
-data/korelate_events.log.*  
-data/korelate_events.duckdb
-data/korelate_events.duckdb.wal
+build_docker_image.sh
 
-data/korelate_events.duckdb
-data/korelate_events.duckdb.wal
-data/korelate.log
+# Test Scripts & Temporary Files
+run_compliance.sh
+run_curl.sh
+test_model.json

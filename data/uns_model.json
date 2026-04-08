@@ -21,7 +21,10 @@
       "schema": {
         "type": "object",
         "properties": {
-          "location": { "type": "string", "title": "Geographic Location" }
+          "location": {
+            "type": "string",
+            "title": "Geographic Location"
+          }
         }
       }
     },
@@ -32,8 +35,14 @@
       "schema": {
         "type": "object",
         "properties": {
-          "status": { "type": "string", "title": "Line Status" },
-          "active_wo": { "type": "string", "title": "Active Work Order" }
+          "status": {
+            "type": "string",
+            "title": "Line Status"
+          },
+          "active_wo": {
+            "type": "string",
+            "title": "Active Work Order"
+          }
         }
       }
     },
@@ -44,9 +53,20 @@
       "schema": {
         "type": "object",
         "properties": {
-          "speed": { "type": "number", "title": "Motor Speed", "unit": "rpm" },
-          "temp": { "type": "number", "title": "Motor Temperature", "unit": "°C" },
-          "status": { "type": "string", "title": "Status" }
+          "speed": {
+            "type": "number",
+            "title": "Motor Speed",
+            "unit": "rpm"
+          },
+          "temp": {
+            "type": "number",
+            "title": "Motor Temperature",
+            "unit": "°C"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
         }
       }
     },
@@ -57,8 +77,15 @@
       "schema": {
         "type": "object",
         "properties": {
-          "temp": { "type": "number", "title": "Laser Temperature", "unit": "°C" },
-          "status": { "type": "string", "title": "Status" }
+          "temp": {
+            "type": "number",
+            "title": "Laser Temperature",
+            "unit": "°C"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
         }
       }
     },
@@ -69,9 +96,20 @@
       "schema": {
         "type": "object",
         "properties": {
-          "vibration": { "type": "number", "title": "Spindle Vibration", "unit": "mm/s" },
-          "load": { "type": "number", "title": "Motor Load", "unit": "%" },
-          "status": { "type": "string", "title": "Status" }
+          "vibration": {
+            "type": "number",
+            "title": "Spindle Vibration",
+            "unit": "mm/s"
+          },
+          "load": {
+            "type": "number",
+            "title": "Motor Load",
+            "unit": "%"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
         }
       }
     },
@@ -82,9 +120,20 @@
       "schema": {
         "type": "object",
         "properties": {
-          "level": { "type": "number", "title": "Fill Level", "unit": "%" },
-          "pressure": { "type": "number", "title": "Internal Pressure", "unit": "bar" },
-          "status": { "type": "string", "title": "Status" }
+          "level": {
+            "type": "number",
+            "title": "Fill Level",
+            "unit": "%"
+          },
+          "pressure": {
+            "type": "number",
+            "title": "Internal Pressure",
+            "unit": "bar"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
         }
       }
     },
@@ -95,11 +144,29 @@
       "schema": {
         "type": "object",
         "properties": {
-          "voltage": { "type": "number", "title": "Voltage", "unit": "V" },
-          "current": { "type": "number", "title": "Current", "unit": "A" },
-          "power": { "type": "number", "title": "Active Power", "unit": "kW" },
-          "pf": { "type": "number", "title": "Power Factor" },
-          "status": { "type": "string", "title": "Status" }
+          "voltage": {
+            "type": "number",
+            "title": "Voltage",
+            "unit": "V"
+          },
+          "current": {
+            "type": "number",
+            "title": "Current",
+            "unit": "A"
+          },
+          "power": {
+            "type": "number",
+            "title": "Active Power",
+            "unit": "kW"
+          },
+          "pf": {
+            "type": "number",
+            "title": "Power Factor"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
         }
       }
     },
@@ -110,9 +177,20 @@
       "schema": {
         "type": "object",
         "properties": {
-          "output": { "type": "number", "title": "Energy Output", "unit": "MW" },
-          "stability": { "type": "number", "title": "Core Stability", "unit": "%" },
-          "status": { "type": "string", "title": "Containment Status" }
+          "output": {
+            "type": "number",
+            "title": "Energy Output",
+            "unit": "MW"
+          },
+          "stability": {
+            "type": "number",
+            "title": "Core Stability",
+            "unit": "%"
+          },
+          "status": {
+            "type": "string",
+            "title": "Containment Status"
+          }
         }
       }
     },
@@ -123,10 +201,25 @@
       "schema": {
         "type": "object",
         "properties": {
-          "humidity": { "type": "number", "title": "Relative Humidity", "unit": "%RH" },
-          "pressure_pa": { "type": "number", "title": "Differential Pressure", "unit": "Pa" },
-          "hvac_vfd_speed_pct": { "type": "number", "title": "HVAC Fan Speed", "unit": "%" },
-          "status": { "type": "string", "title": "Environment Status" }
+          "humidity": {
+            "type": "number",
+            "title": "Relative Humidity",
+            "unit": "%RH"
+          },
+          "pressure_pa": {
+            "type": "number",
+            "title": "Differential Pressure",
+            "unit": "Pa"
+          },
+          "hvac_vfd_speed_pct": {
+            "type": "number",
+            "title": "HVAC Fan Speed",
+            "unit": "%"
+          },
+          "status": {
+            "type": "string",
+            "title": "Environment Status"
+          }
         }
       }
     },
@@ -137,10 +230,25 @@
       "schema": {
         "type": "object",
         "properties": {
-          "temp_c": { "type": "number", "title": "Internal Temperature", "unit": "°C" },
-          "fan_vfd_speed_pct": { "type": "number", "title": "Circulation Fan Speed", "unit": "%" },
-          "web_speed_m_min": { "type": "number", "title": "Conveyor Web Speed", "unit": "m/min" },
-          "status": { "type": "string", "title": "Oven Status" }
+          "temp_c": {
+            "type": "number",
+            "title": "Internal Temperature",
+            "unit": "°C"
+          },
+          "fan_vfd_speed_pct": {
+            "type": "number",
+            "title": "Circulation Fan Speed",
+            "unit": "%"
+          },
+          "web_speed_m_min": {
+            "type": "number",
+            "title": "Conveyor Web Speed",
+            "unit": "m/min"
+          },
+          "status": {
+            "type": "string",
+            "title": "Oven Status"
+          }
         }
       }
     },
@@ -151,9 +259,25 @@
       "schema": {
         "type": "object",
         "properties": {
-          "supply_temp_c": { "type": "number", "title": "Glycol Supply Temp", "unit": "°C" },
-          "status": { "type": "string", "title": "Compressor Status" }
+          "supply_temp_c": {
+            "type": "number",
+            "title": "Glycol Supply Temp",
+            "unit": "°C"
+          },
+          "status": {
+            "type": "string",
+            "title": "Compressor Status"
+          }
         }
+      }
+    },
+    {
+      "elementId": "MachineType",
+      "displayName": "Machine Type",
+      "namespaceUri": "https://www.abelara.com/ns/equipment",
+      "schema": {
+        "type": "object",
+        "properties": {}
       }
     }
   ],
@@ -163,7 +287,9 @@
       "displayName": "Stark Malibu Headquarters",
       "typeId": "SiteType",
       "isaLevel": "Site",
-      "description": "Main R&D and Mk-Series Assembly Facility"
+      "description": "Main R&D and Mk-Series Assembly Facility",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "assembly_line_01",
@@ -171,7 +297,9 @@
       "typeId": "LineType",
       "parentId": "stark_malibu_hq",
       "isaLevel": "Line",
-      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/#"
+      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/#",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "power_modulator_01",
@@ -181,8 +309,12 @@
       "isaLevel": "Equipment",
       "topic_mapping": "spBv1.0/stark_industries/DDATA/power_modulator_01",
       "relationships": {
-        "SuppliesPowerTo": ["assembly_line_01"]
-      }
+        "SuppliesPowerTo": [
+          "assembly_line_01"
+        ]
+      },
+      "namespaceUri": "https://stark-industries.com/uns",
+      "isComposition": false
     },
     {
       "elementId": "power_meter_01",
@@ -192,8 +324,12 @@
       "isaLevel": "Equipment",
       "topic_mapping": "spBv1.0/stark_industries/DDATA/power_meter_01",
       "relationships": {
-        "Monitors": ["power_modulator_01"]
-      }
+        "Monitors": [
+          "power_modulator_01"
+        ]
+      },
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "robot_arm_01",
@@ -203,8 +339,12 @@
       "isaLevel": "Equipment",
       "topic_mapping": "spBv1.0/stark_industries/DDATA/robot_arm_01",
       "relationships": {
-        "ReceivesPowerFrom": ["power_modulator_01"]
-      }
+        "ReceivesPowerFrom": [
+          "power_modulator_01"
+        ]
+      },
+      "namespaceUri": "https://stark-industries.com/uns",
+      "isComposition": false
     },
     {
       "elementId": "laser_welder_01",
@@ -214,8 +354,12 @@
       "isaLevel": "Equipment",
       "topic_mapping": "spBv1.0/stark_industries/DDATA/laser_welder_01",
       "relationships": {
-        "ReceivesGasFrom": ["gas_tank_argon"]
-      }
+        "ReceivesGasFrom": [
+          "gas_tank_argon"
+        ]
+      },
+      "namespaceUri": "https://stark-industries.com/uns",
+      "isComposition": false
     },
     {
       "elementId": "cnc_mill_05",
@@ -223,7 +367,9 @@
       "typeId": "CNCMillType",
       "parentId": "assembly_line_01",
       "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/cnc_mill_05"
+      "topic_mapping": "spBv1.0/stark_industries/DDATA/cnc_mill_05",
+      "namespaceUri": "https://stark-industries.com/uns",
+      "isComposition": false
     },
     {
       "elementId": "gas_tank_argon",
@@ -233,8 +379,12 @@
       "isaLevel": "Equipment",
       "topic_mapping": "spBv1.0/stark_industries/DDATA/gas_tank_argon",
       "relationships": {
-        "SuppliesGasTo": ["laser_welder_01"]
-      }
+        "SuppliesGasTo": [
+          "laser_welder_01"
+        ]
+      },
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "gas_tank_nitrogen",
@@ -244,8 +394,12 @@
       "isaLevel": "Equipment",
       "topic_mapping": "spBv1.0/stark_industries/DDATA/gas_tank_nitrogen",
       "relationships": {
-        "SuppliesGasTo": ["clean_room_01"]
-      }
+        "SuppliesGasTo": [
+          "clean_room_01"
+        ]
+      },
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "clean_room_01",
@@ -255,15 +409,22 @@
       "isaLevel": "Area",
       "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/clean_room_01/#",
       "relationships": {
-        "Contains": ["robot_arm_01", "laser_welder_01"]
-      }
+        "Contains": [
+          "robot_arm_01",
+          "laser_welder_01"
+        ]
+      },
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "hydrochem_frankfurt",
       "displayName": "HyDroChem Frankfurt Plant",
       "typeId": "SiteType",
       "isaLevel": "Site",
-      "description": "Hydrogen PEM Membrane Production"
+      "description": "Hydrogen PEM Membrane Production",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "coating_line_2",
@@ -271,7 +432,9 @@
       "typeId": "LineType",
       "parentId": "hydrochem_frankfurt",
       "isaLevel": "Line",
-      "topic_mapping": "frankfurt/mes/operations/line_2/status"
+      "topic_mapping": "frankfurt/mes/operations/line_2/status",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "hydrochem_main_power",
@@ -281,8 +444,14 @@
       "isaLevel": "Equipment",
       "topic_mapping": "frankfurt/ot/infrastructure/main_power/telemetry",
       "relationships": {
-        "SuppliesPowerTo": ["chiller_plant", "cleanroom_A", "drying_oven_l2"]
-      }
+        "SuppliesPowerTo": [
+          "chiller_plant",
+          "cleanroom_A",
+          "drying_oven_l2"
+        ]
+      },
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "chiller_plant",
@@ -292,8 +461,13 @@
       "isaLevel": "Equipment",
       "topic_mapping": "frankfurt/ot/utilities/chiller_plant/telemetry",
       "relationships": {
-        "ProvidesCoolingTo": ["cleanroom_A", "coating_line_2"]
-      }
+        "ProvidesCoolingTo": [
+          "cleanroom_A",
+          "coating_line_2"
+        ]
+      },
+      "namespaceUri": "https://hydrochem-ag.com/uns",
+      "isComposition": false
     },
     {
       "elementId": "cleanroom_A",
@@ -303,8 +477,12 @@
       "isaLevel": "Area",
       "topic_mapping": "frankfurt/ot/bms/cleanroom_A/telemetry",
       "relationships": {
-        "Contains": ["coating_line_2"]
-      }
+        "Contains": [
+          "coating_line_2"
+        ]
+      },
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false
     },
     {
       "elementId": "drying_oven_l2",
@@ -314,8 +492,64 @@
       "isaLevel": "Equipment",
       "topic_mapping": "frankfurt/ot/line_2/drying_oven/telemetry",
       "relationships": {
-        "ReceivesPowerFrom": ["hydrochem_main_power"]
+        "ReceivesPowerFrom": [
+          "hydrochem_main_power"
+        ]
+      },
+      "namespaceUri": "https://hydrochem-ag.com/uns",
+      "isComposition": false
+    },
+    {
+      "elementId": "CNC-001",
+      "displayName": "CNC Machine 001",
+      "typeId": "MachineType",
+      "namespaceUri": "https://www.abelara.com/ns/equipment",
+      "isComposition": false,
+      "topic_mapping": "test/cnc001",
+      "relationships": {
+        "HasChildren": [
+          "CNC-001-Part"
+        ]
       }
+    },
+    {
+      "elementId": "CNC-001-Part",
+      "displayName": "Part of CNC-001",
+      "typeId": "MachineType",
+      "namespaceUri": "https://www.abelara.com/ns/equipment",
+      "isComposition": true,
+      "topic_mapping": "test/cnc001_part",
+      "relationships": {
+        "HasParent": [
+          "CNC-001"
+        ]
+      }
+    }
+  ],
+  "relationshipTypes": [
+    {
+      "elementId": "HasParent",
+      "displayName": "Has Parent",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "HasChildren"
+    },
+    {
+      "elementId": "HasChildren",
+      "displayName": "Has Children",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "HasParent"
+    },
+    {
+      "elementId": "HasComponent",
+      "displayName": "Has Component",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "ComponentOf"
+    },
+    {
+      "elementId": "ComponentOf",
+      "displayName": "Component Of",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "reverseOf": "HasComponent"
     }
   ]
 }

@@ -1,7 +1,7 @@
 <div id="chat-widget-container" class="chat-widget-container">
     <chat-session-list></chat-session-list>
     <div class="chat-header" id="chat-header">
-        <span>AI Assistant</span>
+        <span>Start to Korelate, chat now</span>
         <div class="chat-controls">
             <button id="btn-chat-sessions" title="History">🕒</button>
             <button id="btn-chat-clear" title="Delete Session">🗑️</button>
@@ -38,7 +38,23 @@
     <div class="chat-resize-handle chat-resize-w"></div>
 </div>
 
-<button id="btn-chat-fab" class="chat-fab" title="Open AI Assistant">💬</button>
+<button id="btn-chat-fab" class="chat-fab" title="Start to Korelate, chat now" style="display:flex; justify-content:center; align-items:center; padding:0;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="32" height="32" style="margin-left: 2px;">
+      <defs>
+        <path id="k-shape-fab" d="M 20 15 L 70 15 L 70 65 L 120 15 L 160 15 L 85 90 L 160 165 L 120 165 L 70 115 L 70 165 L 20 165 Z" />
+        <mask id="cutout-fab">
+          <rect width="100%" height="100%" fill="white" />
+          <circle cx="70" cy="90" r="24" fill="black" />
+        </mask>
+        <clipPath id="k-clip-fab">
+          <use href="#k-shape-fab" />
+        </clipPath>
+      </defs>
+      <use href="#k-shape-fab" fill="#FFFFFF" mask="url(#cutout-fab)" />
+      <circle cx="70" cy="90" r="32" fill="var(--color-primary)" clip-path="url(#k-clip-fab)" />
+      <circle cx="70" cy="90" r="24" fill="#E67E22" />
+    </svg>
+</button>
 
 <input type="file" id="chat-file-input" style="display:none;" accept="image/*,.pdf,.txt,.json,.csv,.js">
 
