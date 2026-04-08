@@ -1,3 +1,17 @@
+## 2026-04-08 - I3X Client Connector & UI Hierarchy Improvements
+- **I3X Client Support**: Added a new data connector (`connectors/i3x/index.js`) allowing Korelate to act as an I3X client. It can:
+  - Connect to remote I3X servers (RFC 001).
+  - Subscribe to real-time data using the I3X Subscription and SSE streaming protocol.
+  - Publish (write) data back to remote objects using the `PUT /value` endpoint.
+- **Agnostic Hierarchy Support**: Refactored the "ISA-95 Level" field into a more flexible "Hierarchy Level". 
+  - It is now optional and provides autocompletion for both ISA-95 (Industry) and Brick Schema (Buildings).
+  - Empty levels are no longer persisted in the JSON model, keeping it clean for non-industrial use cases.
+- **UI & UX Polish**:
+  - Added an "ℹ️ Help" guide in the Modeler view explaining CDM, UNS, and AI Assistant integration.
+  - Replaced the chat FAB emoji with the official Korelate SVG logo.
+  - Updated chat header to "Start to Korelate, chat now".
+- **Core Logic Touched**: `connectors/i3x/index.js`, `public/config.html`, `public/config.js`, `public/html/view.modeler.html`, `public/view.modeler.js`.
+
 ## 2026-04-08 - I3X RFC 001 Full Compliance Achieved
 - **REST Endpoints Added**: Upgraded the `i3xRouter` to support standard RESTful `GET` queries mandated by the I3X compliance test suite. Added:
   - `GET /objecttypes/:elementId`

@@ -497,6 +497,7 @@
                     <select id="prov-type">
                         <option value="mqtt">MQTT Broker</option>
                         <option value="opcua">OPC UA Server</option>
+                        <option value="i3x">I3X Server (RFC 001)</option>
                         <option value="http">HTTP Webhook (Ingest)</option>
                         <option value="file">File Stream (CSV/JSONL)</option>
                     </select>
@@ -581,6 +582,18 @@
                         <div class="wiz-form-group"><label>Password (Optional)</label><input type="password" id="prov-opcua-pass"></div>
                     </div>
                     <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For OPC UA, 'Subscribe Topics' should be NodeIDs (e.g. <code>ns=1;s=Temperature</code>).</p>
+                </div>
+
+                <div id="prov-group-i3x" class="conditional-group">
+                    <div class="wiz-form-group">
+                        <label>Base URL</label>
+                        <input type="text" id="prov-i3x-url" placeholder="http://remote-korelate:8080/api/i3x">
+                    </div>
+                    <div class="wiz-form-group">
+                        <label>API Key (Optional)</label>
+                        <input type="text" id="prov-i3x-key" placeholder="sk-...">
+                    </div>
+                    <p style="font-size:0.85em; color:var(--color-text-secondary);">Note: For I3X, 'Subscribe Topics' should be <strong>Element IDs</strong> (e.g. <code>Pump-001</code>).</p>
                 </div>
 
                 <div id="prov-group-http" class="conditional-group">

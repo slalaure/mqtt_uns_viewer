@@ -48,6 +48,9 @@ Ce document décrit la stratégie et les scénarios de test pour garantir la sta
     * *Backoff* : Vérifier les tentatives de reconnexion exponentielles si le serveur OPC UA tombe.
 * **File Provider (`fileProvider.test.js`)**
     * *CSV Parsing* : Vérifier le routage dynamique via la colonne `topic` d'un CSV.
+* **I3X Provider (`i3xProvider.test.js`)**
+    * *Subscription* : Vérifier la connexion à un serveur I3X distant, la création d'une souscription et la réception de données via le flux SSE.
+    * *Write* : Vérifier l'écriture de données vers un serveur distant via `PUT /value`.
 
 ### 1.4. I3X & Semantic Manager (`semanticManager.test.js`)
 * *Indexation* : Vérifier que les relations (ex: `SuppliesTo`) sont bien indexées en mémoire (aller et retour).

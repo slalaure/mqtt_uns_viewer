@@ -278,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const t = provTypeSelect.value;
         document.getElementById('prov-group-mqtt').classList.toggle('active', t === 'mqtt');
         document.getElementById('prov-group-opcua').classList.toggle('active', t === 'opcua');
+        document.getElementById('prov-group-i3x').classList.toggle('active', t === 'i3x');
         document.getElementById('prov-group-http').classList.toggle('active', t === 'http');
         document.getElementById('prov-group-file').classList.toggle('active', t === 'file');
     }
@@ -311,6 +312,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (p.type === 'opcua') {
                 document.getElementById('prov-opcua-url').value = p.endpointUrl || '';
                 document.getElementById('prov-opcua-user').value = p.username || '';
+            } else if (p.type === 'i3x') {
+                document.getElementById('prov-i3x-url').value = p.baseUrl || '';
+                document.getElementById('prov-i3x-key').value = p.apiKey || '';
             } else if (p.type === 'http') {
                 document.getElementById('prov-http-path').value = p.pathPrefix || '';
             } else if (p.type === 'file') {
@@ -373,6 +377,9 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (editingProviderIndex >= 0 && providersList[editingProviderIndex].password) {
                 newProv.password = providersList[editingProviderIndex].password; 
             }
+        } else if (type === 'i3x') {
+            newProv.baseUrl = document.getElementById('prov-i3x-url').value.trim();
+            newProv.apiKey = document.getElementById('prov-i3x-key').value.trim();
         } else if (type === 'http') {
             newProv.pathPrefix = document.getElementById('prov-http-path').value.trim();
         } else if (type === 'file') {
