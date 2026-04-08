@@ -1,4 +1,5 @@
 ## 2026-04-08 - I3X Client Connector & UI Hierarchy Improvements
+- **UNS Model Migration**: Moved the JSON Import/Export features for `uns_model.json` from the generic Configuration page directly into the CDM Modeler view. This centralizes all schema management in a single logical workspace.
 - **I3X Client Support**: Added a new data connector (`connectors/i3x/index.js`) allowing Korelate to act as an I3X client. It can:
   - Connect to remote I3X servers (RFC 001).
   - Subscribe to real-time data using the I3X Subscription and SSE streaming protocol.

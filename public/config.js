@@ -60,10 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements: Assets ---
     const certList = document.getElementById('cert-list');
     const certUploadInput = document.getElementById('cert-upload-input');
-    const modelEditor = document.getElementById('uns-model-editor');
-    const btnSaveModel = document.getElementById('btn-save-model');
-    const modelUploadInput = document.getElementById('model-upload-input');
-    const btnUploadModel = document.getElementById('btn-upload-model');
 
     // ==========================================
     // 1. DATA LOADING & POPULATION
@@ -617,42 +613,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function loadUnsModel() {
-        try {
-            const res = await fetch('api/env/model');
-            if (!res.ok) throw new Error("Failed to fetch UNS Model.");
-            modelEditor.value = JSON.stringify(await res.json(), null, 2);
-        } catch (e) {
-            modelEditor.value = `// Error loading model: ${e.message}\n[]`;
-        }
-    }
-
-    async function saveUnsModel(modelData) {
-        btnSaveModel.disabled = true; btnSaveModel.textContent = "Saving...";
-        try {
-            const res = await fetch('api/env/model', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(typeof modelData === 'string' ? JSON.parse(modelData) : modelData)
-            });
-            if (!res.ok) throw new Error((await res.json()).error || "Save failed.");
-            showToast("UNS Model saved!", "success");
-            loadUnsModel(); 
-        } catch (e) { showToast(`Error: ${e.message}`, "error"); } 
-        finally { btnSaveModel.disabled = false; btnSaveModel.textContent = "Save Model"; }
-    }
-
-    btnSaveModel.onclick = () => saveUnsModel(modelEditor.value);
-    btnUploadModel.onclick = () => {
-        const file = modelUploadInput.files[0];
-        if (!file) return showToast("Select a JSON file.", "warning");
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try { saveUnsModel(JSON.parse(e.target.result)); modelUploadInput.value = ''; } 
-            catch (err) { showToast("Invalid JSON: " + err.message, "error"); }
-        };
-        reader.readAsText(file);
-    };
-
     async function loadCertificates() {
         try {
             const res = await fetch('api/env/certs');
@@ -698,5 +658,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Init ---
     loadConfig();
     loadCertificates();
-    loadUnsModel();
 });

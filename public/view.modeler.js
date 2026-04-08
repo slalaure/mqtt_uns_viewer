@@ -39,7 +39,8 @@ export async function initModelerView() {
                 'modeler-json-view', 'modeler-ace-editor', 'field-isa-level', 'field-namespace',
                 'container-properties', 'container-relationships',
                 'btn-add-property', 'btn-add-relationship', 'btn-toggle-physics',
-                'modeler-help-modal', 'btn-modeler-help', 'btn-close-modeler-help'
+                'modeler-help-modal', 'btn-modeler-help', 'btn-close-modeler-help',
+                'btn-modeler-import', 'btn-modeler-export', 'modeler-import-file'
             ];
             ids.forEach(id => el[id] = document.getElementById(id));
 
@@ -89,6 +90,41 @@ export function mountModelerView() {
 
     el['btn-modeler-refresh'].onclick = loadModel;
     el['btn-modeler-save'].onclick = saveModelToServer;
+    
+    // Import/Export logic
+    el['btn-modeler-export'].onclick = () => {
+        if (!currentModel) return showToast("No model to export.", "warning");
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentModel, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = `uns_model_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    };
+    
+    el['btn-modeler-import'].onclick = () => el['modeler-import-file'].click();
+    
+    el['modeler-import-file'].onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const importedModel = JSON.parse(evt.target.result);
+                currentModel = importedModel;
+                renderRegistry();
+                setEditMode('form');
+                el['btn-modeler-save'].classList.add('btn-unsaved');
+                showToast("Model imported! Don't forget to click Save.", "info");
+            } catch (err) {
+                showToast("Invalid JSON file.", "error");
+            }
+            el['modeler-import-file'].value = '';
+        };
+        reader.readAsText(file);
+    };
+
     el['btn-modeler-help'].onclick = () => el['modeler-help-modal'].style.display = 'flex';
     el['btn-close-modeler-help'].onclick = () => el['modeler-help-modal'].style.display = 'none';
     

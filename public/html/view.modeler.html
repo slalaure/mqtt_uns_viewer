@@ -17,6 +17,11 @@
                     <button id="btn-add-instance" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Obj</button>
                 </div>
                 <input type="text" id="modeler-search" placeholder="Search models..." class="modern-input" style="padding: 6px 10px; font-size: 0.85em;">
+                <div style="display: flex; gap: 5px;">
+                    <input type="file" id="modeler-import-file" accept=".json" style="display: none;">
+                    <button id="btn-modeler-import" class="tool-button" style="flex: 1; font-size: 0.8em;" title="Import uns_model.json">📥 Import</button>
+                    <button id="btn-modeler-export" class="tool-button" style="flex: 1; font-size: 0.8em;" title="Export uns_model.json">📤 Export</button>
+                </div>
             </div>
         </div>
         <div class="tree-container" id="modeler-tree-container" style="flex: 1; padding: 10px; overflow-y: auto;"></div>
