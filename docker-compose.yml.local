@@ -1,149 +1,242 @@
 # docker-compose.yml.local
-# Local testing with embedded MQTT and OPC UA servers
+# Flexible local testing environment for Korelate connectors
 # 
 # Usage:
-#   docker-compose -f docker-compose.yml.local up
+#   COMPOSE_PROFILES=core docker compose -f docker-compose.yml.local up -d
+#   COMPOSE_PROFILES=ot docker compose -f docker-compose.yml.local up -d
+#   COMPOSE_PROFILES=bms docker compose -f docker-compose.yml.local up -d
+#   COMPOSE_PROFILES=it docker compose -f docker-compose.yml.local up -d
+#   COMPOSE_PROFILES=all docker compose -f docker-compose.yml.local up -d
 #
-# This configuration:
-# - Starts the app with preconfigured MQTT & OPC UA brokers
-# - Includes embedded Mosquitto MQTT broker
-# - Includes embedded OPC UA test server
-# - All services on a private Docker network
-#
-# Access:
-# - Web UI:      http://localhost:8080
-# - MCP Server:  http://localhost:3000
-# - MQTT:        mqtt://localhost:1883 (or mqtt://mqtt:1883 from within Docker)
-# - OPC UA:      opc.tcp://localhost:4840 (or opc.tcp://opcua:4840 from within Docker)
+# Unitary testing (e.g. just postgres and mqtt):
+#   COMPOSE_PROFILES=postgres,mqtt docker compose -f docker-compose.yml.local up -d
 
 version: '3.8'
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
-  # Main Application - Preconfigured with local brokers
+  # ==========================================
+  # BASE APPLICATION (Always On)
+  # ==========================================
   app:
-    build:
-      context: .
+    build: .
     container_name: korelate_app_local
     restart: always
     ports:
-      - "8080:8080"
+      - "${PORT_HTTP:-8080}:8080"
     volumes:
       - ./data:/usr/src/app/data
     environment:
       - NODE_ENV=production
       - PORT=8080
-      - BASE_PATH=/
-      - ENABLE_LOCAL_MQTT_FALLBACK=true
-      - LOCAL_MQTT_HOST=mqtt
-      - LOCAL_MQTT_PORT=1883
-      # Preconfigured MQTT broker for local testing (fallback still works if MQTT_BROKERS is empty)
-      - MQTT_BROKERS='[{"id":"local-mqtt","host":"mqtt","port":1883,"protocol":"mqtt","clientId":"mqtt-uns-viewer-local","username":"","password":"","subscribe":["#"],"publish":["#"],"certFilename":"","keyFilename":"","caFilename":"","alpnProtocol":"","rejectUnauthorized":false}]'
-      # Local admin account for testing
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=password
       - SESSION_SECRET=local-testing-secret
-      - PUBLIC_URL=http://localhost:8080
-      # Enable all simulator features for testing
       - SIMULATOR_ENABLED=true
-      - VIEW_CONFIG_ENABLED=true
-      - EXTERNAL_API_ENABLED=true
     networks:
-      - mqtt_viewer_net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    depends_on:
-      mqtt:
-        condition: service_healthy
-      opcua:
-        condition: service_healthy
+      - korelate_net
+    logging: *default-logging
 
-  # MCP Server
+  # ==========================================
+  # CORE PACKAGES (profiles: core)
+  # ==========================================
   mcp:
-    build:
-      context: .
+    build: .
     container_name: korelate_mcp_local
+    profiles: ["core", "all"]
     restart: always
     ports:
-      - "3000:3000"
-    volumes:
-      - ./data:/usr/src/app/data
+      - "${PORT_MCP:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - MCP_TRANSPORT=http
       - MCP_PORT=3000
       - MAIN_APP_HOST=app
-      - PORT=8080
-      - BASE_PATH=/
     networks:
-      - mqtt_viewer_net
+      - korelate_net
     command: node interfaces/mcp/mcpServer.mjs
     depends_on:
       - app
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *default-logging
 
-  # Local MQTT Broker (Mosquitto)
   mqtt:
     image: eclipse-mosquitto:2.1.2-alpine
     container_name: korelate_mqtt_local
+    profiles: ["core", "mqtt", "all"]
     restart: always
     ports:
       - "1883:1883"
-      - "9001:9001"
     volumes:
       - ./config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_logs:/mosquitto/log
     networks:
-      - mqtt_viewer_net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - korelate_net
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "1883"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      interval: 5s
 
-  # Local OPC UA Server
+  # Note: 'file' connector does not require a separate external server
+
+  # ==========================================
+  # OT PACKAGES (profiles: ot)
+  # ==========================================
   opcua:
     build:
       context: .
       dockerfile: Dockerfile.opcua
     container_name: korelate_opcua_local
+    profiles: ["ot", "opcua", "all"]
     restart: always
     ports:
       - "4840:4840"
-    environment:
-      - NODE_ENV=production
-      - OPCUA_PORT=4840
     networks:
-      - mqtt_viewer_net
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    healthcheck:
-      test: ["CMD", "node", "-e", "const net = require('net'); const socket = net.createConnection(4840, 'localhost'); socket.on('connect', () => {socket.destroy(); process.exit(0)}); socket.on('error', () => process.exit(1));"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      - korelate_net
+    logging: *default-logging
 
-volumes:
-  mosquitto_data:
-  mosquitto_logs:
+  modbus:
+    image: oitc/modbus-server:latest
+    container_name: korelate_modbus_local
+    profiles: ["ot", "modbus", "all"]
+    ports:
+      - "5020:5020"
+    networks:
+      - korelate_net
+
+  eip:
+    image: alpine
+    container_name: korelate_eip_local
+    profiles: ["ot", "eip", "all"]
+    command: sh -c "apk add --no-cache socat && socat TCP-LISTEN:44818,fork,reuseaddr STDOUT"
+    ports:
+      - "44818:44818"
+    networks:
+      - korelate_net
+
+  s7:
+    image: alpine
+    container_name: korelate_s7_local
+    profiles: ["ot", "s7", "all"]
+    command: sh -c "apk add --no-cache socat && socat TCP-LISTEN:102,fork,reuseaddr STDOUT"
+    ports:
+      - "102:102"
+    networks:
+      - korelate_net
+
+  # ==========================================
+  # BMS PACKAGES (profiles: bms)
+  # ==========================================
+  bacnet:
+    image: alpine
+    container_name: korelate_bacnet_local
+    profiles: ["bms", "bacnet", "all"]
+    command: sh -c "apk add --no-cache socat && socat UDP-LISTEN:47808,fork,reuseaddr STDOUT"
+    ports:
+      - "47808:47808/udp"
+    networks:
+      - korelate_net
+
+  knx:
+    image: alpine
+    container_name: korelate_knx_local
+    profiles: ["bms", "knx", "all"]
+    command: sh -c "apk add --no-cache socat && socat UDP-LISTEN:3671,fork,reuseaddr STDOUT"
+    ports:
+      - "3671:3671/udp"
+    networks:
+      - korelate_net
+
+  # ==========================================
+  # IT PACKAGES (profiles: it)
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: korelate_postgres_local
+    profiles: ["it", "sql", "postgres", "all"]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: korelate
+      POSTGRES_PASSWORD: password
+    networks:
+      - korelate_net
+
+  mysql:
+    image: mysql:8.0
+    container_name: korelate_mysql_local
+    profiles: ["it", "sql", "mysql", "all"]
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: korelate
+      MYSQL_ROOT_PASSWORD: password
+    networks:
+      - korelate_net
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: korelate_mssql_local
+    profiles: ["it", "sql", "mssql", "all"]
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Password123!"
+    networks:
+      - korelate_net
+
+  zookeeper:
+    image: zookeeper:3.9.1
+    container_name: korelate_zookeeper_local
+    profiles: ["it", "kafka", "all"]
+    environment:
+      ZOO_PORT: 2181
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    networks:
+      - korelate_net
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: korelate_kafka_local
+    profiles: ["it", "kafka", "all"]
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    networks:
+      - korelate_net
+
+  snmp:
+    image: tandrup/snmpsim
+    container_name: korelate_snmp_local
+    profiles: ["it", "snmp", "all"]
+    ports:
+      - "161:161/udp"
+    networks:
+      - korelate_net
+
+  rest_mock:
+    image: stoplight/prism:4
+    container_name: korelate_rest_local
+    profiles: ["it", "rest-poller", "all"]
+    ports:
+      - "3001:4010"
+    command: mock -h 0.0.0.0 https://raw.githubusercontent.com/OAI/OpenAPI-Specification/main/examples/v3.0/petstore.yaml
+    networks:
+      - korelate_net
 
 networks:
-  mqtt_viewer_net:
+  korelate_net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 100.64.0.0/24

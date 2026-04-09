@@ -285,6 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('prov-group-i3x').classList.toggle('active', t === 'i3x');
         document.getElementById('prov-group-http').classList.toggle('active', t === 'http');
         document.getElementById('prov-group-file').classList.toggle('active', t === 'file');
+        document.getElementById('prov-group-sql').classList.toggle('active', t === 'sql');
+        document.getElementById('prov-group-rest').classList.toggle('active', t === 'rest');
+        document.getElementById('prov-group-snmp').classList.toggle('active', t === 'snmp');
+        document.getElementById('prov-group-kafka').classList.toggle('active', t === 'kafka');
     }
     provTypeSelect.addEventListener('change', updateProvConditionalGroups);
 
@@ -351,6 +355,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('prov-file-path').value = p.filePath || '';
                 document.getElementById('prov-file-topic').value = p.defaultTopic || '';
                 document.getElementById('prov-file-rate').value = p.streamRateMs || '';
+            } else if (p.type === 'sql') {
+                document.getElementById('prov-sql-driver').value = p.options?.driver || 'postgres';
+                document.getElementById('prov-sql-connection').value = p.options?.connection || '';
+                document.getElementById('prov-sql-query').value = p.options?.query || '';
+                document.getElementById('prov-sql-interval').value = p.options?.interval || '';
+                document.getElementById('prov-sql-cursor').value = p.options?.cursorColumn || '';
+                document.getElementById('prov-sql-topic-col').value = p.options?.topicColumn || '';
+            } else if (p.type === 'rest') {
+                document.getElementById('prov-rest-endpoint').value = p.options?.endpoint || '';
+                document.getElementById('prov-rest-interval').value = p.options?.interval || '';
+                document.getElementById('prov-rest-auth-type').value = p.options?.auth?.type || 'none';
+                
+                if (p.options?.auth?.type === 'basic') {
+                    document.getElementById('prov-rest-user').value = p.options.auth.username || '';
+                    document.getElementById('prov-rest-pass').value = p.options.auth.password || '';
+                } else if (p.options?.auth?.type === 'bearer') {
+                    document.getElementById('prov-rest-token').value = p.options.auth.token || '';
+                } else if (p.options?.auth?.type === 'apikey') {
+                    document.getElementById('prov-rest-keyname').value = p.options.auth.headerName || '';
+                    document.getElementById('prov-rest-keyval').value = p.options.auth.apiKey || '';
+                }
+                
+                // Trigger event to hide/show DOM
+                document.getElementById('prov-rest-auth-type').dispatchEvent(new Event('change'));
+            } else if (p.type === 'snmp') {
+                document.getElementById('prov-snmp-target').value = p.options?.target || '';
+                document.getElementById('prov-snmp-community').value = p.options?.community || 'public';
+                document.getElementById('prov-snmp-version').value = p.options?.version || 'v2c';
+                document.getElementById('prov-snmp-interval').value = p.options?.interval || '';
+                document.getElementById('prov-snmp-oids').value = Array.isArray(p.options?.oids) ? p.options.oids.join(', ') : '';
+            } else if (p.type === 'kafka') {
+                document.getElementById('prov-kafka-brokers').value = Array.isArray(p.options?.brokers) ? p.options.brokers.join(', ') : '';
+                document.getElementById('prov-kafka-clientid').value = p.options?.clientId || '';
+                document.getElementById('prov-kafka-groupid').value = p.options?.groupId || '';
             }
         }
         
@@ -451,6 +489,46 @@ document.addEventListener('DOMContentLoaded', () => {
             newProv.filePath = document.getElementById('prov-file-path').value.trim();
             newProv.defaultTopic = document.getElementById('prov-file-topic').value.trim();
             newProv.streamRateMs = parseInt(document.getElementById('prov-file-rate').value) || 1000;
+        } else if (type === 'sql') {
+            newProv.options = {
+                driver: document.getElementById('prov-sql-driver').value,
+                connection: document.getElementById('prov-sql-connection').value.trim(),
+                query: document.getElementById('prov-sql-query').value.trim()
+            };
+            if (document.getElementById('prov-sql-interval').value) newProv.options.interval = parseInt(document.getElementById('prov-sql-interval').value);
+            if (document.getElementById('prov-sql-cursor').value) newProv.options.cursorColumn = document.getElementById('prov-sql-cursor').value.trim();
+            if (document.getElementById('prov-sql-topic-col').value) newProv.options.topicColumn = document.getElementById('prov-sql-topic-col').value.trim();
+        } else if (type === 'rest') {
+            newProv.options = {
+                endpoint: document.getElementById('prov-rest-endpoint').value.trim(),
+                auth: { type: document.getElementById('prov-rest-auth-type').value }
+            };
+            if (document.getElementById('prov-rest-interval').value) newProv.options.interval = parseInt(document.getElementById('prov-rest-interval').value);
+            
+            if (newProv.options.auth.type === 'basic') {
+                newProv.options.auth.username = document.getElementById('prov-rest-user').value.trim();
+                newProv.options.auth.password = document.getElementById('prov-rest-pass').value;
+            } else if (newProv.options.auth.type === 'bearer') {
+                newProv.options.auth.token = document.getElementById('prov-rest-token').value.trim();
+            } else if (newProv.options.auth.type === 'apikey') {
+                newProv.options.auth.headerName = document.getElementById('prov-rest-keyname').value.trim();
+                newProv.options.auth.apiKey = document.getElementById('prov-rest-keyval').value.trim();
+            }
+        } else if (type === 'snmp') {
+            newProv.options = {
+                target: document.getElementById('prov-snmp-target').value.trim(),
+                community: document.getElementById('prov-snmp-community').value.trim() || 'public',
+                version: document.getElementById('prov-snmp-version').value
+            };
+            if (document.getElementById('prov-snmp-interval').value) newProv.options.interval = parseInt(document.getElementById('prov-snmp-interval').value);
+            const oidsRaw = document.getElementById('prov-snmp-oids').value;
+            if (oidsRaw) newProv.options.oids = oidsRaw.split(',').map(s=>s.trim()).filter(Boolean);
+        } else if (type === 'kafka') {
+            newProv.options = {};
+            const brokersRaw = document.getElementById('prov-kafka-brokers').value;
+            if (brokersRaw) newProv.options.brokers = brokersRaw.split(',').map(s=>s.trim()).filter(Boolean);
+            if (document.getElementById('prov-kafka-clientid').value) newProv.options.clientId = document.getElementById('prov-kafka-clientid').value.trim();
+            if (document.getElementById('prov-kafka-groupid').value) newProv.options.groupId = document.getElementById('prov-kafka-groupid').value.trim();
         }
 
         if (editingProviderIndex >= 0) {

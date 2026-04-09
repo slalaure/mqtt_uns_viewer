@@ -6,32 +6,44 @@ This guide explains how to use the embedded MQTT and OPC UA servers for local de
 
 ### Option 1: Using the Preconfigured Compose File (Recommended)
 
-The easiest way to start everything with local test servers:
+The `docker-compose.yml.local` file contains the core Korelate application, MCP agent, and an exhaustive list of pre-configured simulation servers (MQTT, OPC UA, Postgres, Modbus, Kafka, SNMP, REST, etc.) to help you test all Southbound connectors locally.
+
+Because running all databases and simulators simultaneously requires significant RAM, the file uses **Docker Compose Profiles** to let you start only what you need.
 
 ```bash
-docker-compose -f docker-compose.yml.local up
+# Start the core app and standard protocols (MQTT, OPC UA)
+COMPOSE_PROFILES=core,ot docker compose -f docker-compose.yml.local up -d
+
+# Start only IT/Data testing (SQL databases, Kafka, SNMP)
+COMPOSE_PROFILES=it docker compose -f docker-compose.yml.local up -d
+
+# Start EVERYTHING (Warning: Heavy resource usage)
+COMPOSE_PROFILES=all docker compose -f docker-compose.yml.local up -d
 ```
 
-This will start:
-- **Web UI**: http://localhost:8080
-- **MQTT Broker**: `mqtt://localhost:1883` (or `mqtt://mqtt:1883` from Docker)
-- **OPC UA Server**: `opc.tcp://localhost:4840` (or `opc.tcp://opcua:4840` from Docker)
-- **Admin Account**: 
-  - Username: `admin`
-  - Password: `password`
+#### Available Profiles:
+*   `core`: Main App, MCP Agent, Mosquitto MQTT.
+*   `ot` (Operational Technology): OPC UA Simulator, Modbus TCP, S7 Mock, EtherNet/IP Mock.
+*   `bms` (Building Management): BACnet/IP, KNX/IP.
+*   `it` (IT & Data): PostgreSQL, MySQL, MS SQL Server, Kafka + Zookeeper, SNMP Simulator, REST API Mock.
 
-The application is **pre-configured** to connect to these local brokers automatically.
+> **Note on Ports:** If you already run a Korelate instance or other services on the default ports, you can dynamically override them before launching:
+> `export PORT_HTTP=8085; export PORT_MCP=3005; COMPOSE_PROFILES=core ...`
 
-> ⚠️ `simulator-alat` is privé et ne doit pas être exposé dans le code central.
-> Par défaut les simulateurs auto-démarrés sont :
-> - `stark` (Stack Industries)
-> - `deathstar` (Death Star)
-> - `paris_metro` (RATP)
-> - `hydrochem` (HyDroChem-AG)
-> 
-> Si vous avez un simulateur local non commité, placez-le dans `data/simulators` et mettez-le dans `.gitignore`.
+### Option 2: Automated Protocol Integration Testing
 
-### Option 3: HTTP Data Ingestion (REST)
+To prove that the Core Application and the Southbound Connectors are correctly communicating with these simulation servers, an automated integration test script is available. It uses the real underlying libraries (`mqtt`, `pg`, `axios`, `modbus-serial`, etc.) to execute full handshakes and validate data exchange.
+
+```bash
+# 1. Start all simulators
+COMPOSE_PROFILES=all docker compose -f docker-compose.yml.local up -d
+
+# 2. Run the integration test suite
+node tests/integration_protocols.js
+
+# 3. Stop everything and clean up
+docker compose -f docker-compose.yml.local down --remove-orphans
+```
 
 You can also ingest data into the UNS using simple HTTP POST requests. 
 This is enabled via the `http` provider type in `DATA_PROVIDERS`.

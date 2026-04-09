@@ -1,3 +1,20 @@
+- **Docker Testing Environment**: Completely overhauled `docker-compose.yml.local` to include 14 distinct simulation containers (Mosquitto, OPC UA, Modbus, Postgres, MySQL, MSSQL, Kafka, Zookeeper, SNMP, REST Mock, plus mocks for S7, EIP, BACnet, and KNX).
+- **Docker Profiles**: Implemented Compose Profiles (`core`, `ot`, `bms`, `it`, `all`) to allow developers to spin up specific subsets of simulators without overwhelming their local RAM.
+- **Port Flexibility**: Added dynamic environment variables (`PORT_HTTP`, `PORT_MCP`) to the Compose file to easily avoid local `8080` port binding conflicts.
+- **Protocol Integration Testing**: Created a dedicated `tests/integration_protocols.js` Node.js script. Instead of just pinging ports, this script uses actual Node.js drivers (`mqtt`, `pg`, `axios`, `modbus-serial`, `net-snmp`, `kafkajs`) to perform real protocol handshakes, register reads, and queries against the local Docker simulators, guaranteeing that the connectors are talking to valid endpoints.
+
+## 2026-04-09 - IT & Data Connectors Expansion
+- **New Data Providers**: Added 4 new generic data/IT protocols to Korelate's Southbound connector library:
+  - 🗄️ **SQL Database Poller**: Periodically queries PostgreSQL, MySQL, or MS SQL Server, leveraging a cursor to fetch new rows incrementally.
+  - 🌐 **REST API Poller**: Actively interrogates HTTP GET endpoints at set intervals, supporting Basic, Bearer, and API Key authentication.
+  - 📶 **SNMP Poller**: Fetches OID data from network equipment using SNMP v1 and v2c.
+  - 🚀 **Apache Kafka**: High-throughput bidirectional integration with Kafka clusters.
+- **Dynamic Imports**: Uses optional dependencies (`pg`, `mysql2`, `mssql`, `axios`, `net-snmp`, `kafkajs`). If a missing package is requested, Korelate logs an error suggesting the `npm install` command rather than crashing.
+- **UI Integrations**: 
+  - Added new protocols to the Data Provider Builder Wizard in `public/config.html` and `public/config.js` with dynamic forms.
+  - Updated the Help Guide modal with precise explanations and syntax examples for the new connectors.
+- **Testing**: Added unit tests (`tests/sqlProvider.test.js`, `tests/restPollerProvider.test.js`, `tests/snmpProvider.test.js`, `tests/kafkaProvider.test.js`) and updated `test_plan.md` to cover their functionality.
+
 ## 2026-04-08 - Industrial Connectors Expansion
 - **New Data Providers**: Added 4 new native industrial protocols to Korelate's Southbound connector library (`connectors/`):
   - 📡 **Modbus TCP**: Uses `modbus-serial`. Supports Coil, Holding, Input, and Discrete mapping via simple Address parsing (e.g., `40001:16::factory/temp`).

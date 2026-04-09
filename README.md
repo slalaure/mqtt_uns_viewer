@@ -106,7 +106,7 @@ To handle environments ranging from a few updates a minute to thousands of messa
     * "Fire-and-forget" batched ingestion for long-term archival and compliance.
 
 ### 🔌 Connectivity & Protocols (Southbound)
-Korelate acts as a high-performance protocol gateway, bringing data from various industrial and building sources into a unified context:
+Korelate acts as a high-performance protocol gateway, bringing data from various industrial and IT sources into a unified context:
 *   **📡 MQTT & Sparkplug B**: Native high-performance support with auto-decoding.
 *   **⚙️ OPC UA**: Direct connection to industrial PLCs (Kepware, Ignition, etc.).
 *   **🔡 Modbus TCP**: Legacy support for industrial automation.
@@ -114,6 +114,10 @@ Korelate acts as a high-performance protocol gateway, bringing data from various
 *   **🔌 EtherNet/IP**: CIP protocol for Rockwell and Omron systems.
 *   **🏢 BACnet/IP**: Standard for Building Management Systems (BMS).
 *   **💡 KNX/IP**: Event-driven automation for commercial buildings.
+*   **📶 SNMP**: Polling for network equipment (routers, switches).
+*   **🚀 Apache Kafka**: High-throughput bidirectional integration with Kafka clusters.
+*   **🗄️ SQL Databases**: Polling integration for PostgreSQL, MySQL, and MS SQL Server.
+*   **🌐 REST API Poller**: Active polling of external HTTP GET endpoints.
 *   **🔗 I3X (RFC 001)**: Inter-server communication with other UNS nodes.
 *   **📥 HTTP Webhooks**: RESTful ingestion for ERPs and legacy software.
 

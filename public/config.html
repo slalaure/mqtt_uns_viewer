@@ -571,6 +571,43 @@
                             <li><strong>Usage</strong>: The remote system must POST to: <code>http://&lt;korelate-ip&gt;:8080/api/ingest/erp/my/custom/topic</code> with a JSON body.</li>
                         </ul>
                     </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #3498db;">
+                        <strong style="font-size:1.1em;">🗄️ SQL Database Poller</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Periodically executes a SELECT query on PostgreSQL, MySQL, or MS SQL Server to stream new rows.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Cursor Column</strong>: E.g., <code>updated_at</code>. Used to ensure only new data is fetched on subsequent polls.</li>
+                            <li><strong>Topic Column</strong>: E.g., <code>asset_id</code>. Dynamically appends to the Base Topic (e.g., <code>base/topic/{asset_id}</code>).</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #16a085;">
+                        <strong style="font-size:1.1em;">🌐 REST API Poller</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Actively interrogates HTTP GET endpoints at a given interval.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Auth</strong>: Supports Basic Auth, Bearer Token, or API Keys.</li>
+                            <li><strong>Behavior</strong>: Converts the JSON response into a payload and forwards it to the defined Topic.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #8e44ad;">
+                        <strong style="font-size:1.1em;">📶 SNMP Poller</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Polls network equipment (routers, switches) using specific OIDs.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>OIDs</strong>: Comma-separated list of Object Identifiers (e.g., <code>1.3.6.1.2.1.1.1.0</code>).</li>
+                            <li><strong>Community</strong>: Usually <code>public</code>. Supports SNMP v1 and v2c.</li>
+                        </ul>
+                    </div>
+
+                    <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #c0392b;">
+                        <strong style="font-size:1.1em;">🚀 Apache Kafka</strong>
+                        <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">High-throughput integration with enterprise Kafka clusters.</p>
+                        <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
+                            <li><strong>Brokers</strong>: E.g., <code>kafka1:9092, kafka2:9092</code>.</li>
+                            <li><strong>Subscribe Topics</strong>: Topics to consume from.</li>
+                            <li><strong>Publish Topics</strong>: Allowed topics for producing messages.</li>
+                        </ul>
+                    </div>
                 </div>
 
                 <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f1c40f;">
@@ -614,6 +651,10 @@
                         <option value="i3x">I3X Server (RFC 001)</option>
                         <option value="http">HTTP Webhook (Ingest)</option>
                         <option value="file">File Stream (CSV/JSONL)</option>
+                        <option value="sql">SQL Database Poller</option>
+                        <option value="rest">REST API Poller</option>
+                        <option value="snmp">SNMP Poller</option>
+                        <option value="kafka">Apache Kafka</option>
                     </select>
                 </div>
 
@@ -773,6 +814,95 @@
                     <div class="wiz-form-group">
                         <label>Path Prefix</label>
                         <input type="text" id="prov-http-path" placeholder="/api/ingest/rest">
+                    </div>
+                </div>
+
+                <div id="prov-group-sql" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group">
+                            <label>Driver</label>
+                            <select id="prov-sql-driver">
+                                <option value="postgres">PostgreSQL</option>
+                                <option value="mysql">MySQL</option>
+                                <option value="mssql">MS SQL Server</option>
+                            </select>
+                        </div>
+                        <div class="wiz-form-group"><label>Polling Interval (ms)</label><input type="number" id="prov-sql-interval" placeholder="60000"></div>
+                    </div>
+                    <div class="wiz-form-group">
+                        <label>Connection String or URI</label>
+                        <input type="text" id="prov-sql-connection" placeholder="postgres://user:pass@host:5432/db">
+                    </div>
+                    <div class="wiz-form-group">
+                        <label>SELECT Query</label>
+                        <textarea id="prov-sql-query" rows="2" placeholder="SELECT * FROM sensor_data"></textarea>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Cursor Column (Optional)</label><input type="text" id="prov-sql-cursor" placeholder="updated_at" title="Column used to fetch only new records."></div>
+                        <div class="wiz-form-group"><label>Topic Column (Optional)</label><input type="text" id="prov-sql-topic-col" placeholder="asset_id" title="Dynamically appends to base topic."></div>
+                    </div>
+                </div>
+
+                <div id="prov-group-rest" class="conditional-group">
+                    <div class="wiz-form-group">
+                        <label>Endpoint URL (GET)</label>
+                        <input type="text" id="prov-rest-endpoint" placeholder="https://api.example.com/v1/data">
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Polling Interval (ms)</label><input type="number" id="prov-rest-interval" placeholder="60000"></div>
+                        <div class="wiz-form-group">
+                            <label>Auth Type</label>
+                            <select id="prov-rest-auth-type" onchange="document.getElementById('prov-rest-auth-basic').style.display = this.value === 'basic' ? 'grid' : 'none'; document.getElementById('prov-rest-auth-bearer').style.display = this.value === 'bearer' ? 'block' : 'none'; document.getElementById('prov-rest-auth-apikey').style.display = this.value === 'apikey' ? 'grid' : 'none';">
+                                <option value="none">None</option>
+                                <option value="basic">Basic Auth</option>
+                                <option value="bearer">Bearer Token</option>
+                                <option value="apikey">API Key (Header)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="prov-rest-auth-basic" style="display:none;" class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Username</label><input type="text" id="prov-rest-user"></div>
+                        <div class="wiz-form-group"><label>Password</label><input type="password" id="prov-rest-pass"></div>
+                    </div>
+                    <div id="prov-rest-auth-bearer" style="display:none;" class="wiz-form-group">
+                        <label>Token</label>
+                        <input type="password" id="prov-rest-token" placeholder="ey...">
+                    </div>
+                    <div id="prov-rest-auth-apikey" style="display:none;" class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Header Name</label><input type="text" id="prov-rest-keyname" placeholder="x-api-key"></div>
+                        <div class="wiz-form-group"><label>API Key</label><input type="password" id="prov-rest-keyval"></div>
+                    </div>
+                </div>
+
+                <div id="prov-group-snmp" class="conditional-group">
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Target IP</label><input type="text" id="prov-snmp-target" placeholder="192.168.1.1"></div>
+                        <div class="wiz-form-group"><label>Community</label><input type="text" id="prov-snmp-community" placeholder="public"></div>
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group">
+                            <label>Version</label>
+                            <select id="prov-snmp-version">
+                                <option value="v2c">v2c</option>
+                                <option value="v1">v1</option>
+                            </select>
+                        </div>
+                        <div class="wiz-form-group"><label>Polling Interval (ms)</label><input type="number" id="prov-snmp-interval" placeholder="60000"></div>
+                    </div>
+                    <div class="wiz-form-group">
+                        <label>OIDs (Comma separated)</label>
+                        <textarea id="prov-snmp-oids" rows="2" placeholder="1.3.6.1.2.1.1.1.0, 1.3.6.1.2.1.1.3.0"></textarea>
+                    </div>
+                </div>
+
+                <div id="prov-group-kafka" class="conditional-group">
+                    <div class="wiz-form-group">
+                        <label>Brokers (Comma separated)</label>
+                        <input type="text" id="prov-kafka-brokers" placeholder="localhost:9092, localhost:9093">
+                    </div>
+                    <div class="wiz-grid-2">
+                        <div class="wiz-form-group"><label>Client ID</label><input type="text" id="prov-kafka-clientid" placeholder="korelate-client"></div>
+                        <div class="wiz-form-group"><label>Group ID</label><input type="text" id="prov-kafka-groupid" placeholder="korelate-group"></div>
                     </div>
                 </div>
 
