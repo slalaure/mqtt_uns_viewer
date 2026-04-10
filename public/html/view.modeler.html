@@ -21,6 +21,7 @@
                     <input type="file" id="modeler-import-file" accept=".json" style="display: none;">
                     <button id="btn-modeler-import" class="tool-button" style="flex: 1; font-size: 0.8em;" title="Import uns_model.json">📥 Import</button>
                     <button id="btn-modeler-export" class="tool-button" style="flex: 1; font-size: 0.8em;" title="Export uns_model.json">📤 Export</button>
+                    <button id="btn-modeler-raw" class="tool-button" style="flex: 1; font-size: 0.8em; color: var(--color-warning); border-color: var(--color-warning);" title="Edit Full JSON directly">⚙️ Raw</button>
                 </div>
             </div>
         </div>
@@ -94,18 +95,22 @@
                         <h3 class="section-title" style="margin:0;">Object Schema Attributes</h3>
                         <button id="btn-add-property" class="tool-button" style="padding: 2px 8px;">+ Add Attribute</button>
                     </div>
-                    <div style="display: flex; gap: 8px; padding: 0 6px 8px 6px; border-bottom: 1px solid var(--color-border); margin-bottom: 5px; font-size: 0.7em; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase;">
-                        <div style="flex:1.5; min-width: 60px;">ID</div>
-                        <div style="flex:2.5; min-width: 80px;">Label / Title</div>
-                        <div style="flex:1.5; min-width: 80px;">Type</div>
-                        <div style="flex:1; min-width: 50px;">Key</div>
-                        <div style="flex:2; min-width: 100px;">FK Link</div>
-                        <div style="flex:1.5; min-width: 80px;">Confid.</div>
-                        <div style="flex:1.5; min-width: 80px;">Sensit.</div>
-                        <div style="flex:1; min-width: 40px;">Unit</div>
-                        <div style="width: 25px;"></div>
+                    <div style="overflow-x: auto; padding-bottom: 10px;">
+                        <div style="min-width: 800px;">
+                            <div style="display: flex; gap: 8px; padding: 0 6px 8px 6px; border-bottom: 1px solid var(--color-border); margin-bottom: 5px; font-size: 0.7em; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase;">
+                                <div style="flex:1.5; min-width: 80px;">ID</div>
+                                <div style="flex:2.5; min-width: 120px;">Label / Title</div>
+                                <div style="flex:1.5; min-width: 90px;">Type</div>
+                                <div style="flex:1; min-width: 70px;">Key</div>
+                                <div style="flex:2; min-width: 120px;">FK Link</div>
+                                <div style="flex:1.5; min-width: 100px;">Confid.</div>
+                                <div style="flex:1.5; min-width: 100px;">Sensit.</div>
+                                <div style="flex:1; min-width: 60px;">Unit</div>
+                                <div style="width: 30px;"></div>
+                            </div>
+                            <div id="container-properties" class="schema-items-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                        </div>
                     </div>
-                    <div id="container-properties" class="schema-items-container"></div>
                 </div>
             </div>
 
@@ -178,7 +183,7 @@
     .toggle-button { background: transparent; border: none; color: var(--color-text-muted); padding: 4px 10px; font-size: 0.8em; cursor: pointer; border-radius: 4px; }
     .toggle-button.active { background: var(--color-bg); color: var(--color-primary); font-weight: bold; }
     .schema-item-row { display: flex; gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid var(--color-border-secondary); }
-    .modern-input { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); color: var(--color-text); font-size: 0.9em; }
+    .modern-input { width: 100%; padding: 6px 10px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); color: var(--color-text); font-size: 0.9em; box-sizing: border-box; height: 32px; }
     .modern-label { display: block; margin-bottom: 4px; font-size: 0.75em; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; }
     .btn-delete-row { background: transparent; border: none; color: var(--color-text-muted); cursor: pointer; padding: 4px; }
     .btn-delete-row:hover { color: var(--color-danger); }

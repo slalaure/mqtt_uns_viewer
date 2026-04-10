@@ -328,19 +328,25 @@ class AiTools {
                     }
                     try {
                         const newModel = JSON.parse(model_json);
-                        if (!Array.isArray(newModel)) return resolve({ error: "Model must be a JSON Array." });
-                        
+                        if (typeof newModel !== "object" || Array.isArray(newModel)) {
+                            return resolve({ error: "Model must be a JSON Object with 'namespaces', 'objectTypes', and 'instances'." });
+                        }
+
                         const backupPath = this.aiActionManager.backupFile(this.MODEL_MANIFEST_PATH);
                         fs.writeFileSync(this.MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
                         this.aiActionManager.logAction(user, 'update_uns_model', {}, { backupPath, originalPath: this.MODEL_MANIFEST_PATH });
+
+                        // Force SemanticManager to reload if present
+                        if (this.appContext && this.appContext.semanticManager) {
+                            this.appContext.semanticManager.loadModel();
+                        }
 
                         resolve({ success: true, message: "UNS Model Manifest updated successfully." });
                     } catch (error) {
                         resolve({ error: `Error updating model: ${error.message}` });
                     }
                 });
-            },
-            search_uns_concept: async ({ concept, filters, source_id }) => {
+            },            search_uns_concept: async ({ concept, filters, source_id }) => {
                 this.loadUnsModel();
                 const lowerConcept = concept.toLowerCase();
                 const model = this.unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));

@@ -55,6 +55,7 @@ class ChartConfigBar extends HTMLElement {
                 </div>
                 <div id="chart-range-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
                 
+                <button id="btn-chart-profile" class="tool-button" style="color:var(--color-primary); border-color:var(--color-primary);" title="AI Learning Studio: Profile data and suggest rules">Profile & Learn</button>
                 <button id="btn-chart-clear" class="tool-button" style="color:var(--color-danger); border-color:var(--color-danger);" title="Clear All Selections">Clear All</button>
                 <button id="btn-chart-export-csv" class="tool-button" title="Export CSV">CSV</button>
                 <button id="btn-chart-export-png" class="tool-button" title="Export PNG">PNG</button>
@@ -81,6 +82,7 @@ class ChartConfigBar extends HTMLElement {
         this.querySelector('#chart-start-date').addEventListener('change', (e) => emit('date-changed', { type: 'start', value: e.target.value }));
         this.querySelector('#chart-end-date').addEventListener('change', (e) => emit('date-changed', { type: 'end', value: e.target.value }));
         
+        this.querySelector('#btn-chart-profile').addEventListener('click', () => emit('profile-and-learn'));
         this.querySelector('#btn-chart-clear').addEventListener('click', () => emit('clear-all'));
         this.querySelector('#btn-chart-export-csv').addEventListener('click', () => emit('export-csv'));
         this.querySelector('#btn-chart-export-png').addEventListener('click', () => emit('export-png'));

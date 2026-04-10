@@ -18,6 +18,7 @@
  * [UPDATED] Eradicated silent catches on JSON.stringify failures to ensure API serialization issues are logged.
  */
 const express = require('express');
+const llmEngine = require('../../core/engine/llmEngine');
 
 // Helper simple pour échapper les apostrophes
 const escapeSQL = (str) => {
@@ -40,7 +41,7 @@ const mqttToSqlLike = (topicPattern) => {
     return escaped;
 }
 
-module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, config) => {
+module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, config, semanticManager, alertManager) => {
     const router = express.Router();
     const isMultiBroker = (config.DATA_PROVIDERS || []).length > 1;
 
@@ -216,6 +217,292 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
             Promise.all(promises).then(results => res.json(results));
         });
+    });
+
+    // --- [NEW] Data Profiling for AI Learning Studio ---
+    router.post('/profile', (req, res) => {
+        const { topics, startDate, endDate } = req.body;
+
+        if (!topics || !startDate || !endDate) {
+            return res.status(400).json({ error: "Missing required fields." });
+        }
+
+        db.serialize(() => {
+            const promises = topics.map(t => {
+                return new Promise((resolve) => {
+                    const variableProfiles = t.variables.map(v => {
+                        return new Promise((vResolve) => {
+                            let valExpr;
+                            if (v.path === '(value)') {
+                                valExpr = `TRY_CAST(CAST(payload AS VARCHAR) AS DOUBLE)`;
+                            } else {
+                                // Extract the path (e.g. $.temperature_c)
+                                const safePath = escapeSQL(v.path); 
+                                valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
+                            }
+
+                            const safeTopic = escapeSQL(t.topic);
+                            const safeBroker = escapeSQL(t.sourceId);
+                            const safeStart = escapeSQL(startDate);
+                            const safeEnd = escapeSQL(endDate);
+
+                            const query = `
+                                WITH raw_data AS (
+                                    SELECT 
+                                        timestamp,
+                                        ${valExpr} as val
+                                    FROM korelate_events
+                                    WHERE topic = '${safeTopic}' 
+                                      AND source_id = '${safeBroker}'
+                                      AND timestamp >= CAST('${safeStart}' AS TIMESTAMPTZ)
+                                      AND timestamp <= CAST('${safeEnd}' AS TIMESTAMPTZ)
+                                ),
+                                stats AS (
+                                    SELECT 
+                                        MIN(val) as min_val,
+                                        MAX(val) as max_val,
+                                        AVG(val) as mean_val,
+                                        STDDEV(val) as stddev_val,
+                                        CAST(COUNT(*) FILTER (WHERE val IS NULL) AS INTEGER) as null_count,
+                                        CAST(COUNT(*) AS INTEGER) as total_count
+                                    FROM raw_data
+                                ),
+                                frequency AS (
+                                    SELECT AVG(diff) as avg_freq
+                                    FROM (
+                                        SELECT extract('epoch' from timestamp - lag(timestamp) OVER (ORDER BY timestamp)) as diff
+                                        FROM raw_data
+                                    )
+                                ),
+                                chatter AS (
+                                    SELECT CAST(COUNT(*) AS INTEGER) as crossings
+                                    FROM (
+                                        SELECT 
+                                            val,
+                                            lag(val) OVER (ORDER BY timestamp) as prev_val,
+                                            (SELECT mean_val FROM stats) as m
+                                        FROM raw_data
+                                        WHERE val IS NOT NULL
+                                    )
+                                    WHERE (val > m AND prev_val <= m) OR (val < m AND prev_val >= m)
+                                )
+                                SELECT * FROM stats, frequency, chatter
+                            `;
+
+                            db.all(query, (err, rows) => {
+                                if (err) vResolve({ id: v.id, path: v.path, error: err.message });
+                                else vResolve({ id: v.id, path: v.path, stats: rows && rows[0] ? rows[0] : {} });
+                            });
+                        });
+                    });
+
+                    Promise.all(variableProfiles).then(vars => {
+                        resolve({ sourceId: t.sourceId, topic: t.topic, variables: vars });
+                    });
+                });
+            });
+
+            Promise.all(promises).then(results => res.json(results));
+        });
+    });
+
+    // --- [NEW] AI Synthesis for Data Profiling ---
+    router.post('/learn', async (req, res) => {
+        const { profileData } = req.body;
+        if (!profileData) return res.status(400).json({ error: "Missing 'profileData'." });
+
+        if (!config.LLM_API_KEY) {
+            return res.status(503).json({ error: "AI Features not configured (Missing API Key)." });
+        }
+
+        try {
+            // Get current model if possible
+            let currentModelStr = "{}";
+            if (semanticManager && semanticManager.getModel()) {
+                currentModelStr = JSON.stringify(semanticManager.getModel(), null, 2);
+            }
+
+            const systemPrompt = llmEngine.generateDataProfilePrompt(profileData, currentModelStr);
+            const conversation = [
+                { role: "user", content: systemPrompt + "\n\nAnalyze the provided data profile. Check if the objects exist in the CURRENT UNS MODEL. If not, suggest creating them and guessing their relationships. Then suggest updates to the UNS model schema and alert rules." }
+            ];
+
+            const message = await llmEngine.fetchChatCompletion(conversation, config, []);
+            let content = message.content;
+
+            // Try to parse JSON from response (sometimes LLMs wrap it in markdown blocks)
+            if (content.includes('```json')) {
+                content = content.split('```json')[1].split('```')[0].trim();
+            } else if (content.includes('```')) {
+                const parts = content.split('```');
+                if (parts.length >= 3) {
+                    content = parts[1].trim();
+                }
+            }
+
+            try {
+                const suggestions = JSON.parse(content);
+                
+                // Inject meta for UI dropdowns
+                let existingElementIds = [];
+                let existingTypeIds = [];
+                if (semanticManager && semanticManager.getModel()) {
+                    const currentModel = semanticManager.getModel();
+                    if (currentModel.objects) existingElementIds = currentModel.objects.map(o => o.elementId);
+                    if (currentModel.objectTypes) existingTypeIds = currentModel.objectTypes.map(t => t.elementId);
+                }
+                suggestions.meta = {
+                    existingElementIds,
+                    existingTypeIds,
+                    relTypes: ['HasParent', 'HasComponent', 'SuppliesTo', 'ReceivesFrom', 'Controls', 'Monitors']
+                };
+
+                res.json(suggestions);
+            } catch (e) {
+                // If it's not valid JSON, return the raw content but maybe it's an error
+                res.json({ error: "AI failed to return valid JSON", raw: content });
+            }
+        } catch (err) {
+            console.error("AI Profiling Error:", err.message);
+            if (err.response && err.response.data) {
+                console.error("AI Profiling Error Details:", JSON.stringify(err.response.data, null, 2));
+            }
+            res.status(500).json({ error: err.response?.data?.error?.message || err.message, details: err.response?.data });
+        }
+    });
+
+    // --- [NEW] Apply AI Profiling Suggestions ---
+    router.post('/apply-learn', async (req, res) => {
+        const payload = req.body;
+        if (!payload) return res.status(400).json({ error: "Missing payload." });
+
+        try {
+            let modelChanged = false;
+            
+            // 1. Update UNS Model (if semanticManager is available)
+            if (semanticManager) {
+                let currentModel = semanticManager.getModel() || {};
+                if (!currentModel.instances) currentModel.instances = [];
+                if (!currentModel.objectTypes) currentModel.objectTypes = [];
+
+                const approvedNewObjects = (payload.new_objects || []).filter(o => o._approved);
+                for (const o of approvedNewObjects) {
+                    const newObj = {
+                        elementId: o.elementId,
+                        typeId: o.type,
+                        displayName: o.description || o.elementId,
+                        topic_mapping: o.topic_mapping || undefined,
+                        namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                        isComposition: false
+                    };
+                    
+                    if (o.relationships && Array.isArray(o.relationships)) {
+                        newObj.relationships = {};
+                        for (const rel of o.relationships) {
+                            if (!rel.type || !rel.target) continue;
+                            
+                            // Map HasParent to the built-in parentId field
+                            if (rel.type === 'HasParent') {
+                                newObj.parentId = rel.target;
+                            } else {
+                                if (!newObj.relationships[rel.type]) newObj.relationships[rel.type] = [];
+                                newObj.relationships[rel.type].push(rel.target);
+                            }
+                        }
+                    }
+                    
+                    // Cleanup empty relationships object
+                    if (Object.keys(newObj.relationships || {}).length === 0) delete newObj.relationships;
+
+                    currentModel.instances.push(newObj);
+                    modelChanged = true;
+
+                    // Ensure the ObjectType exists for this new instance!
+                    let targetType = currentModel.objectTypes.find(t => t.elementId === newObj.typeId);
+                    if (!targetType) {
+                        targetType = {
+                            elementId: newObj.typeId,
+                            displayName: `${newObj.typeId} (Auto-generated)`,
+                            namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                            schema: { type: "object", properties: {} }
+                        };
+                        currentModel.objectTypes.push(targetType);
+                    }
+                }
+
+                const approvedSchemaUpdates = (payload.schema_updates || []).filter(s => s._approved);
+                for (const s of approvedSchemaUpdates) {
+                    let targetInstance = currentModel.instances.find(obj => obj.topic_mapping === s.topic);
+                    
+                    if (!targetInstance) {
+                        // Fallback: create a dummy instance if not found and not created above
+                        const parts = s.topic.split('/');
+                        const fallbackName = parts.length > 0 ? parts[parts.length - 1].toLowerCase().replace(/[^a-z0-9_]/g, '_') : 'unknown';
+                        const fallbackId = `${fallbackName}_${Date.now().toString().slice(-4)}`;
+                        
+                        targetInstance = {
+                            elementId: fallbackId,
+                            typeId: `${fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1)}Type`,
+                            displayName: `Generated for ${s.topic}`,
+                            topic_mapping: s.topic,
+                            namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                            isComposition: false
+                        };
+                        currentModel.instances.push(targetInstance);
+                    }
+
+                    // We need to apply schema properties to its Type, not the Instance itself.
+                    let targetType = currentModel.objectTypes.find(t => t.elementId === targetInstance.typeId);
+                    
+                    if (!targetType) {
+                        // If type doesn't exist, create it
+                        targetType = {
+                            elementId: targetInstance.typeId,
+                            displayName: `${targetInstance.typeId} (Auto-generated)`,
+                            namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                            schema: { type: "object", properties: {} }
+                        };
+                        currentModel.objectTypes.push(targetType);
+                    }
+
+                    if (!targetType.schema) targetType.schema = { type: "object", properties: {} };
+                    if (!targetType.schema.properties) targetType.schema.properties = {};
+                    if (!targetType.schema.properties[s.variable]) {
+                        targetType.schema.properties[s.variable] = { type: "number" };
+                    }
+                    
+                    targetType.schema.properties[s.variable].nominal_value = s.suggestions.nominal_value;
+                    targetType.schema.properties[s.variable].expected_range = s.suggestions.expected_range;
+                    targetType.schema.properties[s.variable].data_frequency_seconds = s.suggestions.data_frequency_seconds;
+                    modelChanged = true;
+                }
+
+                if (modelChanged) {
+                    const saveResult = semanticManager.saveModel(currentModel);
+                    if (saveResult.error) throw new Error("Failed to save UNS Model: " + saveResult.error);
+                }
+            }
+
+            // 2. Create Alert Rules
+            if (alertManager) {
+                const approvedAlerts = (payload.alert_rules || []).filter(r => r._approved);
+                for (const r of approvedAlerts) {
+                    await alertManager.createRule({
+                        name: r.name,
+                        topic_pattern: "#", // Apply globally by default, user can restrict later
+                        severity: r.severity || "warning",
+                        condition_code: r.condition,
+                        workflow_prompt: r.rationale || "Auto-generated from AI Learning Studio",
+                        owner_id: req.user ? req.user.id : 'global'
+                    });
+                }
+            }
+
+            res.json({ success: true, modelChanged });
+        } catch (err) {
+            console.error("Apply Learn Error:", err);
+            res.status(500).json({ error: err.message });
+        }
     });
 
     router.get('/search', (req, res, next) => {

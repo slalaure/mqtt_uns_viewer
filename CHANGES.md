@@ -1,3 +1,44 @@
+## 2026-04-10 - AI Learning Studio (DuckDB Profiling & LLM Synthesis)
+- **DuckDB Profiling API**: Created `/api/context/profile` endpoint in `interfaces/web/contextApi.js`. 
+    - Implemented advanced SQL using CTEs (Common Table Expressions) and Window Functions (`lag()`).
+    - Calculates Min, Max, Mean, StdDev, Null Count, Frequency (Avg sampling interval), and "Chatter" (number of mean crossings) for multiple topics and variables in parallel.
+    - [BUGFIX] Replaced `db.get` with `db.all` to avoid "get() is not implemented because it's evil" fatal error in DuckDB Node.js driver.
+    - [BUGFIX] Casted `COUNT(*)` to `INTEGER` to prevent `JSON.stringify` BigInt serialization crash.
+- **LLM Synthesis Engine**: 
+    - Added `generateDataProfilePrompt(profileData, currentModel)` to `core/engine/llmEngine.js`.
+    - Injects the active `uns_model.json` to allow the LLM to infer missing objects and guess relationships (e.g. `HasParent`, `HasComponent`).
+    - Added strict "Ontology Rules" preventing the LLM from grouping independent telemetry into monolithic "Global" concepts. Forces distinct ObjectTypes and Instances per logical asset based on the topic hierarchy.
+    - Explicitly mandates **ISA-95** conventions (e.g., `EnterpriseType`, `SiteType`, `AreaType`) for OT hierarchies and **Brick Schema** conventions (e.g., `BuildingType`, `FloorType`, `AHUType`) for BMS environments.
+    - Enforces rigorous semantic naming (`snake_case` for instances, `PascalCase` ending in `Type` for object types) to eliminate fallback artifacts like `generated_xxx`.
+    - Instructs the AI to analyze statistical fingerprints and propose strictly formatted JSON updates for `uns_model.json` (nominal values, quality scores) and `alertRules` (including debounce-aware logic).
+- **Frontend Integration**: 
+    - Added "Profile & Learn" button to `public/components/chart-config-bar.js`.
+    - Implemented a rich, interactive approval modal in `public/view.chart.js` allowing operators to individually review, modify, or reject every suggested schema update and alert rule.
+    - Revamped the UI to be responsive and full-width, utilizing a CSS grid layout. Added info-boxes to clarify the role of `Element ID`, `Type ID`, and `Topic`, along with guidance on establishing physical hierarchies through relationships (`HasParent`, `HasComponent`). Colors are now fully dark-mode compatible.
+    - Added editable relationships: AI-inferred relationships can now be manually corrected or added directly within the UI.
+    - Converted `Element ID` and `Type ID` fields into hybrid dropdowns (`<datalist>`) populated with existing instances and types from the current semantic model, ensuring structural consistency.
+    - Renamed "Quality" label to "Standard Quality Level".
+    - [BUGFIX] Fixed `confirmModal` in `public/utils.js` blindly replacing `\n` with `<br>` for HTML strings, which caused extreme layout expansion and broke scrolling. Forced modal containers to `90vh` max-height with Flexbox overflow handling.
+- **Hot-Reloading**: Created `/api/context/apply-learn` which directly integrates approved updates into the `SemanticManager` and `AlertManager` at runtime, triggering an immediate UI refresh.
+    - [BUGFIX] Corrected the payload builder to target `.instances` and `.objectTypes` rather than `.objects` to align with I3X schema formatting in `uns_model.json`. Also correctly maps `HasParent` relations to the native `parentId` property.
+    - Improved the API fallback element generator to construct semantic identifiers based on the physical MQTT topic path rather than blind timestamps if the LLM skips an object definition.
+- **AI Chat Widget**: 
+    - [BUGFIX] Fixed a critical logic flaw in the Agent loop (`chatApi.js`) where tool executions were not triggering a subsequent LLM fetch, causing the AI to abruptly stop after calling a tool without providing an answer.
+    - [BUGFIX] Resolved an "infinite approval loop" where the AI Chat would repeatedly ask for permission to use `update_uns_model`. This was caused by an outdated schema validation rule in `aiTools.js` that rejected valid Object payloads by strictly expecting a legacy Array, forcing the LLM into a perpetual retry cycle.
+    - Restored the v1.5.1 WebSocket streaming capabilities in the UI (`ai-chat-widget.js`). The chat now displays real-time `status` updates (e.g., "⏳ Analyzing results (Turn 2)...") and calculates the exact execution duration for every tool used (e.g., "✅ 🔧 Finished get_alerts 1.25s"), providing complete transparency into the AI's internal reasoning loop.
+    - Implemented a missing `approval_required` handler in the UI. When the AI attempts to use a destructive tool (e.g., `update_uns_model`), the UI now pauses execution, decodes the tool arguments, and presents an interactive Confirmation Modal to the user before resuming the backend agent loop.
+- **CDM Modeler Improvements**:
+    - Added an "Advanced Raw JSON" mode (⚙️ Raw) to view and edit the entire `uns_model.json` (Namespaces, Types, and Instances) globally within the embedded Ace Editor, instead of only editing single selected items.
+    - [UI FIX] The Raw Mode now properly disables the "Display Name" input to prevent accidental renames of the "uns_model.json" label, hides the irrelevant "Form/JSON" toggle and "Delete" button, and dynamically tracks unsaved changes to enable the global "Save" button.
+    - [BUGFIX] Fixed the JSON view desynchronization: switching between tree objects while in "JSON Mode" now instantly updates the editor content without having to toggle back and forth to the "Form Mode".
+    - [BUGFIX] Fixed a lifecycle bug where the `Namespace URI` dropdown would render completely empty because its options were being populated before the DOM element was correctly attached and bound to the state manager.
+    - Prevented data loss during UI saves: The "Form Mode" now preserves all deep/custom AI profiling schema attributes (`nominal_value`, `expected_range`, `data_frequency_seconds`, `quality_score`) when saving properties, rather than blindly overwriting them.
+    - Added a dedicated "Profiling" sub-row in the Object Schema Attributes UI to explicitly display and allow manual editing of Nominal, Min, Max, Freq, and Qual values discovered by the AI Learning Studio. This sub-row now dynamically appears only for `number` or `integer` data types.
+    - Automatically falls back the `Label/Title` to the `ID` if left empty, rather than saving an empty string.
+    - [UI FIX] When a Namespace is selected in the registry, the irrelevant "Object Schema Attributes" and "i3X Relationships" sections are now hidden. Additionally, the "Namespace URI" dropdown dynamically transforms into an editable text input to allow creating and modifying custom URIs.
+- **Testing**: Added a dedicated test scenario to `test_plan.md` (Section 3.11) to cover the full "Learning Studio" flow.
+- **Core Logic Touched**: `interfaces/web/contextApi.js`, `core/engine/llmEngine.js`, `public/view.chart.js`, `public/components/chart-config-bar.js`, `interfaces/web/router.js`.
+
 - **Docker Testing Environment**: Completely overhauled `docker-compose.yml.local` to include 14 distinct simulation containers (Mosquitto, OPC UA, Modbus, Postgres, MySQL, MSSQL, Kafka, Zookeeper, SNMP, REST Mock, plus mocks for S7, EIP, BACnet, and KNX).
 - **Docker Profiles**: Implemented Compose Profiles (`core`, `ot`, `bms`, `it`, `all`) to allow developers to spin up specific subsets of simulators without overwhelming their local RAM.
 - **Port Flexibility**: Added dynamic environment variables (`PORT_HTTP`, `PORT_MCP`) to the Compose file to easily avoid local `8080` port binding conflicts.

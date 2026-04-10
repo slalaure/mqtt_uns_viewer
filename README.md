@@ -274,6 +274,7 @@ Visualize correlations instantly with high performance.
 * **Primitive Support:** Directly plot simple numerical/boolean payloads (e.g., `true`/`false` automatically scaled to `0`/`1`).
 * **Exports & Unsaved Tracking:** Easily export charts to **CSV** or **PNG**. The UI features pulsating visual indicators to remind you to save your configurations.
 * **Statistical Modes:** Choose from Mean, Min, Max, Median, StdDev, Range, or Sum aggregations.
+* **AI Learning Studio:** Highlight a time range and click "Profile & Learn" to have the AI analyze statistical fingerprints (Frequency, Chatter, Boundaries) and propose UNS model updates or smart alert rules.
 
 ### 7. AI Chat Assistant (Multimodal)
 A floating assistant powered by LLMs (OpenAI, Gemini, Local models) running a recursive agentic loop.
@@ -282,7 +283,7 @@ A floating assistant powered by LLMs (OpenAI, Gemini, Local models) running a re
   * **Vision:** Use your device's camera or upload images/logs to give the AI context on physical equipment.
 * **Capabilities:** Can search data, infer schemas, generate SQL, configure mapping rules, create HMI dashboards (`create_hmi_view`), and control built-in simulators.
 * **AI Safety (Approval Workflow):** For sensitive operations (modifying model, creating files, updating mapper), the UI prompts for user approval before execution. You can "Approve Once" or "Approve for Session" to streamline your workflow.
-* **Proxy-Resilient Streaming:** Uses NDJSON HTTP streaming with WebSocket fallbacks so the "Thinking..." and "Executing tool..." statuses work flawlessly behind strict reverse proxies.
+* **Proxy-Resilient Streaming:** Uses NDJSON HTTP streaming with WebSocket fallbacks so the "Thinking..." and "Executing tool..." statuses work flawlessly behind strict reverse proxies. Displays execution durations for full transparency.
 * **Session Management:** Slide out the left menu to switch between historical chats, start new ones, or delete them.
 
 ### 8. Intelligent Alerting & Workflow Engine
@@ -302,9 +303,11 @@ Korelate provides a native, northbound implementation of the **I3X (Industrial I
 ### 10. CDM Modeler (Core Data Model)
 Korelate includes a powerful graphical editor to define your plant's semantic hierarchy and metadata.
 * **Concept Definition:** Map industrial concepts to physical MQTT topics.
+* **Ontology Support:** Native support for **ISA-95** (OT) and **Brick Schema** (BMS) conventions for professional-grade UNS structures.
+* **Advanced Editing:** Includes a **"⚙️ Raw"** JSON mode for bulk model editing and a specialized **Profiling UI** to manage nominal values, expected ranges, and data quality levels.
 * **Data Governance & Security:** Explicitly tag data nodes with **Sensitivity Levels** (Public, Internal, Confidential, Secret) and **Privacy/Compliance** flags (GDPR, Health/HDS, Financial/PCI).
 * **Graph Visualization:** Explore relationships beyond simple hierarchies (e.g., "Machine A SuppliesTo Tank B") using an interactive, 100% dependency-free native SVG Force-Directed graph engine (KorelateGraph).
-* **I3X Compatibility:** Seamlessly bridge legacy tag names to a standardized I3X element structure.
+* **I3X Compatibility:** Seamlessly bridge legacy tag names to a standardized I3X element structure (Instances and ObjectTypes).
 
 ### 11. AI Safety & Governance (Admin)
 As the AI Agent gains more autonomy, Korelate provides tools to monitor and control its actions.
@@ -505,6 +508,9 @@ The application exposes a comprehensive REST API.
 | `GET` | `/api/context/status` | Get DB size and connection status. | ✅ (Session/Basic) |
 | `GET` | `/api/context/last-known` | Gets the precise state of the UNS at a specific timestamp. | ✅ (Session/Basic) |
 | `POST` | `/api/context/aggregate` | Returns downsampled time-series data using DuckDB `time_bucket`. | ✅ (Session/Basic) |
+| `POST` | `/api/context/profile` | High-performance statistical profiling (Min, Max, Freq, Chatter) for a time range. | ✅ (Session/Basic) |
+| `POST` | `/api/context/learn` | AI-powered synthesis of data profiles to suggest UNS model updates. | ✅ (Session/Basic) |
+| `POST` | `/api/context/apply-learn` | Hot-reloads approved AI suggestions into the active Semantic Model and Alert Rules. | ✅ (Admin) |
 | `POST` | `/api/publish/message` | Publish MQTT message. | ✅ (Session/Basic) |
 | `GET` | `/api/chat/sessions` | List chat history sessions. | ✅ (Session/Basic) |
 | `GET` | `/api/chat/session/:id` | Load specific session history. | ✅ (Session/Basic) |

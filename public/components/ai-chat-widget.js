@@ -291,11 +291,27 @@ class AiChatWidget extends HTMLElement {
 
         if (data.type === 'start') {
             this.removeTypingIndicator();
-            this.currentLogDiv = this.createLogContainer();
+            if (!this.currentLogDiv) this.currentLogDiv = this.createLogContainer();
+        } else if (data.type === 'status') {
+            this.removeTypingIndicator();
+            if (!this.currentLogDiv) this.currentLogDiv = this.createLogContainer();
+            
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'chat-status-update';
+            statusDiv.style.fontSize = '0.85em';
+            statusDiv.style.color = 'var(--color-text-muted)';
+            statusDiv.style.fontStyle = 'italic';
+            statusDiv.style.marginBottom = '5px';
+            statusDiv.textContent = `⏳ ${data.content}`;
+            this.currentLogDiv.appendChild(statusDiv);
+            this.scrollToBottom();
+            
         } else if (data.type === 'chunk') {
             if (this.processedChunkIds.has(data.chunkId)) return;
             this.processedChunkIds.add(data.chunkId);
             this.appendToLog(this.currentLogDiv, data.content, data.chunkType);
+        } else if (data.type === 'message') {
+            this.conversationHistory.push(data.content);
         } else if (data.type === 'done') {
             this.isProcessing = false;
             this.updateProcessingUI(false);
@@ -305,6 +321,67 @@ class AiChatWidget extends HTMLElement {
             this.appendMessageToUI({ role: 'assistant', content: data.content, type: 'error' });
             this.isProcessing = false;
             this.updateProcessingUI(false);
+        } else if (data.type === 'approval_required') {
+            this.isProcessing = false;
+            this.updateProcessingUI(false);
+            this.currentLogDiv = null;
+            this.handleApprovalRequired(data.content.toolCalls);
+        }
+    }
+
+    async handleApprovalRequired(toolCalls) {
+        if (!toolCalls || toolCalls.length === 0) return;
+        
+        let html = '<div style="text-align: left; font-size: 0.9em;">';
+        html += '<p>The AI wants to execute the following sensitive actions. Do you approve?</p>';
+        html += '<ul style="padding-left: 20px; list-style-type: disc;">';
+        
+        toolCalls.forEach(t => {
+            let argsStr = "";
+            try { 
+                const args = JSON.parse(t.function.arguments); 
+                argsStr = JSON.stringify(args, null, 2);
+            } catch(e) { argsStr = t.function.arguments; }
+            
+            html += `<li style="margin-bottom: 10px;">
+                <b>${this.sanitize(t.function.name)}</b>
+                <pre style="background: var(--color-bg-secondary); padding: 5px; border-radius: 4px; max-height: 150px; overflow-y: auto;"><code>${this.sanitize(argsStr)}</code></pre>
+            </li>`;
+        });
+        html += '</ul></div>';
+
+        const approved = await confirmModal("Action Required", html, "Approve Actions", false);
+        
+        if (approved) {
+            this.isProcessing = true;
+            this.updateProcessingUI(true);
+            
+            // Re-send the last message, but append the approved IDs so the backend proceeds
+            const approvedIds = toolCalls.map(t => t.id);
+            try {
+                const payload = {
+                    sessionId: this.currentSessionId,
+                    messages: this.conversationHistory, // backend already has the latest state via history
+                    approvedToolCallIds: approvedIds,
+                    context: {
+                        currentTopic: state.currentTopic,
+                        currentSourceId: state.currentSourceId
+                    }
+                };
+                window.dispatchEvent(new CustomEvent('send-chat-message', { detail: payload }));
+            } catch (e) {
+                this.appendMessageToUI({ role: 'assistant', content: '⚠️ Error resuming: ' + e.message, type: 'error' });
+                this.isProcessing = false;
+                this.updateProcessingUI(false);
+            }
+        } else {
+            // Remove the LLM tool request we just appended to history
+            const last = this.conversationHistory[this.conversationHistory.length - 1];
+            if (last && last.role === 'assistant' && last.tool_calls) {
+                this.conversationHistory.pop();
+            }
+            this.appendMessageToUI({ role: 'assistant', content: '⛔ Actions rejected by user.', type: 'error' });
+            this.refreshSession();
         }
     }
 
@@ -409,15 +486,54 @@ class AiChatWidget extends HTMLElement {
         return div;
     }
 
-    appendToLog(container, text, type) {
+    appendToLog(container, content, type) {
         if (!container) return;
+        
         if (type === 'text') {
-            container.innerHTML = this.formatMarkdown(text);
+            // Text chunks from LLM are just appended directly to the container
+            // Since LLM streams are no longer chunk-by-chunk in this implementation, 
+            // 'text' actually contains the full response so far.
+            // We find or create the text wrapper.
+            let textWrapper = container.querySelector('.streaming-text-content');
+            if (!textWrapper) {
+                textWrapper = document.createElement('div');
+                textWrapper.className = 'streaming-text-content';
+                container.appendChild(textWrapper);
+            }
+            textWrapper.innerHTML = this.formatMarkdown(content);
+            
         } else if (type === 'tool_start') {
+            const toolId = `tool-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
             const toolDiv = document.createElement('div');
+            toolDiv.id = toolId;
             toolDiv.className = 'tool-usage';
-            toolDiv.textContent = `🔧 Using tool: ${text}`;
+            toolDiv.style.display = 'flex';
+            toolDiv.style.justifyContent = 'space-between';
+            toolDiv.innerHTML = `<span><span class="typing-dot" style="display:inline-block; width:6px; height:6px; margin-right:5px; background:var(--color-primary)"></span> 🔧 Executing <b>${content}</b>...</span> <span class="tool-timer"></span>`;
+            
+            // Stash the tool ID in the container for the result chunk to find
+            if (!container.dataset.activeTools) container.dataset.activeTools = "{}";
+            const activeTools = JSON.parse(container.dataset.activeTools);
+            activeTools[content] = toolId;
+            container.dataset.activeTools = JSON.stringify(activeTools);
+            
             container.appendChild(toolDiv);
+            
+        } else if (type === 'tool_result') {
+            // Content shape is { name: fnName, result: "Done", duration: ms }
+            if (container.dataset.activeTools) {
+                const activeTools = JSON.parse(container.dataset.activeTools);
+                const toolId = activeTools[content.name];
+                if (toolId) {
+                    const toolDiv = container.querySelector(`#${toolId}`);
+                    if (toolDiv) {
+                        toolDiv.style.borderLeftColor = 'var(--color-success)';
+                        toolDiv.innerHTML = `<span>✅ 🔧 Finished <b>${content.name}</b></span> <span style="font-size:0.85em; color:var(--color-text-muted)">${(content.duration / 1000).toFixed(2)}s</span>`;
+                    }
+                    delete activeTools[content.name];
+                    container.dataset.activeTools = JSON.stringify(activeTools);
+                }
+            }
         }
         this.scrollToBottom();
     }

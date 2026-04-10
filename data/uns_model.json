@@ -11,6 +11,16 @@
     {
       "uri": "https://hydrochem-ag.com/uns",
       "displayName": "HyDroChem-AG (Frankfurt)"
+    },
+    {
+      "uri": "https://airliquide.com/alat",
+      "displayName": "Air Liquide Advanced Technologies",
+      "isaLevel": "Enterprise",
+      "namespaceUri": "https://airliquide.com/alat",
+      "schema": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ],
   "objectTypes": [
@@ -22,8 +32,7 @@
         "type": "object",
         "properties": {
           "location": {
-            "type": "string",
-            "title": "Geographic Location"
+            "type": "string"
           }
         }
       }
@@ -36,12 +45,78 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "string",
-            "title": "Line Status"
+            "type": "string"
           },
           "active_wo": {
-            "type": "string",
-            "title": "Active Work Order"
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "elementId": "ALAT_BuildingType",
+      "displayName": "ALAT Facility Building",
+      "namespaceUri": "https://airliquide.com/alat",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "building_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "elementId": "ALAT_AmbienceSensorType",
+      "displayName": "ALAT HVAC Ambience Sensor",
+      "namespaceUri": "https://airliquide.com/alat",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "temperature_c": {
+            "type": "number",
+            "unit": "°C"
+          },
+          "co2_ppm": {
+            "type": "number",
+            "unit": "ppm"
+          },
+          "occupancy_count": {
+            "type": "number"
+          },
+          "hvac_mode": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "elementId": "ALAT_SafetyStatusType",
+      "displayName": "ALAT Safety Alarm Status",
+      "namespaceUri": "https://airliquide.com/alat",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "alarm": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "elementId": "ALAT_MeterType",
+      "displayName": "ALAT Utility Meter",
+      "namespaceUri": "https://airliquide.com/alat",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "index_kwh": {
+            "type": "number",
+            "unit": "kWh"
+          },
+          "index_m3": {
+            "type": "number",
+            "unit": "m3"
           }
         }
       }
@@ -49,247 +124,172 @@
     {
       "elementId": "RobotArmType",
       "displayName": "Robotic Assembly Arm",
-      "namespaceUri": "https://stark-industries.com/uns",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "speed": {
-            "type": "number",
-            "title": "Motor Speed",
-            "unit": "rpm"
-          },
-          "temp": {
-            "type": "number",
-            "title": "Motor Temperature",
-            "unit": "°C"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        }
-      }
+      "namespaceUri": "https://stark-industries.com/uns"
     },
     {
       "elementId": "LaserWelderType",
       "displayName": "Precision Laser Welder",
-      "namespaceUri": "https://stark-industries.com/uns",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "temp": {
-            "type": "number",
-            "title": "Laser Temperature",
-            "unit": "°C"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        }
-      }
+      "namespaceUri": "https://stark-industries.com/uns"
     },
     {
       "elementId": "CNCMillType",
       "displayName": "5-Axis CNC Mill",
-      "namespaceUri": "https://stark-industries.com/uns",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "vibration": {
-            "type": "number",
-            "title": "Spindle Vibration",
-            "unit": "mm/s"
-          },
-          "load": {
-            "type": "number",
-            "title": "Motor Load",
-            "unit": "%"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        }
-      }
+      "namespaceUri": "https://stark-industries.com/uns"
     },
     {
       "elementId": "GasTankType",
       "displayName": "Industrial Gas Tank",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "level": {
-            "type": "number",
-            "title": "Fill Level",
-            "unit": "%"
-          },
-          "pressure": {
-            "type": "number",
-            "title": "Internal Pressure",
-            "unit": "bar"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        }
-      }
+      "namespaceUri": "https://cesmii.org/i3x"
     },
     {
       "elementId": "PowerMeterType",
       "displayName": "Facility Power Meter",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "voltage": {
-            "type": "number",
-            "title": "Voltage",
-            "unit": "V"
-          },
-          "current": {
-            "type": "number",
-            "title": "Current",
-            "unit": "A"
-          },
-          "power": {
-            "type": "number",
-            "title": "Active Power",
-            "unit": "kW"
-          },
-          "pf": {
-            "type": "number",
-            "title": "Power Factor"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        }
-      }
+      "namespaceUri": "https://cesmii.org/i3x"
     },
     {
       "elementId": "PowerModulatorType",
       "displayName": "Arc Reactor Modulator",
-      "namespaceUri": "https://stark-industries.com/uns",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "output": {
-            "type": "number",
-            "title": "Energy Output",
-            "unit": "MW"
-          },
-          "stability": {
-            "type": "number",
-            "title": "Core Stability",
-            "unit": "%"
-          },
-          "status": {
-            "type": "string",
-            "title": "Containment Status"
-          }
-        }
-      }
+      "namespaceUri": "https://stark-industries.com/uns"
     },
     {
       "elementId": "CleanRoomType",
       "displayName": "Clean Room Environment",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "humidity": {
-            "type": "number",
-            "title": "Relative Humidity",
-            "unit": "%RH"
-          },
-          "pressure_pa": {
-            "type": "number",
-            "title": "Differential Pressure",
-            "unit": "Pa"
-          },
-          "hvac_vfd_speed_pct": {
-            "type": "number",
-            "title": "HVAC Fan Speed",
-            "unit": "%"
-          },
-          "status": {
-            "type": "string",
-            "title": "Environment Status"
-          }
-        }
-      }
+      "namespaceUri": "https://cesmii.org/i3x"
     },
     {
       "elementId": "DryingOvenType",
       "displayName": "Industrial Drying Oven",
-      "namespaceUri": "https://hydrochem-ag.com/uns",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "temp_c": {
-            "type": "number",
-            "title": "Internal Temperature",
-            "unit": "°C"
-          },
-          "fan_vfd_speed_pct": {
-            "type": "number",
-            "title": "Circulation Fan Speed",
-            "unit": "%"
-          },
-          "web_speed_m_min": {
-            "type": "number",
-            "title": "Conveyor Web Speed",
-            "unit": "m/min"
-          },
-          "status": {
-            "type": "string",
-            "title": "Oven Status"
-          }
-        }
-      }
+      "namespaceUri": "https://hydrochem-ag.com/uns"
     },
     {
       "elementId": "ChillerPlantType",
       "displayName": "Central Chiller Plant",
-      "namespaceUri": "https://hydrochem-ag.com/uns",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "supply_temp_c": {
-            "type": "number",
-            "title": "Glycol Supply Temp",
-            "unit": "°C"
-          },
-          "status": {
-            "type": "string",
-            "title": "Compressor Status"
-          }
-        }
-      }
-    },
-    {
-      "elementId": "MachineType",
-      "displayName": "Machine Type",
-      "namespaceUri": "https://www.abelara.com/ns/equipment",
-      "schema": {
-        "type": "object",
-        "properties": {}
-      }
+      "namespaceUri": "https://hydrochem-ag.com/uns"
     }
   ],
   "instances": [
+    {
+      "elementId": "ALAT_Enterprise",
+      "displayName": "Air Liquide Advanced Technologies",
+      "isaLevel": "Enterprise",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "sassenage_site",
+      "displayName": "Sassenage Site",
+      "typeId": "SiteType",
+      "parentId": "ALAT_Enterprise",
+      "isaLevel": "Site",
+      "namespaceUri": "https://cesmii.org/i3x"
+    },
+    {
+      "elementId": "cavendish",
+      "displayName": "Cavendish Building",
+      "typeId": "ALAT_BuildingType",
+      "parentId": "sassenage_site",
+      "isaLevel": "Area",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "cavendish_hvac",
+      "displayName": "Cavendish HVAC Ambience",
+      "typeId": "ALAT_AmbienceSensorType",
+      "parentId": "cavendish",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Cavendish/BMS/HVAC/Ambience/Telemetry",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "cavendish_safety",
+      "displayName": "Cavendish Safety Status",
+      "typeId": "ALAT_SafetyStatusType",
+      "parentId": "cavendish",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Cavendish/Safety/Alarm/Status",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "curie",
+      "displayName": "Curie Building",
+      "typeId": "ALAT_BuildingType",
+      "parentId": "sassenage_site",
+      "isaLevel": "Area",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "curie_hvac",
+      "displayName": "Curie HVAC Ambience",
+      "typeId": "ALAT_AmbienceSensorType",
+      "parentId": "curie",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Curie/BMS/HVAC/Ambience/Telemetry",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "euler",
+      "displayName": "Euler Building",
+      "typeId": "ALAT_BuildingType",
+      "parentId": "sassenage_site",
+      "isaLevel": "Area",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "euler_hvac",
+      "displayName": "Euler HVAC Ambience",
+      "typeId": "ALAT_AmbienceSensorType",
+      "parentId": "euler",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Euler/BMS/HVAC/Ambience/Telemetry",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "johnson",
+      "displayName": "Johnson Building",
+      "typeId": "ALAT_BuildingType",
+      "parentId": "sassenage_site",
+      "isaLevel": "Area",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "johnson_hvac",
+      "displayName": "Johnson HVAC Ambience",
+      "typeId": "ALAT_AmbienceSensorType",
+      "parentId": "johnson",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Johnson/BMS/HVAC/Ambience/Telemetry",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "facilities",
+      "displayName": "Site Facilities",
+      "parentId": "sassenage_site",
+      "isaLevel": "Area",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "meter_elec",
+      "displayName": "Global Electricity Meter",
+      "typeId": "ALAT_MeterType",
+      "parentId": "facilities",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Facilities/Metering/Global/Electricity",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
+    {
+      "elementId": "meter_gas",
+      "displayName": "Global Gas Meter",
+      "typeId": "ALAT_MeterType",
+      "parentId": "facilities",
+      "isaLevel": "Equipment",
+      "topic_mapping": "ALAT/Sassenage/Facilities/Metering/Global/Gas",
+      "namespaceUri": "https://airliquide.com/alat"
+    },
     {
       "elementId": "stark_malibu_hq",
       "displayName": "Stark Malibu Headquarters",
       "typeId": "SiteType",
       "isaLevel": "Site",
-      "description": "Main R&D and Mk-Series Assembly Facility",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
+      "namespaceUri": "https://cesmii.org/i3x"
     },
     {
       "elementId": "assembly_line_01",
@@ -298,258 +298,7 @@
       "parentId": "stark_malibu_hq",
       "isaLevel": "Line",
       "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/#",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "power_modulator_01",
-      "displayName": "Arc Reactor Modulator",
-      "typeId": "PowerModulatorType",
-      "parentId": "stark_malibu_hq",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/power_modulator_01",
-      "relationships": {
-        "SuppliesPowerTo": [
-          "assembly_line_01"
-        ]
-      },
-      "namespaceUri": "https://stark-industries.com/uns",
-      "isComposition": false
-    },
-    {
-      "elementId": "power_meter_01",
-      "displayName": "Facility Main Feed Meter",
-      "typeId": "PowerMeterType",
-      "parentId": "stark_malibu_hq",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/power_meter_01",
-      "relationships": {
-        "Monitors": [
-          "power_modulator_01"
-        ]
-      },
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "robot_arm_01",
-      "displayName": "Heavy Duty Arm (Core Cell)",
-      "typeId": "RobotArmType",
-      "parentId": "assembly_line_01",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/robot_arm_01",
-      "relationships": {
-        "ReceivesPowerFrom": [
-          "power_modulator_01"
-        ]
-      },
-      "namespaceUri": "https://stark-industries.com/uns",
-      "isComposition": false
-    },
-    {
-      "elementId": "laser_welder_01",
-      "displayName": "Titanium Laser Welder",
-      "typeId": "LaserWelderType",
-      "parentId": "assembly_line_01",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/laser_welder_01",
-      "relationships": {
-        "ReceivesGasFrom": [
-          "gas_tank_argon"
-        ]
-      },
-      "namespaceUri": "https://stark-industries.com/uns",
-      "isComposition": false
-    },
-    {
-      "elementId": "cnc_mill_05",
-      "displayName": "5-Axis CNC (Casing)",
-      "typeId": "CNCMillType",
-      "parentId": "assembly_line_01",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/cnc_mill_05",
-      "namespaceUri": "https://stark-industries.com/uns",
-      "isComposition": false
-    },
-    {
-      "elementId": "gas_tank_argon",
-      "displayName": "Argon Shielding Gas",
-      "typeId": "GasTankType",
-      "parentId": "stark_malibu_hq",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/gas_tank_argon",
-      "relationships": {
-        "SuppliesGasTo": [
-          "laser_welder_01"
-        ]
-      },
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "gas_tank_nitrogen",
-      "displayName": "Nitrogen Purge Gas",
-      "typeId": "GasTankType",
-      "parentId": "stark_malibu_hq",
-      "isaLevel": "Equipment",
-      "topic_mapping": "spBv1.0/stark_industries/DDATA/gas_tank_nitrogen",
-      "relationships": {
-        "SuppliesGasTo": [
-          "clean_room_01"
-        ]
-      },
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "clean_room_01",
-      "displayName": "Class 100 Clean Room",
-      "typeId": "CleanRoomType",
-      "parentId": "assembly_line_01",
-      "isaLevel": "Area",
-      "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/clean_room_01/#",
-      "relationships": {
-        "Contains": [
-          "robot_arm_01",
-          "laser_welder_01"
-        ]
-      },
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "hydrochem_frankfurt",
-      "displayName": "HyDroChem Frankfurt Plant",
-      "typeId": "SiteType",
-      "isaLevel": "Site",
-      "description": "Hydrogen PEM Membrane Production",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "coating_line_2",
-      "displayName": "Coating Line 2",
-      "typeId": "LineType",
-      "parentId": "hydrochem_frankfurt",
-      "isaLevel": "Line",
-      "topic_mapping": "frankfurt/mes/operations/line_2/status",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "hydrochem_main_power",
-      "displayName": "Frankfurt Grid Feed",
-      "typeId": "PowerMeterType",
-      "parentId": "hydrochem_frankfurt",
-      "isaLevel": "Equipment",
-      "topic_mapping": "frankfurt/ot/infrastructure/main_power/telemetry",
-      "relationships": {
-        "SuppliesPowerTo": [
-          "chiller_plant",
-          "cleanroom_A",
-          "drying_oven_l2"
-        ]
-      },
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "chiller_plant",
-      "displayName": "Utility Chiller Plant",
-      "typeId": "ChillerPlantType",
-      "parentId": "hydrochem_frankfurt",
-      "isaLevel": "Equipment",
-      "topic_mapping": "frankfurt/ot/utilities/chiller_plant/telemetry",
-      "relationships": {
-        "ProvidesCoolingTo": [
-          "cleanroom_A",
-          "coating_line_2"
-        ]
-      },
-      "namespaceUri": "https://hydrochem-ag.com/uns",
-      "isComposition": false
-    },
-    {
-      "elementId": "cleanroom_A",
-      "displayName": "BMS Cleanroom A",
-      "typeId": "CleanRoomType",
-      "parentId": "hydrochem_frankfurt",
-      "isaLevel": "Area",
-      "topic_mapping": "frankfurt/ot/bms/cleanroom_A/telemetry",
-      "relationships": {
-        "Contains": [
-          "coating_line_2"
-        ]
-      },
-      "namespaceUri": "https://cesmii.org/i3x",
-      "isComposition": false
-    },
-    {
-      "elementId": "drying_oven_l2",
-      "displayName": "Drying Oven (PEM Curing)",
-      "typeId": "DryingOvenType",
-      "parentId": "coating_line_2",
-      "isaLevel": "Equipment",
-      "topic_mapping": "frankfurt/ot/line_2/drying_oven/telemetry",
-      "relationships": {
-        "ReceivesPowerFrom": [
-          "hydrochem_main_power"
-        ]
-      },
-      "namespaceUri": "https://hydrochem-ag.com/uns",
-      "isComposition": false
-    },
-    {
-      "elementId": "CNC-001",
-      "displayName": "CNC Machine 001",
-      "typeId": "MachineType",
-      "namespaceUri": "https://www.abelara.com/ns/equipment",
-      "isComposition": false,
-      "topic_mapping": "test/cnc001",
-      "relationships": {
-        "HasChildren": [
-          "CNC-001-Part"
-        ]
-      }
-    },
-    {
-      "elementId": "CNC-001-Part",
-      "displayName": "Part of CNC-001",
-      "typeId": "MachineType",
-      "namespaceUri": "https://www.abelara.com/ns/equipment",
-      "isComposition": true,
-      "topic_mapping": "test/cnc001_part",
-      "relationships": {
-        "HasParent": [
-          "CNC-001"
-        ]
-      }
-    }
-  ],
-  "relationshipTypes": [
-    {
-      "elementId": "HasParent",
-      "displayName": "Has Parent",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasChildren"
-    },
-    {
-      "elementId": "HasChildren",
-      "displayName": "Has Children",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasParent"
-    },
-    {
-      "elementId": "HasComponent",
-      "displayName": "Has Component",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "ComponentOf"
-    },
-    {
-      "elementId": "ComponentOf",
-      "displayName": "Component Of",
-      "namespaceUri": "https://cesmii.org/i3x",
-      "reverseOf": "HasComponent"
+      "namespaceUri": "https://cesmii.org/i3x"
     }
   ]
 }

@@ -48,6 +48,81 @@ class LlmEngine {
     }
 
     /**
+     * Generates a prompt for analyzing data profiles and suggesting model/alert updates.
+     */
+    generateDataProfilePrompt(profileData, currentModelStr) {
+        return `
+            You are a Senior IIoT Data Scientist and UNS Architect.
+            Analyze the following statistical profile of industrial data collected from a Unified Namespace (UNS).
+            
+            DATA PROFILE:
+            ${JSON.stringify(profileData, null, 2)}
+
+            CURRENT UNS MODEL:
+            ${currentModelStr}
+            
+            TASK:
+            1. Analyze the topics in the Data Profile against the CURRENT UNS MODEL.
+            2. If the specific asset or equipment for a topic does NOT exist in the model, you MUST suggest creating it.
+               
+               CRITICAL ONTOLOGY RULES:
+               - GRANULARITY: Do NOT create a single global or monolithic concept. Every distinct physical asset or logical node in the topic hierarchy MUST have its own distinct Instance (elementId) and ObjectType (typeId).
+               - NAMING CONVENTIONS: 
+                 * 'elementId' MUST be semantic, descriptive, and snake_case (e.g., 'cooling_pump_01', 'hvac_ahu_roof'). NEVER use 'generated_xxx' or random IDs.
+                 * 'typeId' MUST be PascalCase and end with 'Type' (e.g., 'CoolingPumpType', 'AirHandlingUnitType').
+               - DOMAIN ONTOLOGIES:
+                 * For OT/Manufacturing topics: Map to ISA-95 standard concepts (e.g., EnterpriseType, SiteType, AreaType, LineType, WorkCellType, EquipmentType).
+                 * For BMS/Facilities/HVAC topics: Map to Brick Schema concepts (e.g., BuildingType, FloorType, RoomType, AHUType, VAVType, ChillerType, SensorType).
+               - I3X RELATIONSHIPS: Only use standard relationship types: 'HasParent', 'HasComponent', 'SuppliesTo', 'ReceivesFrom', 'Controls', 'Monitors'.
+                 * Use 'HasParent' strictly to build the physical location hierarchy (e.g., Machine HasParent Line, AHU HasParent Roof).
+
+            3. Suggest updates to the 'uns_model.json' for these topics. Include nominal values, expected ranges, typical frequencies, and a data quality score (0-1).
+            4. Propose smart Alert Rules for the Alert Manager. 
+               - Use the 'Frequency' and 'Chatter' metrics to avoid noisy alerts.
+               - Rules must be valid JavaScript conditions.
+               - Incorporate debouncing or hysteresis (e.g., "value > threshold for 30 seconds").
+            
+            RESPONSE FORMAT:
+            You must respond ONLY with a strictly formatted JSON object:
+            {
+              "new_objects": [
+                {
+                  "action": "create_object",
+                  "elementId": "...",
+                  "type": "...",
+                  "topic_mapping": "...",
+                  "description": "...",
+                  "relationships": [
+                    { "type": "HasParent", "target": "..." }
+                  ]
+                }
+              ],
+              "schema_updates": [
+                {
+                  "topic": "...",
+                  "variable": "...",
+                  "suggestions": {
+                    "nominal_value": 0,
+                    "expected_range": [min, max],
+                    "data_frequency_seconds": 0,
+                    "quality_score": 0.95
+                  }
+                }
+              ],
+              "alert_rules": [
+                {
+                  "name": "...",
+                  "severity": "warning|critical",
+                  "condition": "...", 
+                  "description": "...",
+                  "rationale": "Why this rule is proposed based on the statistics."
+                }
+              ]
+            }
+        `;
+    }
+
+    /**
      * Generates the base system prompt for the UNS Architect Chat Assistant.
      */
     generateChatSystemPrompt(template, connectorContext, toolsContext) {

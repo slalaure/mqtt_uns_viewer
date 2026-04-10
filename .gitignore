@@ -50,3 +50,5 @@ build_docker_image.sh
 run_compliance.sh
 run_curl.sh
 test_model.json
+data/ai_history/history.json
+data/ai_history/uns_model.json.bkp.1775810752782

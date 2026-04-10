@@ -128,6 +128,12 @@ Ce document décrit la stratégie et les scénarios de test pour garantir la sta
 * **Scenario B : Métadonnées de Sécurité** : Définir des niveaux de Confidentialité (ex: "Restricted") et de Sensibilité (ex: "Highly Sensitive"). Vérifier la persistance après sauvegarde.
 * **Scenario C : Contraintes de Clé (PK/FK)** : Définir une propriété comme Primary Key. Définir une autre comme Foreign Key et sélectionner un objet cible dans le menu "Link to". Vérifier la visibilité conditionnelle du sélecteur FK.
 
+### 3.11. AI Learning Studio (Chart Profiling)
+* **Scenario A : Data Profiling** : Select a time range on the chart, click "Profile & Learn". Verify that the backend calculates Min, Max, Mean, StdDev, Frequency, and Chatter correctly.
+* **Scenario B : AI Synthesis** : Confirm the analysis. Verify that the AI returns a structured JSON with `schema_updates` and `alert_rules`.
+* **Scenario C : Suggestion Display** : Verify that the suggestions are displayed in a formatted modal with clear sections for model updates and alert rules.
+* **Scenario D : Robustness** : Attempt profiling with no data in range. Verify that the UI handles the "No data found" or empty results gracefully.
+
 ---
 
 ## 4. Tests de Résilience (Chaos & Load Testing)

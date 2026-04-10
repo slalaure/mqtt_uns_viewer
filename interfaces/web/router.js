@@ -275,7 +275,7 @@ function createRouter(deps) {
     router.use('/api/context', (req, res, next) => {
         if (!db) return res.status(503).json({ error: "DB not ready" });
         const dbManager = require('../../storage/dbManager')(db, deps.dbFile, deps.dbWalFile, wsManager.broadcast, logger, config.DUCKDB_MAX_SIZE_MB, config.DUCKDB_PRUNE_CHUNK_SIZE, deps.getIsPruning, deps.setIsPruning); 
-        require('./contextApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config)(req, res, next); 
+        require('./contextApi')(db, getPrimaryConnection, simulatorManager.getStatuses, dbManager.getDbStatus, config, deps.semanticManager, deps.alertManager)(req, res, next); 
     });
 
     router.use('/api/tools', ipFilterMiddleware, require('./toolsApi')(logger));

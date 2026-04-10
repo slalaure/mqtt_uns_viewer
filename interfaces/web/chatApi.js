@@ -266,7 +266,7 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
 
                     if (requiresApproval) {
                         logger.info({ clientId, pendingTools: pendingSensitiveCalls.map(t => t.function.name) }, "[ChatAPI] Approval required for sensitive tools");
-                        sendChunk(res, 'chunk', message.content || "", clientId, 'text'); // [FIX] Added 'text'
+                        sendChunk(res, 'chunk', message.content || "", clientId, 'text'); 
                         sendChunk(res, 'message', message, clientId); 
                         sendChunk(res, 'approval_required', { toolCalls: pendingSensitiveCalls }, clientId);
                         finalMessageSent = true; 
@@ -280,7 +280,7 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
 
                         const fnName = toolCall.function.name;
                         logger.info({ clientId, tool: fnName }, "[ChatAPI] Executing tool");
-                        sendChunk(res, 'chunk', fnName, clientId, 'tool_start'); // [FIX] streamState='chunk', chunkType='tool_start'
+                        sendChunk(res, 'chunk', fnName, clientId, 'tool_start'); 
                         
                         let result;
                         let duration = 0;
@@ -302,7 +302,7 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
                         
                         duration = Date.now() - startTime;
                         logger.debug({ clientId, tool: fnName, duration }, "[ChatAPI] Tool execution completed");
-                        sendChunk(res, 'chunk', { name: fnName, result: "Done", duration }, clientId, 'tool_result'); // [FIX]
+                        sendChunk(res, 'chunk', { name: fnName, result: "Done", duration }, clientId, 'tool_result'); 
 
                         conversation.push({
                             tool_call_id: toolCall.id,
@@ -311,6 +311,10 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
                             content: result
                         });
                     }
+                    
+                    // We must loop again to let the LLM analyze the tool results, so we do NOT set finalMessageSent = true
+                    // We clear `message` so the next loop fetches a new one based on the updated conversation
+                    message = null; 
                 } 
                 // Case 2: The model generated a final text response
                 else {

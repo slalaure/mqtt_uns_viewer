@@ -163,7 +163,11 @@ export function confirmModal(title, message, confirmText = 'Confirm', isDanger =
         
         const bodyEl = document.createElement('div');
         bodyEl.className = 'generic-modal-body';
-        bodyEl.innerHTML = message.replace(/\n/g, '<br>'); 
+        if (message.trim().startsWith('<')) {
+            bodyEl.innerHTML = message;
+        } else {
+            bodyEl.innerHTML = message.replace(/\n/g, '<br>'); 
+        }
         
         const actions = document.createElement('div');
         actions.className = 'generic-modal-actions';

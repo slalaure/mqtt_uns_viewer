@@ -40,7 +40,7 @@ export async function initModelerView() {
                 'container-properties', 'container-relationships',
                 'btn-add-property', 'btn-add-relationship', 'btn-toggle-physics',
                 'modeler-help-modal', 'btn-modeler-help', 'btn-close-modeler-help',
-                'btn-modeler-import', 'btn-modeler-export', 'modeler-import-file'
+                'btn-modeler-import', 'btn-modeler-export', 'modeler-import-file', 'btn-modeler-raw'
             ];
             ids.forEach(id => el[id] = document.getElementById(id));
 
@@ -142,6 +142,7 @@ export function mountModelerView() {
     el['btn-modeler-delete'].onclick = handleDelete;
     el['btn-mode-form'].onclick = () => setEditMode('form');
     el['btn-mode-json'].onclick = () => setEditMode('json');
+    el['btn-modeler-raw'].onclick = () => setEditMode('raw');
     el['btn-add-property'].onclick = () => addSchemaRow();
     el['btn-add-relationship'].onclick = () => addRelationshipRow();
     
@@ -183,12 +184,12 @@ async function loadModel() {
 }
 
 function populateNamespaces() {
-    if (!el['field-namespace']) return;
-    el['field-namespace'].innerHTML = (currentModel?.namespaces || []).map(ns => 
+    const nsEl = document.getElementById('field-namespace');
+    if (!nsEl) return;
+    nsEl.innerHTML = (currentModel?.namespaces || []).map(ns =>
         `<option value="${ns.uri}">${ns.displayName}</option>`
     ).join('');
 }
-
 function renderRegistry() {
     if (!el['modeler-tree-container']) return;
     const query = el['modeler-search'].value.toLowerCase();
@@ -245,20 +246,67 @@ function selectItem(type, id) {
     
     renderRegistry();
     
-    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(i => i.oninput = null);
+    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(i => {
+        if(i) i.oninput = null;
+    });
+
+    // 1. Setup Namespace UI dynamically
+    const nsContainer = el['field-namespace'].parentNode;
+    if (type === 'namespace') {
+        nsContainer.innerHTML = `<label class="modern-label">Namespace URI</label><input type="text" id="field-namespace" class="modern-input">`;
+    } else {
+        nsContainer.innerHTML = `<label class="modern-label">Namespace URI</label><select id="field-namespace" class="modern-input"></select>`;
+    }
+    el['field-namespace'] = document.getElementById('field-namespace');
     
+    if (type !== 'namespace') populateNamespaces();
+    
+    // 2. Fill values
     el['modeler-edit-displayname'].value = ref.displayName || '';
     el['modeler-edit-id'].textContent = id;
     el['field-isa-level'].value = ref.isaLevel || '';
-    el['field-namespace'].value = ref.namespaceUri || (type === 'namespace' ? ref.uri : '');
-
-    renderSchemaItems();
-    renderRelationships();
     
-    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(i => i.oninput = syncStateFromForm);
+    if (type === 'namespace') {
+        el['field-namespace'].value = ref.uri || '';
+    } else {
+        el['field-namespace'].value = ref.namespaceUri || '';
+    }
+
+    // 3. Toggle Sections Visibility
+    const schemaSection = el['container-properties'].closest('.editor-section');
+    const relSection = el['container-relationships'].closest('.editor-section');
+    const isaContainer = el['field-isa-level'].parentNode;
+    
+    if (type === 'namespace') {
+        schemaSection.style.display = 'none';
+        relSection.style.display = 'none';
+        isaContainer.style.display = 'none';
+    } else if (type === 'objectType') {
+        schemaSection.style.display = 'block';
+        relSection.style.display = 'block';
+        isaContainer.style.display = 'none';
+        renderSchemaItems();
+        renderRelationships();
+    } else {
+        schemaSection.style.display = 'block';
+        relSection.style.display = 'block';
+        isaContainer.style.display = 'block';
+        renderSchemaItems();
+        renderRelationships();
+    }
+    
+    [el['modeler-edit-displayname'], el['field-isa-level'], el['field-namespace']].forEach(i => {
+        if(i) i.oninput = syncStateFromForm;
+    });
 
     // Render graph natively
     drawGraph();
+
+    if (editMode === 'json' || editMode === 'raw') {
+        if (aceEditor) aceEditor.setValue(JSON.stringify(currentSelection.ref, null, 2), -1);
+        editMode = 'json'; // Exit raw mode since an item is selected
+        setEditMode('json');
+    }
 }
 
 function renderSchemaItems() {
@@ -274,6 +322,10 @@ function addSchemaRow(data = {}) {
     const container = el['container-properties'];
     const row = document.createElement('div');
     row.className = 'schema-item-row';
+    row.style.flexDirection = 'column';
+    row.style.alignItems = 'stretch';
+    row.style.gap = '4px';
+
     const types = ['string', 'number', 'boolean', 'integer', 'object', 'array'];
     const typeOptions = types.map(t => `<option value="${t}" ${data.type === t ? 'selected' : ''}>${t}</option>`).join('');
     
@@ -305,23 +357,41 @@ function addSchemaRow(data = {}) {
 
     const fkTargetOptions = `<option value="">-- Link to PK --</option>` + fkTargets.map(t => `<option value="${t.id}" ${data.fkTarget === t.id ? 'selected' : ''}>${t.label}</option>`).join('');
 
+    const minRange = data.expected_range ? data.expected_range[0] : '';
+    const maxRange = data.expected_range ? data.expected_range[1] : '';
+
+    const isNumeric = data.type === 'number' || data.type === 'integer';
+
     row.innerHTML = `
-        <input type="text" placeholder="ID" class="modern-input" style="flex:1.5; font-family:monospace; min-width: 60px;" value="${data.id || ''}" data-key="id">
-        <input type="text" placeholder="Label" class="modern-input" style="flex:2.5; min-width: 80px;" value="${data.title || ''}" data-key="title">
-        <select class="modern-input" style="flex:1.5; min-width: 80px;" data-key="type">${typeOptions}</select>
-        
-        <select class="modern-input" style="flex:1; min-width: 50px; background: var(--color-bg-tertiary);" data-key="keyType" title="Key Type (PK/FK)">${keyTypeOptions}</select>
-        <select class="modern-input" style="flex:2; min-width: 100px; display: ${data.keyType === 'FK' ? 'block' : 'none'}; border: 1px solid var(--color-primary);" data-key="fkTarget">${fkTargetOptions}</select>
-        
-        <select class="modern-input" style="flex:1.5; min-width: 80px;" data-key="confidentiality" title="Confidentiality">${confOptions}</select>
-        <select class="modern-input" style="flex:1.5; min-width: 80px;" data-key="sensitivity" title="Sensitivity">${sensOptions}</select>
-        
-        <input type="text" placeholder="Unit" class="modern-input" style="flex:1; min-width: 40px;" value="${data.unit || ''}" data-key="unit">
-        <button class="btn-delete-row">✖</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" placeholder="ID" class="modern-input" style="flex: 1.5 0 80px; font-family:monospace; min-width: 80px;" value="${data.id || ''}" data-key="id">
+            <input type="text" placeholder="Label" class="modern-input" style="flex: 2.5 0 120px; min-width: 120px;" value="${data.title || data.id || ''}" data-key="title">
+            <select class="modern-input" style="flex: 1.5 0 90px; min-width: 90px;" data-key="type">${typeOptions}</select>
+            
+            <select class="modern-input" style="flex: 1 0 70px; min-width: 70px; background: var(--color-bg-tertiary);" data-key="keyType" title="Key Type (PK/FK)">${keyTypeOptions}</select>
+            <select class="modern-input" style="flex: 2 0 120px; min-width: 120px; display: ${data.keyType === 'FK' ? 'block' : 'none'}; border: 1px solid var(--color-primary);" data-key="fkTarget">${fkTargetOptions}</select>
+            <div style="flex: 2 0 120px; min-width: 120px; display: ${data.keyType !== 'FK' ? 'block' : 'none'};"></div>
+            
+            <select class="modern-input" style="flex: 1.5 0 100px; min-width: 100px;" data-key="confidentiality" title="Confidentiality">${confOptions}</select>
+            <select class="modern-input" style="flex: 1.5 0 100px; min-width: 100px;" data-key="sensitivity" title="Sensitivity">${sensOptions}</select>
+            
+            <input type="text" placeholder="Unit" class="modern-input" style="flex: 1 0 60px; min-width: 60px;" value="${data.unit || ''}" data-key="unit">
+            <button class="btn-delete-row" style="flex: 0 0 30px; width: 30px; padding: 4px 8px;">✖</button>
+        </div>
+        <div class="profiling-row" style="display: ${isNumeric ? 'flex' : 'none'}; flex-wrap: wrap; gap: 15px; align-items: center; padding: 6px 10px; background: var(--color-bg-tertiary); border-radius: 4px; font-size: 0.85em; margin-top: 5px;">
+            <span style="color: var(--color-text-muted); font-weight: bold;">Profiling:</span>
+            <div style="display:flex; align-items:center; gap: 4px;">Nominal: <input type="number" step="any" class="modern-input" style="padding: 4px 6px; width: 70px;" data-key="nominal_value" value="${data.nominal_value ?? ''}"></div>
+            <div style="display:flex; align-items:center; gap: 4px;">Min: <input type="number" step="any" class="modern-input" style="padding: 4px 6px; width: 70px;" data-key="min_range" value="${minRange}"></div>
+            <div style="display:flex; align-items:center; gap: 4px;">Max: <input type="number" step="any" class="modern-input" style="padding: 4px 6px; width: 70px;" data-key="max_range" value="${maxRange}"></div>
+            <div style="display:flex; align-items:center; gap: 4px;">Freq(s): <input type="number" step="any" class="modern-input" style="padding: 4px 6px; width: 70px;" data-key="data_frequency_seconds" value="${data.data_frequency_seconds ?? ''}"></div>
+            <div style="display:flex; align-items:center; gap: 4px;">Qual(%): <input type="number" step="any" min="0" max="100" class="modern-input" style="padding: 4px 6px; width: 70px;" data-key="quality_score" value="${data.quality_score ? Math.round(data.quality_score * 100) : ''}"></div>
+        </div>
     `;
 
     const keyTypeSelect = row.querySelector('[data-key="keyType"]');
     const fkTargetSelect = row.querySelector('[data-key="fkTarget"]');
+    const typeSelect = row.querySelector('[data-key="type"]');
+    const profilingRow = row.querySelector('.profiling-row');
     
     keyTypeSelect.onchange = (e) => {
         fkTargetSelect.style.display = e.target.value === 'FK' ? 'block' : 'none';
@@ -333,9 +403,15 @@ function addSchemaRow(data = {}) {
             renderSchemaItems();
         }
     };
+    
+    typeSelect.onchange = (e) => {
+        const val = e.target.value;
+        profilingRow.style.display = (val === 'number' || val === 'integer') ? 'flex' : 'none';
+        syncStateFromForm();
+    };
 
     row.querySelectorAll('input, select').forEach(i => {
-        if (i !== keyTypeSelect) i.oninput = syncStateFromForm;
+        if (i !== keyTypeSelect && i !== typeSelect) i.oninput = syncStateFromForm;
         if (i === fkTargetSelect) i.onchange = syncStateFromForm;
     });
     row.querySelector('.btn-delete-row').onclick = () => { 
@@ -389,11 +465,21 @@ function syncStateFromForm() {
     if (!currentSelection.ref) return;
     const ref = currentSelection.ref;
     ref.displayName = el['modeler-edit-displayname'].value;
+    
     if (el['field-isa-level'].value) {
         ref.isaLevel = el['field-isa-level'].value;
     } else {
         delete ref.isaLevel;
     }
+    
+    if (currentSelection.type === 'namespace') {
+        ref.uri = el['field-namespace'].value;
+        // Namespaces don't have properties or relationships
+        renderRegistry();
+        el['btn-modeler-save'].classList.add('btn-unsaved');
+        return; 
+    }
+    
     ref.namespaceUri = el['field-namespace'].value;
 
     const properties = {};
@@ -401,8 +487,13 @@ function syncStateFromForm() {
     rows.forEach(row => {
         const id = row.querySelector('[data-key="id"]').value.trim();
         if (!id) return;
+        
+        // Preserve any unknown properties that the AI might have added
+        const existingItem = ref.schema?.properties?.[id] || {};
+        
         const item = { 
-            title: row.querySelector('[data-key="title"]').value, 
+            ...existingItem,
+            title: row.querySelector('[data-key="title"]').value || id, 
             type: row.querySelector('[data-key="type"]').value,
             keyType: row.querySelector('[data-key="keyType"]').value,
             confidentiality: row.querySelector('[data-key="confidentiality"]').value,
@@ -415,6 +506,31 @@ function syncStateFromForm() {
 
         const unitEl = row.querySelector('[data-key="unit"]');
         if (unitEl && unitEl.value) item.unit = unitEl.value;
+
+        // Profiling Metadata
+        const nom = row.querySelector('[data-key="nominal_value"]').value;
+        if (nom !== '') item.nominal_value = parseFloat(nom);
+        else delete item.nominal_value;
+
+        const freq = row.querySelector('[data-key="data_frequency_seconds"]').value;
+        if (freq !== '') item.data_frequency_seconds = parseFloat(freq);
+        else delete item.data_frequency_seconds;
+
+        const qual = row.querySelector('[data-key="quality_score"]').value;
+        if (qual !== '') item.quality_score = parseFloat(qual) / 100;
+        else delete item.quality_score;
+
+        const min = row.querySelector('[data-key="min_range"]').value;
+        const max = row.querySelector('[data-key="max_range"]').value;
+        if (min !== '' || max !== '') {
+            item.expected_range = [
+                min !== '' ? parseFloat(min) : null,
+                max !== '' ? parseFloat(max) : null
+            ];
+        } else {
+            delete item.expected_range;
+        }
+
         properties[id] = item;
     });
     ref.schema = { type: "object", properties };
@@ -445,22 +561,56 @@ function setEditMode(mode) {
             Object.assign(currentSelection.ref, updated);
             selectItem(currentSelection.type, currentSelection.id);
         } catch(e) { showToast("Fix JSON first", "error"); return; }
+    } else if (editMode === 'raw' && mode !== 'raw') {
+        try {
+            const updated = JSON.parse(aceEditor.getValue());
+            currentModel = updated;
+            renderRegistry();
+            if (currentSelection.id) selectItem(currentSelection.type, currentSelection.id);
+        } catch(e) { showToast("Fix JSON first", "error"); return; }
     }
+
     editMode = mode;
-    el['btn-mode-form'].classList.toggle('active', mode === 'form');
-    el['btn-mode-json'].classList.toggle('active', mode === 'json');
-    el['modeler-form-view'].style.display = mode === 'form' ? 'block' : 'none';
-    el['modeler-json-view'].style.display = mode === 'json' ? 'block' : 'none';
-    if (mode === 'json') { 
+
+    if (mode === 'raw') {
+        el['modeler-welcome'].style.display = 'none';
+        el['modeler-content'].style.display = 'flex';
+        el['modeler-edit-displayname'].value = 'uns_model.json';
+        el['modeler-edit-displayname'].disabled = true;
+        el['modeler-edit-id'].textContent = 'Complete JSON Model (Namespaces, ObjectTypes, Instances)';
+        el['btn-mode-form'].parentElement.style.display = 'none'; // Hide Form/JSON toggle group
+        el['btn-modeler-delete'].style.display = 'none'; // Hide Delete button
+        el['modeler-form-view'].style.display = 'none';
+        el['modeler-json-view'].style.display = 'block';
+    } else {
+        el['modeler-edit-displayname'].disabled = false;
+        el['btn-mode-form'].parentElement.style.display = 'flex'; // Show Form/JSON toggle group
+        el['btn-modeler-delete'].style.display = 'flex'; // Show Delete button
+        el['btn-mode-form'].classList.toggle('active', mode === 'form');
+        el['btn-mode-json'].classList.toggle('active', mode === 'json');
+        el['modeler-form-view'].style.display = mode === 'form' ? 'block' : 'none';
+        el['modeler-json-view'].style.display = mode === 'json' ? 'block' : 'none';
+    }
+
+    if (mode === 'json' || mode === 'raw') {
         if (!aceEditor) {
             aceEditor = ace.edit(el['modeler-ace-editor']);
             aceEditor.setTheme(state.isDarkMode ? "ace/theme/tomorrow_night" : "ace/theme/chrome");
             aceEditor.session.setMode("ace/mode/json");
+            
+            // Mark model as unsaved on any JSON edit
+            aceEditor.on("change", () => {
+                el['btn-modeler-save'].classList.add('btn-unsaved');
+            });
         }
-        aceEditor.setValue(JSON.stringify(currentSelection.ref, null, 2), -1);
+
+        if (mode === 'raw') {
+            aceEditor.setValue(JSON.stringify(currentModel, null, 2), -1);
+        } else {
+            aceEditor.setValue(JSON.stringify(currentSelection.ref, null, 2), -1);
+        }
     }
 }
-
 // ============================================================================
 // NATIVE KORELATE GRAPH ENGINE (SVG Force-Directed)
 // 100% Dependency Free, Built for Stability and Performance
@@ -878,13 +1028,20 @@ function createItem(type) {
 async function saveModelToServer() {
     if (editMode === 'json' && aceEditor) {
         try { Object.assign(currentSelection.ref, JSON.parse(aceEditor.getValue())); } catch(e) { return showToast("Invalid JSON", "error"); }
+    } else if (editMode === 'raw' && aceEditor) {
+        try { 
+            const updated = JSON.parse(aceEditor.getValue()); 
+            currentModel = updated;
+        } catch(e) { return showToast("Invalid JSON in Raw mode", "error"); }
     }
+    
     el['btn-modeler-save'].disabled = true;
     try {
         const res = await fetch('api/env/model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentModel) });
         if (!res.ok) throw new Error();
         showToast("Model saved", "success");
         el['btn-modeler-save'].classList.remove('btn-unsaved');
+        renderRegistry(); // Refresh registry in case raw json modified names/ids
     } catch (e) { showToast("Save error", "error"); }
     finally { el['btn-modeler-save'].disabled = false; }
 }
