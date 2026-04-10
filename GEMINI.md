@@ -79,4 +79,6 @@ When executing terminal commands to build or test the application, you operate u
 1. **DO NOT run persistent processes**: Never run `node server.js`, `npm start`, or `docker-compose up`.
 2. **DO NOT run interactive commands**: Always use flags like `-y`, `--force`, or `CI=true` to bypass prompts.
 3. **Safe Commands**: You are auto-authorized to use `repomix`, `cat`, `ls`, `grep`, `git status/diff`, and the test commands (`jest`, `playwright` in headless mode). 
-4. If a task requires restarting the server to see changes, modify the code, run the tests, update `CHANGES.md`, and instruct the user to restart the server manually.
+4. If a task requires restarting the
+
+ server to see changes, modify the code, run the tests, update `CHANGES.md`, and instruct the user to restart the server manually.
