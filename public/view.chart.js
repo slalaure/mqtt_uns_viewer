@@ -549,6 +549,7 @@ function findNumericKeys(obj, path = "", list = []) {
     const newPath = path ? `${path}.${key}` : key;
     const value = obj[key];
     if (typeof value === "number") list.push({ path: newPath, type: "number", value });
+    else if (typeof value === "boolean") list.push({ path: newPath, type: "boolean", value: value ? 1 : 0 });
     else if (typeof value === "string" && !isNaN(parseFloat(value)) && isFinite(Number(value))) list.push({ path: newPath, type: "number", value });
     else if (typeof value === "object") findNumericKeys(value, newPath, list);
   }
@@ -563,9 +564,14 @@ function populateChartVariables(payloadString) {
   }
   try {
     const payload = JSON.parse(payloadString);
-    let numericKeys = (typeof payload === "number" || (typeof payload === "string" && !isNaN(parseFloat(payload)))) 
-        ? [{ path: "(value)", type: "number", value: payload }] 
-        : findNumericKeys(payload);
+    let numericKeys = [];
+    if (typeof payload === "number" || (typeof payload === "string" && !isNaN(parseFloat(payload)))) {
+        numericKeys = [{ path: "(value)", type: "number", value: payload }];
+    } else if (typeof payload === "boolean") {
+        numericKeys = [{ path: "(value)", type: "boolean", value: payload ? 1 : 0 }];
+    } else {
+        numericKeys = findNumericKeys(payload);
+    }
     chartVariableList.updateData(selectedChartTopic, selectedChartSourceId, numericKeys, chartedVariables);
   } catch (e) {
     chartVariableList.updateData(selectedChartTopic, selectedChartSourceId, [], chartedVariables);

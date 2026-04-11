@@ -182,10 +182,12 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                     t.variables.forEach(v => {
                         let valExpr;
                         if (v.path === '(value)') {
-                            valExpr = `TRY_CAST(CAST(payload AS VARCHAR) AS DOUBLE)`;
+                            const p = `CAST(payload AS VARCHAR)`;
+                            valExpr = `CASE WHEN lower(${p}) IN ('true', '1') THEN 1.0 WHEN lower(${p}) IN ('false', '0') THEN 0.0 ELSE TRY_CAST(${p} AS DOUBLE) END`;
                         } else {
                             const safePath = escapeSQL(v.path); // e.g. $.temperature_c
-                            valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
+                            const p = `json_extract_string(payload, '${safePath}')`;
+                            valExpr = `CASE WHEN lower(${p}) IN ('true', '1') THEN 1.0 WHEN lower(${p}) IN ('false', '0') THEN 0.0 ELSE TRY_CAST(${p} AS DOUBLE) END`;
                         }
                         
                         if (aggType === 'RANGE') {
@@ -234,11 +236,13 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                         return new Promise((vResolve) => {
                             let valExpr;
                             if (v.path === '(value)') {
-                                valExpr = `TRY_CAST(CAST(payload AS VARCHAR) AS DOUBLE)`;
+                                const p = `CAST(payload AS VARCHAR)`;
+                                valExpr = `CASE WHEN lower(${p}) IN ('true', '1') THEN 1.0 WHEN lower(${p}) IN ('false', '0') THEN 0.0 ELSE TRY_CAST(${p} AS DOUBLE) END`;
                             } else {
                                 // Extract the path (e.g. $.temperature_c)
                                 const safePath = escapeSQL(v.path); 
-                                valExpr = `TRY_CAST(json_extract_string(payload, '${safePath}') AS DOUBLE)`;
+                                const p = `json_extract_string(payload, '${safePath}')`;
+                                valExpr = `CASE WHEN lower(${p}) IN ('true', '1') THEN 1.0 WHEN lower(${p}) IN ('false', '0') THEN 0.0 ELSE TRY_CAST(${p} AS DOUBLE) END`;
                             }
 
                             const safeTopic = escapeSQL(t.topic);
