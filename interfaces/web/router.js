@@ -16,6 +16,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const featureGate = require('./middlewares/featureGate');
 const metricsManager = require('../../core/metricsManager');
@@ -158,6 +159,47 @@ function createRouter(deps) {
         } else {
             res.status(404).send('Not found');
         }
+    });
+
+    const storageUserHmi = multer.diskStorage({
+        destination: function (req, file, cb) {
+            if (req.user && req.user.role === 'admin') {
+                cb(null, DATA_PATH); // Admins upload globally
+            } else if (req.user && req.user.id) {
+                const userHmiDir = path.join(SESSIONS_PATH, req.user.id, 'hmis');
+                if (!fs.existsSync(userHmiDir)) {
+                    fs.mkdirSync(userHmiDir, { recursive: true });
+                }
+                cb(null, userHmiDir); // Normal users upload privately
+            } else {
+                cb(new Error('Unauthorized to upload HMI'), false);
+            }
+        },
+        filename: function (req, file, cb) {
+            cb(null, path.basename(file.originalname)); 
+        }
+    });
+
+    const uploadUserHmi = multer({ 
+        storage: storageUserHmi, 
+        fileFilter: (req, file, cb) => {
+            if (file.originalname.match(/\.(svg|html|htm|js|gltf|glb|bin|png|jpg|jpeg)$/i)) {
+                if (file.originalname.toLowerCase().startsWith('simulator-')) {
+                    cb(new Error('Simulator files must be uploaded in the Simulators tab.'), false);
+                } else {
+                    cb(null, true);
+                }
+            } else {
+                cb(new Error('Invalid HMI asset file type! Only svg, html, js, and 3d formats allowed.'), false);
+            }
+        }
+    });
+
+    router.post('/api/hmi/upload', featureGate(config, 'VIEW_HMI_ENABLED'), auth.requireRole('viewer'), uploadUserHmi.array('hmi_assets'), (req, res) => {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: "No valid files uploaded." });
+        }
+        res.json({ success: true, count: req.files.length, message: "HMI files imported successfully." });
     });
 
     router.get('/api/hmi/list', featureGate(config, 'VIEW_HMI_ENABLED'), (req, res, next) => {

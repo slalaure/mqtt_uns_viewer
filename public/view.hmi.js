@@ -22,7 +22,10 @@ const hmiLabel = document.getElementById('hmi-label');
 const btnHmiFullscreen = document.getElementById('btn-hmi-fullscreen');
 const hmiView = document.getElementById('hmi-view');
 const hmiSelectDropdown = document.getElementById('hmi-select-dropdown');
-let btnDeleteHmi = null; // Dynamically created
+let btnDeleteHmi = null;
+let btnExportHmi = null;
+let btnImportHmi = null;
+let importHmiInput = null; // Dynamically created
 
 // --- Module-level State ---
 let hmiInitialStates = new Map();
@@ -161,6 +164,8 @@ export function onHmiViewHide() {
     hmiSelectDropdown?.removeEventListener('change', onHmiFileChange);
     hmiHistoryToggle?.removeEventListener('change', onHistoryToggleChange);
     btnDeleteHmi?.removeEventListener('click', deleteCurrentHmi);
+    btnExportHmi?.removeEventListener('click', exportCurrentHmi);
+    btnImportHmi?.removeEventListener('click', triggerHmiImport);
 
     isMounted = false;
 }
@@ -180,6 +185,8 @@ export function onHmiViewShow() {
     hmiSelectDropdown?.addEventListener('change', onHmiFileChange);
     hmiHistoryToggle?.addEventListener('change', onHistoryToggleChange);
     btnDeleteHmi?.addEventListener('click', deleteCurrentHmi);
+    btnExportHmi?.addEventListener('click', exportCurrentHmi);
+    btnImportHmi?.addEventListener('click', triggerHmiImport);
 
     if (activeBindings.length > 0 && hmiContent) {
         // If we have active bindings, re-initialize them with a fresh context
@@ -229,15 +236,39 @@ export function initHmiView(appConfig) {
 
     const controlsContainer = document.querySelector('.hmi-view-controls') || document.querySelector('.map-view-controls');
     if (controlsContainer && !document.getElementById('btn-delete-hmi')) {
+        btnImportHmi = document.createElement('button');
+        btnImportHmi.id = 'btn-import-hmi';
+        btnImportHmi.className = 'tool-button';
+        btnImportHmi.textContent = 'Import';
+        btnImportHmi.title = "Import HMI files";
+        btnImportHmi.style.marginLeft = "10px";
+        controlsContainer.insertBefore(btnImportHmi, btnHmiFullscreen);
+
+        btnExportHmi = document.createElement('button');
+        btnExportHmi.id = 'btn-export-hmi';
+        btnExportHmi.className = 'tool-button';
+        btnExportHmi.textContent = 'Export';
+        btnExportHmi.title = "Export current view and its JS bindings";
+        btnExportHmi.style.marginLeft = "5px";
+        controlsContainer.insertBefore(btnExportHmi, btnHmiFullscreen);
+
         btnDeleteHmi = document.createElement('button');
         btnDeleteHmi.id = 'btn-delete-hmi';
-        btnDeleteHmi.className = 'tool-button button-danger'; 
-        btnDeleteHmi.textContent = 'Delete'; 
+        btnDeleteHmi.className = 'tool-button button-danger';
+        btnDeleteHmi.textContent = 'Delete';
         btnDeleteHmi.title = "Delete current view";
-        btnDeleteHmi.style.marginLeft = "10px";
+        btnDeleteHmi.style.marginLeft = "5px";
         controlsContainer.insertBefore(btnDeleteHmi, btnHmiFullscreen);
-    }
-}
+
+        // Create hidden input for import
+        importHmiInput = document.createElement('input');
+        importHmiInput.type = 'file';
+        importHmiInput.multiple = true;
+        importHmiInput.accept = '.html,.htm,.svg,.js,.glb,.gltf,.bin,.png,.jpg,.jpeg';
+        importHmiInput.style.display = 'none';
+        importHmiInput.addEventListener('change', handleHmiImport);
+        controlsContainer.appendChild(importHmiInput);
+    }}
 
 export function setHmiHistoryData(entries) {
     allHistoryEntries = entries; 
@@ -301,6 +332,77 @@ async function deleteCurrentHmi() {
         }
     } catch(e) {
         showToast("Request failed: " + e.message, "error");
+    }
+}
+
+async function exportCurrentHmi() {
+    if (!hmiSelectDropdown || !hmiSelectDropdown.value) {
+        return showToast("Please select a view to export.", "warning");
+    }
+    const filename = hmiSelectDropdown.value;
+
+    try {
+        // Download the main SVG/HTML file
+        const mainA = document.createElement('a');
+        mainA.href = `api/hmi/file?name=${encodeURIComponent(filename)}`;
+        mainA.download = filename;
+        document.body.appendChild(mainA);
+        mainA.click();
+        document.body.removeChild(mainA);
+
+        // Try to download the JS bindings file if it exists
+        const res = await fetch(`api/hmi/bindings.js?name=${encodeURIComponent(filename)}`);
+        const text = await res.text();
+        if (!text.trim().startsWith('// No bindings')) {
+            const blob = new Blob([text], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            const jsA = document.createElement('a');
+            jsA.href = url;
+            jsA.download = `${filename}.js`;
+            document.body.appendChild(jsA);
+            jsA.click();
+            document.body.removeChild(jsA);
+            URL.revokeObjectURL(url);
+        }
+    } catch(e) {
+        console.log("No associated JS file found to export or error occurred.", e);
+    }
+}
+
+function triggerHmiImport() {
+    if (importHmiInput) importHmiInput.click();
+}
+
+async function handleHmiImport(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('hmi_assets', files[i]);
+    }
+
+    try {
+        const response = await fetch('api/hmi/upload', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Upload failed.");
+        
+        showToast(`${result.count} files imported successfully.`, "success");
+        
+        // Find the main file to select it automatically
+        let mainFile = null;
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].name.match(/\.(svg|html|htm)$/i)) {
+                mainFile = files[i].name;
+                break;
+            }
+        }
+        
+        refreshHmiList(mainFile);
+    } catch (e) {
+        showToast(`Import Error: ${e.message}`, "error");
+    } finally {
+        event.target.value = ''; // Reset input
     }
 }
 
