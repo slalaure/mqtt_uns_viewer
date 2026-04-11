@@ -23,6 +23,8 @@ main#chart-view {
     padding: 20px;
     box-sizing: border-box;
     background-color: var(--color-bg-secondary);
+    display: flex;
+    flex-direction: column;
 }
 /* --- Chart Controls (Top-left)  --- */
 .chart-tree-wrapper .tree-controls {
@@ -77,6 +79,13 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
 }
 #chart-tree .is-folder > .node-container { font-weight: 500; }
 /* --- Chart Variable List (Top-right) --- */
+chart-variable-list {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-height: 0; /* Crucial for nested flexbox scrolling */
+    margin-top: 10px;
+}
 .chart-variable-list {
     flex-grow: 1;
     overflow-y: auto;
@@ -84,7 +93,7 @@ body.dark-mode #chart-tree .selected .node-name::before { filter: brightness(0) 
     border: 1px solid var(--color-border-secondary);
     border-radius: 4px;
     padding: 10px 15px;
-    margin-top: 10px;
+    min-height: 0;
 }
 .chart-variable-item {
     display: block;
