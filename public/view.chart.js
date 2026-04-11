@@ -537,12 +537,19 @@ export function updateChartSliderUI(min, max, isInitialLoad = false, force = fal
 function findNumericKeys(obj, path = "", list = []) {
   if (obj === null || typeof obj !== "object") return list;
   if (Array.isArray(obj)) {
-    if (obj.length > 0 && obj.every(i => typeof i === "object" && i.hasOwnProperty("name") && i.hasOwnProperty("value"))) {
+    if (obj.length > 0 && obj.every(i => typeof i === "object" && i !== null && i.hasOwnProperty("name") && i.hasOwnProperty("value"))) {
       obj.forEach((metric) => {
         const newPath = path ? `${path}[${metric.name}]` : `[${metric.name}]`;
         if (typeof metric.value === "number") list.push({ path: newPath, type: "number", value: metric.value });
+        else if (typeof metric.value === "boolean") list.push({ path: newPath, type: "boolean", value: metric.value ? 1 : 0 });
       });
+      return list;
     }
+    // Generic array traversal
+    obj.forEach((item, index) => {
+        const newPath = path ? `${path}[${index}]` : `[${index}]`;
+        findNumericKeys(item, newPath, list);
+    });
     return list;
   }
   for (const key of Object.keys(obj)) {

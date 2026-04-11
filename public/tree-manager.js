@@ -423,14 +423,23 @@ export function createTreeManager(rootElementOrId, options = {}) {
             nodeContainer.dataset.isI3x = "true";
             nodeContainer.dataset.sourceId = 'i3x';
             nodeContainer.dataset.topic = obj.elementId;
+
+            let effectiveSourceId = 'i3x';
+            let effectiveTopic = obj.elementId;
+
             if (obj.topic_mapping) {
                 nodeContainer.dataset.topicMapping = obj.topic_mapping;
+                effectiveTopic = obj.topic_mapping;
+
                 if (!i3xTopicMap.has(obj.topic_mapping)) i3xTopicMap.set(obj.topic_mapping, []);
                 i3xTopicMap.get(obj.topic_mapping).push(li);
 
                 // Initial payload sync from cache
                 const lastEntry = lastMqttEntries.find(e => e.topic === obj.topic_mapping);
                 if (lastEntry) {
+                    effectiveSourceId = lastEntry.sourceId || 'mqtt';
+                    nodeContainer.dataset.sourceId = effectiveSourceId;
+                    nodeContainer.dataset.topic = effectiveTopic;
                     nodeContainer.dataset.payload = typeof lastEntry.payload === 'object' ? JSON.stringify(lastEntry.payload) : String(lastEntry.payload);
                     const tsSpan = nodeContainer.querySelector('.node-timestamp');
                     const ts = lastEntry.timestampMs || (lastEntry.timestamp ? new Date(lastEntry.timestamp).getTime() : null);
@@ -438,15 +447,16 @@ export function createTreeManager(rootElementOrId, options = {}) {
                         const dateObj = new Date(ts);
                         tsSpan.textContent = dateObj.toLocaleTimeString('en-GB');
                     }
+                } else {
+                    nodeContainer.dataset.topic = effectiveTopic;
                 }
             }
 
             li.appendChild(nodeContainer);
-            nodeMap.set(`i3x_node_${path}`, li);            
+            nodeMap.set(`i3x_node_${path}`, li);
             if (onNodeClick) {
-                nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', obj.elementId));
+                nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, effectiveSourceId, effectiveTopic));
             }
-
             nodeContainer.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
                 if (li.classList.contains('is-folder')) {
