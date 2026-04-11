@@ -12,10 +12,11 @@ jest.mock('mqtt', () => {
         connect: jest.fn(() => {
             const mockClient = {
                 on: jest.fn((event, handler) => {
-                    if (event === 'connect') {
-                        // Automatically resolve connection
-                        setTimeout(handler, 10);
-                    }
+                    if (event === 'connect') setTimeout(handler, 10);
+                    return mockClient;
+                }),
+                once: jest.fn((event, handler) => {
+                    if (event === 'connect') setTimeout(handler, 10);
                     return mockClient;
                 }),
                 subscribe: jest.fn((topics, opts, cb) => {
@@ -24,7 +25,9 @@ jest.mock('mqtt', () => {
                 publish: jest.fn((topic, payload, opts, cb) => {
                     if (cb) cb(null);
                 }),
-                end: jest.fn()
+                end: jest.fn((force, cb) => {
+                    if (cb) setTimeout(cb, 10);
+                })
             };
             return mockClient;
         })
@@ -198,5 +201,18 @@ describe('MqttProvider', () => {
         expect(result).toBe(false);
         expect(provider.logger.error).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('Could not read MTLS'));
         expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('main_mqtt', 'error', 'MTLS Certs missing');
+    });
+
+    test('disconnect should await client end and cleanup', async () => {
+        const provider = new MqttProvider(providerConfig, mockContext);
+        await provider.connect();
+        
+        const client = mqtt.connect.mock.results[0].value;
+        await provider.disconnect();
+        
+        expect(client.end).toHaveBeenCalledWith(true, expect.any(Function));
+        expect(provider.client).toBeNull();
+        expect(provider.connected).toBe(false);
+        expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('main_mqtt', 'disconnected', null);
     });
 });

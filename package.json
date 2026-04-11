@@ -1,6 +1,6 @@
 {
   "name": "korelate",
-  "version": "1.6.0-beta1",
+  "version": "1.6.0-beta2",
   "description": "The Open-Source Unified Namespace Explorer for the AI Era",
   "main": "server.js",
   "scripts": {

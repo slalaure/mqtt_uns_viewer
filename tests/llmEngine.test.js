@@ -190,6 +190,48 @@ describe('LLM Engine', () => {
         });
     });
 
+    describe('Multi-Model Selection', () => {
+        test('fetchChatCompletion should use the first model from a comma-separated list by default', async () => {
+            mockConfig.LLM_MODEL = 'model1, model2, model3';
+            
+            axios.post.mockResolvedValueOnce({
+                data: { choices: [{ message: { role: 'assistant', content: 'Reply' } }] }
+            });
+
+            await llmEngine.fetchChatCompletion([{ role: 'user', content: 'Hi' }], mockConfig, []);
+
+            const requestPayload = axios.post.mock.calls[0][1];
+            expect(requestPayload.model).toBe('model1');
+        });
+
+        test('fetchChatCompletion should use the selectedModel if provided, overriding the list', async () => {
+            mockConfig.LLM_MODEL = 'model1, model2';
+            
+            axios.post.mockResolvedValueOnce({
+                data: { choices: [{ message: { role: 'assistant', content: 'Reply' } }] }
+            });
+
+            await llmEngine.fetchChatCompletion([{ role: 'user', content: 'Hi' }], mockConfig, [], null, 'model2');
+
+            const requestPayload = axios.post.mock.calls[0][1];
+            expect(requestPayload.model).toBe('model2');
+        });
+
+        test('runAutonomousAgent should prioritize LLM_MODEL_ALERTS if defined', async () => {
+            mockConfig.LLM_MODEL = 'main-model';
+            mockConfig.LLM_MODEL_ALERTS = 'alert-model';
+            
+            axios.post.mockResolvedValueOnce({
+                data: { choices: [{ message: { role: 'assistant', content: 'Reply' } }] }
+            });
+
+            await llmEngine.runAutonomousAgent("Sys", "User", mockConfig, [], {}, {}, mockLogger);
+
+            const requestPayload = axios.post.mock.calls[0][1];
+            expect(requestPayload.model).toBe('alert-model');
+        });
+    });
+
     describe('Streamed Fetch Execution', () => {
         test('fetchChatCompletion should return the message object directly', async () => {
             const expectedMessage = {

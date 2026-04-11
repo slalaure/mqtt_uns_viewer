@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.6.0-beta1-blue.svg?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.6.0--beta2-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg?style=for-the-badge)
 ![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge)
 ![Stack](https://img.shields.io/badge/stack-Node.js%20|%20DuckDB%20|%20Timescale-orange?style=for-the-badge)
@@ -248,7 +248,7 @@ The left panel displays the discovered UNS hierarchy.
 Create professional HMIs using HTML, standard vector graphics, and 3D scenes.
 * **Composite Dashboards:** Load `.html` files that act as grid layouts combining multiple embedded SVGs (`.embedded-svg`), live charts (`.embedded-chart`), and data bindings into a single, cohesive view.
 * **3D Integration (A-Frame):** Automatically detects and loads A-Frame to render live 3D Digital Twins directly in the browser using `.glb`/`.gltf` assets.
-* **Dynamic Loading:** Upload `.html`, `.svg`, or 3D models directly via the UI or ask the AI to generate one.
+* **Import / Export:** Seamlessly download current views (including their JS bindings) or upload new ones directly from the HMI interface.
 * **Instant Refresh:** Views instantly fetch their latest known state from DuckDB using the "AS OF" SQL logic upon activation.
 * **Layered Storage:** Users can see global views and their own private views. Admins can delete global views directly from the UI.
 
@@ -276,8 +276,9 @@ Visualize correlations instantly with high performance.
 * **Statistical Modes:** Choose from Mean, Min, Max, Median, StdDev, Range, or Sum aggregations.
 * **AI Learning Studio:** Highlight a time range and click "Profile & Learn" to have the AI analyze statistical fingerprints (Frequency, Chatter, Boundaries) and propose UNS model updates or smart alert rules.
 
-### 7. AI Chat Assistant (Multimodal)
-A floating assistant powered by LLMs (OpenAI, Gemini, Local models) running a recursive agentic loop.
+### 7. AI Chat Assistant (Multimodal & Multi-Model)
+A floating assistant powered by LLMs running a recursive agentic loop.
+* **Multi-Model Support:** Configure and switch between multiple LLMs (e.g., `gemini-2.0-flash`, `gpt-4o`, `claude-3-5-sonnet`) on the fly directly from the Chat UI or the AI Learning Studio. Assign dedicated, high-tier models specifically for background tasks like Autonomous Alert Analysis.
 * **Multimodal Inputs:**
   * **Voice (STT/TTS):** Speak to the assistant (continuous listening mode) and hear responses natively.
   * **Vision:** Use your device's camera or upload images/logs to give the AI context on physical equipment.
@@ -304,10 +305,11 @@ Korelate provides a native, northbound implementation of the **I3X (Industrial I
 Korelate includes a powerful graphical editor to define your plant's semantic hierarchy and metadata.
 * **Concept Definition:** Map industrial concepts to physical MQTT topics.
 * **Ontology Support:** Native support for **ISA-95** (OT) and **Brick Schema** (BMS) conventions for professional-grade UNS structures.
+* **Responsive 3-Pane IDE:** The interface smoothly scales from a widescreen desktop down to a tablet or mobile device.
 * **Advanced Editing:** Includes a **"⚙️ Raw"** JSON mode for bulk model editing and a specialized **Profiling UI** to manage nominal values, expected ranges, and data quality levels.
 * **Data Governance & Security:** Explicitly tag data nodes with **Sensitivity Levels** (Public, Internal, Confidential, Secret) and **Privacy/Compliance** flags (GDPR, Health/HDS, Financial/PCI).
-* **Graph Visualization:** Explore relationships beyond simple hierarchies (e.g., "Machine A SuppliesTo Tank B") using an interactive, 100% dependency-free native SVG Force-Directed graph engine (KorelateGraph).
-* **I3X Compatibility:** Seamlessly bridge legacy tag names to a standardized I3X element structure (Instances and ObjectTypes).
+* **Graph Visualization:** Explore semantic links using an interactive, 100% dependency-free native SVG Force-Directed graph engine (KorelateGraph).
+* **I3X Relationships:** Link concepts using standardized relationships (`HasParent`, `HasComponent`, `SuppliesTo`, etc.) natively in the UI.
 
 ### 11. AI Safety & Governance (Admin)
 As the AI Agent gains more autonomy, Korelate provides tools to monitor and control its actions.
