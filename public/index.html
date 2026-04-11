@@ -28,261 +28,294 @@
         <div class="header-content">
             <img src="assets/logo.svg" alt="Korelate" class="app-logo">
             <div class="header-sub-row">
-                <p>v 1.6.0-beta1</p>
                 <div id="connector-status-container" class="connector-status-container"></div>
             </div>
         </div>
         <div id="current-datetime" class="datetime-container"></div>
-        <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">&#9881;</a>
-        <div class="theme-switch-wrapper">
-            <label class="theme-switch" for="dark-mode-toggle">
-                <input type="checkbox" id="dark-mode-toggle" />
-                <span class="slider round"></span>
-            </label>
-            <span class="theme-label">Dark Mode</span>
+        <div class="header-actions">
+            <a href="config.html" id="btn-config-view" class="nav-button icon-button" title="Configuration">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </a>
+            <div class="theme-switch-wrapper">
+                <label class="theme-switch" for="dark-mode-toggle">
+                    <input type="checkbox" id="dark-mode-toggle" />
+                    <span class="slider round"></span>
+                </label>
+                <span class="theme-label">Dark Mode</span>
+            </div>
         </div>
     </header>
-    <nav class="tab-nav">
-        <button id="btn-tree-view" class="tab-button active">Tree View</button>
-        <button id="btn-hmi-view" class="tab-button">HMI Dashboard</button>
-        <button id="btn-history-view" class="tab-button">History</button>
-        <button id="btn-modeler-view" class="tab-button" style="display: none;">CDM Modeler</button>
-        <button id="btn-mapper-view" class="tab-button">Mapper</button>
-        <button id="btn-chart-view" class="tab-button">Chart</button>
-        <button id="btn-alerts-view" class="tab-button">Alerts</button>
-        <button id="btn-publish-view" class="tab-button">Publish</button> 
-        <button id="btn-admin-view" class="tab-button" style="display: none; border-bottom-color: var(--color-danger);">Admin</button>
-    </nav>
-    <div class="view-container">
-        <main id="tree-view" class="view active">
-            <div class="tree-view-wrapper">
-                <div class="tree-controls" style="align-items: center;">
-                    <input type="text" id="tree-filter-input" placeholder="Filter topics...">
-                    <button id="btn-expand-all" class="tool-button" title="Expand All">▲</button>
-                    <button id="btn-collapse-all" class="tool-button" title="Collapse All">▼</button>
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.85em; color: var(--color-text-secondary); white-space: nowrap; margin-left: 2px;" title="Disable data traversal animations">
-                        <input type="checkbox" id="disable-tree-animations" style="margin: 0; padding: 0;"> Disable Anim.
-                    </label>
+    
+    <div class="app-body">
+        <nav class="sidebar-nav" id="sidebar">
+            <button id="btn-sidebar-toggle" class="tab-button" title="Toggle Sidebar" style="border-left-color: transparent;" onclick="document.getElementById('sidebar').classList.toggle('collapsed');">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toggle-icon"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <button id="btn-tree-view" class="tab-button active">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M14 9h5"/><path d="M14 15h5"/></svg>
+                <span class="nav-label">Tree View</span>
+            </button>
+            <button id="btn-hmi-view" class="tab-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><rect x="7" y="7" width="3" height="9"/><rect x="14" y="7" width="3" height="5"/></svg>
+                <span class="nav-label">HMI Dashboard</span>
+            </button>
+            <button id="btn-history-view" class="tab-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="nav-label">History</span>
+            </button>
+            <button id="btn-modeler-view" class="tab-button" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="8" y="2" rx="1"/><path d="M12 10v3"/><path d="M6 13h12"/><path d="M6 13v3"/><path d="M18 13v3"/><rect width="8" height="8" x="2" y="16" rx="1"/><rect width="8" height="8" x="14" y="16" rx="1"/></svg>
+                <span class="nav-label">CDM Modeler</span>
+            </button>
+            <button id="btn-mapper-view" class="tab-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                <span class="nav-label">Mapper</span>
+            </button>
+            <button id="btn-chart-view" class="tab-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span class="nav-label">Chart</span>
+            </button>
+            <button id="btn-alerts-view" class="tab-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="nav-label">Alerts</span>
+            </button>
+            <button id="btn-publish-view" class="tab-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <span class="nav-label">Publish</span>
+            </button> 
+            <button id="btn-admin-view" class="tab-button" style="display: none; margin-top: auto; border-left-color: transparent;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span class="nav-label">Admin</span>
+            </button>
+        </nav>
+
+        <div class="view-container">
+            <main id="tree-view" class="view active">
+                <div class="tree-view-wrapper">
+                    <div class="tree-controls" style="align-items: center;">
+                        <input type="text" id="tree-filter-input" placeholder="Filter topics...">
+                        <button id="btn-expand-all" class="tool-button" title="Expand All">▲</button>
+                        <button id="btn-collapse-all" class="tool-button" title="Collapse All">▼</button>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 0.85em; color: var(--color-text-secondary); white-space: nowrap; margin-left: 2px;" title="Disable data traversal animations">
+                            <input type="checkbox" id="disable-tree-animations" style="margin: 0; padding: 0;"> Disable Anim.
+                        </label>
+                    </div>
+                    <div id="mqtt-tree" class="tree-container"></div>
                 </div>
-                <div id="mqtt-tree" class="tree-container"></div>
-            </div>
-            <div class="resizer" id="drag-handle-vertical"></div>
-            <div id="payload-display" class="payload-container">
-                <div id="payload-main-area">
-                    <div class="payload-header">
-                        <h2>Payload</h2>
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <button id="btn-create-alert-from-tree" class="tool-button" style="display:none; font-size:0.8em;">🔔 Create Alert Rule</button>
-                            <div class="payload-controls">
-                                <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
-                                <label for="live-payload-toggle">Live Update</label>
+                <div class="resizer" id="drag-handle-vertical"></div>
+                <div id="payload-display" class="payload-container">
+                    <div id="payload-main-area">
+                        <div class="payload-header">
+                            <h2>Payload</h2>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <button id="btn-create-alert-from-tree" class="tool-button" style="display:none; font-size:0.8em;">🔔 Create Alert Rule</button>
+                                <div class="payload-controls">
+                                    <input type="checkbox" id="live-payload-toggle" name="live-payload-toggle" checked>
+                                    <label for="live-payload-toggle">Live Update</label>
+                                </div>
                             </div>
                         </div>
+                        <div id="payload-topic" class="payload-topic-display">No topic selected</div>
+                        <pre id="payload-content">Select a topic to see its payload.</pre>
                     </div>
-                    <div id="payload-topic" class="payload-topic-display">No topic selected</div>
-                    <pre id="payload-content">Select a topic to see its payload.</pre>
+                    <div class="resizer-horizontal" id="drag-handle-horizontal"></div>
+                    <div id="topic-history-container" class="topic-history-container">
+                        <h3 class="topic-history-header">Recent History</h3>
+                        <div id="topic-history-log" class="topic-history-log">
+                            <p class="history-placeholder">Select a topic to see its recent history.</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="resizer-horizontal" id="drag-handle-horizontal"></div>
-                <div id="topic-history-container" class="topic-history-container">
-                    <h3 class="topic-history-header">Recent History</h3>
-                    <div id="topic-history-log" class="topic-history-log">
-                        <p class="history-placeholder">Select a topic to see its recent history.</p>
+            </main>
+            <main id="hmi-view" class="view">
+                <div class="hmi-view-container">
+                    <div class="hmi-view-controls map-view-controls">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="hmi-select-dropdown" style="font-size: 0.9em; margin-bottom: 2px;">Select View:</label>
+                            <select id="hmi-select-dropdown" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);"></select>
+                        </div>
+                        <div class="history-toggle-container">
+                            <input type="checkbox" id="hmi-history-toggle" name="hmi-history-toggle">
+                            <label for="hmi-history-toggle">History Mode</label>
+                        </div>
+                        <div id="hmi-timeline-slider-container" class="time-slider-container">
+                            <div class="slider-track"></div>
+                            <div class="slider-handle" id="hmi-handle">
+                                <div class="slider-label" id="hmi-label"></div>
+                            </div>
+                        </div>
+                        <button id="btn-hmi-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
                     </div>
+                    <div id="hmi-content" class="svg-content"></div>
                 </div>
-            </div>
-        </main>
-        <main id="hmi-view" class="view">
-            <div class="hmi-view-container">
-                <div class="hmi-view-controls map-view-controls">
-                    <div class="form-group" style="margin: 0;">
-                        <label for="hmi-select-dropdown" style="font-size: 0.9em; margin-bottom: 2px;">Select View:</label>
-                        <select id="hmi-select-dropdown" style="padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
-                        </select>
-                    </div>
-                    <div class="history-toggle-container">
-                        <input type="checkbox" id="hmi-history-toggle" name="hmi-history-toggle">
-                        <label for="hmi-history-toggle">History Mode</label>
-                    </div>
-                    <div id="hmi-timeline-slider-container" class="time-slider-container">
+            </main>
+            <main id="history-view" class="view">
+                <div class="history-status-bar">
+                    <div>Total Messages: <span id="history-total-messages">--</span></div>
+                    <div>DB Size: <span id="history-db-size">--</span> / <span id="history-db-limit">--</span> MB</div>
+                </div>
+                <div class="history-controls">
+                    <input type="text" id="history-search-input" placeholder="Filter by keyword in topic or payload...">
+                    <div id="time-range-slider-container" class="time-slider-container">
                         <div class="slider-track"></div>
-                        <div class="slider-handle" id="hmi-handle">
-                            <div class="slider-label" id="hmi-label"></div>
+                        <div class="slider-range" id="slider-range"></div>
+                        <div class="slider-handle" id="handle-min">
+                            <div class="slider-label" id="label-min"></div>
                         </div>
-                    </div>
-                    <button id="btn-hmi-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
-                </div>
-                <div id="hmi-content" class="svg-content"></div>
-            </div>
-        </main>
-        <main id="history-view" class="view">
-            <div class="history-status-bar">
-                <div>Total Messages: <span id="history-total-messages">--</span></div>
-                <div>DB Size: <span id="history-db-size">--</span> / <span id="history-db-limit">--</span> MB</div>
-            </div>
-            <div class="history-controls">
-                <input type="text" id="history-search-input" placeholder="Filter by keyword in topic or payload...">
-                <div id="time-range-slider-container" class="time-slider-container">
-                    <div class="slider-track"></div>
-                    <div class="slider-range" id="slider-range"></div>
-                    <div class="slider-handle" id="handle-min">
-                        <div class="slider-label" id="label-min"></div>
-                    </div>
-                    <div class="slider-handle" id="handle-max">
-                        <div class="slider-label" id="label-max"></div>
+                        <div class="slider-handle" id="handle-max">
+                            <div class="slider-label" id="label-max"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div id="historical-log-container" class="historical-log-container">
-            </div>
-            <div id="pruning-indicator" class="pruning-indicator">
-                <p>Cleaning database, please wait...</p>
-            </div>
-        </main>
-        <main id="modeler-view" class="view" style="padding: 0;"></main>
-        <main id="mapper-view" class="view"></main>
-        <main id="chart-view" class="view">
-            <div class="chart-tree-wrapper">
-                <div class="tree-controls">
-                    <input type="text" id="chart-filter-input" placeholder="Filter topics...">
-                    <button id="btn-chart-expand-all" class="tool-button" title="Expand All">▲</button>
-                    <button id="btn-chart-collapse-all" class="tool-button" title="Collapse All">▼</button>
+                <div id="historical-log-container" class="historical-log-container"></div>
+                <div id="pruning-indicator" class="pruning-indicator">
+                    <p>Cleaning database, please wait...</p>
                 </div>
-                <div id="chart-tree" class="tree-container">
+            </main>
+            <main id="modeler-view" class="view" style="padding: 0;"></main>
+            <main id="mapper-view" class="view"></main>
+            <main id="chart-view" class="view">
+                <div class="chart-tree-wrapper">
+                    <div class="tree-controls">
+                        <input type="text" id="chart-filter-input" placeholder="Filter topics...">
+                        <button id="btn-chart-expand-all" class="tool-button" title="Expand All">▲</button>
+                        <button id="btn-chart-collapse-all" class="tool-button" title="Collapse All">▼</button>
                     </div>
-            </div>
-            <div class="resizer" id="drag-handle-vertical-chart"></div>
-            <div id="chart-payload-container" class="payload-container">
-                <div id="chart-payload-area">
-                    <div class="payload-header">
-                        <h2>Payload &amp; Variables</h2>
-                    </div>
-                    <div id="chart-payload-topic" class="payload-topic-display">Select a topic from the Chart tree.
-                    </div>
-                    <div id="chart-variable-list" class="chart-variable-list">
-                        <p class="history-placeholder">No numeric properties found in this payload.</p>
-                    </div>
+                    <div id="chart-tree" class="tree-container"></div>
                 </div>
-                <div class="resizer-horizontal" id="drag-handle-horizontal-chart"></div>
-                <div id="chart-main-area">
-                    <div class="chart-config-bar">
-                        <div class="form-group">
-                            <label for="chart-config-select">Saved Charts:</label>
-                            <select id="chart-config-select">
-                                <option value="">-- New Chart --</option>
-                            </select>
+                <div class="resizer" id="drag-handle-vertical-chart"></div>
+                <div id="chart-payload-container" class="payload-container">
+                    <div id="chart-payload-area">
+                        <div class="payload-header">
+                            <h2>Payload &amp; Variables</h2>
                         </div>
-                        <button id="btn-chart-save-current" class="tool-button button-primary" title="Save">Save</button>
-                        <button id="btn-chart-save-as" class="tool-button" title="Save As New...">Save As...</button>
-                        <button id="btn-chart-delete-config" class="tool-button button-danger" title="Delete Selected Chart">Delete</button>
-                        <div class="form-group">
-                            <label for="chart-type-select">Type:</label>
-                            <select id="chart-type-select">
-                                <option value="line">Line</option>
-                                <option value="bar">Bar</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <input type="checkbox" id="chart-connect-nulls-toggle" name="chart-connect-nulls-toggle">
-                            <label for="chart-connect-nulls-toggle" class="checkbox-label">Connect Gaps</label>
-                        </div>
-                        <div class="form-group">
-                            <input type="checkbox" id="chart-smart-axis-toggle" name="chart-smart-axis-toggle" checked>
-                            <label for="chart-smart-axis-toggle" class="checkbox-label" title="Group variables with similar names on the same axis">Smart Axis</label>
-                        </div>
-                        <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
-                            <label style="font-size: 0.75em; margin-bottom: 2px;">Start</label>
-                            <input type="datetime-local" id="chart-start-date" style="padding: 4px; font-size: 0.85em;">
-                        </div>
-                        <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
-                            <label style="font-size: 0.75em; margin-bottom: 2px;">End</label>
-                            <input type="datetime-local" id="chart-end-date" style="padding: 4px; font-size: 0.85em;">
-                        </div>
-                        <div id="chart-range-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
-                        <button id="btn-chart-clear" class="tool-button" style="color:var(--color-danger); border-color:var(--color-danger);" title="Clear All Selections">Clear All</button>
-                        <button id="btn-chart-export-csv" class="tool-button" title="Export CSV">CSV</button>
-                        <button id="btn-chart-export-png" class="tool-button" title="Export PNG">PNG</button>
-                        <button id="btn-chart-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
-                        <span id="chart-save-status"></span>
-                    </div>
-                    <div id="chart-time-range-slider-container" class="time-slider-container">
-                        <div class="slider-track"></div>
-                        <div class="slider-range" id="chart-slider-range"></div>
-                        <div class="slider-handle" id="chart-handle-min">
-                            <div class="slider-label" id="chart-label-min"></div>
-                        </div>
-                        <div class="slider-handle" id="chart-handle-max">
-                            <div class="slider-label" id="chart-label-max"></div>
+                        <div id="chart-payload-topic" class="payload-topic-display">Select a topic from the Chart tree.</div>
+                        <div id="chart-variable-list" class="chart-variable-list">
+                            <p class="history-placeholder">No numeric properties found in this payload.</p>
                         </div>
                     </div>
-                    <div id="chart-canvas-container">
-                        <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
-                        <canvas id="chart-canvas" style="display: none;"></canvas>
+                    <div class="resizer-horizontal" id="drag-handle-horizontal-chart"></div>
+                    <div id="chart-main-area">
+                        <div class="chart-config-bar">
+                            <div class="form-group">
+                                <label for="chart-config-select">Saved Charts:</label>
+                                <select id="chart-config-select">
+                                    <option value="">-- New Chart --</option>
+                                </select>
+                            </div>
+                            <button id="btn-chart-save-current" class="tool-button button-primary" title="Save">Save</button>
+                            <button id="btn-chart-save-as" class="tool-button" title="Save As New...">Save As...</button>
+                            <button id="btn-chart-delete-config" class="tool-button button-danger" title="Delete Selected Chart">Delete</button>
+                            <div class="form-group">
+                                <label for="chart-type-select">Type:</label>
+                                <select id="chart-type-select">
+                                    <option value="line">Line</option>
+                                    <option value="bar">Bar</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <input type="checkbox" id="chart-connect-nulls-toggle" name="chart-connect-nulls-toggle">
+                                <label for="chart-connect-nulls-toggle" class="checkbox-label">Connect Gaps</label>
+                            </div>
+                            <div class="form-group">
+                                <input type="checkbox" id="chart-smart-axis-toggle" name="chart-smart-axis-toggle" checked>
+                                <label for="chart-smart-axis-toggle" class="checkbox-label" title="Group variables with similar names on the same axis">Smart Axis</label>
+                            </div>
+                            <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
+                                <label style="font-size: 0.75em; margin-bottom: 2px;">Start</label>
+                                <input type="datetime-local" id="chart-start-date" style="padding: 4px; font-size: 0.85em;">
+                            </div>
+                            <div class="form-group" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0;">
+                                <label style="font-size: 0.75em; margin-bottom: 2px;">End</label>
+                                <input type="datetime-local" id="chart-end-date" style="padding: 4px; font-size: 0.85em;">
+                            </div>
+                            <div id="chart-range-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
+                            <button id="btn-chart-clear" class="tool-button" style="color:var(--color-danger); border-color:var(--color-danger);" title="Clear All Selections">Clear All</button>
+                            <button id="btn-chart-export-csv" class="tool-button" title="Export CSV">CSV</button>
+                            <button id="btn-chart-export-png" class="tool-button" title="Export PNG">PNG</button>
+                            <button id="btn-chart-fullscreen" class="tool-button" title="Toggle Fullscreen">&#x2922;</button>
+                            <span id="chart-save-status"></span>
+                        </div>
+                        <div id="chart-time-range-slider-container" class="time-slider-container">
+                            <div class="slider-track"></div>
+                            <div class="slider-range" id="chart-slider-range"></div>
+                            <div class="slider-handle" id="chart-handle-min">
+                                <div class="slider-label" id="chart-label-min"></div>
+                            </div>
+                            <div class="slider-handle" id="chart-handle-max">
+                                <div class="slider-label" id="chart-label-max"></div>
+                            </div>
+                        </div>
+                        <div id="chart-canvas-container">
+                            <p id="chart-placeholder">Select a topic, choose variables, and click "Refresh", or load a saved chart.</p>
+                            <canvas id="chart-canvas" style="display: none;"></canvas>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </main>
-        <main id="alerts-view" class="view"></main>
-        <main id="publish-view" class="view">
-            <div class="publish-panel-wrapper">
-                <h2>Manual Publish</h2>
-                <form id="publish-form">
-                    <div class="form-group">
-                        <label for="publish-topic">Topic</label>
-                        <input type="text" id="publish-topic" placeholder="e.g., stark_industries/malibu_facility/bms/main_power_feed" required>
-                    </div>
-                    <div class="publish-options-row">
+            </main>
+            <main id="alerts-view" class="view"></main>
+            <main id="publish-view" class="view">
+                <div class="publish-panel-wrapper">
+                    <h2>Manual Publish</h2>
+                    <form id="publish-form">
                         <div class="form-group">
-                            <label for="publish-format">Payload Format</label>
-                            <select id="publish-format">
-                                <option value="json">JSON</option>
-                                <option value="string">String</option>
-                                <option value="sparkplugb">Sparkplug B (JSON input)</option>
-                            </select>
+                            <label for="publish-topic">Topic</label>
+                            <input type="text" id="publish-topic" placeholder="e.g., stark_industries/malibu_facility/bms/main_power_feed" required>
+                        </div>
+                        <div class="publish-options-row">
+                            <div class="form-group">
+                                <label for="publish-format">Payload Format</label>
+                                <select id="publish-format">
+                                    <option value="json">JSON</option>
+                                    <option value="string">String</option>
+                                    <option value="sparkplugb">Sparkplug B (JSON input)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="publish-qos">QoS</label>
+                                <select id="publish-qos">
+                                    <option value="0">0 - At most once</option>
+                                    <option value="1">1 - At least once</option>
+                                    <option value="2">2 - Exactly once</option>
+                                </select>
+                            </div>
+                            <div class="form-group form-group-checkbox">
+                                <input type="checkbox" id="publish-retain">
+                                <label for="publish-retain" class="checkbox-label">Retain Message</label>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label for="publish-qos">QoS</label>
-                            <select id="publish-qos">
-                                <option value="0">0 - At most once</option>
-                                <option value="1">1 - At least once</option>
-                                <option value="2">2 - Exactly once</option>
-                            </select>
+                            <label>Payload</label>
+                            <div id="publish-payload-editor" spellcheck="false"></div>
                         </div>
-                        <div class="form-group form-group-checkbox">
-                            <input type="checkbox" id="publish-retain">
-                            <label for="publish-retain" class="checkbox-label">Retain Message</label>
+                        <div class="publish-actions">
+                            <button type="submit" id="publish-button" class="tool-button button-primary" style="padding: 10px 20px; font-size: 1em;">Publish Message</button>
+                            <span id="publish-status"></span>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label >Payload</label>
-                        <div id="publish-payload-editor" spellcheck="false"></div>
-                    </div>
-                    <div class="publish-actions">
-                        <button type="submit" id="publish-button" class="tool-button button-primary" style="padding: 10px 20px; font-size: 1em;">Publish Message</button>
-                        <span id="publish-status"></span>
-                    </div>
-                </form>
-            </div>
-            <div class="resizer" id="drag-handle-vertical-publish"></div>
-            <div class="simulator-panel-wrapper">
-                <h2>Simulator</h2>
-                <div class="simulator-controls-container">
-                    <p>Control the built-in data simulators.</p> 
-                    <div id="simulator-list-container" class="simulator-controls">
-                    </div>
-                    <template id="simulator-control-template">
-                        <div class="simulator-instance-controls">
-                            <h3 class="simulator-name"></h3>
-                            <span class="status-indicator stopped">Stopped</span>
-                            <button class="tool-button btn-start-sim">Start</button>
-                            <button class="tool-button btn-stop-sim" disabled>Stop</button>
-                        </div>
-                    </template>
+                    </form>
                 </div>
-            </div>
-        </main>
-        <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;"></main>
+                <div class="resizer" id="drag-handle-vertical-publish"></div>
+                <div class="simulator-panel-wrapper">
+                    <h2>Simulator</h2>
+                    <div class="simulator-controls-container">
+                        <p>Control the built-in data simulators.</p> 
+                        <div id="simulator-list-container" class="simulator-controls"></div>
+                        <template id="simulator-control-template">
+                            <div class="simulator-instance-controls">
+                                <h3 class="simulator-name"></h3>
+                                <span class="status-indicator stopped">Stopped</span>
+                                <button class="tool-button btn-start-sim">Start</button>
+                                <button class="tool-button btn-stop-sim" disabled>Stop</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </main>
+            <main id="admin-view" class="view" style="flex-direction: column; overflow: hidden; padding: 0;"></main>
+        </div>
     </div>
     <ai-chat-widget></ai-chat-widget>
+    
     <div id="delete-rule-modal-backdrop" class="modal-backdrop" style="display: none;">
         <div class="modal-content">
             <h3 id="delete-modal-title">Confirm Deletion</h3>
@@ -299,10 +332,6 @@
             </div>
         </div>
     </div>
-    <footer class="app-footer">
-        <p>Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/korelate" target="_blank"
-                rel="noopener noreferrer">github</a></p>
-    </footer>
     
     <script src="ws-client.js" type="module"></script>
     <script src="router.js" type="module"></script>

@@ -133,14 +133,18 @@
             .wizard-header { flex-wrap: wrap; }
             .step-indicator { padding: 10px; font-size: 0.85em; flex-basis: 50%; }
             .wiz-grid-2 { grid-template-columns: 1fr; }
+            .header-content { flex-direction: column; align-items: flex-start; gap: 5px; }
         }
     </style>
 </head>
 <body class="scrollable-page">
-    <header>
-        <div class="header-content">
-            <h1>Korelate</h1>
-            <p>System Configuration</p>
+    <header style="padding: 15px 20px;">
+        <div class="header-content" style="display: flex; align-items: center; gap: 15px;">
+            <img src="assets/logo.svg" alt="Korelate" class="app-logo" style="height: 28px;">
+            <div>
+                <h1 style="display: block; font-size: 1.25em; margin: 0; color: var(--color-text);">Korelate</h1>
+                <p style="margin: 0; font-size: 0.85em; color: var(--color-text-secondary);">System Configuration &bull; <span style="font-family: var(--font-mono); font-weight: bold; color: var(--color-primary);">v 1.6.0-beta2</span></p>
+            </div>
         </div>
         <a href="./" class="nav-button">Back to Viewer</a>
     </header>
@@ -924,6 +928,10 @@
             </form>
         </div>
     </div>
+    
+    <footer class="app-footer" style="margin-top: 40px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-secondary); padding: 15px;">
+        <p style="margin: 0; color: var(--color-text-secondary);">Clone me, enhance me, read documentation or request features on <a href="https://github.com/slalaure/korelate" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); font-weight: 500;">github</a></p>
+    </footer>
 
     <script type="module" src="config.js"></script>
 </body>
