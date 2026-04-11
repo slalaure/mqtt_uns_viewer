@@ -28,10 +28,20 @@ module.exports = (logger) => {
             if (!user) {
                 return res.status(401).json({ error: info.message || "Authentication failed" });
             }
-            req.logIn(user, (err) => {
+            req.logIn(user, async (err) => {
                 if (err) {
                     return next(err);
                 }
+                
+                // Update last_login timestamp for local users
+                if (user.id) {
+                    try {
+                        await userManager.updateLastLogin(user.id);
+                    } catch (e) {
+                        logger.error({ err: e }, "Failed to update last_login for user " + user.id);
+                    }
+                }
+
                 logger.info(`User logged in: ${user.username || user.email}`);
                 return res.json({ 
                     success: true, 

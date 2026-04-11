@@ -310,7 +310,17 @@ function verifyPassword(password, hash) {
  */
 function getAllUsers() {
     return new Promise((resolve, reject) => {
-        db.all("SELECT id, username, email, display_name, role, last_login FROM users ORDER BY created_at DESC", (err, rows) => {
+        // Use a simple query. The issue of multiple rows for the same user 
+        // usually stems from missing constraints on DB migrations or bad inserts.
+        // We use GROUP BY as a safety net to deduplicate the UI in case of dirty data.
+        db.all(`
+            SELECT id, MAX(username) as username, MAX(email) as email, 
+                   MAX(display_name) as display_name, MAX(role) as role, 
+                   MAX(last_login) as last_login, MAX(created_at) as created_at
+            FROM users 
+            GROUP BY id 
+            ORDER BY MAX(created_at) DESC
+        `, (err, rows) => {
             if (err) return reject(err);
             resolve(rows);
         });
@@ -361,6 +371,15 @@ function updateUserRole(userId, newRole) {
     });
 }
 
+function updateLastLogin(userId) {
+    return new Promise((resolve, reject) => {
+        db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", userId, (err) => {
+            if (err) return reject(err);
+            resolve(true);
+        });
+    });
+}
+
 function verifyApiKey(apiKey) {
     return new Promise((resolve, reject) => {
         db.all("SELECT * FROM api_keys WHERE api_key = ?", apiKey, (err, rows) => {
@@ -388,5 +407,6 @@ module.exports = {
     getAllUsers,
     deleteUser,
     updateUserRole,
+    updateLastLogin,
     verifyApiKey
 };
