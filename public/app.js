@@ -1022,13 +1022,13 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCollapseAll?.addEventListener('click', () => mainTree.toggleAllFolders(true));
         treeFilterInput?.addEventListener('input', () => mainTree.applyFilter(treeFilterInput.value));
 
-        btnMapperExpandAll?.addEventListener('click', () => mapperTree.toggleAllFolders(false));
-        btnMapperCollapseAll?.addEventListener('click', () => mapperTree.toggleAllFolders(true));
-        mapperFilterInput?.addEventListener('input', () => mapperTree.applyFilter(mapperFilterInput.value));
+        document.getElementById('btn-mapper-expand-all')?.addEventListener('click', () => mapperTree.toggleAllFolders(false));
+        document.getElementById('btn-mapper-collapse-all')?.addEventListener('click', () => mapperTree.toggleAllFolders(true));
+        document.getElementById('mapper-filter-input')?.addEventListener('input', (e) => mapperTree.applyFilter(e.target.value));
 
-        btnChartExpandAll?.addEventListener('click', () => chartTree.toggleAllFolders(false));
-        btnChartCollapseAll?.addEventListener('click', () => chartTree.toggleAllFolders(true));
-        chartFilterInput?.addEventListener('input', () => chartTree.applyFilter(chartFilterInput.value));
+        document.getElementById('btn-chart-expand-all')?.addEventListener('click', () => chartTree.toggleAllFolders(false));
+        document.getElementById('btn-chart-collapse-all')?.addEventListener('click', () => chartTree.toggleAllFolders(true));
+        document.getElementById('chart-filter-input')?.addEventListener('input', (e) => chartTree.applyFilter(e.target.value));
 
         const ROLES = { 'viewer': 10, 'operator': 20, 'engineer': 30, 'admin': 100 };
         const hasRole = (minRole) => {

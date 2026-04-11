@@ -34,6 +34,7 @@ export function createTreeManager(rootElementOrId, options = {}) {
     }
 
     let nodeMap = new Map(); // Stores references to <li> elements by topic path
+    let i3xTopicMap = new Map(); // Stores mapping of physical topics to I3X <li> elements
 
     // --- [NEW] I3X Mode State ---
     let isI3xModeActive = false;
@@ -62,6 +63,30 @@ export function createTreeManager(rootElementOrId, options = {}) {
     function update(sourceId, topic, payload, timestamp, updateOptions = {}) {
         const rootNode = getRootNode();
         if (!rootNode) return null;
+
+        // Sync physical topic updates to their mapped I3X nodes
+        const i3xNodes = i3xTopicMap.get(topic);
+        if (i3xNodes) {
+            const payloadString = typeof payload === 'object' ? JSON.stringify(payload) : String(payload);
+            const dateObj = new Date(timestamp);
+            const timeStr = dateObj.toLocaleTimeString('en-GB');
+            i3xNodes.forEach(li => {
+                const container = li.querySelector(':scope > .node-container');
+                if (container) {
+                    container.dataset.payload = payloadString;
+                    const tsSpan = container.querySelector('.node-timestamp');
+                    if (tsSpan) {
+                        tsSpan.textContent = timeStr;
+                        tsSpan.style.color = '';
+                    }
+                    if (updateOptions.enableAnimations !== false) {
+                        container.classList.remove('flash');
+                        void container.offsetWidth; 
+                        container.classList.add('flash');
+                    }
+                }
+            });
+        }
 
         // Block live MQTT updates if we are currently viewing the I3X Semantic Model
         if (isI3xModeActive) return null;
@@ -360,10 +385,10 @@ export function createTreeManager(rootElementOrId, options = {}) {
         }
         
         const i3xUl = i3xRootLi.querySelector(':scope > ul');
-        i3xUl.innerHTML = ''; 
-        
-        const childrenMap = new Map();
-        objects.forEach(obj => {
+        i3xUl.innerHTML = '';
+        i3xTopicMap.clear();
+
+        const childrenMap = new Map();        objects.forEach(obj => {
             const parent = (obj.parentId === '/' || !obj.parentId) ? null : obj.parentId;
             if (!childrenMap.has(parent)) childrenMap.set(parent, []);
             childrenMap.get(parent).push(obj);
@@ -398,10 +423,26 @@ export function createTreeManager(rootElementOrId, options = {}) {
             nodeContainer.dataset.isI3x = "true";
             nodeContainer.dataset.sourceId = 'i3x';
             nodeContainer.dataset.topic = obj.elementId;
-            
+            if (obj.topic_mapping) {
+                nodeContainer.dataset.topicMapping = obj.topic_mapping;
+                if (!i3xTopicMap.has(obj.topic_mapping)) i3xTopicMap.set(obj.topic_mapping, []);
+                i3xTopicMap.get(obj.topic_mapping).push(li);
+
+                // Initial payload sync from cache
+                const lastEntry = lastMqttEntries.find(e => e.topic === obj.topic_mapping);
+                if (lastEntry) {
+                    nodeContainer.dataset.payload = typeof lastEntry.payload === 'object' ? JSON.stringify(lastEntry.payload) : String(lastEntry.payload);
+                    const tsSpan = nodeContainer.querySelector('.node-timestamp');
+                    const ts = lastEntry.timestampMs || (lastEntry.timestamp ? new Date(lastEntry.timestamp).getTime() : null);
+                    if (tsSpan && ts) {
+                        const dateObj = new Date(ts);
+                        tsSpan.textContent = dateObj.toLocaleTimeString('en-GB');
+                    }
+                }
+            }
+
             li.appendChild(nodeContainer);
-            nodeMap.set(`i3x_node_${path}`, li);
-            
+            nodeMap.set(`i3x_node_${path}`, li);            
             if (onNodeClick) {
                 nodeContainer.addEventListener('click', (e) => onNodeClick(e, nodeContainer, 'i3x', obj.elementId));
             }
