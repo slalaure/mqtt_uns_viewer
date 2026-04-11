@@ -138,6 +138,7 @@ let services = {};
             simulatorManager: services.simulatorManager,
             wsManager: services.wsManager,
             mapperEngine: services.mapperEngine,
+            connectorManager: services.connectorManager,
             ENV_PATH, ENV_EXAMPLE_PATH, CHART_CONFIG_PATH, 
             longReplacer, auth: require('./interfaces/web/middlewares/auth'),
             ANALYTICS_SCRIPT: '', // Add if needed
@@ -170,7 +171,7 @@ let services = {};
                 await dataManager.stop();
                 await new Promise(r => services.wsManager.close(r));
                 await new Promise(r => server.close(r));
-                services.connectorManager.closeAll(); 
+                await services.connectorManager.closeAll(); 
                 await dataManager.close();
                 process.exit(0);
             } catch (err) {

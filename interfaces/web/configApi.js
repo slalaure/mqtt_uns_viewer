@@ -288,9 +288,18 @@ module.exports = (envPath, envExamplePath, dataPath, logger, db, dataManager, ap
                 await mergeConfigFromDb(appConfig, db, logger);
 
                 // If DATA_PROVIDERS were updated, trigger a refresh of the connector connections
-                if (dbUpdates.some(u => u.key === 'DATA_PROVIDERS')) {
+                const hasProvidersUpdate = dbUpdates.some(u => u.key === 'DATA_PROVIDERS');
+                if (hasProvidersUpdate) {
+                    logger.info("📡 DATA_PROVIDERS change detected. Triggering hot-reload of connectors...");
                     if (connectorManager && typeof connectorManager.refreshProviders === 'function') {
-                        connectorManager.refreshProviders();
+                        try {
+                            await connectorManager.refreshProviders();
+                            logger.info("✅ Connectors hot-reload completed.");
+                        } catch (reErr) {
+                            logger.error({ err: reErr }, "❌ Failed to hot-reload connectors");
+                        }
+                    } else {
+                        logger.warn("⚠️ Cannot hot-reload connectors: connectorManager not available or refreshProviders missing.");
                     }
                 }
             }

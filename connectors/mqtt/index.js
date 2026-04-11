@@ -110,7 +110,7 @@ class MqttProvider extends BaseProvider {
             }
 
             // --- MQTT Event Bindings ---
-            this.client.on('connect', () => {
+            this.client.once('connect', () => {
                 this.logger.info(`✅ Connected.`);
                 this.connected = true;
                 this.updateStatus('connected');
@@ -169,7 +169,12 @@ class MqttProvider extends BaseProvider {
 
             this.client.on('reconnect', () => { this.logger.info(`🔄 Reconnecting...`); this.updateStatus('connecting'); });
             this.client.on('offline', () => { this.connected = false; this.updateStatus('offline'); });
-            this.client.on('error', (err) => { this.logger.error(`❌ MQTT Error: ${err.message}`); this.updateStatus('error', err.message); });
+            this.client.on('error', (err) => { 
+                this.logger.error(`❌ MQTT Error: ${err.message}`); 
+                this.updateStatus('error', err.message);
+                // If we haven't resolved yet, it means the initial connection failed
+                resolve(false);
+            });
             this.client.on('close', () => {
                 this.connected = false;
                 if (!this.context.isShuttingDown()) this.updateStatus('disconnected');
@@ -178,11 +183,22 @@ class MqttProvider extends BaseProvider {
     }
 
     async disconnect() {
-        if (this.client) {
-            this.client.end(true);
-            this.client = null;
-        }
-        this.connected = false;
+        return new Promise((resolve) => {
+            if (this.client) {
+                this.logger.info("Disconnecting MQTT client...");
+                // Force closure and wait for the callback
+                this.client.end(true, () => {
+                    this.logger.info("MQTT client closed.");
+                    this.client = null;
+                    this.connected = false;
+                    this.updateStatus('disconnected');
+                    resolve();
+                });
+            } else {
+                this.connected = false;
+                resolve();
+            }
+        });
     }
 
     /**

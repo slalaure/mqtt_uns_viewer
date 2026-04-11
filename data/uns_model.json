@@ -75,14 +75,32 @@
         "properties": {
           "temperature_c": {
             "type": "number",
-            "unit": "°C"
+            "unit": "°C",
+            "nominal_value": 21.42,
+            "expected_range": [
+              18,
+              24
+            ],
+            "data_frequency_seconds": 10.18
           },
           "co2_ppm": {
             "type": "number",
-            "unit": "ppm"
+            "unit": "ppm",
+            "nominal_value": 724.14,
+            "expected_range": [
+              400,
+              1100
+            ],
+            "data_frequency_seconds": 10.18
           },
           "occupancy_count": {
-            "type": "number"
+            "type": "number",
+            "nominal_value": 65,
+            "expected_range": [
+              0,
+              200
+            ],
+            "data_frequency_seconds": 10.18
           },
           "hvac_mode": {
             "type": "string"
@@ -165,6 +183,24 @@
       "elementId": "ChillerPlantType",
       "displayName": "Central Chiller Plant",
       "namespaceUri": "https://hydrochem-ag.com/uns"
+    },
+    {
+      "elementId": "BmsSystemType",
+      "displayName": "BmsSystemType (Auto-generated)",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "elementId": "HvacSystemType",
+      "displayName": "HvacSystemType (Auto-generated)",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "schema": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ],
   "instances": [
@@ -299,6 +335,26 @@
       "isaLevel": "Line",
       "topic_mapping": "stark_industries/malibu_facility/assembly_line_01/#",
       "namespaceUri": "https://cesmii.org/i3x"
+    },
+    {
+      "elementId": "cavendish_bms_system",
+      "typeId": "BmsSystemType",
+      "displayName": "Logical management node for the Building Management System in the Cavendish facility.",
+      "topic_mapping": "ALAT/Sassenage/Cavendish/BMS/#",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false,
+      "parentId": "cavendish"
+    },
+    {
+      "elementId": "cavendish_hvac_subsystem",
+      "typeId": "HvacSystemType",
+      "displayName": "Logical subsystem for HVAC controls and monitoring within the Cavendish BMS.",
+      "topic_mapping": "ALAT/Sassenage/Cavendish/BMS/HVAC/#",
+      "namespaceUri": "https://cesmii.org/i3x",
+      "isComposition": false,
+      "parentId": "cavendish_bms_system"
     }
-  ]
+  ],
+  "relationshipTypes": [],
+  "legacy_concepts": []
 }

@@ -1,4 +1,13 @@
-## 2026-04-10 - AI Learning Studio (DuckDB Profiling & LLM Synthesis)
+- **Chart View Architectural Refactoring (Lean View Pattern)**: ... (unchanged)
+
+## 2026-04-10 - MQTT Hot-Reload & Connectivity Resilience
+- **Hot-Reload Fix**: Resolved an issue where MQTT subscription changes required a full application restart. 
+    - Updated `ConnectorManager` to perform a strictly sequential `async` refresh: it now awaits the full termination of old connectors before instantiating new ones, with an added 500ms safety delay to allow brokers to clear session state.
+    - Improved `MqttProvider.disconnect()` to be fully asynchronous, awaiting the `mqtt` library's `end` callback before resolving.
+    - Added error handling to `MqttProvider.connect()` to ensure the initialization Promise resolves even if the connection fails (e.g., timeout).
+    - Added high-signal logs in `configApi.js` and `MqttProvider` to confirm when a hot-reload is triggered and completed.
+- **Improved Shutdown**: Ensured `closeAll()` is properly awaited during the server's graceful shutdown sequence to prevent open handle warnings in Jest and clean termination in production.
+- **Observability**: Added diagnostic logging in the configuration API to track `DATA_PROVIDERS` updates and verify the hot-reloading pipeline's success.
 - **DuckDB Profiling API**: Created `/api/context/profile` endpoint in `interfaces/web/contextApi.js`. 
     - Implemented advanced SQL using CTEs (Common Table Expressions) and Window Functions (`lag()`).
     - Calculates Min, Max, Mean, StdDev, Null Count, Frequency (Avg sampling interval), and "Chatter" (number of mean crossings) for multiple topics and variables in parallel.

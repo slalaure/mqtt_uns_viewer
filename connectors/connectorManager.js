@@ -135,15 +135,18 @@ class ConnectorManager {
     /**
      * Gracefully closes all loaded data providers.
      */
-    closeAll() {
+    async closeAll() {
         this.logger.info("Closing all data connectors...");
+        const closePromises = [];
         this.providers.forEach((provider, id) => {
             try {
-                provider.disconnect();
+                closePromises.push(provider.disconnect());
             } catch(e) {
-                this.logger.error({ err: e }, `Error disconnecting provider ${id}`);
+                this.logger.error({ err: e }, `Error initiating disconnect for provider ${id}`);
             }
         });
+        
+        await Promise.allSettled(closePromises);
         this.providers.clear();
         this.context.activeConnections.clear();
     }
@@ -153,8 +156,11 @@ class ConnectorManager {
      */
     async refreshProviders() {
         this.logger.info("🔄 Refreshing Data Connectors from updated configuration...");
-        this.closeAll();
+        await this.closeAll();
         
+        // Small delay to allow brokers to clear previous session state/clientId
+        await new Promise(r => setTimeout(r, 500));
+
         // Reload generic DATA_PROVIDERS from the current config
         if (this.context.config.DATA_PROVIDERS) {
             this.context.config.DATA_PROVIDERS.forEach(providerConfig => {
