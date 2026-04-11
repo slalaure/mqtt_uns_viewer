@@ -268,7 +268,8 @@ export function initHmiView(appConfig) {
         importHmiInput.style.display = 'none';
         importHmiInput.addEventListener('change', handleHmiImport);
         controlsContainer.appendChild(importHmiInput);
-    }}
+    }
+}
 
 export function setHmiHistoryData(entries) {
     allHistoryEntries = entries; 
@@ -678,14 +679,14 @@ function updateHmiElement(el, keyPath, value) {
         if (keyPath.includes('status') || keyPath === 'alert_level' || keyPath === 'global_status') {
             const v = String(value).toLowerCase();
             let color = '';
-            if (['damaged', 'offline', 'breached', 'error', 'stopped_emergency', 'cancelled', 'interrupted', 'sag detected'].some(s => v.includes(s))) color = '#f85149';
-            else if (['online', 'empty', 'green', 'clear', 'patrol', 'ok', 'running', 'nominal'].includes(v)) color = '#3fb950';
-            else color = '#d29922';
+            if (['damaged', 'offline', 'breached', 'error', 'stopped_emergency', 'cancelled', 'interrupted', 'sag detected'].some(s => v.includes(s))) color = 'var(--color-danger)';
+            else if (['online', 'empty', 'green', 'clear', 'patrol', 'ok', 'running', 'nominal'].includes(v)) color = 'var(--color-success)';
+            else color = 'var(--color-warning)'; // Replaced hardcoded colors with CSS variables
 
             if (tagName === 'TEXT' || tagName === 'TSPAN') el.setAttribute('fill', color);
             else el.style.color = color;
             
-            if (color === '#f85149' && !el.classList.contains('text-data')) el.classList.add('alarm-text');
+            if (color === 'var(--color-danger)' && !el.classList.contains('text-data')) el.classList.add('alarm-text');
             else el.classList.remove('alarm-text');
         }
         if (typeof value === 'number' && !Number.isInteger(value)) el.textContent = parseFloat(value).toFixed(2);
@@ -812,7 +813,11 @@ async function fetchLastKnownState(timestamp) {
         else if (state.type === 'prop') element[state.prop] = state.value;
 
         element.classList.remove('alarm-text', 'highlight-svg-default');
-        if (['#f85149', '#d29922', '#3fb950', '#58a6ff'].includes(element.getAttribute('fill') || element.style.color)) {
+        
+        // Check if the current color looks like one of our variables or old hardcoded colors to reset it
+        const currentFill = element.getAttribute('fill') || '';
+        const currentColor = element.style.color || '';
+        if (currentFill.includes('var(--color-') || currentColor.includes('var(--color-') || ['#f85149', '#d29922', '#3fb950', '#58a6ff'].includes(currentFill || currentColor)) {
             element.removeAttribute('fill');
             element.style.color = '';
         }

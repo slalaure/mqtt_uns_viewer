@@ -6,6 +6,29 @@
     - Improved `MqttProvider.disconnect()` to be fully asynchronous, awaiting the `mqtt` library's `end` callback before resolving.
     - Added error handling to `MqttProvider.connect()` to ensure the initialization Promise resolves even if the connection fails (e.g., timeout).
     - Added high-signal logs in `configApi.js` and `MqttProvider` to confirm when a hot-reload is triggered and completed.
+
+## 2026-04-11 - Semantic Graph, Responsiveness, & AI Configuration Updates
+- **Multi-Model LLM Support**: 
+    - Users can now select and load multiple LLM models via the Config Wizard using a new checkbox modal.
+    - Added a dropdown selector within the AI Chat Widget (relocated to the input area for better UX) and the Chart AI Learning Studio to switch models on the fly.
+    - `core/engine/llmEngine.js` updated to parse the new comma-separated `LLM_MODEL` list and route requests accordingly.
+- **Dedicated Alerts AI Agent**: 
+    - Added an "Alerts AI Assistance" section in the Admin panel to configure a specific, dedicated model (`LLM_MODEL_ALERTS`) strictly for autonomous alert root-cause analysis.
+- **I3X Semantic Graph Integration Fixes**: 
+    - **Live Payload Sync**: Fixed an issue where I3X semantic nodes did not receive live MQTT data. The `tree-manager` now maps physical topics to semantic nodes and syncs their payloads and animations in real-time.
+    - **Historical State Sync**: I3X nodes are now immediately initialized with historical payload data from the cache upon hierarchy build, removing the need to wait for a new MQTT message.
+    - **Chart & Mapper Linking**: Semantic nodes now act as true physical aliases. Clicking an I3X node in the Chart or Mapper view correctly targets the underlying physical topic for charting or transformation.
+    - **Array Parsing**: Updated the `view.chart.js` payload parser to recursively traverse JSON arrays (like the `{ "data": [...] }` envelope used by the I3X `/objects/value` API), fixing an issue where numeric and boolean metrics nested inside arrays were silently ignored.
+    - **Boolean Charting**: Added support for charting and profiling `boolean` data types (rendering as 0 or 1).
+    - **Metadata Exclusion**: Fixed an issue where internal `_i3x` semantic metadata objects polluted the chart variable selection list.
+- **UI & UX Polish**:
+    - **Compact Trees & Protocol Icons**: Tree views (Main, Chart, Mapper) are now significantly more compact (reduced line height and padding) and automatically inject protocol-specific icons (📡, ⚙️, 🧠) at the root level instead of generic folder icons.
+    - **HMI Import/Export**: Added "Import" and "Export" capabilities directly to the HMI Dashboard view to seamlessly download or upload SVGs alongside their associated JS bindings.
+    - **Fullscreen Harmonization**: Replaced native `requestFullscreen()` with pseudo-fullscreen (`z-index` stacking) in the Alerts Dashboard. Increased the AI Chat widget's `z-index` to 20000+ to ensure it floats above *all* maximized views (Chart, Alerts, HMI).
+    - **Modeler Responsiveness**: Refactored the CDM Modeler layout with CSS media queries. The 3-pane layout now gracefully degrades into a vertically stacked, single-column scrollable interface on mobile and tablet devices (< 992px).
+    - **Chart Scroll Fix**: Fixed a CSS Flexbox bug in `chart-variable-list` that prevented vertical scrolling when payloads contained dozens of properties.
+    - **Modeler Terminology**: Renamed "i3X Relationships" to "Relationships" and "Object Schema Attributes" to "Variables with attributes" for clarity.
+    - **Tree Filter Fix**: Fixed a bug where the left-panel tree filters in Chart and Mapper views stopped working after dynamic template injection due to stale DOM references.
 - **Improved Shutdown**: Ensured `closeAll()` is properly awaited during the server's graceful shutdown sequence to prevent open handle warnings in Jest and clean termination in production.
 - **Observability**: Added diagnostic logging in the configuration API to track `DATA_PROVIDERS` updates and verify the hot-reloading pipeline's success.
 - **DuckDB Profiling API**: Created `/api/context/profile` endpoint in `interfaces/web/contextApi.js`. 

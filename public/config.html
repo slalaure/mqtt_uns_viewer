@@ -29,7 +29,7 @@
             padding: 6px 10px;
             display: flex; justify-content: space-between; align-items: center;
             border-bottom: 1px solid var(--color-border-secondary);
-            font-family: 'Courier New', Courier, monospace; font-size: 0.9em;
+            font-family: var(--font-mono); font-size: 0.9em;
         }
         .cert-item:last-child { border-bottom: none; }
         .btn-copy-cert {
@@ -108,7 +108,7 @@
             justify-content: space-between; align-items: center;
         }
         .provider-info h4 { margin: 0 0 5px 0; color: var(--color-primary); }
-        .provider-info p { margin: 0; font-size: 0.85em; color: var(--color-text-secondary); font-family: monospace; }
+        .provider-info p { margin: 0; font-size: 0.85em; color: var(--color-text-secondary); font-family: var(--font-mono); }
         .provider-actions { display: flex; gap: 5px; }
 
         /* Modal Builder */
@@ -150,8 +150,8 @@
         <input type="file" id="import-config-input" accept=".json" style="display:none;">
 
         <div class="import-export-row">
-            <button type="button" id="btn-export-config" class="tool-button" title="Download current config as JSON">⬇️ Export Config</button>
-            <button type="button" id="btn-import-config" class="tool-button" title="Upload a JSON config file">⬆️ Import Config</button>
+            <button type="button" id="btn-export-config" class="tool-button" title="Download current config as JSON"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export Config</button>
+            <button type="button" id="btn-import-config" class="tool-button" title="Upload a JSON config file"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import Config</button>
         </div>
 
         <div class="config-mode-toggle">
@@ -201,7 +201,7 @@
                 <div class="wizard-step" id="wiz-step-2">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <h2 style="margin:0;">Data Providers</h2>
-                        <button type="button" id="btn-provider-help" class="tool-button" title="Data Providers Guide">ℹ️ Help</button>
+                        <button type="button" id="btn-provider-help" class="tool-button" title="Data Providers Guide"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Help</button>
                     </div>
                     <p class="step-desc">Define your connections to MQTT brokers, OPC UA servers, or API webhooks.</p>
                     
@@ -412,7 +412,7 @@
                         <label>Model Name</label>
                         <div style="display:flex; gap:10px;">
                             <input type="text" id="wiz-LLM_MODEL" name="LLM_MODEL" placeholder="gpt-4o, gemini-2.5-pro..." list="llm-models-list" style="flex:1;">
-                            <button type="button" id="btn-fetch-models" class="tool-button">🔄 Fetch Models</button>
+                            <button type="button" id="btn-fetch-models" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Fetch Models</button>
                         </div>
                         <datalist id="llm-models-list"></datalist>
                         <span style="font-size:0.8em; color:var(--color-text-secondary); margin-top:5px; display:block;">Select from list or type a custom model name manually (must support tool calling).</span>
@@ -470,7 +470,7 @@
     <div id="provider-help-modal" class="builder-modal-overlay" style="z-index: 10001;">
         <div class="builder-modal" style="max-width: 850px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid var(--color-border); padding-bottom:10px;">
-                <h3 style="margin:0; color: var(--color-primary);">🔌 Data Providers Guide & Realistic Examples</h3>
+                <h3 style="margin:0; color: var(--color-primary);"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V7a4 4 0 0 1 8 0v3"/><rect x="4" y="10" width="16" height="10" rx="2" ry="2"/><line x1="12" y1="14" x2="12" y2="16"/></svg> Data Providers Guide & Realistic Examples</h3>
                 <button type="button" id="btn-close-provider-help" style="background:none; border:none; color:var(--color-text); font-size:1.5em; cursor:pointer;">&times;</button>
             </div>
             
@@ -488,7 +488,7 @@
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;">
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #3498db;">
-                        <strong style="font-size:1.1em;">📡 MQTT Broker (Standard IoT)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.426a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M2 9.328a15 15 0 0 1 20 0"/></svg> MQTT Broker (Standard IoT)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects to standard brokers like Mosquitto, EMQX, or AWS IoT.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Host & Port</strong>: <code>broker.hivemq.com</code> / <code>1883</code> (TCP) or <code>8883</code> (TLS).</li>
@@ -498,7 +498,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #1abc9c;">
-                        <strong style="font-size:1.1em;">🔡 Modbus TCP (Industrial)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Modbus TCP (Industrial)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Legacy protocol for PLCs and sensors.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Unit ID</strong>: Slave ID (usually 1).</li>
@@ -507,7 +507,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #34495e;">
-                        <strong style="font-size:1.1em;">⚙️ Siemens S7 (S7-Comm)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Siemens S7 (S7-Comm)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Native connection to Siemens S7-300/1200/1500.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Rack/Slot</strong>: Usually 0/1 or 0/2.</li>
@@ -516,7 +516,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #d35400;">
-                        <strong style="font-size:1.1em;">🔌 EtherNet/IP (CIP)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V7a4 4 0 0 1 8 0v3"/><rect x="4" y="10" width="16" height="10" rx="2" ry="2"/><line x1="12" y1="14" x2="12" y2="16"/></svg> EtherNet/IP (CIP)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Rockwell (Allen-Bradley) and Omron automation.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Routing</strong>: JSON array like <code>[1, 0]</code> (Port 1, Slot 0).</li>
@@ -525,7 +525,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #e74c3c;">
-                        <strong style="font-size:1.1em;">⚙️ OPC UA Server (Industrial)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> OPC UA Server (Industrial)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects directly to PLCs or SCADA gateways (e.g., Kepware, Ignition).</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Endpoint URL</strong>: <code>opc.tcp://10.0.0.55:4840</code>.</li>
@@ -535,7 +535,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f39c12;">
-                        <strong style="font-size:1.1em;">🏢 BACnet/IP (Building Automation)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg> BACnet/IP (Building Automation)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects to BMS systems, HVAC, and smart building controllers.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Target IP</strong>: IP of the specific BACnet device (e.g. <code>192.168.1.15</code>).</li>
@@ -544,7 +544,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f1c40f;">
-                        <strong style="font-size:1.1em;">💡 KNX/IP (Building Automation)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 11.2 4a4.65 4.65 0 0 0-5.3 7.5c.76.76 1.23 1.52 1.41 2.5h7.78z"/></svg> KNX/IP (Building Automation)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Event-driven standard for commercial building lighting, blinds, and HVAC.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Gateway IP</strong>: IP of the KNX IP Router/Interface.</li>
@@ -554,7 +554,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #9b59b6;">
-                        <strong style="font-size:1.1em;">🔗 I3X Server (RFC 001)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> I3X Server (RFC 001)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Connects to another compliant Unified Namespace (like another Korelate instance) via REST/SSE.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Base URL</strong>: <code>http://remote-korelate:8080/api/i3x</code>.</li>
@@ -564,7 +564,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #2ecc71;">
-                        <strong style="font-size:1.1em;">📥 HTTP Webhook (Ingest API)</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg> HTTP Webhook (Ingest API)</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Opens a REST endpoint for systems that can only push HTTP POST requests (e.g., ERPs, old sensors).</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Path Prefix</strong>: <code>/api/ingest/erp</code>.</li>
@@ -573,7 +573,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #3498db;">
-                        <strong style="font-size:1.1em;">🗄️ SQL Database Poller</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg> SQL Database Poller</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Periodically executes a SELECT query on PostgreSQL, MySQL, or MS SQL Server to stream new rows.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Cursor Column</strong>: E.g., <code>updated_at</code>. Used to ensure only new data is fetched on subsequent polls.</li>
@@ -582,7 +582,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #16a085;">
-                        <strong style="font-size:1.1em;">🌐 REST API Poller</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> REST API Poller</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Actively interrogates HTTP GET endpoints at a given interval.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Auth</strong>: Supports Basic Auth, Bearer Token, or API Keys.</li>
@@ -591,7 +591,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #8e44ad;">
-                        <strong style="font-size:1.1em;">📶 SNMP Poller</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="M2 15h10"/><path d="M9 18l3-3-3-3"/></svg> SNMP Poller</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Polls network equipment (routers, switches) using specific OIDs.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>OIDs</strong>: Comma-separated list of Object Identifiers (e.g., <code>1.3.6.1.2.1.1.1.0</code>).</li>
@@ -600,7 +600,7 @@
                     </div>
 
                     <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #c0392b;">
-                        <strong style="font-size:1.1em;">🚀 Apache Kafka</strong>
+                        <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> Apache Kafka</strong>
                         <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">High-throughput integration with enterprise Kafka clusters.</p>
                         <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                             <li><strong>Brokers</strong>: E.g., <code>kafka1:9092, kafka2:9092</code>.</li>
@@ -611,7 +611,7 @@
                 </div>
 
                 <div style="background:var(--color-bg-tertiary); padding:15px; border-radius:6px; border-left: 4px solid #f1c40f;">
-                    <strong style="font-size:1.1em;">📁 Local File Stream (Simulation/Playback)</strong>
+                    <strong style="font-size:1.1em;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Local File Stream (Simulation/Playback)</strong>
                     <p style="margin: 8px 0; font-size: 0.9em; color: var(--color-text-secondary);">Reads a CSV or JSONL file from disk and streams it line-by-line into the UNS as if it were live data. Perfect for testing AI models or UI dashboards without real hardware.</p>
                     <ul style="margin:0; padding-left: 15px; font-size: 0.9em;">
                         <li><strong>File Path</strong>: <code>data/test_data.csv</code>.</li>
@@ -631,7 +631,7 @@
         <div class="builder-modal">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; margin-bottom: 15px;">
                 <h3 id="provider-modal-title" style="margin:0; border:none;">Add Data Provider</h3>
-                <button type="button" class="tool-button btn-help-trigger" title="Data Providers Guide">ℹ️ Help</button>
+                <button type="button" class="tool-button btn-help-trigger" title="Data Providers Guide"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Help</button>
             </div>
             <form id="provider-builder-form">
                 <div class="wiz-form-group">
