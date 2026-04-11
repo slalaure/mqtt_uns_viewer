@@ -553,6 +553,8 @@ function findNumericKeys(obj, path = "", list = []) {
     return list;
   }
   for (const key of Object.keys(obj)) {
+    if (key === '_i3x') continue; // Ignore internal I3X semantic metadata
+
     const newPath = path ? `${path}.${key}` : key;
     const value = obj[key];
     if (typeof value === "number") list.push({ path: newPath, type: "number", value });
