@@ -22,21 +22,21 @@ main#tree-view {
 
 /* --- Tree Controls --- */
 .tree-controls {
-    padding: 10px;
+    padding: 6px 10px;
     display: flex;
-    gap: 10px;
+    gap: 8px;
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
 }
 
 #tree-filter-input {
     flex-grow: 1;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
     border: 1px solid var(--color-border);
     background-color: var(--color-bg);
     color: var(--color-text);
-    font-size: 14px;
+    font-size: 0.9em;
 }
 #tree-filter-input:focus {
     outline: none;

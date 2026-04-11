@@ -40,6 +40,23 @@ export function createTreeManager(rootElementOrId, options = {}) {
     let isI3xModeActive = false;
     let lastMqttEntries = []; // Cache to restore MQTT view when switching back
 
+    const protocolIcons = {
+        'mqtt': '📡',
+        'opcua': '⚙️',
+        'modbus': '🔡',
+        's7': '⚙️',
+        'eip': '🔌',
+        'bacnet': '🏢',
+        'knx': '💡',
+        'i3x': '🧠',
+        'http': '📥',
+        'file': '📁',
+        'sql': '🗄️',
+        'rest': '🌐',
+        'snmp': '📶',
+        'kafka': '🚀'
+    };
+
     /**
      * Smart fallback to guess the provider type if it wasn't registered in the initial config.
      * Useful for dynamically launched CSV parsers.
@@ -159,6 +176,14 @@ export function createTreeManager(rootElementOrId, options = {}) {
                     <span class="node-name">${part}</span>
                     <span class="node-timestamp"></span>
                 `;
+
+                if (index === 0) {
+                    const icon = protocolIcons[part.toLowerCase()] || '';
+                    if (icon) {
+                        nodeContainer.classList.add('protocol-node');
+                        nodeContainer.querySelector('.node-name').innerHTML = `<span style="margin-right:4px;">${icon}</span> ${part.toUpperCase()}`;
+                    }
+                }
 
                 nodeContainer.dataset.sourceId = safeSourceId;
                 nodeContainer.dataset.topic = nodeSpecificTopic; 
@@ -359,11 +384,11 @@ export function createTreeManager(rootElementOrId, options = {}) {
             let checkboxHtml = showCheckboxes ? `<input type="checkbox" class="node-filter-checkbox" checked>` : '';
             nodeContainer.innerHTML = `
                 ${checkboxHtml}
-                <span class="node-name" style="color: var(--color-primary); font-weight: bold; letter-spacing: 1px;">I3X_Semantic_Graph</span>
+                <span class="node-name" style="color: var(--color-primary); font-weight: bold; letter-spacing: 1px;"><span style="margin-right:4px;">🧠</span>I3X_Semantic_Graph</span>
             `;
-            
-            nodeContainer.dataset.sourceId = 'i3x';
-            nodeContainer.dataset.topic = '';
+
+            nodeContainer.classList.add('protocol-node');
+            nodeContainer.dataset.sourceId = 'i3x';            nodeContainer.dataset.topic = '';
             
             i3xRootLi.appendChild(nodeContainer);
             

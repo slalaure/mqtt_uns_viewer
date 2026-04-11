@@ -13,20 +13,20 @@ main#mapper-view {
 }
 /* Add styles for the new tree-controls */
 .mapper-tree-wrapper .tree-controls {
-    padding: 10px;
+    padding: 6px 10px;
     display: flex;
-    gap: 10px;
+    gap: 8px;
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
 }
 .mapper-tree-wrapper .tree-controls input {
     flex-grow: 1;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
     border: 1px solid var(--color-border);
     background-color: var(--color-bg);
     color: var(--color-text);
-    font-size: 14px;
+    font-size: 0.9em;
 }
 .mapper-tree-wrapper .tree-controls input:focus {
     outline: none;
