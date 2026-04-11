@@ -613,12 +613,16 @@ async function loadHmiPlan(filename) {
 
 function toggleFullscreen() {
     trackEvent('hmi_fullscreen_toggle');
-    if (!hmiView) return;
-    if (!document.fullscreenElement) {
-        hmiView.requestFullscreen().catch(err => console.error(err));
-    } else {
-        if (document.exitFullscreen) document.exitFullscreen();
-    }
+    const container = document.querySelector('.hmi-view-container');
+    if (!container) return;
+    const isMaximized = container.classList.toggle('maximized');
+    if (btnHmiFullscreen) btnHmiFullscreen.innerHTML = isMaximized ? '✖ Minimize' : '⛶ Maximize';
+
+    Object.assign(container.style, isMaximized ? {
+        position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', zIndex: '10000', backgroundColor: 'var(--color-bg-secondary)'
+    } : {
+        position: '', top: '', left: '', right: '', bottom: '', zIndex: '', backgroundColor: ''
+    });
 }
 
 function getNestedValue(obj, path) {

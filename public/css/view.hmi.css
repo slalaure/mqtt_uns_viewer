@@ -56,26 +56,18 @@ main#hmi-view {
     flex-grow: 1;
 }
 /* --- Fullscreen Styles --- */
-main#hmi-view:fullscreen {
+.hmi-view-container.maximized {
     background-color: var(--color-bg);
     padding: 0;
     box-sizing: border-box;
-    display: flex; /* Ensure flex layout is maintained */
+    display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
 }
-main#hmi-view:fullscreen .hmi-view-container {
+.hmi-view-container.maximized .svg-content {
      height: 100%;
-     width: 100%;
 }
-main#hmi-view:fullscreen .svg-content {
-     height: 100%; /* Allow it to fill remaining space */
-}
-/* Cross-browser fullscreen background */
-main#hmi-view:-webkit-full-screen { background-color: var(--color-bg); }
-main#hmi-view:-moz-full-screen { background-color: var(--color-bg); }
-main#hmi-view:-ms-fullscreen { background-color: var(--color-bg); }
 
 /* --- A-Frame Overrides --- */
 /* Hide the vr button to keep the dashboard clean */

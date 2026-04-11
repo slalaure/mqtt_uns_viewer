@@ -63,7 +63,7 @@ class AiChatWidget extends HTMLElement {
                 opt.textContent = model.replace('models/', '');
                 modelSelect.appendChild(opt);
             });
-            modelSelect.style.display = 'inline-block';
+            modelSelect.style.display = 'block';
         }
 
         const sessionList = this.querySelector('chat-session-list');        if (sessionList) {
