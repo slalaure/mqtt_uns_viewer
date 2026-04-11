@@ -42,7 +42,7 @@ class AiChatWidget extends HTMLElement {
         // Wait for init() to be called by app.js so we have the correct basePath before fetching templates.
     }
 
-    async init(basePath) {
+    async init(basePath, llmModels = []) {
         if (this.isMounted) return;
 
         this.appBasePath = basePath || '';
@@ -53,9 +53,20 @@ class AiChatWidget extends HTMLElement {
         this.setupEventListeners();
         this.initVoice();
         this.initTTS();
-        
-        const sessionList = this.querySelector('chat-session-list');
-        if (sessionList) {
+
+        const modelSelect = this.querySelector('#chat-model-select');
+        if (modelSelect && llmModels.length > 0) {
+            modelSelect.innerHTML = '';
+            llmModels.forEach(model => {
+                const opt = document.createElement('option');
+                opt.value = model;
+                opt.textContent = model.replace('models/', '');
+                modelSelect.appendChild(opt);
+            });
+            modelSelect.style.display = 'inline-block';
+        }
+
+        const sessionList = this.querySelector('chat-session-list');        if (sessionList) {
             sessionList.init(this.appBasePath, this.currentSessionId, {
                 onSwitch: (id) => this.switchSession(id),
                 onDelete: (id) => this.deleteSession(id),
@@ -242,18 +253,21 @@ class AiChatWidget extends HTMLElement {
         this.autoResizeInput();
         this.scrollToBottom();
 
+        const modelSelect = this.querySelector('#chat-model-select');
+        const selectedModel = modelSelect ? modelSelect.value : undefined;
+
         try {
             const payload = {
                 sessionId: this.currentSessionId,
                 messages: this.conversationHistory,
+                model: selectedModel,
                 context: {
                     currentTopic: state.currentTopic,
                     currentSourceId: state.currentSourceId
                 }
             };
-            
-            window.dispatchEvent(new CustomEvent('send-chat-message', { detail: payload }));
-            
+
+            window.dispatchEvent(new CustomEvent('send-chat-message', { detail: payload }));            
         } catch (e) {
             this.appendMessageToUI({ role: 'assistant', content: '⚠️ Error sending message: ' + e.message, type: 'error' });
             this.isProcessing = false;

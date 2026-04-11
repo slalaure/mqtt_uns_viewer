@@ -864,6 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 colorChartTreeCallback: colorChartTree,
                 maxSavedChartConfigs: appConfig.maxSavedChartConfigs || 0,
                 isMultiSource: isMultiSource,
+                llmModels: appConfig.llmModels,
                 makeResizable: makeResizable
             });
         }
@@ -988,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (appConfig.viewChatEnabled) {
-            initChatView(appConfig.basePath, () => {
+            initChatView(appConfig.basePath, appConfig.llmModels, () => {
                 refreshHmiList();
             });
             const fab = document.getElementById('btn-chat-fab');

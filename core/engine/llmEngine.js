@@ -162,14 +162,13 @@ class LlmEngine {
             if (agentLogger) agentLogger.info(`[LlmEngine] Turn ${turnCount}...`);
 
             const requestPayload = {
-                model: config.LLM_MODEL,
+                model: config.LLM_MODEL_ALERTS || (config.LLM_MODEL || "").split(',')[0].trim() || 'gemini-2.0-flash',
                 messages: conversation,
                 stream: false, 
                 temperature: 0.1,
                 tools: enabledTools.length > 0 ? enabledTools : undefined,
                 tool_choice: enabledTools.length > 0 ? "auto" : undefined
             };
-
             const response = await axios.post(apiUrl, requestPayload, { headers, timeout: LLM_TIMEOUT_MS });
             const message = response.data.choices[0].message;
 
@@ -208,23 +207,22 @@ class LlmEngine {
     /**
      * Sends a request to the LLM (Used by streaming endpoints).
      */
-    async fetchChatCompletion(conversation, config, enabledTools, abortSignal) {
+    async fetchChatCompletion(conversation, config, enabledTools, abortSignal, selectedModel) {
         let apiUrl = config.LLM_API_URL;
         if (!apiUrl.endsWith('/')) apiUrl += '/';
         apiUrl += 'chat/completions';
 
-        const headers = { 
+        const headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.LLM_API_KEY}`
         };
 
         const requestPayload = {
-            model: config.LLM_MODEL,
+            model: selectedModel || (config.LLM_MODEL || "").split(',')[0].trim() || 'gemini-2.0-flash',
             messages: conversation,
-            stream: false, 
+            stream: false,
             temperature: 0.1,
-            tools: enabledTools.length > 0 ? enabledTools : undefined,
-            tool_choice: enabledTools.length > 0 ? "auto" : undefined
+            tools: enabledTools.length > 0 ? enabledTools : undefined,            tool_choice: enabledTools.length > 0 ? "auto" : undefined
         };
 
         const response = await axios.post(apiUrl, requestPayload, { 

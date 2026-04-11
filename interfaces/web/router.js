@@ -249,6 +249,8 @@ function createRouter(deps) {
             viewAlertsEnabled: config.VIEW_ALERTS_ENABLED, 
             basePath: basePath,
             viewConfigEnabled: config.VIEW_CONFIG_ENABLED,
+            llmModels: (config.LLM_MODEL || "").split(',').map(m => m.trim()).filter(Boolean),
+            llmModelAlerts: config.LLM_MODEL_ALERTS || '',
             maxSavedChartConfigs: config.MAX_SAVED_CHART_CONFIGS,
             maxSavedMapperVersions: config.MAX_SAVED_MAPPER_VERSIONS,
             hmiFilePath: config.HMI_FILE_PATH 

@@ -62,6 +62,7 @@ let chartRefreshTimer = null;
 let isUserInteracting = false;
 let lastSliderUpdate = 0;
 let isMounted = false; // Lifecycle flag
+let appLlmModels = [];
 
 // Configuration for Chart
 const MAX_POINTS_PER_SERIES = 500;
@@ -240,11 +241,13 @@ export async function initChartView(callbacks) {
     isMultiSource: multiBrokerState,
     requestRangeCallback,
     getHistory,
+    llmModels,
     ...otherCallbacks
   } = callbacks;
   appCallbacks = { ...appCallbacks, ...otherCallbacks };
   maxChartsLimit = maxSavedChartConfigs || 0;
   isMultiSource = multiBrokerState || false;
+  appLlmModels = llmModels || [];
 
   try {
     const response = await fetch("html/view.chart.html");
@@ -385,7 +388,7 @@ export function mountChartView() {
     configBar.addEventListener("smart-axis-changed", onSmartAxisChange);
     configBar.addEventListener("date-changed", onDateChange);
     configBar.addEventListener("clear-all", onClearAll);
-    configBar.addEventListener("profile-and-learn", () => openAIStudio(chartedVariables, currentMinTimestamp, currentMaxTimestamp, showChartLoader, hideChartLoader));
+    configBar.addEventListener("profile-and-learn", () => openAIStudio(chartedVariables, currentMinTimestamp, currentMaxTimestamp, showChartLoader, hideChartLoader, appLlmModels));
     configBar.addEventListener("export-csv", onExportCSV);
     configBar.addEventListener("export-png", onExportPNG);
     configBar.addEventListener("toggle-fullscreen", toggleChartFullscreen);

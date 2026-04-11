@@ -21,18 +21,38 @@ import { showToast, confirmModal } from "../utils.js";
  * @param {number} maxTs Current maximum timestamp.
  * @param {Function} showLoader Callback to show loader.
  * @param {Function} hideLoader Callback to hide loader.
+ * @param {Array} llmModels Available LLM models.
  */
-export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, hideLoader) {
+export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, hideLoader, llmModels = []) {
   if (chartedVariables.size === 0) {
     showToast("Please add variables to the chart first.", "warning");
     return;
   }
 
+  let modelSelectHtml = '';
+  if (llmModels && llmModels.length > 0) {
+      modelSelectHtml = `
+      <div style="margin-top: 15px; margin-bottom: 5px;">
+        <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:0.9em;">Select LLM Model:</label>
+        <select id="studio-model-select" style="width:100%; padding:8px; border-radius:4px; border:1px solid var(--color-border); background:var(--color-bg-tertiary); color:var(--color-text);">
+            ${llmModels.map(m => `<option value="${m}">${m.replace('models/', '')}</option>`).join('')}
+        </select>
+      </div>`;
+  }
+
+  let selectedModel = llmModels.length > 0 ? llmModels[0] : undefined;
+  const updateModel = (e) => {
+      if (e.target.id === 'studio-model-select') selectedModel = e.target.value;
+  };
+  document.body.addEventListener('change', updateModel);
+
   const isConfirmed = await confirmModal(
     "AI Learning Studio",
-    `Profile the selected range and generate AI suggestions for UNS model and alert rules?`,
+    `Profile the selected range and generate AI suggestions for UNS model and alert rules?${modelSelectHtml}`,
     "Start Analysis",
   );
+
+  document.body.removeEventListener('change', updateModel);
 
   if (!isConfirmed) return;
 
@@ -74,7 +94,7 @@ export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, h
     const learnResponse = await fetch("api/context/learn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileData })
+        body: JSON.stringify({ profileData, model: selectedModel })
     });
 
     if (!learnResponse.ok) {

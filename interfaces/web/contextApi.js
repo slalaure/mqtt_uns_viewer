@@ -308,7 +308,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
     // --- [NEW] AI Synthesis for Data Profiling ---
     router.post('/learn', async (req, res) => {
-        const { profileData } = req.body;
+        const { profileData, model } = req.body;
         if (!profileData) return res.status(400).json({ error: "Missing 'profileData'." });
 
         if (!config.LLM_API_KEY) {
@@ -327,7 +327,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                 { role: "user", content: systemPrompt + "\n\nAnalyze the provided data profile. Check if the objects exist in the CURRENT UNS MODEL. If not, suggest creating them and guessing their relationships. Then suggest updates to the UNS model schema and alert rules." }
             ];
 
-            const message = await llmEngine.fetchChatCompletion(conversation, config, []);
+            const message = await llmEngine.fetchChatCompletion(conversation, config, [], null, model);
             let content = message.content;
 
             // Try to parse JSON from response (sometimes LLMs wrap it in markdown blocks)

@@ -123,9 +123,9 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
      * Used by both HTTP POST and WebSocket messages.
      */
     const handleCompletion = async (payload, user, res = null, clientId = null) => {
-        const { messages, sessionId, autoApproveSession, approvedToolCallIds } = payload;
+        const { messages, sessionId, autoApproveSession, approvedToolCallIds, model } = payload;
 
-        logger.info({ clientId, sessionId, messageCount: messages?.length }, "[ChatAPI] Handling completion request");
+        logger.info({ clientId, sessionId, messageCount: messages?.length, model }, "[ChatAPI] Handling completion request");
 
         if (!messages || !Array.isArray(messages)) {
             const err = new Error("Missing or invalid messages.");
@@ -227,12 +227,13 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
                 let retryCount = 0;
                 while (!message) {
                     try {
-                        logger.debug({ clientId, model: config.LLM_MODEL }, "[ChatAPI] Fetching chat completion from upstream LLM");
+                        logger.debug({ clientId, model: model || config.LLM_MODEL }, "[ChatAPI] Fetching chat completion from upstream LLM");
                         message = await llmEngine.fetchChatCompletion(
                             conversation,
                             config,
                             enabledTools,
-                            abortController.signal
+                            abortController.signal,
+                            model
                         );
                     } catch (err) {
                         if (err.response && err.response.status === 429 && retryCount < MAX_RETRIES_429) {

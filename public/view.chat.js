@@ -19,20 +19,20 @@ let chatWidget = null;
 /**
  * Initializes the Chat View (Called once).
  */
-export function initChatView(basePath) {
+export function initChatView(basePath, llmModels = [], onHmiRefresh) {
     chatWidget = document.querySelector('ai-chat-widget');
     if (chatWidget) {
-        chatWidget.init(basePath);
-        
+        chatWidget.init(basePath, llmModels);
+
         // Listen for internal events from the component to bridge with WebSocket
         window.addEventListener('send-chat-message', (e) => {
             sendWebSocketMessage({
                 type: 'chat_message',
                 user: window.currentUser, // [FIX] Send user context to correctly route session files
+                model: e.detail.model, // Pass selected model
                 ...e.detail
             });
         });
-
         window.addEventListener('stop-chat-generation', (e) => {
             sendWebSocketMessage({
                 type: 'chat_stop',

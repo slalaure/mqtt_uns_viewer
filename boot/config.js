@@ -154,6 +154,7 @@ function loadConfig(logger, paths) {
         LLM_API_URL: process.env.LLM_API_URL?.trim() || 'https://generativelanguage.googleapis.com/v1beta/openai/',
         LLM_API_KEY: process.env.LLM_API_KEY?.trim() || '',
         LLM_MODEL: process.env.LLM_MODEL?.trim() || 'gemini-2.0-flash',
+        LLM_MODEL_ALERTS: process.env.LLM_MODEL_ALERTS?.trim() || '',
         HMI_FILE_PATH: process.env.HMI_FILE_PATH?.trim() || process.env.SVG_FILE_PATH?.trim() || 'view.html',
         BASE_PATH: process.env.BASE_PATH?.trim() || '/',
         MAX_SAVED_CHART_CONFIGS: parseInt(process.env.MAX_SAVED_CHART_CONFIGS, 10) || 0,
@@ -269,6 +270,9 @@ async function mergeConfigFromDb(config, db, logger) {
                         break;
                     case 'LLM_MODEL':
                         config.LLM_MODEL = val;
+                        break;
+                    case 'LLM_MODEL_ALERTS':
+                        config.LLM_MODEL_ALERTS = val;
                         break;
                     case 'ANALYTICS_ENABLED':
                         config.ANALYTICS_ENABLED = parseStrictBool(val, config.ANALYTICS_ENABLED);

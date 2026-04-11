@@ -16,6 +16,57 @@ class AdminAlertsPanel extends HTMLElement {
     connectedCallback() {
         this.render();
         this.loadResolvedStats();
+        this.loadConfig();
+    }
+
+    async loadConfig() {
+        try {
+            const res = await fetch('api/config');
+            const data = await res.json();
+            const models = data.llmModels || [];
+            const currentAlertsModel = data.llmModelAlerts || '';
+
+            const selectEl = this.querySelector('#alerts-ai-model-select');
+            if (selectEl) {
+                selectEl.innerHTML = '<option value="">-- Default (Chat Model) --</option>';
+                models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m.replace('models/', '');
+                    if (m === currentAlertsModel) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load config for alerts panel", e);
+        }
+    }
+
+    async onSaveModel() {
+        const selectEl = this.querySelector('#alerts-ai-model-select');
+        const val = selectEl ? selectEl.value : '';
+        const btnSave = this.querySelector('#btn-save-alerts-model');
+        if (btnSave) {
+            btnSave.disabled = true;
+            btnSave.textContent = "Saving...";
+        }
+        
+        try {
+            const response = await fetch('api/env', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ LLM_MODEL_ALERTS: val })
+            });
+            if (!response.ok) throw new Error("Failed to save config");
+            showToast("Alerts AI Model updated successfully", "success");
+        } catch (e) {
+            showToast("Failed to save Alerts AI Model", "error");
+        } finally {
+            if (btnSave) {
+                btnSave.disabled = false;
+                btnSave.textContent = "Save Configuration";
+            }
+        }
     }
 
     async loadResolvedStats() {
@@ -60,6 +111,21 @@ class AdminAlertsPanel extends HTMLElement {
     render() {
         this.innerHTML = `
             <div style="max-width: 800px; margin: 0 auto;">
+                <h2>Alerts AI Assistance</h2>
+                <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
+                    Configure the specific AI model used for automated alert analysis and root-cause investigation.
+                </p>
+                <div style="background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+                        <label for="alerts-ai-model-select" style="font-weight: bold;">Dedicated LLM Model:</label>
+                        <select id="alerts-ai-model-select" style="padding: 8px; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); color: var(--color-text);">
+                            <option value="">-- Loading... --</option>
+                        </select>
+                        <span style="font-size: 0.85em; color: var(--color-text-secondary);">If set to 'Default', the first model configured in the main AI Settings will be used. Models must be fetched and configured in the main AI Settings first.</span>
+                    </div>
+                    <button id="btn-save-alerts-model" class="button-primary" style="width: auto; padding: 8px 16px;">Save Configuration</button>
+                </div>
+
                 <h2>Alerts History Maintenance</h2>
                 <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
                     Manage the archive of triggered alerts.
@@ -78,6 +144,7 @@ class AdminAlertsPanel extends HTMLElement {
         `;
 
         this.querySelector('#btn-purge-alerts').onclick = () => this.onPurgeAlerts();
+        this.querySelector('#btn-save-alerts-model').onclick = () => this.onSaveModel();
     }
 }
 

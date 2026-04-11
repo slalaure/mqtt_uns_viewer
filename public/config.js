@@ -208,29 +208,50 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
             
             const data = await res.json();
-            modelsDatalist.innerHTML = '';
             
             let modelsArray = data.data || data.models || [];
             
             if (modelsArray.length > 0) {
-                // Clear the input so the datalist is fully expanded for the user
-                llmModelInput.value = '';
+                // Build a checkbox list for selection
+                let currentSelected = llmModelInput.value.split(',').map(s => s.trim()).filter(Boolean);
                 
+                let html = '<div style="max-height: 400px; overflow-y: auto; text-align: left; background: var(--color-bg-secondary); padding: 10px; border-radius: 4px;">';
                 modelsArray.forEach(m => {
-                    const opt = document.createElement('option');
-                    let val = m.id || m.name; 
-                    // Clean up Gemini model prefix to make it more readable
+                    let val = m.id || m.name;
                     val = val.replace('models/', '');
-                    opt.value = val;
-                    modelsDatalist.appendChild(opt);
+                    const isChecked = currentSelected.includes(val) ? 'checked' : '';
+                    html += `
+                        <label style="display: block; padding: 5px; border-bottom: 1px solid var(--color-border); cursor: pointer;">
+                            <input type="checkbox" class="llm-model-checkbox" value="${val}" ${isChecked}>
+                            <span style="margin-left: 5px;">${val}</span>
+                        </label>
+                    `;
                 });
-                showToast(`Successfully loaded ${modelsArray.length} models. (If a specific model is missing, you can still type it manually).`, "success");
+                html += '</div>';
+
+                const updateSelection = (e) => {
+                    if (e.target.classList.contains('llm-model-checkbox')) {
+                        if (e.target.checked) {
+                            if (!currentSelected.includes(e.target.value)) currentSelected.push(e.target.value);
+                        } else {
+                            currentSelected = currentSelected.filter(v => v !== e.target.value);
+                        }
+                    }
+                };
+                
+                document.body.addEventListener('change', updateSelection);
+                const isApply = await confirmModal("Select LLM Models", html, "Apply Selection", false);
+                document.body.removeEventListener('change', updateSelection);
+                
+                if (isApply) {
+                    llmModelInput.value = currentSelected.join(', ');
+                }
             } else {
                 throw new Error("No models found in response.");
             }
         } catch (e) {
             console.error("Model fetch failed:", e);
-            showToast("Failed to fetch models via API. You can still type the exact model name manually.", "warning");
+            showToast("Failed to fetch models via API. You can still type the exact model names manually (comma-separated).", "warning");
         } finally {
             btnFetchModels.disabled = false;
             btnFetchModels.textContent = "🔄 Fetch Models";
