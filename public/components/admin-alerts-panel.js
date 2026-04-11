@@ -126,7 +126,7 @@ class AdminAlertsPanel extends HTMLElement {
                     <button id="btn-save-alerts-model" class="button-primary" style="width: auto; padding: 8px 16px;">Save Configuration</button>
                 </div>
 
-                <h2>Alerts History Maintenance</h2>
+                <h2>Alerts Maintenance</h2>
                 <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
                     Manage the archive of triggered alerts.
                 </p>
