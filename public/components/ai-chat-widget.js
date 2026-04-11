@@ -6,6 +6,17 @@ import { state, subscribe, unsubscribe } from '../state.js';
 import { trackEvent, confirmModal, showToast } from '../utils.js';
 import './chat-session-list.js';
 
+// SVG Icon Dictionary for internal logic
+const ICONS = {
+    speaker: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+    wrench: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    check: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-success);"><polyline points="20 6 9 17 4 12"/></svg>',
+    loader: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 2s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>',
+    file: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+    close: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-danger); cursor:pointer;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    alert: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-danger);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+};
+
 /**
  * AI Chat Assistant Web Component.
  * Encapsulates the entire floating chat widget, including sessions, 
@@ -269,7 +280,7 @@ class AiChatWidget extends HTMLElement {
 
             window.dispatchEvent(new CustomEvent('send-chat-message', { detail: payload }));            
         } catch (e) {
-            this.appendMessageToUI({ role: 'assistant', content: '⚠️ Error sending message: ' + e.message, type: 'error' });
+            this.appendMessageToUI({ role: 'assistant', content: `Error sending message: ${e.message}`, type: 'error' });
             this.isProcessing = false;
             this.updateProcessingUI(false);
         }
@@ -316,7 +327,7 @@ class AiChatWidget extends HTMLElement {
             statusDiv.style.color = 'var(--color-text-muted)';
             statusDiv.style.fontStyle = 'italic';
             statusDiv.style.marginBottom = '5px';
-            statusDiv.textContent = `⏳ ${data.content}`;
+            statusDiv.innerHTML = `${ICONS.loader} ${data.content}`;
             this.currentLogDiv.appendChild(statusDiv);
             this.scrollToBottom();
             
@@ -384,7 +395,7 @@ class AiChatWidget extends HTMLElement {
                 };
                 window.dispatchEvent(new CustomEvent('send-chat-message', { detail: payload }));
             } catch (e) {
-                this.appendMessageToUI({ role: 'assistant', content: '⚠️ Error resuming: ' + e.message, type: 'error' });
+                this.appendMessageToUI({ role: 'assistant', content: 'Error resuming: ' + e.message, type: 'error' });
                 this.isProcessing = false;
                 this.updateProcessingUI(false);
             }
@@ -394,7 +405,7 @@ class AiChatWidget extends HTMLElement {
             if (last && last.role === 'assistant' && last.tool_calls) {
                 this.conversationHistory.pop();
             }
-            this.appendMessageToUI({ role: 'assistant', content: '⛔ Actions rejected by user.', type: 'error' });
+            this.appendMessageToUI({ role: 'assistant', content: 'Actions rejected by user.', type: 'error' });
             this.refreshSession();
         }
     }
@@ -422,7 +433,9 @@ class AiChatWidget extends HTMLElement {
         const div = document.createElement('div');
         div.className = `chat-message ${msg.role} ${msg.type || ''}`;
         
-        if (Array.isArray(msg.content)) {
+        if (msg.type === 'error') {
+            div.innerHTML = `${ICONS.alert} <span>${this.sanitize(msg.content)}</span>`;
+        } else if (Array.isArray(msg.content)) {
             let htmlParts = '';
             msg.content.forEach(part => {
                 if (part.type === 'text') htmlParts += this.formatMarkdown(part.text);
@@ -432,7 +445,7 @@ class AiChatWidget extends HTMLElement {
         } else {
             let htmlContent = this.formatMarkdown(msg.content || '');
             if (msg.tool_calls) {
-                msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">🔧 ${this.sanitize(t.function.name)}</div>`);
+                msg.tool_calls.forEach(t => htmlContent += `<div class="tool-usage">${ICONS.wrench} ${this.sanitize(t.function.name)}</div>`);
             }
             if (msg.role === 'tool') {
                 div.classList.add('system');
@@ -445,7 +458,7 @@ class AiChatWidget extends HTMLElement {
         if (msg.role === 'assistant' && msg.content && !Array.isArray(msg.content)) {
             const speakerBtn = document.createElement('button');
             speakerBtn.className = 'btn-message-speak';
-            speakerBtn.innerHTML = '🔊';
+            speakerBtn.innerHTML = ICONS.speaker;
             speakerBtn.onclick = () => this.speakText(msg.content);
             div.appendChild(speakerBtn);
         }
@@ -523,7 +536,7 @@ class AiChatWidget extends HTMLElement {
             toolDiv.className = 'tool-usage';
             toolDiv.style.display = 'flex';
             toolDiv.style.justifyContent = 'space-between';
-            toolDiv.innerHTML = `<span><span class="typing-dot" style="display:inline-block; width:6px; height:6px; margin-right:5px; background:var(--color-primary)"></span> 🔧 Executing <b>${content}</b>...</span> <span class="tool-timer"></span>`;
+            toolDiv.innerHTML = `<span><span class="typing-dot" style="display:inline-block; width:6px; height:6px; margin-right:5px; background:var(--color-primary)"></span> ${ICONS.wrench} Executing <b>${content}</b>...</span> <span class="tool-timer"></span>`;
             
             // Stash the tool ID in the container for the result chunk to find
             if (!container.dataset.activeTools) container.dataset.activeTools = "{}";
@@ -542,7 +555,7 @@ class AiChatWidget extends HTMLElement {
                     const toolDiv = container.querySelector(`#${toolId}`);
                     if (toolDiv) {
                         toolDiv.style.borderLeftColor = 'var(--color-success)';
-                        toolDiv.innerHTML = `<span>✅ 🔧 Finished <b>${content.name}</b></span> <span style="font-size:0.85em; color:var(--color-text-muted)">${(content.duration / 1000).toFixed(2)}s</span>`;
+                        toolDiv.innerHTML = `<span>${ICONS.check} Finished <b>${content.name}</b></span> <span style="font-size:0.85em; color:var(--color-text-muted)">${(content.duration / 1000).toFixed(2)}s</span>`;
                     }
                     delete activeTools[content.name];
                     container.dataset.activeTools = JSON.stringify(activeTools);
@@ -692,10 +705,10 @@ class AiChatWidget extends HTMLElement {
         }
         preview.style.display = 'flex';
         preview.innerHTML = `
-            <div class="preview-item" style="display:flex; align-items:center; gap:10px; background:var(--color-bg-secondary); padding:5px 10px; border-radius:5px; border:1px solid var(--color-border);">
-                ${this.pendingAttachment.type === 'image' ? `<img src="${this.pendingAttachment.content}" style="height:30px; border-radius:3px;">` : '📄'}
+            <div class="preview-item" style="display:flex; align-items:center; gap:10px; background:var(--color-bg-secondary); padding:5px 10px; border-radius:5px; border:1px solid var(--color-border); max-width: 100%;">
+                ${this.pendingAttachment.type === 'image' ? `<img src="${this.pendingAttachment.content}" style="height:30px; border-radius:3px;">` : ICONS.file}
                 <span style="font-size:0.8em; max-width:150px; overflow:hidden; text-overflow:ellipsis;">${this.pendingAttachment.name}</span>
-                <button id="btn-remove-file" style="background:none; border:none; cursor:pointer; color:var(--color-danger);">✕</button>
+                <button id="btn-remove-file" style="background:none; border:none; cursor:pointer; padding: 0;">${ICONS.close}</button>
             </div>
         `;
         this.querySelector('#btn-remove-file').onclick = () => {
