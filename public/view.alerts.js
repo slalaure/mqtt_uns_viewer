@@ -60,15 +60,7 @@ const onSearchInput = () => renderActiveAlerts();
 const onProviderChange = () => renderActiveAlerts();
 const onFullscreenClick = () => toggleFullscreen();
 const onFullscreenChange = () => {
-    const panel = document.getElementById('active-alerts-panel');
-    if (btnFullscreen) {
-        if (document.fullscreenElement === panel) {
-            btnFullscreen.innerHTML = '✖ Minimize';
-        } else {
-            btnFullscreen.innerHTML = '⛶ Maximize';
-            panel?.classList.remove('fullscreen-mode');
-        }
-    }
+    // Native fullscreen handler no longer needed as we use pseudo-fullscreen
 };
 const onNewRuleClick = () => showRuleEditor();
 const onCancelRuleClick = () => hideRuleEditor();
@@ -277,15 +269,9 @@ export function openCreateRuleModal(topic, examplePayload) {
 
 function toggleFullscreen() {
     const panel = document.getElementById('active-alerts-panel');
-    if (!document.fullscreenElement) {
-        panel.requestFullscreen().catch(err => {
-            console.error(`Error enabling fullscreen: ${err.message}`);
-        });
-        panel.classList.add('fullscreen-mode');
-    } else {
-        document.exitFullscreen();
-        panel.classList.remove('fullscreen-mode');
-    }
+    if (!panel) return;
+    const isMaximized = panel.classList.toggle('fullscreen-mode');
+    if (btnFullscreen) btnFullscreen.innerHTML = isMaximized ? '✖ Minimize' : '⛶ Maximize';
 }
 
 function showRuleEditor(ruleToEdit = null) {
