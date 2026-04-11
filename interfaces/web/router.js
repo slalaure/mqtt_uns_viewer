@@ -20,6 +20,7 @@ const multer = require('multer');
 const spBv10Codec = require('sparkplug-payload').get("spBv1.0");
 const featureGate = require('./middlewares/featureGate');
 const metricsManager = require('../../core/metricsManager');
+const auth = require('./middlewares/auth');
 
 /**
  * Configures and returns the main application router.

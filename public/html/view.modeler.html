@@ -197,4 +197,45 @@
         color: #007bff !important; 
         font-weight: bold !important; 
     }
+    
+    /* --- Responsive Layout --- */
+    @media (max-width: 992px) {
+        .modeler-container {
+            flex-direction: column !important;
+            overflow-y: auto !important;
+            display: block !important;
+        }
+        .modeler-sidebar, .modeler-main-editor, .modeler-graph-sidebar {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            border-right: none !important;
+            border-left: none !important;
+            border-bottom: 2px solid var(--color-primary) !important;
+            flex: none !important;
+        }
+        .modeler-sidebar {
+            height: 350px !important; 
+        }
+        .modeler-main-editor {
+            min-height: 500px !important;
+        }
+        .modeler-graph-sidebar {
+            height: 400px !important;
+        }
+        #drag-handle-vertical-modeler-1, #drag-handle-vertical-modeler-2 {
+            display: none !important;
+        }
+        #modeler-form-view {
+            overflow-y: visible !important;
+            padding: 15px !important;
+        }
+        #modeler-welcome {
+            min-height: 300px !important;
+        }
+        .grid-form {
+            grid-template-columns: 1fr !important;
+        }
+    }
 </style>
