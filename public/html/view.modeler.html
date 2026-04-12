@@ -1,27 +1,26 @@
 <div class="modeler-container" style="display: flex; height: 100%; width: 100%; overflow: hidden; background-color: var(--color-bg);">
-    <!-- PANEL 1: REGISTRY -->
     <div class="modeler-sidebar" style="width: 300px; min-width: 150px; background-color: var(--color-bg-secondary); display: flex; flex-direction: column; border-right: 1px solid var(--color-border); flex-shrink: 0;">
         <div style="padding: 15px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-tertiary);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h2 style="margin: 0; font-size: 1.1em; color: var(--color-text);">CDM Registry</h2>
-                <div style="display: flex; gap: 5px;">
-                    <button id="btn-modeler-help" class="tool-button" title="CDM Modeler Guide">ℹ️ Help</button>
-                    <button id="btn-modeler-refresh" class="tool-button" title="Reload Model">↻</button>
-                    <button id="btn-modeler-save" class="tool-button button-primary" title="Save All Changes">💾 Save</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="margin: 0; font-size: 1.1em; color: var(--color-text); white-space: nowrap;">CDM Registry</h2>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button id="btn-modeler-help" class="tool-button" title="CDM Modeler Guide"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg> Help</button>
+                    <button id="btn-modeler-refresh" class="tool-button" title="Reload Model"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
+                    <button id="btn-modeler-save" class="tool-button button-primary" title="Save All Changes"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save</button>
                 </div>
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
-                <div style="display: flex; gap: 5px;">
-                    <button id="btn-add-namespace" class="tool-button" style="flex: 1; font-size: 0.85em;">+ NS</button>
-                    <button id="btn-add-type" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Type</button>
-                    <button id="btn-add-instance" class="tool-button" style="flex: 1; font-size: 0.85em;">+ Obj</button>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button id="btn-add-namespace" class="tool-button" style="flex: 1; font-size: 0.85em; min-width: max-content;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> NS</button>
+                    <button id="btn-add-type" class="tool-button" style="flex: 1; font-size: 0.85em; min-width: max-content;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Type</button>
+                    <button id="btn-add-instance" class="tool-button" style="flex: 1; font-size: 0.85em; min-width: max-content;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Obj</button>
                 </div>
                 <input type="text" id="modeler-search" placeholder="Search models..." class="modern-input" style="padding: 6px 10px; font-size: 0.85em;">
-                <div style="display: flex; gap: 5px;">
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <input type="file" id="modeler-import-file" accept=".json" style="display: none;">
-                    <button id="btn-modeler-import" class="tool-button" style="flex: 1; font-size: 0.8em;" title="Import uns_model.json">📥 Import</button>
-                    <button id="btn-modeler-export" class="tool-button" style="flex: 1; font-size: 0.8em;" title="Export uns_model.json">📤 Export</button>
-                    <button id="btn-modeler-raw" class="tool-button" style="flex: 1; font-size: 0.8em; color: var(--color-warning); border-color: var(--color-warning);" title="Edit Full JSON directly">⚙️ Raw</button>
+                    <button id="btn-modeler-import" class="tool-button" style="flex: 1; font-size: 0.8em; min-width: max-content;" title="Import uns_model.json"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Import</button>
+                    <button id="btn-modeler-export" class="tool-button" style="flex: 1; font-size: 0.8em; min-width: max-content;" title="Export uns_model.json"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Export</button>
+                    <button id="btn-modeler-raw" class="tool-button" style="flex: 1; font-size: 0.8em; min-width: max-content; color: var(--color-warning); border-color: var(--color-warning);" title="Edit Full JSON directly"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Raw</button>
                 </div>
             </div>
         </div>
@@ -30,10 +29,9 @@
     
     <div class="resizer" id="drag-handle-vertical-modeler-1"></div>
 
-    <!-- PANEL 2: EDITOR -->
     <div class="modeler-main-editor" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 300px; background-color: var(--color-bg);">
         <div id="modeler-welcome" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-text-secondary);">
-            <div style="font-size: 4em; margin-bottom: 20px; filter: grayscale(1) opacity(0.5);">🏗️</div>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 80px; height: 80px; margin-bottom: 20px; opacity: 0.5;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
             <h2 style="margin-bottom: 10px;">CDM Modeler</h2>
             <p>Select a model to edit or create a new one.</p>
         </div>
@@ -49,7 +47,7 @@
                         <button id="btn-mode-form" class="toggle-button active">Form</button>
                         <button id="btn-mode-json" class="toggle-button">JSON</button>
                     </div>
-                    <button id="btn-modeler-delete" class="tool-button button-danger">🗑️</button>
+                    <button id="btn-modeler-delete" class="tool-button button-danger"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
                 </div>
             </div>
 
@@ -61,14 +59,12 @@
                             <label class="modern-label" title="Standardized hierarchy level (ISA-95 for Industry, Brick Schema for Buildings, etc.)">Hierarchy Level (Optional)</label>
                             <input type="text" id="field-isa-level" class="modern-input" list="hierarchy-levels" placeholder="e.g. Site, Area, Building..." title="Leave empty if not applicable">
                             <datalist id="hierarchy-levels">
-                                <!-- ISA-95 (Industrial) -->
                                 <option value="Enterprise">
                                 <option value="Site">
                                 <option value="Area">
                                 <option value="Line">
                                 <option value="WorkCell">
                                 <option value="Equipment">
-                                <!-- Brick Schema (Buildings) -->
                                 <option value="Building">
                                 <option value="Floor">
                                 <option value="Room">
@@ -122,21 +118,19 @@
 
     <div class="resizer" id="drag-handle-vertical-modeler-2"></div>
 
-    <!-- PANEL 3: GRAPH -->
     <div class="modeler-graph-sidebar" style="width: 400px; min-width: 150px; background-color: var(--color-bg-secondary); display: flex; flex-direction: column; border-left: 1px solid var(--color-border); flex-shrink: 0;">
         <div style="padding: 15px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-tertiary); display: flex; justify-content: space-between; align-items: center;">
             <h2 style="margin: 0; font-size: 0.8em; text-transform: uppercase; color: var(--color-text-secondary);">Dependency Graph</h2>
-            <button id="btn-toggle-physics" class="tool-button" title="Toggle Auto-Layout (Physics)" style="font-size: 0.75em; padding: 2px 6px;">⚛️ Freeze</button>
+            <button id="btn-toggle-physics" class="tool-button" title="Toggle Auto-Layout (Physics)" style="font-size: 0.75em; padding: 2px 6px;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Freeze</button>
         </div>
         <div id="relationship-graph" style="flex: 1; background-color: var(--color-bg-tertiary); overflow: hidden; min-height: 300px; width: 100%;"></div>
     </div>
 </div>
 
-<!-- HELP MODAL -->
 <div id="modeler-help-modal" class="modal-backdrop" style="display:none; z-index: 3000;">
     <div class="help-modal-content" style="background: var(--color-bg); padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--color-border);">
         <div style="display:flex; justify-content:space-between; margin-bottom:20px; align-items:center;">
-            <h2 style="margin:0; color: var(--color-primary);">📚 CDM & UNS Modeler Guide</h2>
+            <h2 style="margin:0; color: var(--color-primary); display:flex; align-items:center; gap:8px;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> CDM & UNS Modeler Guide</h2>
             <button id="btn-close-modeler-help" style="background:none; border:none; font-size:1.5em; cursor:pointer; color: var(--color-text-muted);">&times;</button>
         </div>
         
@@ -161,7 +155,7 @@
 
         <div style="background: rgba(0, 123, 255, 0.1); border-left: 4px solid #007bff; padding: 15px; border-radius: 4px; margin-top: 25px;">
             <h3 style="margin: 0 0 10px 0; color: #007bff; display: flex; align-items: center; gap: 8px;">
-                <span>🤖</span> AI Assistant Integration
+                <svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg> AI Assistant Integration
             </h3>
             <p style="margin: 0; color: var(--color-text); line-height: 1.5; font-size: 0.95em;">
                 Building a complex model from scratch can be tedious. You can rely on the <strong>Korelate AI Chat</strong> to do the heavy lifting! 

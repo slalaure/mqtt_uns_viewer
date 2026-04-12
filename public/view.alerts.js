@@ -125,7 +125,7 @@ export async function initAlertsView(options = {}) {
     providerFilterSelect = document.getElementById('alerts-source-filter');
 
     if (btnFullscreen) {
-        btnFullscreen.innerHTML = '⛶ Maximize';
+        btnFullscreen.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Maximize';
         btnFullscreen.style.fontSize = '0.85em';
     }
 
@@ -238,7 +238,6 @@ export function unmountAlertsView() {
 export const onAlertsViewShow = mountAlertsView;
 export const onAlertsViewHide = unmountAlertsView;
 
-
 export function refreshAlerts() {
     if (isMounted && container && container.querySelector('#active-alerts-panel').classList.contains('active')) {
         loadActiveAlerts();
@@ -271,7 +270,11 @@ function toggleFullscreen() {
     const panel = document.getElementById('active-alerts-panel');
     if (!panel) return;
     const isMaximized = panel.classList.toggle('fullscreen-mode');
-    if (btnFullscreen) btnFullscreen.innerHTML = isMaximized ? '✖ Minimize' : '⛶ Maximize';
+    if (btnFullscreen) {
+        btnFullscreen.innerHTML = isMaximized 
+            ? '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg> Minimize'
+            : '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Maximize';
+    }
 }
 
 function showRuleEditor(ruleToEdit = null) {
@@ -318,11 +321,11 @@ async function loadRules() {
         rules.forEach(rule => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td data-label="Name" title="${rule.name}">
-                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>${rule.name}</strong></div>
+                <td data-label="Name" title="${sanitize(rule.name)}">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>${sanitize(rule.name)}</strong></div>
                 </td>
-                <td data-label="Topic" title="${rule.topic_pattern}">
-                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><code>${rule.topic_pattern}</code></div>
+                <td data-label="Topic" title="${sanitize(rule.topic_pattern)}">
+                    <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><code>${sanitize(rule.topic_pattern)}</code></div>
                 </td>
                 <td data-label="Severity"><span class="badge badge-${rule.severity}">${rule.severity}</span></td>
                 <td data-label="Actions">
@@ -461,7 +464,7 @@ function renderActiveAlerts() {
     activeAlertsTableBody.innerHTML = '';
     
     if (filteredAlerts.length === 0) {
-        activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts match the filters.</td></tr>';
+        activeAlertsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-success);"><polyline points="20 6 9 17 4 12"></polyline></svg> No active alerts match the filters.</td></tr>';
         return;
     }
 
@@ -484,7 +487,7 @@ function renderActiveAlerts() {
             fullJsonTooltip = JSON.stringify(JSON.parse(alert.trigger_value), null, 2).replace(/"/g, '&quot;');
         } catch(e) { fullJsonTooltip = alert.trigger_value; }
         
-        const triggerHtml = `<div class="compact-json" title="${fullJsonTooltip}">${displayTrigger}</div>`;
+        const triggerHtml = `<div class="compact-json" title="${fullJsonTooltip}">${sanitize(displayTrigger)}</div>`;
 
         // --- 2. Action & Analysis Column ---
         let analysisHtml = '';
@@ -496,17 +499,17 @@ function renderActiveAlerts() {
             // If we have a structured action
             analysisHtml = `
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <div class="ai-action-pill" title="${aiData.action}">💡 ${aiData.action}</div>
-                    <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report">👁️</button>
+                    <div class="ai-action-pill" title="${sanitize(aiData.action)}"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-warning); margin:0 4px 0 0;"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 11.2 4a4.65 4.65 0 0 0-5.3 7.5c.76.76 1.23 1.52 1.41 2.5h7.78z"></path></svg> ${sanitize(aiData.action)}</div>
+                    <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
                 </div>
             `;
         } else if (alert.analysis_result) {
              // Fallback for old alerts without structure
-             const snippet = alert.analysis_result.substring(0, 60) + "...";
+             const snippet = sanitize(alert.analysis_result).substring(0, 60) + "...";
              analysisHtml = `
                 <div style="display:flex; align-items:center; gap:10px;">
                     <span style="font-size:0.85em; opacity:0.8;">${snippet}</span>
-                    <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report">👁️</button>
+                    <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
                 </div>
             `;
         } else {
@@ -534,7 +537,7 @@ function renderActiveAlerts() {
                 const d = new Date(alert.updated_at);
                 actionTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
-            statusHtml += `<div class="alert-meta-info">by ${alert.handled_by} <span style="opacity:0.7">(${actionTime})</span></div>`;
+            statusHtml += `<div class="alert-meta-info">by ${sanitize(alert.handled_by)} <span style="opacity:0.7">(${actionTime})</span></div>`;
         }
 
         // Format Date column
@@ -548,8 +551,8 @@ function renderActiveAlerts() {
             <td data-label="Time" style="font-size:0.85em; white-space:nowrap;">${displayTime}</td>
             <td data-label="Severity"><span class="badge badge-${alert.severity}">${alert.severity}</span></td>
             <td data-label="Rule / Topic">
-                <div style="font-weight:bold; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${alert.rule_name}</div>
-                <div style="font-size:0.75em; color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${alert.topic}">${alert.topic}</div>
+                <div style="font-weight:bold; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${sanitize(alert.rule_name)}">${sanitize(alert.rule_name)}</div>
+                <div style="font-size:0.75em; color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${sanitize(alert.topic)}">${sanitize(alert.topic)}</div>
             </td>
             <td data-label="Status">${statusHtml}</td>
             <td data-label="Value">${triggerHtml}</td>
@@ -572,7 +575,7 @@ function renderActiveAlerts() {
                 const contentDiv = document.getElementById('analysis-content');
                 if(contentDiv) {
                     if (window.marked) {
-                        contentDiv.innerHTML = window.marked.parse(contentToModal);
+                        contentDiv.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(window.marked.parse(contentToModal)) : window.marked.parse(contentToModal);
                     } else {
                         contentDiv.textContent = contentToModal;
                     }
@@ -602,4 +605,9 @@ async function updateStatus(id, status) {
         });
         loadActiveAlerts();
     } catch (e) { console.error(e); }
+}
+
+function sanitize(str) {
+    if (!str) return '';
+    return window.DOMPurify ? window.DOMPurify.sanitize(str) : str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

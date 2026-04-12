@@ -20,6 +20,14 @@ let syncTimeout = null;
 // --- DOM Elements ---
 let el = {};
 
+const ICONS = {
+    ns: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+    type: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+    inst: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
+    freeze: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+    unfreeze: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>'
+};
+
 export async function initModelerView() {
     if (templatePromise) return templatePromise;
 
@@ -148,7 +156,7 @@ export function mountModelerView() {
     
     el['btn-toggle-physics'].onclick = () => {
         isPhysicsEnabled = !isPhysicsEnabled;
-        el['btn-toggle-physics'].innerHTML = isPhysicsEnabled ? "⚛️ Freeze" : "❄️ Unfreeze";
+        el['btn-toggle-physics'].innerHTML = isPhysicsEnabled ? `${ICONS.freeze} Freeze` : `${ICONS.unfreeze} Unfreeze`;
         if (networkGraph) {
             networkGraph.setPhysics(isPhysicsEnabled);
         }
@@ -209,7 +217,7 @@ function renderRegistry() {
             div.style.fontWeight = "bold";
         }
         
-        div.innerHTML = `<span class="node-icon">${icon}</span> <span class="node-label" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</span>`;
+        div.innerHTML = `<span class="node-icon" style="margin-right:6px; display:inline-flex; align-items:center;">${icon}</span> <span class="node-label" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</span>`;
         div.onclick = () => selectItem(type, id);
         return div;
     };
@@ -227,9 +235,9 @@ function renderRegistry() {
         });
     };
 
-    section('Namespaces', currentModel.namespaces, 'namespace', '🌐');
-    section('Object Types', currentModel.objectTypes, 'objectType', '📃');
-    section('Instances', currentModel.instances, 'instance', '📦');
+    section('Namespaces', currentModel.namespaces, 'namespace', ICONS.ns);
+    section('Object Types', currentModel.objectTypes, 'objectType', ICONS.type);
+    section('Instances', currentModel.instances, 'instance', ICONS.inst);
 }
 
 function selectItem(type, id) {
@@ -705,10 +713,16 @@ class KorelateGraph {
             text.setAttribute('font-family', 'sans-serif');
             text.setAttribute('pointer-events', 'none');
             
+            // Need to append SVG content to label inside the text/g node.
+            // Since label contains HTML/SVG string now (`${icon} ${label}`),
+            // We can't use simple textContent. We have to parse or render it.
+            // For SVG compatibility, let's keep it simple: strip SVG if present, or render it.
+            // A simple hack: just strip tags for the SVG rendering to keep it lightweight.
+            let rawText = n.label.replace(/<[^>]*>?/gm, '').trim();
+            
             // Simple truncation
-            let shortLabel = node.label;
-            if (shortLabel.length > 20) shortLabel = shortLabel.substring(0, 18) + '...';
-            text.textContent = shortLabel;
+            if (rawText.length > 20) rawText = rawText.substring(0, 18) + '...';
+            text.textContent = rawText;
             
             g.appendChild(rect);
             g.appendChild(text);
@@ -948,19 +962,19 @@ function drawGraph() {
     };
 
     if (item.namespaceUri) {
-        addNode('ns', item.namespaceUri.split('/').pop(), '🌐', 'ns');
+        addNode('ns', item.namespaceUri.split('/').pop(), ICONS.ns, 'ns');
         edges.push({ from: 'self', to: 'ns', label: 'belongs to' });
     }
 
     if (currentSelection.type === 'instance') {
         if (item.parentId && item.parentId !== '/') {
             const p = currentModel.instances.find(i => i.elementId === item.parentId);
-            addNode('parent', p ? (p.displayName || p.elementId) : item.parentId, '📦', 'inst');
+            addNode('parent', p ? (p.displayName || p.elementId) : item.parentId, ICONS.inst, 'inst');
             edges.push({ from: 'self', to: 'parent', label: 'ChildOf' });
         }
         if (item.typeId) {
             const t = currentModel.objectTypes.find(ot => ot.elementId === item.typeId);
-            addNode('type', t ? (t.displayName || t.elementId) : item.typeId, '📃', 'type');
+            addNode('type', t ? (t.displayName || t.elementId) : item.typeId, ICONS.type, 'type');
             edges.push({ from: 'self', to: 'type', label: 'InstanceOf' });
         }
         if (item.relationships) {
@@ -969,7 +983,7 @@ function drawGraph() {
                 list.forEach(tId => {
                     const tObj = currentModel.instances.find(i => i.elementId === tId);
                     const label = tObj ? (tObj.displayName || tId) : tId;
-                    addNode(`rel-${tId}`, label, '📦', 'inst');
+                    addNode(`rel-${tId}`, label, ICONS.inst, 'inst');
                     edges.push({ from: 'self', to: `rel-${tId}`, label: rel });
                 });
             });
@@ -977,7 +991,7 @@ function drawGraph() {
     } else if (currentSelection.type === 'objectType') {
         const instances = currentModel.instances.filter(i => i.typeId === item.elementId).slice(0, 10);
         instances.forEach(i => {
-            addNode(`inst-${i.elementId}`, i.displayName || i.elementId, '📦', 'inst');
+            addNode(`inst-${i.elementId}`, i.displayName || i.elementId, ICONS.inst, 'inst');
             edges.push({ from: `inst-${i.elementId}`, to: 'self', label: 'Implements' });
         });
     }

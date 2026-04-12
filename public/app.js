@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let samplingWarningTimer = null;
     const samplingBadge = document.createElement('div');
     samplingBadge.id = 'sampling-warning-badge';
-    samplingBadge.style.cssText = 'display: none; align-items: center; gap: 6px; font-size: 0.75em; font-weight: bold; background-color: rgba(255, 193, 7, 0.2); color: #ffc107; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255, 193, 7, 0.5);';
+    samplingBadge.style.cssText = 'display: none; align-items: center; gap: 6px; font-size: 0.75em; font-weight: bold; background-color: rgba(255, 193, 7, 0.2); color: #ffc107; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255, 193, 7, 0.5); white-space: nowrap; flex-shrink: 0;';
     samplingBadge.innerHTML = '⚠️ Data rate too high. Displaying sampled data.';
     
     const headerSubRow = document.querySelector('.header-sub-row');
@@ -192,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Helper: Inject User Menu in Header ---
     function injectUserMenu(user) {
         const headerContent = document.querySelector('header');
+        const headerActions = document.querySelector('.header-actions');
         const existingMenu = document.querySelector('.user-menu');
         if (existingMenu) existingMenu.remove();
 
@@ -200,15 +201,6 @@ document.addEventListener('DOMContentLoaded', () => {
         userDiv.style.display = 'flex';
         userDiv.style.alignItems = 'center';
         userDiv.style.gap = '10px';
-
-        if (window.innerWidth > 768) {
-            userDiv.style.marginLeft = 'auto'; 
-            userDiv.style.marginRight = '15px';
-        } else {
-            userDiv.style.marginTop = '10px';
-            userDiv.style.width = '100%';
-            userDiv.style.justifyContent = 'space-between';
-        }
 
         function generateLocalAvatar(name) {
             const initial = (name || 'U').charAt(0).toUpperCase();
@@ -226,22 +218,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const avatarUrl = user.avatar || generateLocalAvatar(user.displayName || user.username);
-        const isAdminLabel = (user.role === 'admin') ? '<span style="background:var(--color-danger); font-size:0.7em; padding:2px 4px; border-radius:3px; margin-left:5px;">ADMIN</span>' : '';
+        const isAdminLabel = (user.role === 'admin') ? '<span style="background:var(--color-danger); font-size:0.7em; padding:2px 4px; border-radius:3px; margin-left:5px; color:white;">ADMIN</span>' : '';
 
         userDiv.innerHTML = `
             <div style="display:flex; align-items:center; gap:8px;">
-                <img src="${avatarUrl}" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);">
+                <img src="${avatarUrl}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--color-border);">
                 <div style="display:flex; flex-direction:column; line-height:1.1;">
-                    <span style="font-size: 0.9em; font-weight:bold;">${user.displayName || user.username}</span>
+                    <span style="font-size: 0.9em; font-weight:bold; white-space: nowrap;">${user.displayName || user.username}</span>
                     ${isAdminLabel}
                 </div>
             </div>
-            <button id="btn-logout" class="nav-button" style="font-size: 0.8em; padding: 4px 10px; background-color:rgba(220, 53, 69, 0.8);">Logout</button>
+            <button id="btn-logout" class="nav-button" style="font-size: 0.8em; padding: 4px 10px; background-color:var(--color-danger); color:white; border:none; cursor:pointer;">Logout</button>
         `;
 
-        if (btnConfigView && btnConfigView.parentNode === headerContent) {
-            headerContent.insertBefore(userDiv, btnConfigView);
+        if (window.innerWidth > 768 && headerActions) {
+            headerActions.appendChild(userDiv);
         } else {
+            // Mobile layout
+            userDiv.style.marginTop = '10px';
+            userDiv.style.width = '100%';
+            userDiv.style.justifyContent = 'space-between';
             headerContent.appendChild(userDiv);
         }
 
@@ -269,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // If admin, ensure the admin tab button exists and is visible
     const btnAdminView = document.getElementById('btn-admin-view');
     if (currentUser.role === 'admin' && btnAdminView) {
-        btnAdminView.style.display = 'block';
+        btnAdminView.style.display = 'flex';
     }
 
     // --- Variables and State ---
@@ -843,7 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         viewsConfig.forEach(v => {
             const btn = document.getElementById(v.id);
-            if (btn) btn.style.display = v.enabled ? 'block' : 'none';
+            if (btn) btn.style.display = v.enabled ? 'flex' : 'none'; // Use flex for proper icon + text alignment
         });
 
         if (btnConfigView) {
@@ -1038,16 +1034,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Role-Based Tab Visibility ---
         const btnAdmin = document.getElementById('btn-admin-view');
-        if (btnAdmin) btnAdmin.style.display = hasRole('admin') ? 'block' : 'none';
+        if (btnAdmin) btnAdmin.style.display = hasRole('admin') ? 'flex' : 'none';
         
         const btnModeler = document.getElementById('btn-modeler-view');
-        if (btnModeler) btnModeler.style.display = (appConfig.viewModelerEnabled && hasRole('engineer')) ? 'block' : 'none';
+        if (btnModeler) btnModeler.style.display = (appConfig.viewModelerEnabled && hasRole('engineer')) ? 'flex' : 'none';
 
         const btnMapper = document.getElementById('btn-mapper-view');
-        if (btnMapper) btnMapper.style.display = (appConfig.viewMapperEnabled && hasRole('engineer')) ? 'block' : 'none';
+        if (btnMapper) btnMapper.style.display = (appConfig.viewMapperEnabled && hasRole('engineer')) ? 'flex' : 'none';
 
         const btnPublish = document.getElementById('btn-publish-view');
-        if (btnPublish) btnPublish.style.display = (appConfig.viewPublishEnabled && hasRole('operator')) ? 'block' : 'none';
+        if (btnPublish) btnPublish.style.display = (appConfig.viewPublishEnabled && hasRole('operator')) ? 'flex' : 'none';
 
         // Dynamically build the allowed route names
         const routeNames = ['tree'];

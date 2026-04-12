@@ -211,7 +211,7 @@ class AlertsRulesPanel extends HTMLElement {
             <div id="rules-list-container">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h2>Detection Rules</h2>
-                    <button id="btn-new-rule" class="tool-button button-primary">+ New Rule</button>
+                    <button id="btn-new-rule" class="tool-button button-primary"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Rule</button>
                 </div>
                 <table class="alerts-table">
                     <thead>
@@ -253,7 +253,7 @@ class AlertsRulesPanel extends HTMLElement {
                     <div class="form-group">
                         <div class="label-with-icon">
                             <label style="margin:0;">Condition (JavaScript)</label>
-                            <span id="btn-js-help" class="info-icon" title="See Examples" style="cursor:pointer;">ℹ️</span>
+                            <span id="btn-js-help" class="info-icon" title="See Examples" style="cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></span>
                         </div>
                         <span class="help-text">
                             Available vars: <code>msg.payload</code>, <code>msg.topic</code>. <br>
@@ -268,7 +268,7 @@ class AlertsRulesPanel extends HTMLElement {
                     <div class="form-group">
                         <div class="label-with-icon">
                             <label style="margin:0;">Webhook URL (HTTP POST)</label>
-                            <span class="info-icon" title="Trigger external systems">🔗</span>
+                            <span class="info-icon" title="Trigger external systems"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>
                         </div>
                         <span class="help-text">Enter a URL to receive a POST request when alert triggers.</span>
                         <input type="text" name="webhook" placeholder="https://chat.googleapis.com/v1/spaces/AAAA/messages?key=...">
@@ -280,18 +280,18 @@ class AlertsRulesPanel extends HTMLElement {
             </div>
 
             <div id="alert-help-modal" class="modal-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:4000; align-items:center; justify-content:center;">
-                <div class="help-modal-content" style="background:var(--color-bg); padding:20px; border-radius:8px; width:90%; max-width:600px;">
+                <div class="help-modal-content" style="background:var(--color-bg); padding:20px; border-radius:8px; width:90%; max-width:600px; max-height: 85vh; overflow-y: auto; box-shadow: 0 15px 50px rgba(0,0,0,0.5); border: 1px solid var(--color-border); position: relative;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
                         <h3 style="margin:0;">JavaScript Condition Examples</h3>
-                        <button id="btn-close-help" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
+                        <button id="btn-close-help" style="background:none; border:none; font-size:1.5em; cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                     </div>
-                    <div class="example-block" style="margin-bottom:15px;">
-                        <div class="example-title" style="font-weight:bold; margin-bottom:5px;">1. Simple Threshold (JSON)</div>
-                        <pre style="background:var(--color-bg-secondary); padding:10px; border-radius:4px; font-size:0.85em; overflow-x:auto;">return msg.payload.value > 70;</pre>
+                    <div class="example-block" style="background-color: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                        <div class="example-title" style="font-weight: bold; margin-bottom: 8px; color: var(--color-primary);">1. Simple Threshold (JSON)</div>
+                        <pre style="background:var(--color-code-bg); color:var(--color-code-text); padding:10px; border-radius:4px; font-size:0.85em; font-family:'Courier New', monospace; overflow-x:auto;">return msg.payload.value > 70;</pre>
                     </div>
-                    <div class="example-block" style="margin-bottom:15px;">
-                        <div class="example-title" style="font-weight:bold; margin-bottom:5px;">2. Sparkplug B</div>
-                        <pre style="background:var(--color-bg-secondary); padding:10px; border-radius:4px; font-size:0.85em; overflow-x:auto;">
+                    <div class="example-block" style="background-color: var(--color-bg-tertiary); border: 1px solid var(--color-border); border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                        <div class="example-title" style="font-weight: bold; margin-bottom: 8px; color: var(--color-primary);">2. Sparkplug B</div>
+                        <pre style="background:var(--color-code-bg); color:var(--color-code-text); padding:10px; border-radius:4px; font-size:0.85em; font-family:'Courier New', monospace; overflow-x:auto;">
 if (!msg.payload.metrics) return false;
 const metric = msg.payload.metrics.find(m => m.name === "Motor/Temp");
 return metric && metric.value > 80.0;</pre>

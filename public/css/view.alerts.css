@@ -15,10 +15,13 @@ main#alerts-view {
     border-bottom: 1px solid var(--color-border);
     gap: 15px;
     flex-shrink: 0;
+    overflow-x: auto; /* Allow scrolling if many tabs */
+    scrollbar-width: none;
 }
+.alerts-sub-nav::-webkit-scrollbar { display: none; }
 
 .sub-tab-button {
-    padding: 4px 10px;
+    padding: 6px 12px;
     border: 1px solid transparent;
     background: transparent;
     color: var(--color-text-secondary);
@@ -27,6 +30,16 @@ main#alerts-view {
     border-radius: 4px;
     transition: all 0.2s;
     font-size: 0.9em;
+    display: inline-flex;       /* Fixes SVG and Text vertical alignment */
+    align-items: center;        /* Centers SVG with text */
+    gap: 8px;                   /* Space between SVG and text */
+    white-space: nowrap;        /* Prevents text from breaking under icon */
+}
+
+.sub-tab-button svg {
+    width: 1.2em;
+    height: 1.2em;
+    flex-shrink: 0;
 }
 
 .sub-tab-button:hover { background-color: var(--color-bg-accent); }
@@ -118,6 +131,9 @@ main#alerts-view {
     text-overflow: ellipsis;
     max-width: 300px;
     cursor: help;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .btn-view-analysis {
@@ -128,6 +144,9 @@ main#alerts-view {
     padding: 4px 8px;
     font-size: 1.1em;
     transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 .btn-view-analysis:hover { background-color: var(--color-bg-accent); }
 
@@ -168,7 +187,7 @@ main#alerts-view {
     100% { opacity: 0.6; }
 }
 
-/* --- Buttons (RESTORED COLORS) --- */
+/* --- Buttons --- */
 .btn-action {
     padding: 2px 8px;
     font-size: 0.85em;
@@ -290,7 +309,7 @@ main#alerts-view {
 .rule-editor-header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); padding-bottom: 10px; }
 .code-editor-wrapper { height: 150px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 15px; }
 .label-with-icon { display: flex; align-items: center; gap: 8px; }
-.info-icon { cursor: pointer; color: var(--color-primary); }
+.info-icon { cursor: pointer; color: var(--color-primary); display: inline-flex; align-items: center; }
 .help-text { font-size: 0.85em; color: var(--color-text-secondary); margin: 5px 0 10px; display: block; line-height: 1.4; }
 
 /* Example Blocks for Help Modal */

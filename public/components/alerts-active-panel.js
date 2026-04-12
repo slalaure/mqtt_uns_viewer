@@ -98,7 +98,7 @@ class AlertsActivePanel extends HTMLElement {
         tbody.innerHTML = '';
         
         if (filteredAlerts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);">✅ No active alerts match the filters.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--color-text-secondary);"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-success);"><polyline points="20 6 9 17 4 12"></polyline></svg> No active alerts match the filters.</td></tr>';
             return;
         }
 
@@ -122,8 +122,8 @@ class AlertsActivePanel extends HTMLElement {
             } else if (aiData.action) {
                 analysisHtml = `
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <div class="ai-action-pill" title="${this.sanitize(aiData.action)}">💡 ${this.sanitize(aiData.action)}</div>
-                        <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report">👁️</button>
+                        <div class="ai-action-pill" title="${this.sanitize(aiData.action)}"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-warning); margin:0 4px 0 0;"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 11.2 4a4.65 4.65 0 0 0-5.3 7.5c.76.76 1.23 1.52 1.41 2.5h7.78z"></path></svg> ${this.sanitize(aiData.action)}</div>
+                        <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
                     </div>
                 `;
             } else if (alert.analysis_result) {
@@ -131,7 +131,7 @@ class AlertsActivePanel extends HTMLElement {
                  analysisHtml = `
                     <div style="display:flex; align-items:center; gap:10px;">
                         <span style="font-size:0.85em; opacity:0.8;">${snippet}</span>
-                        <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report">👁️</button>
+                        <button class="btn-view-analysis tool-button" style="padding:2px 6px;" title="View Full Report"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
                     </div>
                 `;
             } else {
@@ -226,11 +226,11 @@ class AlertsActivePanel extends HTMLElement {
         if (!document.fullscreenElement) {
             panel.requestFullscreen().catch(err => console.error(`Error enabling fullscreen: ${err.message}`));
             panel.classList.add('fullscreen-mode');
-            if(btn) btn.innerHTML = '✖ Minimize';
+            if(btn) btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg> Minimize';
         } else {
             document.exitFullscreen();
             panel.classList.remove('fullscreen-mode');
-            if(btn) btn.innerHTML = '⛶ Maximize';
+            if(btn) btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Maximize';
         }
     }
 
@@ -252,7 +252,7 @@ class AlertsActivePanel extends HTMLElement {
                             <input type="checkbox" id="chk-hide-resolved"> 
                             <strong>Hide Resolved</strong>
                         </label>
-                        <button id="btn-alerts-fullscreen" class="tool-button" title="Toggle Fullscreen" style="padding: 4px 10px;">⛶ Maximize</button>
+                        <button id="btn-alerts-fullscreen" class="tool-button" title="Toggle Fullscreen" style="padding: 4px 10px;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Maximize</button>
                         <span style="font-size:0.8em; color:var(--color-text-secondary); border-left:1px solid var(--color-border); padding-left:15px;">Updates automatically</span>
                     </div>
                 </div>
@@ -262,7 +262,7 @@ class AlertsActivePanel extends HTMLElement {
                         ${providerOptions}
                     </select>
                     <input type="text" id="alerts-search-input" placeholder="Search alerts by topic, rule name or payload..." style="flex-grow: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg); color: var(--color-text);">
-                    <button id="btn-alerts-refresh" class="tool-button">↻ Refresh</button>
+                    <button id="btn-alerts-refresh" class="tool-button"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 6px 0 0;"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg> Refresh</button>
                 </div>
 
                 <div id="alerts-table-wrapper" style="overflow-x: auto; flex-grow:1;">
@@ -280,12 +280,11 @@ class AlertsActivePanel extends HTMLElement {
                     </table>
                 </div>
 
-                <!-- Modals are attached inside the component -->
                 <div id="analysis-modal" class="modal-backdrop" style="display:none; z-index: 3000; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
                     <div class="help-modal-content" style="max-width: 800px; background:var(--color-bg); padding:20px; border-radius:8px; width:90%; max-height:90vh; overflow-y:auto; position:relative;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid var(--color-border); padding-bottom:10px;">
-                            <h3 style="margin:0;">🤖 AI Analysis Report</h3>
-                            <button id="btn-close-analysis" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--color-text);">×</button>
+                            <h3 style="margin:0; display:flex; align-items:center; gap:8px;"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg> AI Analysis Report</h3>
+                            <button id="btn-close-analysis" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--color-text);"><svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                         </div>
                         <div id="analysis-content" class="analysis-content" style="line-height:1.6;"></div>
                         <div style="text-align:right; margin-top:20px;">

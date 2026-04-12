@@ -119,7 +119,7 @@ body {
     border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
-    width: 9em;
+    width: 10.5em; /* Increased width to prevent text wrapping */
     flex-shrink: 0;
     padding: 10px 0;
     overflow-y: auto;
@@ -128,11 +128,11 @@ body {
 }
 
 .sidebar-nav.collapsed {
-    width: 60px;
+    width: 3.5em;
 }
 
 .tab-button {
-    padding: 12px 18px; /* Centers the 20px icon exactly within the 60px collapsed width */
+    padding: 12px 18px;
     border: none;
     background-color: transparent;
     cursor: pointer;
@@ -141,19 +141,19 @@ body {
     color: var(--color-text-secondary);
     border-left: 3px solid transparent;
     transition: all 0.2s ease-in-out;
-    display: flex;
-    flex-direction: row; /* Force horizontal alignment */
-    flex-wrap: nowrap; /* Prevent text from wrapping below the icon */
-    align-items: center; /* Ensures perfect vertical centering of SVG and text */
-    justify-content: flex-start;
-    gap: 12px;
+    display: flex !important;
+    flex-direction: row !important; /* Force strict horizontal layout */
+    flex-wrap: nowrap !important; 
+    align-items: center !important; 
+    justify-content: flex-start !important;
+    gap: 12px !important;
     text-align: left;
-    white-space: nowrap;
+    white-space: nowrap !important;
     overflow: hidden;
 }
 
 .tab-button svg {
-    display: block; /* Removes inline descent space that causes baseline issues */
+    display: block; 
     width: 20px;
     height: 20px;
     flex-shrink: 0;
@@ -162,7 +162,8 @@ body {
 
 .nav-label {
     display: inline-block;
-    line-height: 20px; /* Force line-height to exactly match the SVG height */
+    line-height: 20px; 
+    white-space: nowrap !important; /* Prevent text wrapping */
 }
 
 .tab-button:hover {
@@ -218,21 +219,23 @@ body {
 header {
     background-color: var(--color-bg-secondary);
     color: var(--color-text);
-    padding: 6px 15px; /* Compact padding */
+    padding: 6px 15px;
     flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--color-border);
     gap: 15px;
+    flex-wrap: nowrap; /* Ensure elements stay on a single line */
 }
 
 header h1 { margin: 0; font-size: 1.25em; text-align: left; display: none; }
 
 .app-logo {
-    height: 24px; /* Reduced for vertical space optimization */
+    height: 24px; 
     width: auto;
     display: block;
+    flex-shrink: 0;
 }
 
 body.dark-mode .app-logo {
@@ -243,6 +246,8 @@ body.dark-mode .app-logo {
     display: flex;
     align-items: center;
     gap: 15px;
+    flex: 1;
+    min-width: 0; /* Allows content to shrink and prevents breaking flex layout */
 }
 
 /* Header Sub-row for Status */
@@ -250,12 +255,16 @@ body.dark-mode .app-logo {
     display: flex;
     align-items: center;
     margin-left: 0;
+    overflow-x: auto; /* Allow scrolling if too many brokers */
+    scrollbar-width: none;
 }
+.header-sub-row::-webkit-scrollbar { display: none; }
 
 .header-actions {
     display: flex;
     align-items: center;
     gap: 15px;
+    flex-shrink: 0;
 }
 
 /* Broker Status Container */
@@ -273,6 +282,7 @@ body.dark-mode .app-logo {
     padding: 2px 8px;
     border-radius: 12px;
     cursor: default;
+    white-space: nowrap;
 }
 .connector-dot {
     width: 8px;
@@ -299,12 +309,15 @@ body.dark-mode .app-logo {
     border: 1px solid var(--color-border);
     padding: 4px 8px;
     border-radius: 4px;
+    white-space: nowrap !important; /* Force clock to stay on 1 line */
+    flex-shrink: 0;
 }
 /* --- Theme Switcher --- */
 .theme-switch-wrapper {
     display: flex;
     align-items: center;
     gap: 8px;
+    white-space: nowrap !important; /* Force Dark Mode label to stay on 1 line */
 }
 .theme-label {
     font-size: 0.9em;
@@ -317,6 +330,7 @@ body.dark-mode .app-logo {
     display: inline-block;
     width: 44px;
     height: 24px;
+    flex-shrink: 0;
 }
 .theme-switch input {
     opacity: 0;
@@ -394,6 +408,7 @@ input:checked + .slider:before { transform: translateX(20px); }
     padding: 5px 10px; 
     border-radius: 4px; 
     transition: all 0.2s;
+    white-space: nowrap;
 }
 body.dark-mode .nav-button { background-color: var(--color-bg-tertiary); }
 .nav-button:hover { background-color: var(--color-bg-accent); }
@@ -710,15 +725,15 @@ body.dark-mode .is-file.mapped-target .node-name::before { filter: invert(80%) s
     .nav-label { display: none !important; }
     
     .tab-button {
-        padding: 12px 15px; /* Better touch target */
-        border-left: none;
-        border-bottom: 3px solid transparent;
-        white-space: nowrap;
-        justify-content: center; /* Center the icon */
+        padding: 12px 15px !important;
+        border-left: none !important;
+        border-bottom: 3px solid transparent !important;
+        white-space: nowrap !important;
+        justify-content: center !important; 
     }
     .tab-button.active {
-        border-left-color: transparent;
-        border-bottom-color: var(--color-primary);
+        border-left-color: transparent !important;
+        border-bottom-color: var(--color-primary) !important;
     }
     
     /* Fix for Admin & Alerts Sub-Navigation on Mobile */
