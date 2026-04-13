@@ -308,7 +308,6 @@ function renderStudioHTML(localSuggestions) {
 
     <div class="ai-studio-grid">
         
-        <!-- New Objects -->
         ${(localSuggestions.new_objects && localSuggestions.new_objects.length > 0) ? `
         <div class="ai-section">
             <h4 style="color: var(--color-success);">🛠️ New UNS Objects Inference</h4>
@@ -352,15 +351,14 @@ function renderStudioHTML(localSuggestions) {
             `).join('')}
         </div>` : ''}
 
-        <!-- Schema Updates -->
         <div class="ai-section">
             <h4 style="color: var(--color-primary);">📊 Schema Profiling & Boundaries</h4>
             ${(localSuggestions.schema_updates || []).length > 0 ? `
             <div style="display: flex; flex-direction: column; gap: 10px;">
                 ${(localSuggestions.schema_updates || []).map((s, i) => `
-                    <div class="ai-card" style="display: flex; align-items: center; gap: 15px; margin-bottom: 0; padding: 10px 15px;">
-                        <input type="checkbox" data-path="schema_updates.${i}._approved" checked style="transform: scale(1.2); cursor: pointer;">
-                        <div style="flex: 1; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div class="ai-card" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; padding: 10px 15px;">
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <input type="checkbox" data-path="schema_updates.${i}._approved" checked style="transform: scale(1.2); cursor: pointer;">
                             <div style="min-width: 200px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.variable}">
                                 ${s.variable}
                             </div>
@@ -384,12 +382,25 @@ function renderStudioHTML(localSuggestions) {
                                 Standard Quality Level: ${Math.round(s.suggestions.quality_score * 100)}%
                             </div>
                         </div>
+                        <div style="display: flex; gap: 15px; padding-left: 35px; flex-wrap: wrap;">
+                            <div class="ai-input-group" style="flex: 3; min-width: 150px;">
+                                <label>Description</label>
+                                <input type="text" data-path="schema_updates.${i}.suggestions.description" value="${s.suggestions.description || ''}" class="ai-suggestion-input" placeholder="Explanation of the data">
+                            </div>
+                            <div class="ai-input-group" style="flex: 1.5; min-width: 100px;">
+                                <label>Regex/Pattern</label>
+                                <input type="text" data-path="schema_updates.${i}.suggestions.pattern" value="${s.suggestions.pattern || ''}" class="ai-suggestion-input" placeholder="e.g. ^[A-Z]+$">
+                            </div>
+                            <div class="ai-input-group" style="flex: 2; min-width: 100px;">
+                                <label>Source HW</label>
+                                <input type="text" data-path="schema_updates.${i}.suggestions.source" value="${s.suggestions.source || ''}" class="ai-suggestion-input" placeholder="e.g. PLC-01">
+                            </div>
+                        </div>
                     </div>
                 `).join('')}
             </div>` : '<i>No schema updates suggested.</i>'}
         </div>
 
-        <!-- Alert Rules -->
         <div class="ai-section">
             <h4 style="color: var(--color-warning);">🚨 Proposed Smart Alert Rules</h4>
             <div class="info-box" style="border-left-color: var(--color-warning); background: rgba(255, 193, 7, 0.1);">

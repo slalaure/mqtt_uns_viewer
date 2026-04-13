@@ -396,7 +396,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                         typeId: o.type,
                         displayName: o.description || o.elementId,
                         topic_mapping: o.topic_mapping || undefined,
-                        namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                        namespaceUri: currentModel.namespaces?.[0]?.uri || "[https://cesmii.org/i3x](https://cesmii.org/i3x)",
                         isComposition: false
                     };
                     
@@ -427,7 +427,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                         targetType = {
                             elementId: newObj.typeId,
                             displayName: `${newObj.typeId} (Auto-generated)`,
-                            namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                            namespaceUri: currentModel.namespaces?.[0]?.uri || "[https://cesmii.org/i3x](https://cesmii.org/i3x)",
                             schema: { type: "object", properties: {} }
                         };
                         currentModel.objectTypes.push(targetType);
@@ -449,7 +449,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                             typeId: `${fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1)}Type`,
                             displayName: `Generated for ${s.topic}`,
                             topic_mapping: s.topic,
-                            namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                            namespaceUri: currentModel.namespaces?.[0]?.uri || "[https://cesmii.org/i3x](https://cesmii.org/i3x)",
                             isComposition: false
                         };
                         currentModel.instances.push(targetInstance);
@@ -463,7 +463,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                         targetType = {
                             elementId: targetInstance.typeId,
                             displayName: `${targetInstance.typeId} (Auto-generated)`,
-                            namespaceUri: currentModel.namespaces?.[0]?.uri || "https://cesmii.org/i3x",
+                            namespaceUri: currentModel.namespaces?.[0]?.uri || "[https://cesmii.org/i3x](https://cesmii.org/i3x)",
                             schema: { type: "object", properties: {} }
                         };
                         currentModel.objectTypes.push(targetType);
@@ -478,6 +478,11 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                     targetType.schema.properties[s.variable].nominal_value = s.suggestions.nominal_value;
                     targetType.schema.properties[s.variable].expected_range = s.suggestions.expected_range;
                     targetType.schema.properties[s.variable].data_frequency_seconds = s.suggestions.data_frequency_seconds;
+
+                    if (s.suggestions.description !== undefined) targetType.schema.properties[s.variable].description = s.suggestions.description;
+                    if (s.suggestions.pattern !== undefined) targetType.schema.properties[s.variable].pattern = s.suggestions.pattern;
+                    if (s.suggestions.source !== undefined) targetType.schema.properties[s.variable].source = s.suggestions.source;
+                    
                     modelChanged = true;
                 }
 

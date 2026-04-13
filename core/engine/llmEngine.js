@@ -77,6 +77,7 @@ class LlmEngine {
                  * Use 'HasParent' strictly to build the physical location hierarchy (e.g., Machine HasParent Line, AHU HasParent Roof).
 
             3. Suggest updates to the 'uns_model.json' for these topics. Include nominal values, expected ranges, typical frequencies, and a data quality score (0-1).
+               Also provide a 'description' of what the data represents, a regex/schema 'pattern' (if applicable), and the actual system 'source' that generated it (sensor, software, form ...).
             4. Propose smart Alert Rules for the Alert Manager. 
                - Use the 'Frequency' and 'Chatter' metrics to avoid noisy alerts.
                - Rules must be valid JavaScript conditions.
@@ -102,6 +103,9 @@ class LlmEngine {
                   "topic": "...",
                   "variable": "...",
                   "suggestions": {
+                    "description": "Explanation of what this specific data point is.",
+                    "pattern": "Regex pattern or schema string constraint (if any).",
+                    "source": "The specific hardware, sensor, or PLC generating this data.",
                     "nominal_value": 0,
                     "expected_range": [min, max],
                     "data_frequency_seconds": 0,

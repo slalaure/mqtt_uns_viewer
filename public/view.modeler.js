@@ -373,16 +373,16 @@ function addSchemaRow(data = {}) {
     row.innerHTML = `
         <div style="display: flex; gap: 8px; align-items: center;">
             <input type="text" placeholder="ID" class="modern-input" style="flex: 1.5 0 80px; font-family:monospace; min-width: 80px;" value="${data.id || ''}" data-key="id">
-            <input type="text" placeholder="Label" class="modern-input" style="flex: 2.5 0 120px; min-width: 120px;" value="${data.title || data.id || ''}" data-key="title">
+            <input type="text" placeholder="Label" class="modern-input" style="flex: 2 0 120px; min-width: 120px;" value="${data.title || data.id || ''}" data-key="title">
+            <input type="text" placeholder="Description..." class="modern-input" style="flex: 3 0 150px; min-width: 150px;" value="${data.description || ''}" data-key="description" title="Explanation of the data">
             <select class="modern-input" style="flex: 1.5 0 90px; min-width: 90px;" data-key="type">${typeOptions}</select>
-            
+            <input type="text" placeholder="Regex/Pattern" class="modern-input" style="flex: 1.5 0 100px; min-width: 100px;" value="${data.pattern || ''}" data-key="pattern" title="Regex or schema constraint (for string/array/object)">
+            <input type="text" placeholder="Software/Sensor/PLC" class="modern-input" style="flex: 2 0 120px; min-width: 120px;" value="${data.source || ''}" data-key="source" title="Hardware or entity that generated this data">
             <select class="modern-input" style="flex: 1 0 70px; min-width: 70px; background: var(--color-bg-tertiary);" data-key="keyType" title="Key Type (PK/FK)">${keyTypeOptions}</select>
             <select class="modern-input" style="flex: 2 0 120px; min-width: 120px; display: ${data.keyType === 'FK' ? 'block' : 'none'}; border: 1px solid var(--color-primary);" data-key="fkTarget">${fkTargetOptions}</select>
             <div style="flex: 2 0 120px; min-width: 120px; display: ${data.keyType !== 'FK' ? 'block' : 'none'};"></div>
-            
             <select class="modern-input" style="flex: 1.5 0 100px; min-width: 100px;" data-key="confidentiality" title="Confidentiality">${confOptions}</select>
             <select class="modern-input" style="flex: 1.5 0 100px; min-width: 100px;" data-key="sensitivity" title="Sensitivity">${sensOptions}</select>
-            
             <input type="text" placeholder="Unit" class="modern-input" style="flex: 1 0 60px; min-width: 60px;" value="${data.unit || ''}" data-key="unit">
             <button class="btn-delete-row" style="flex: 0 0 30px; width: 30px; padding: 4px 8px;">✖</button>
         </div>
@@ -514,6 +514,15 @@ function syncStateFromForm() {
 
         const unitEl = row.querySelector('[data-key="unit"]');
         if (unitEl && unitEl.value) item.unit = unitEl.value;
+        
+        const descEl = row.querySelector('[data-key="description"]');
+        if (descEl && descEl.value) item.description = descEl.value; else delete item.description;
+        
+        const pattEl = row.querySelector('[data-key="pattern"]');
+        if (pattEl && pattEl.value) item.pattern = pattEl.value; else delete item.pattern;
+
+        const srcEl = row.querySelector('[data-key="source"]');
+        if (srcEl && srcEl.value) item.source = srcEl.value; else delete item.source;
 
         // Profiling Metadata
         const nom = row.querySelector('[data-key="nominal_value"]').value;
