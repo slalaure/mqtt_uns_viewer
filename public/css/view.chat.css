@@ -5,12 +5,11 @@
 }
 
 /* Ensure the main layout can shrink smoothly when the chat is docked */
-body header, body .app-body {
+body .app-body {
     transition: width 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
-body.chat-docked header,
 body.chat-docked .app-body {
-    width: calc(98% - var(--chat-dock-width));
+    width: calc(100% - var(--chat-dock-width));
 }
 
 /* --- Floating Widget Container --- */
@@ -41,15 +40,16 @@ body.chat-docked .app-body {
 
 /* --- Docked State Overrides --- */
 .chat-widget-container.docked {
-    top: 0 !important;
+    top: var(--header-height, 46px) !important;
     right: 0 !important;
     bottom: 0 !important;
     left: auto !important;
-    height: 100% !important; 
+    height: calc(100% - var(--header-height, 46px)) !important; 
     border-radius: 0;
     border-top: none;
     border-right: none;
     border-bottom: none;
+    border-left: 1px solid var(--color-border);
     transform: none !important;
     box-shadow: -5px 0 25px rgba(0,0,0,0.15);
     transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.3s ease, width 0s;
@@ -550,7 +550,6 @@ body.chat-docked .app-body {
     #btn-chat-dock {
         display: none !important; /* Disallow docking on mobile */
     }
-    body.chat-docked header,
     body.chat-docked .app-body {
         width: 100% !important; /* Cancel main layout shrink on mobile */
     }

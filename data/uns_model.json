@@ -45,10 +45,20 @@
         "type": "object",
         "properties": {
           "status": {
-            "type": "string"
+            "type": "string",
+            "title": "status",
+            "keyType": "-",
+            "confidentiality": "Public",
+            "sensitivity": "Normal",
+            "pattern": "^(RUNNING|STOPPED|IDLE|MAINTENANCE|FAULTED|OFFLINE)$"
           },
           "active_wo": {
-            "type": "string"
+            "type": "string",
+            "title": "active_wo",
+            "keyType": "-",
+            "confidentiality": "Public",
+            "sensitivity": "Normal",
+            "pattern": "^WO-\\d{4,12}$"
           }
         }
       }
@@ -76,6 +86,8 @@
           "temperature_c": {
             "type": "number",
             "unit": "°C",
+            "description": "Ambient room temperature",
+            "source": "HVAC PLC (Siemens S7)",
             "nominal_value": 21.42,
             "expected_range": [
               18,
@@ -86,6 +98,8 @@
           "co2_ppm": {
             "type": "number",
             "unit": "ppm",
+            "description": "Carbon Dioxide concentration levels",
+            "source": "Wall-mounted CO2 Sensor",
             "nominal_value": 724.14,
             "expected_range": [
               400,
@@ -95,6 +109,8 @@
           },
           "occupancy_count": {
             "type": "number",
+            "description": "Estimated number of people in the area based on entry/exit logs",
+            "source": "BMS System",
             "nominal_value": 65,
             "expected_range": [
               0,
@@ -103,7 +119,9 @@
             "data_frequency_seconds": 10.18
           },
           "hvac_mode": {
-            "type": "string"
+            "type": "string",
+            "description": "The current operating mode of the HVAC unit",
+            "pattern": "^(HEAT|COOL|VENT|AUTO|OFF)$"
           }
         }
       }

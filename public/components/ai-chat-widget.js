@@ -203,6 +203,26 @@ class AiChatWidget extends HTMLElement {
         }
     }
 
+    // --- Utility Method for External Callers ---
+    async askNewQuestion(promptText, autoSend = false) {
+        this.toggleWidget(true);
+        await this.createNewSession();
+        
+        // Brief timeout to allow DOM updates after session clear
+        setTimeout(() => {
+            const input = this.querySelector('#chat-input');
+            if (input) {
+                input.value = promptText;
+                this.autoResizeInput();
+                if (autoSend) {
+                    this.sendMessage();
+                } else {
+                    input.focus();
+                }
+            }
+        }, 50);
+    }
+
     async deleteSession(id) {
         try {
             await fetch(`${this.appBasePath}/api/chat/session/${id}`, { method: 'DELETE' });
@@ -219,6 +239,10 @@ class AiChatWidget extends HTMLElement {
         const container = this.querySelector('#chat-widget-container');
         
         if (this.isDocked) {
+            const header = document.querySelector('header');
+            const headerHeight = header ? header.offsetHeight : 46;
+            document.body.style.setProperty('--header-height', `${headerHeight}px`);
+
             container.classList.add('docked');
             document.body.classList.add('chat-docked');
             document.body.style.setProperty('--chat-dock-width', `${this.dockWidth}px`);
@@ -226,6 +250,7 @@ class AiChatWidget extends HTMLElement {
             container.classList.remove('docked');
             document.body.classList.remove('chat-docked');
             document.body.style.setProperty('--chat-dock-width', `0px`);
+            document.body.style.removeProperty('--header-height');
             
             // Restore original floating position
             container.style.left = '';
@@ -250,6 +275,10 @@ class AiChatWidget extends HTMLElement {
             trackEvent('chat_open');
             
             if (this.isDocked) {
+                const header = document.querySelector('header');
+                const headerHeight = header ? header.offsetHeight : 46;
+                document.body.style.setProperty('--header-height', `${headerHeight}px`);
+
                 document.body.classList.add('chat-docked');
                 document.body.style.setProperty('--chat-dock-width', `${this.dockWidth}px`);
             }

@@ -319,6 +319,22 @@ function selectItem(type, id) {
 
 function renderSchemaItems() {
     el['container-properties'].innerHTML = '';
+    
+    // Inject the Datalist for Regex Presets (Only needed once per render)
+    if (!document.getElementById('regex-presets')) {
+        const datalist = document.createElement('datalist');
+        datalist.id = 'regex-presets';
+        datalist.innerHTML = `
+            <option value="^[a-zA-Z0-9_]+$">Alphanumeric</option>
+            <option value="^\\d+$">Numbers Only</option>
+            <option value="^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$">Email Address</option>
+            <option value="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$">Hex Color</option>
+            <option value="^(true|false|1|0)$">Boolean (Strict)</option>
+            <option value="^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$">IP Address (v4)</option>
+        `;
+        el['container-properties'].appendChild(datalist);
+    }
+
     const schema = currentSelection.ref.schema || {};
     const props = schema.properties || {};
     Object.entries(props).forEach(([key, val]) => {
@@ -376,8 +392,13 @@ function addSchemaRow(data = {}) {
             <input type="text" placeholder="Label" class="modern-input" style="flex: 2 0 120px; min-width: 120px;" value="${data.title || data.id || ''}" data-key="title">
             <input type="text" placeholder="Description..." class="modern-input" style="flex: 3 0 150px; min-width: 150px;" value="${data.description || ''}" data-key="description" title="Explanation of the data">
             <select class="modern-input" style="flex: 1.5 0 90px; min-width: 90px;" data-key="type">${typeOptions}</select>
-            <input type="text" placeholder="Regex/Pattern" class="modern-input" style="flex: 1.5 0 100px; min-width: 100px;" value="${data.pattern || ''}" data-key="pattern" title="Regex or schema constraint (for string/array/object)">
-            <input type="text" placeholder="Software/Sensor/PLC" class="modern-input" style="flex: 2 0 120px; min-width: 120px;" value="${data.source || ''}" data-key="source" title="Hardware or entity that generated this data">
+            
+            <div style="flex: 1.5 0 100px; min-width: 100px; position: relative; display: flex; align-items: center;">
+                <input type="text" placeholder="Regex/Pattern" class="modern-input" style="width: 100%; padding-right: 24px;" value="${data.pattern || ''}" data-key="pattern" title="Regex or schema constraint" list="regex-presets">
+                <button class="btn-ask-ai-regex" style="position: absolute; right: 4px; background: none; border: none; cursor: pointer; font-size: 1.1em; padding: 0; display: flex; align-items: center; justify-content: center; filter: grayscale(0.5); transition: filter 0.2s;" title="Ask AI to generate a Regex pattern">✨</button>
+            </div>
+
+            <input type="text" placeholder="Sensor/PLC/HW" class="modern-input" style="flex: 2 0 120px; min-width: 120px;" value="${data.source || ''}" data-key="source" title="Hardware or entity that generated this data">
             <select class="modern-input" style="flex: 1 0 70px; min-width: 70px; background: var(--color-bg-tertiary);" data-key="keyType" title="Key Type (PK/FK)">${keyTypeOptions}</select>
             <select class="modern-input" style="flex: 2 0 120px; min-width: 120px; display: ${data.keyType === 'FK' ? 'block' : 'none'}; border: 1px solid var(--color-primary);" data-key="fkTarget">${fkTargetOptions}</select>
             <div style="flex: 2 0 120px; min-width: 120px; display: ${data.keyType !== 'FK' ? 'block' : 'none'};"></div>
@@ -395,6 +416,34 @@ function addSchemaRow(data = {}) {
             <div style="display:flex; align-items:center; gap: 4px;">Qual(%): <input type="number" step="any" min="0" max="100" class="modern-input" style="padding: 4px 6px; width: 70px;" data-key="quality_score" value="${data.quality_score ? Math.round(data.quality_score * 100) : ''}"></div>
         </div>
     `;
+
+    // Hook up the AI Regex Assistant button
+    const btnAskAi = row.querySelector('.btn-ask-ai-regex');
+    if (btnAskAi) {
+        btnAskAi.onmouseover = () => btnAskAi.style.filter = 'grayscale(0)';
+        btnAskAi.onmouseout = () => btnAskAi.style.filter = 'grayscale(0.5)';
+        btnAskAi.onclick = () => {
+            const propId = row.querySelector('[data-key="id"]')?.value || 'this property';
+            const propDesc = row.querySelector('[data-key="description"]')?.value || '';
+            const propType = row.querySelector('[data-key="type"]')?.value || 'string';
+            const objectName = el['modeler-edit-displayname']?.value || 'the current object';
+
+            let promptMsg = `I am modeling an equipment/object named "${objectName}" in the CDM Modeler.\n`;
+            promptMsg += `Please generate a strict Regular Expression (Regex) pattern to validate the following property:\n`;
+            promptMsg += `- Property Name: "${propId}"\n`;
+            promptMsg += `- Data Type: "${propType}"\n`;
+            if (propDesc) promptMsg += `- Description/Role: "${propDesc}"\n\n`;
+            promptMsg += `Provide ONLY the raw Regex string inside a code block, followed by a brief explanation.`;
+
+            const chatWidget = document.querySelector('ai-chat-widget');
+            if (chatWidget && typeof chatWidget.askNewQuestion === 'function') {
+                // Creates a new session to guarantee context and auto-sends the prompt
+                chatWidget.askNewQuestion(promptMsg, true);
+            } else {
+                showToast("AI Chat Assistant is not available.", "warning");
+            }
+        };
+    }
 
     const keyTypeSelect = row.querySelector('[data-key="keyType"]');
     const fkTargetSelect = row.querySelector('[data-key="fkTarget"]');
@@ -493,7 +542,7 @@ function syncStateFromForm() {
     const properties = {};
     const rows = [...el['container-properties'].children];
     rows.forEach(row => {
-        const id = row.querySelector('[data-key="id"]').value.trim();
+        const id = row.querySelector('[data-key="id"]')?.value?.trim();
         if (!id) return;
         
         // Preserve any unknown properties that the AI might have added

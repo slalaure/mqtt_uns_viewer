@@ -77,7 +77,7 @@ class LlmEngine {
                  * Use 'HasParent' strictly to build the physical location hierarchy (e.g., Machine HasParent Line, AHU HasParent Roof).
 
             3. Suggest updates to the 'uns_model.json' for these topics. Include nominal values, expected ranges, typical frequencies, and a data quality score (0-1).
-               Also provide a 'description' of what the data represents, a regex/schema 'pattern' (if applicable), and the actual system 'source' that generated it (sensor, software, form ...).
+               Also provide a 'description' of what the data represents, a regex/schema 'pattern' (if applicable), and the actual hardware 'source' that generated it.
             4. Propose smart Alert Rules for the Alert Manager. 
                - Use the 'Frequency' and 'Chatter' metrics to avoid noisy alerts.
                - Rules must be valid JavaScript conditions.
@@ -133,6 +133,14 @@ class LlmEngine {
         let prompt = template || "You are an expert UNS Architect. CONTEXT:\n{{CONNECTOR_CONTEXT}}\n\nTOOLS:\n{{TOOLS_CONTEXT}}";
         prompt = prompt.replace('{{CONNECTOR_CONTEXT}}', connectorContext);
         prompt = prompt.replace('{{TOOLS_CONTEXT}}', toolsContext);
+        
+        // Append specific instructions to handle the CDM Modeler Regex assistance
+        prompt += `\n\nSPECIAL INSTRUCTION - CDM MODELER REGEX:
+If the user asks to generate a "Regex pattern" or "schema constraint" for a property in the CDM Modeler:
+1. Provide a highly accurate, standard regular expression.
+2. Format the regex string clearly in a code block so it can be easily copied by the user.
+3. Provide a brief, simple explanation of what the regex enforces (e.g., "This ensures the value is exactly a valid MAC Address").`;
+
         return prompt;
     }
 

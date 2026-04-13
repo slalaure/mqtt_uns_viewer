@@ -119,7 +119,7 @@ body {
     border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
-    width: 10.5em; /* Increased width to prevent text wrapping */
+    width: 10em; /* Increased width to prevent text wrapping */
     flex-shrink: 0;
     padding: 10px 0;
     overflow-y: auto;
@@ -128,11 +128,11 @@ body {
 }
 
 .sidebar-nav.collapsed {
-    width: 3.5em;
+    width: 3em;
 }
 
 .tab-button {
-    padding: 12px 18px;
+    padding: 12px 8px;
     border: none;
     background-color: transparent;
     cursor: pointer;
