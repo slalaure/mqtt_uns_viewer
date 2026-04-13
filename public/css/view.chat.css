@@ -1,4 +1,18 @@
 /* public/css/view.chat.css */
+
+:root {
+    --chat-dock-width: 0px;
+}
+
+/* Ensure the main layout can shrink smoothly when the chat is docked */
+body header, body .app-body {
+    transition: width 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+body.chat-docked header,
+body.chat-docked .app-body {
+    width: calc(98% - var(--chat-dock-width));
+}
+
 /* --- Floating Widget Container --- */
 .chat-widget-container {
     position: fixed;
@@ -25,6 +39,46 @@
     pointer-events: auto;
 }
 
+/* --- Docked State Overrides --- */
+.chat-widget-container.docked {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    height: 100% !important; 
+    border-radius: 0;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    transform: none !important;
+    box-shadow: -5px 0 25px rgba(0,0,0,0.15);
+    transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.3s ease, width 0s;
+}
+
+.chat-widget-container.docked .chat-header {
+    cursor: default;
+    border-radius: 0;
+}
+
+.chat-widget-container.docked .chat-body {
+    border-radius: 0;
+}
+
+/* Hide all resize handles except West when docked */
+.chat-widget-container.docked .chat-resize-handle:not(.chat-resize-w) {
+    display: none !important;
+}
+
+/* Make sure West handle spans full height when docked for easy resizing */
+.chat-widget-container.docked .chat-resize-w {
+    top: 0;
+    bottom: 0;
+    height: 100%;
+    width: 10px;
+    left: -5px;
+    cursor: ew-resize;
+}
+
 /* We need the internal parts to keep the border radius clipping */
 .chat-header {
     background-color: var(--color-primary);
@@ -37,9 +91,31 @@
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
     cursor: grab; /* Shows it's draggable */
+    gap: 10px;
+    flex-wrap: nowrap; /* Prevent wrapping when squeezed */
 }
 .chat-header:active {
     cursor: grabbing;
+}
+
+/* Ensure the title truncates cleanly instead of wrapping to a new line */
+.chat-header > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+.chat-header > span > svg {
+    flex-shrink: 0; /* Keep the icon intact */
+}
+
+/* Ensure the buttons stay in a single horizontal row */
+.chat-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .chat-controls button {
@@ -51,6 +127,9 @@
     padding: 4px;
     border-radius: 4px;
     transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .chat-controls button:hover {
     background-color: rgba(255,255,255,0.2);
@@ -467,5 +546,12 @@
     }
     .chat-header {
         cursor: default; /* Disable dragging indicator on mobile */
+    }
+    #btn-chat-dock {
+        display: none !important; /* Disallow docking on mobile */
+    }
+    body.chat-docked header,
+    body.chat-docked .app-body {
+        width: 100% !important; /* Cancel main layout shrink on mobile */
     }
 }

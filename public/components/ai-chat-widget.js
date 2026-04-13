@@ -1,3 +1,4 @@
+// public/components/ai-chat-widget.js
 /**
  * @license Apache License, Version 2.0 (the "License")
  */
@@ -14,7 +15,8 @@ const ICONS = {
     loader: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 2s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>',
     file: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
     close: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-danger); cursor:pointer;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
-    alert: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-danger);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+    alert: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-danger);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+    dock: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/><path d="M15 3v18"/></svg>'
 };
 
 /**
@@ -26,6 +28,8 @@ class AiChatWidget extends HTMLElement {
     constructor() {
         super();
         this.isWidgetOpen = false;
+        this.isDocked = false;
+        this.dockWidth = 400;
         this.isMounted = false;
         this.isProcessing = false;
         this.currentSessionId = 'default';
@@ -77,7 +81,8 @@ class AiChatWidget extends HTMLElement {
             modelSelect.style.display = 'block';
         }
 
-        const sessionList = this.querySelector('chat-session-list');        if (sessionList) {
+        const sessionList = this.querySelector('chat-session-list');        
+        if (sessionList) {
             sessionList.init(this.appBasePath, this.currentSessionId, {
                 onSwitch: (id) => this.switchSession(id),
                 onDelete: (id) => this.deleteSession(id),
@@ -115,6 +120,17 @@ class AiChatWidget extends HTMLElement {
         const camCancel = this.querySelector('#btn-cam-cancel');
         const camCapture = this.querySelector('#btn-cam-capture');
         
+        // Inject Dock Button if it doesn't exist
+        const controls = this.querySelector('.chat-controls');
+        if (controls && !this.querySelector('#btn-chat-dock')) {
+            const dockBtn = document.createElement('button');
+            dockBtn.id = 'btn-chat-dock';
+            dockBtn.title = 'Dock to Right Pane';
+            dockBtn.innerHTML = ICONS.dock;
+            controls.insertBefore(dockBtn, minimize);
+            dockBtn.addEventListener('click', () => this.toggleDock());
+        }
+
         fab?.addEventListener('click', () => this.toggleWidget(true));
         minimize?.addEventListener('click', () => this.toggleWidget(false));
         send?.addEventListener('click', () => this.sendMessage());
@@ -196,6 +212,31 @@ class AiChatWidget extends HTMLElement {
     }
 
     // --- UI Actions ---
+    toggleDock() {
+        if (window.innerWidth <= 480) return; // Prevent docking on mobile completely
+        
+        this.isDocked = !this.isDocked;
+        const container = this.querySelector('#chat-widget-container');
+        
+        if (this.isDocked) {
+            container.classList.add('docked');
+            document.body.classList.add('chat-docked');
+            document.body.style.setProperty('--chat-dock-width', `${this.dockWidth}px`);
+        } else {
+            container.classList.remove('docked');
+            document.body.classList.remove('chat-docked');
+            document.body.style.setProperty('--chat-dock-width', `0px`);
+            
+            // Restore original floating position
+            container.style.left = '';
+            container.style.top = '';
+            container.style.width = `${this.dockWidth}px`;
+            container.style.height = '600px';
+            container.style.bottom = '90px';
+            container.style.right = '20px';
+        }
+    }
+
     toggleWidget(open) {
         this.isWidgetOpen = open;
         const container = this.querySelector('#chat-widget-container');
@@ -207,9 +248,19 @@ class AiChatWidget extends HTMLElement {
             this.querySelector('#chat-input')?.focus();
             setTimeout(() => this.scrollToBottom(), 300);
             trackEvent('chat_open');
+            
+            if (this.isDocked) {
+                document.body.classList.add('chat-docked');
+                document.body.style.setProperty('--chat-dock-width', `${this.dockWidth}px`);
+            }
         } else {
             container.classList.remove('active');
             fab.style.display = 'flex';
+            
+            if (this.isDocked) {
+                document.body.classList.remove('chat-docked');
+                document.body.style.setProperty('--chat-dock-width', `0px`);
+            }
         }
     }
 
@@ -517,10 +568,6 @@ class AiChatWidget extends HTMLElement {
         if (!container) return;
         
         if (type === 'text') {
-            // Text chunks from LLM are just appended directly to the container
-            // Since LLM streams are no longer chunk-by-chunk in this implementation, 
-            // 'text' actually contains the full response so far.
-            // We find or create the text wrapper.
             let textWrapper = container.querySelector('.streaming-text-content');
             if (!textWrapper) {
                 textWrapper = document.createElement('div');
@@ -547,7 +594,6 @@ class AiChatWidget extends HTMLElement {
             container.appendChild(toolDiv);
             
         } else if (type === 'tool_result') {
-            // Content shape is { name: fnName, result: "Done", duration: ms }
             if (container.dataset.activeTools) {
                 const activeTools = JSON.parse(container.dataset.activeTools);
                 const toolId = activeTools[content.name];
@@ -732,6 +778,7 @@ class AiChatWidget extends HTMLElement {
         };
 
         header.onmousedown = (e) => {
+            if (this.isDocked) return; // Prevent dragging while docked
             if (e.target.closest('button')) return;
             isDragging = true;
             switchToAbsolute();
@@ -760,10 +807,24 @@ class AiChatWidget extends HTMLElement {
 
                 document.onmousemove = (me) => {
                     const dx = me.clientX - startX, dy = me.clientY - startY;
-                    if (pos.includes('e')) widget.style.width = (startWidth + dx) + 'px';
-                    if (pos.includes('s')) widget.style.height = (startHeight + dy) + 'px';
-                    if (pos.includes('w')) { widget.style.width = (startWidth - dx) + 'px'; widget.style.left = (startLeft + dx) + 'px'; }
-                    if (pos.includes('n')) { widget.style.height = (startHeight - dy) + 'px'; widget.style.top = (startTop + dy) + 'px'; }
+                    
+                    if (this.isDocked) {
+                        // Only allow resizing width via West handle when docked
+                        if (pos.includes('w')) {
+                            let newWidth = startWidth - dx;
+                            if (newWidth < 300) newWidth = 300;
+                            if (newWidth > window.innerWidth * 0.6) newWidth = window.innerWidth * 0.6;
+                            widget.style.width = newWidth + 'px';
+                            this.dockWidth = newWidth;
+                            document.body.style.setProperty('--chat-dock-width', `${newWidth}px`);
+                        }
+                    } else {
+                        // Free floating resize logic
+                        if (pos.includes('e')) widget.style.width = (startWidth + dx) + 'px';
+                        if (pos.includes('s')) widget.style.height = (startHeight + dy) + 'px';
+                        if (pos.includes('w')) { widget.style.width = (startWidth - dx) + 'px'; widget.style.left = (startLeft + dx) + 'px'; }
+                        if (pos.includes('n')) { widget.style.height = (startHeight - dy) + 'px'; widget.style.top = (startTop + dy) + 'px'; }
+                    }
                 };
                 document.onmouseup = () => { document.onmousemove = null; };
             };
