@@ -32,6 +32,7 @@ class AiChatWidget extends HTMLElement {
         this.dockWidth = 400;
         this.isMounted = false;
         this.isProcessing = false;
+        this.isSpeaking = false;
         this.currentSessionId = 'default';
         this.conversationHistory = [];
         this.appBasePath = '';
@@ -41,8 +42,10 @@ class AiChatWidget extends HTMLElement {
         this.isListening = false;
         this.finalTranscript = '';
         this.userWantMicActive = false;
+        this.wasVoiceTurn = false; // Tracks if the CURRENT interaction was voice-driven
         this.availableVoices = [];
         this.currentUtterance = null;
+        this.silenceTimer = null;
         
         // Camera State
         this.cameraStream = null;
@@ -120,21 +123,28 @@ class AiChatWidget extends HTMLElement {
         const camCancel = this.querySelector('#btn-cam-cancel');
         const camCapture = this.querySelector('#btn-cam-capture');
         
-        // Inject Dock Button if it doesn't exist
-        const controls = this.querySelector('.chat-controls');
-        if (controls && !this.querySelector('#btn-chat-dock')) {
+        // Inject Dock Button if it doesn't exist, correctly placing it in the same container as 'minimize'
+        if (minimize && minimize.parentNode && !this.querySelector('#btn-chat-dock')) {
             const dockBtn = document.createElement('button');
             dockBtn.id = 'btn-chat-dock';
             dockBtn.title = 'Dock to Right Pane';
             dockBtn.innerHTML = ICONS.dock;
-            controls.insertBefore(dockBtn, minimize);
+            minimize.parentNode.insertBefore(dockBtn, minimize);
             dockBtn.addEventListener('click', () => this.toggleDock());
         }
 
         fab?.addEventListener('click', () => this.toggleWidget(true));
         minimize?.addEventListener('click', () => this.toggleWidget(false));
         send?.addEventListener('click', () => this.sendMessage());
-        stop?.addEventListener('click', () => this.stopGeneration());
+        
+        stop?.addEventListener('click', () => {
+            if (this.isProcessing) this.stopGeneration();
+            if (this.isSpeaking) {
+                window.speechSynthesis.cancel();
+                this.isSpeaking = false;
+                this.updateProcessingUI(this.isProcessing);
+            }
+        });
         
         input?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -315,10 +325,23 @@ class AiChatWidget extends HTMLElement {
 
     // --- Core Logic: Send Message ---
     async sendMessage() {
+        this.clearSilenceTimer();
+        
+        // Capture if this turn was initiated while the mic was active
+        this.wasVoiceTurn = this.userWantMicActive;
+
+        if (this.userWantMicActive) {
+            this.userWantMicActive = false;
+            try { this.recognition.stop(); } catch(e) {}
+            this.querySelector('#btn-chat-mic')?.classList.remove('listening');
+        }
+
         if (this.isProcessing) return;
         const input = this.querySelector('#chat-input');
         const text = input.value.trim();
         if (!text && !this.pendingAttachment) return;
+        
+        this.finalTranscript = ''; // Prevent bleed-over to next voice input
 
         this.isProcessing = true;
         this.updateProcessingUI(true);
@@ -352,6 +375,7 @@ class AiChatWidget extends HTMLElement {
                 sessionId: this.currentSessionId,
                 messages: this.conversationHistory,
                 model: selectedModel,
+                voiceMode: this.wasVoiceTurn, // Pass true if it's a voice-driven turn
                 context: {
                     currentTopic: state.currentTopic,
                     currentSourceId: state.currentSourceId
@@ -377,11 +401,16 @@ class AiChatWidget extends HTMLElement {
         const btnStop = this.querySelector('#btn-stop-chat');
         const input = this.querySelector('#chat-input');
 
-        if (processing) {
+        if (processing || this.isSpeaking) {
             btnSend.style.display = 'none';
             btnStop.style.display = 'flex';
-            input.placeholder = 'AI is thinking...';
-            this.showTypingIndicator();
+            if (processing) {
+                input.placeholder = 'AI is thinking...';
+                this.showTypingIndicator();
+            } else {
+                input.placeholder = 'Speaking...';
+                this.removeTypingIndicator();
+            }
         } else {
             btnSend.style.display = 'flex';
             btnStop.style.display = 'none';
@@ -468,6 +497,7 @@ class AiChatWidget extends HTMLElement {
                     sessionId: this.currentSessionId,
                     messages: this.conversationHistory, // backend already has the latest state via history
                     approvedToolCallIds: approvedIds,
+                    voiceMode: this.wasVoiceTurn,
                     context: {
                         currentTopic: state.currentTopic,
                         currentSourceId: state.currentSourceId
@@ -501,8 +531,9 @@ class AiChatWidget extends HTMLElement {
             
             // Speak last message if it's from assistant and was voice-driven
             const lastMsg = this.conversationHistory[this.conversationHistory.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant' && this.userWantMicActive) {
+            if (lastMsg && lastMsg.role === 'assistant' && this.wasVoiceTurn) {
                 this.speakText(lastMsg.content);
+                this.wasVoiceTurn = false; // Reset after speaking
             }
         } catch (e) { console.error(e); }
     }
@@ -654,10 +685,12 @@ class AiChatWidget extends HTMLElement {
             this.isListening = true;
             this.querySelector('#btn-chat-mic')?.classList.add('listening');
             this.querySelector('#chat-input').placeholder = "Listening...";
+            this.resetSilenceTimer();
         };
 
         this.recognition.onend = () => {
             this.isListening = false;
+            this.clearSilenceTimer();
             if (this.userWantMicActive) {
                 try { this.recognition.start(); } catch(e) {}
             } else {
@@ -667,6 +700,7 @@ class AiChatWidget extends HTMLElement {
         };
 
         this.recognition.onresult = (event) => {
+            this.resetSilenceTimer();
             let interimTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) this.finalTranscript += event.results[i][0].transcript + ' ';
@@ -681,14 +715,35 @@ class AiChatWidget extends HTMLElement {
             if (e.error === 'not-allowed') {
                 this.userWantMicActive = false;
                 this.querySelector('#btn-chat-mic')?.classList.remove('listening');
+                this.clearSilenceTimer();
             }
         };
+    }
+    
+    clearSilenceTimer() {
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+    }
+
+    resetSilenceTimer() {
+        this.clearSilenceTimer();
+        if (this.userWantMicActive) {
+            this.silenceTimer = setTimeout(() => {
+                const input = this.querySelector('#chat-input');
+                if (input && input.value.trim().length > 0) {
+                    this.sendMessage(); // Let sendMessage handle turning off the mic
+                }
+            }, 3000);
+        }
     }
 
     toggleMic() {
         if (!this.recognition) return showToast("Voice recognition not supported in this browser.", "warning");
         if (this.userWantMicActive) {
             this.userWantMicActive = false;
+            this.clearSilenceTimer();
             this.recognition.stop();
         } else {
             window.speechSynthesis.cancel();
@@ -711,13 +766,32 @@ class AiChatWidget extends HTMLElement {
         if (!('speechSynthesis' in window)) return;
         window.speechSynthesis.cancel();
         
-        const cleanText = text.replace(/\*\*/g, '').replace(/`/g, '').replace(/#/g, '').replace(/<[^>]*>/g, '');
+        // Strip markdown formatting to make speech more fluent
+        const cleanText = text.replace(/\*\*/g, '')
+                              .replace(/`/g, '')
+                              .replace(/#/g, '')
+                              .replace(/<[^>]*>/g, '')
+                              .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
         this.currentUtterance = new SpeechSynthesisUtterance(cleanText);
         this.currentUtterance.lang = navigator.language || 'en-US';
         
         const voice = this.availableVoices.find(v => v.lang === this.currentUtterance.lang && v.name.includes('Google')) 
                    || this.availableVoices.find(v => v.lang === this.currentUtterance.lang);
         if (voice) this.currentUtterance.voice = voice;
+        
+        this.currentUtterance.onstart = () => {
+            this.isSpeaking = true;
+            this.updateProcessingUI(this.isProcessing);
+        };
+        this.currentUtterance.onend = () => {
+            this.isSpeaking = false;
+            this.updateProcessingUI(this.isProcessing);
+        };
+        this.currentUtterance.onerror = () => {
+            this.isSpeaking = false;
+            this.updateProcessingUI(this.isProcessing);
+        };
         
         window.speechSynthesis.speak(this.currentUtterance);
     }

@@ -1,3 +1,4 @@
+// interfaces/web/chatApi.js
 /**
  * @license Apache License, Version 2.0 (the "License")
  * @author Sebastien Lalaurette
@@ -8,6 +9,7 @@
  * [UPDATED] Extracted Tool Implementations to core/engine/aiTools.js.
  * [NEW] Added WebSocket support for real-time bi-directional chat.
  * [NEW] Added detailed diagnostic logging for troubleshooting.
+ * [NEW] Added support for voiceMode context to force concise TTS responses.
  */
 const express = require('express');
 const fs = require('fs');
@@ -123,9 +125,9 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
      * Used by both HTTP POST and WebSocket messages.
      */
     const handleCompletion = async (payload, user, res = null, clientId = null) => {
-        const { messages, sessionId, autoApproveSession, approvedToolCallIds, model } = payload;
+        const { messages, sessionId, autoApproveSession, approvedToolCallIds, model, voiceMode } = payload;
 
-        logger.info({ clientId, sessionId, messageCount: messages?.length, model }, "[ChatAPI] Handling completion request");
+        logger.info({ clientId, sessionId, messageCount: messages?.length, model, voiceMode }, "[ChatAPI] Handling completion request");
 
         if (!messages || !Array.isArray(messages)) {
             const err = new Error("Missing or invalid messages.");
@@ -185,6 +187,11 @@ module.exports = (db, logger, config, getConnectorConnection, simulatorManager, 
             if (payload.context) {
                 const { currentTopic, currentSourceId } = payload.context;
                 contextText = `\n\nUSER CURRENT VIEW CONTEXT:\n- Current Source: ${currentSourceId || 'None'}\n- Current Topic: ${currentTopic || 'None'}`;
+            }
+
+            // [NEW] Inject constraint for TTS optimization
+            if (voiceMode) {
+                contextText += `\n\nVOICE MODE ACTIVE: The user is communicating via Voice. Your response will be read aloud via Text-to-Speech. You MUST keep your answer highly concise, conversational, and fluent. Avoid complex formatting, long lists, code blocks, or overly verbose technical jargon. Provide direct, spoken-word friendly answers.`;
             }
 
             const systemPromptText = llmEngine.generateChatSystemPrompt(
