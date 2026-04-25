@@ -83,10 +83,16 @@
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 <span class="nav-label">Publish</span>
             </button> 
-            <button id="btn-admin-view" class="tab-button" style="display: none; margin-top: auto; border-left-color: transparent;">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span class="nav-label">Admin</span>
-            </button>
+            
+            <div style="margin-top: auto; display: flex; flex-direction: column; width: 100%;">
+                <button id="btn-admin-view" class="tab-button" style="display: none; border-left-color: transparent;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span class="nav-label">Admin</span>
+                </button>
+                <div style="text-align: center; padding: 10px 0 15px 0; font-size: 0.65em; color: var(--color-text-muted); font-family: var(--font-mono); opacity: 0.6;">
+                    <span class="nav-label">v 1.6.0-beta2</span>
+                </div>
+            </div>
         </nav>
 
         <div class="view-container">
