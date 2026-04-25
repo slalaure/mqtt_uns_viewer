@@ -107,19 +107,19 @@ To handle environments ranging from a few updates a minute to thousands of messa
 
 ### 🔌 Connectivity & Protocols (Southbound)
 Korelate acts as a high-performance protocol gateway, bringing data from various industrial and IT sources into a unified context:
-*   **📡 MQTT & Sparkplug B**: Native high-performance support with auto-decoding.
-*   **⚙️ OPC UA**: Direct connection to industrial PLCs (Kepware, Ignition, etc.).
-*   **🔡 Modbus TCP**: Legacy support for industrial automation.
-*   **⚙️ Siemens S7**: Native S7-Comm protocol for Siemens PLCs.
-*   **🔌 EtherNet/IP**: CIP protocol for Rockwell and Omron systems.
-*   **🏢 BACnet/IP**: Standard for Building Management Systems (BMS).
-*   **💡 KNX/IP**: Event-driven automation for commercial buildings.
-*   **📶 SNMP**: Polling for network equipment (routers, switches).
-*   **🚀 Apache Kafka**: High-throughput bidirectional integration with Kafka clusters.
-*   **🗄️ SQL Databases**: Polling integration for PostgreSQL, MySQL, and MS SQL Server.
-*   **🌐 REST API Poller**: Active polling of external HTTP GET endpoints.
-*   **🔗 I3X (RFC 001)**: Inter-server communication with other UNS nodes.
-*   **📥 HTTP Webhooks**: RESTful ingestion for ERPs and legacy software.
+* **📡 MQTT & Sparkplug B**: Native high-performance support with auto-decoding.
+* **⚙️ OPC UA**: Direct connection to industrial PLCs (Kepware, Ignition, etc.).
+* **🔡 Modbus TCP**: Legacy support for industrial automation.
+* **⚙️ Siemens S7**: Native S7-Comm protocol for Siemens PLCs.
+* **🔌 EtherNet/IP**: CIP protocol for Rockwell and Omron systems.
+* **🏢 BACnet/IP**: Standard for Building Management Systems (BMS).
+* **💡 KNX/IP**: Event-driven automation for commercial buildings.
+* **📶 SNMP**: Polling for network equipment (routers, switches).
+* **🚀 Apache Kafka**: High-throughput bidirectional integration with Kafka clusters.
+* **🗄️ SQL Databases**: Polling integration for PostgreSQL, MySQL, and MS SQL Server.
+* **🌐 REST API Poller**: Active polling of external HTTP GET endpoints.
+* **🔗 I3X (RFC 001)**: Inter-server communication with other UNS nodes, featuring **Auto-Discovery** of remote semantic topologies.
+* **📥 HTTP Webhooks**: RESTful ingestion for ERPs and legacy software.
 
 ---
 
@@ -171,7 +171,7 @@ The application supports extensive configuration via environment variables.
 Define multiple providers and explicitly set their Read/Write permissions using arrays. Supported types are `mqtt`, `opcua`, and `file`.
 ```bash
 # Define multiple providers (Minified JSON)
-DATA_PROVIDERS='[{"id":"local_mqtt", "type":"mqtt", "host":"localhost", "port":1883, "subscribe":["#"], "publish":["uns/commands/#"]}, {"id":"factory_opc", "type":"opcua", "endpointUrl":"opc.tcp://localhost:4840", "subscribe":[{"nodeId":"ns=1;s=Temperature", "topic":"uns/factory/temperature"}]}]'
+DATA_PROVIDERS='[{"id":"local_mqtt", "type":"mqtt", "host":"localhost", "port":1883, "protocol":"mqtt", "subscribe":["#"], "publish":["commands/#"]}, {"id":"factory_opc", "type":"opcua", "endpointUrl":"opc.tcp://localhost:4840", "subscribe":[{"nodeId":"ns=1;s=Temperature", "topic":"uns/factory/temperature"}]}, {"id":"rest_ingest", "type":"http", "pathPrefix":"/api/ingest/rest"}]'
 ```
 
 #### Storage Tuning
@@ -297,6 +297,7 @@ Define sophisticated detection rules using JavaScript conditions.
 ### 9. I3X Standard API (RFC 001)
 Korelate provides a native, northbound implementation of the **I3X (Industrial Information Interface eXchange)** standard.
 * **Full Compliance:** Implements RFC 001 exploratory, value, and subscription methods.
+* **Client Auto-Discovery:** When connecting to a remote I3X server, Korelate automatically discovers, imports, and visually recreates the remote semantic hierarchy without manual configuration.
 * **Engineering Units (EngUnit):** Automatically extracts and attaches measurement units to VQT (Value-Quality-Timestamp) responses from both static metadata and dynamic MQTT payloads.
 * **Recursive Context:** Supports `maxDepth` recursion in both Last Known Value and Historical queries, allowing clients to fetch entire equipment hierarchies in a single call.
 * **Write-Back Capability:** Supports RFC 4.2.2.1, enabling authenticated clients to send command values back to the factory floor via the standardized interface.
