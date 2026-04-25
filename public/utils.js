@@ -196,12 +196,14 @@ export function confirmModal(title, message, confirmText = 'Confirm', isDanger =
         backdrop.classList.add('visible');
         
         const close = (result) => {
+            btnConfirm.disabled = true;
+            btnCancel.disabled = true;
             backdrop.classList.remove('visible');
+            resolve(result); // Resolve immediately so caller doesn't wait for animation
             setTimeout(() => {
                 if (document.body.contains(backdrop)) {
                     document.body.removeChild(backdrop);
                 }
-                resolve(result);
             }, 200); 
         };
         

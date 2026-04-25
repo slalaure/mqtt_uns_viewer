@@ -19,8 +19,8 @@ import { showToast, confirmModal } from "../utils.js";
  * @param {Map} chartedVariables Map of currently charted variables.
  * @param {number} minTs Current minimum timestamp.
  * @param {number} maxTs Current maximum timestamp.
- * @param {Function} showLoader Callback to show loader.
- * @param {Function} hideLoader Callback to hide loader.
+ * @param {Function} showLoader Callback to show subtle loader (used for applying).
+ * @param {Function} hideLoader Callback to hide subtle loader.
  * @param {Array} llmModels Available LLM models.
  */
 export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, hideLoader, llmModels = []) {
@@ -56,7 +56,20 @@ export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, h
 
   if (!isConfirmed) return;
 
-  showLoader();
+  // Replace subtle chart loader with an explicit AI loading modal to avoid "frozen window" confusion
+  const loadingOverlay = document.createElement('div');
+  loadingOverlay.className = 'generic-modal-backdrop visible';
+  loadingOverlay.style.zIndex = '10005';
+  loadingOverlay.innerHTML = `
+      <div class="generic-modal-content" style="text-align: center; padding: 40px; transform: none;">
+          <div style="border: 4px solid var(--color-border); border-top: 4px solid var(--color-primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px auto;"></div>
+          <h3 style="margin: 0 0 10px 0; color: var(--color-primary);">AI is analyzing data...</h3>
+          <p style="color: var(--color-text-secondary); margin: 0;">This may take 10 to 30 seconds depending on the model complexity.</p>
+          <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+      </div>
+  `;
+  document.body.appendChild(loadingOverlay);
+
   try {
     // 1. Group variables by topic/broker
     const topicsMap = new Map();
@@ -103,7 +116,11 @@ export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, h
     }
     const suggestions = await learnResponse.json();
 
-    hideLoader();
+    // REMOVE OVERLAY HERE: The AI is done thinking, we can remove the loader 
+    // before waiting for user confirmation on the results.
+    if (document.body.contains(loadingOverlay)) {
+        loadingOverlay.remove();
+    }
 
     // 4. Display Suggestions
     if (suggestions.error) {
@@ -147,12 +164,13 @@ export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, h
 
         document.body.addEventListener('change', updateModelFromInput);
 
+        // This await pauses execution until the user clicks Apply or Cancel
         const isApply = await confirmModal("AI Learning Studio - Approval", html, "Apply Approved Changes", false);
         
         document.body.removeEventListener('change', updateModelFromInput);
 
         if (isApply) {
-            showLoader();
+            showLoader(); // Re-use the subtle chart loader for the quick save operation
             try {
                 const applyRes = await fetch("api/context/apply-learn", {
                     method: "POST",
@@ -177,7 +195,10 @@ export async function openAIStudio(chartedVariables, minTs, maxTs, showLoader, h
     }
 
   } catch (err) {
-    hideLoader();
+    // In case of an error during fetching, ensure the overlay is removed
+    if (document.body.contains(loadingOverlay)) {
+        loadingOverlay.remove();
+    }
     console.error("Learning Studio Error:", err);
     showToast(err.message, "error");
   }
