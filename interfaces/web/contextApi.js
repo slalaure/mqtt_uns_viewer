@@ -9,16 +9,12 @@
  * @copyright (c) 2025-2026 Sebastien Lalaurette
  *
  * Context API - Data & History Endpoints
- * [RENAMED] Formerly mcpApi.js to avoid confusion with the actual MCP server.
- * [MODIFIED] Ensures query returns the absolute last value known <= timestamp.
- * [MODIFIED] Added db.serialize() to prevent DuckDB locking errors.
- * [MODIFIED] Added 'startDate' and 'endDate' support for time filtering.
- * [MODIFIED] Added Admin check for Prune Topic.
- * [NEW] Added /aggregate endpoint for optimized time-bucketed charting.
- * [UPDATED] Eradicated silent catches on JSON.stringify failures to ensure API serialization issues are logged.
+ * [MODIFIED] Added mqtt-match to properly link AI schema suggestions to wildcard instances.
+ * [MODIFIED] Secured schema property injections against missing AI suggestion keys.
  */
 const express = require('express');
 const llmEngine = require('../../core/engine/llmEngine');
+const mqttMatch = require('mqtt-match');
 
 // Helper simple pour échapper les apostrophes
 const escapeSQL = (str) => {
@@ -45,7 +41,6 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
     const router = express.Router();
     const isMultiBroker = (config.DATA_PROVIDERS || []).length > 1;
 
-    // Helper for logging
     const log = (msg) => console.log(`[ContextAPI] ${msg}`);
     const logError = (msg, err) => console.error(`[ContextAPI] ❌ ${msg}`, err ? err.message : '');
 
@@ -185,7 +180,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                             const p = `CAST(payload AS VARCHAR)`;
                             valExpr = `CASE WHEN lower(${p}) IN ('true', '1') THEN 1.0 WHEN lower(${p}) IN ('false', '0') THEN 0.0 ELSE TRY_CAST(${p} AS DOUBLE) END`;
                         } else {
-                            const safePath = escapeSQL(v.path); // e.g. $.temperature_c
+                            const safePath = escapeSQL(v.path);
                             const p = `json_extract_string(payload, '${safePath}')`;
                             valExpr = `CASE WHEN lower(${p}) IN ('true', '1') THEN 1.0 WHEN lower(${p}) IN ('false', '0') THEN 0.0 ELSE TRY_CAST(${p} AS DOUBLE) END`;
                         }
@@ -352,7 +347,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
                 let existingTypeIds = [];
                 if (semanticManager && semanticManager.getModel()) {
                     const currentModel = semanticManager.getModel();
-                    if (currentModel.objects) existingElementIds = currentModel.objects.map(o => o.elementId);
+                    if (currentModel.instances) existingElementIds = currentModel.instances.map(o => o.elementId);
                     if (currentModel.objectTypes) existingTypeIds = currentModel.objectTypes.map(t => t.elementId);
                 }
                 suggestions.meta = {
@@ -436,7 +431,12 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                 const approvedSchemaUpdates = (payload.schema_updates || []).filter(s => s._approved);
                 for (const s of approvedSchemaUpdates) {
-                    let targetInstance = currentModel.instances.find(obj => obj.topic_mapping === s.topic);
+                    
+                    // Allow wildcard resolution via mqttMatch to avoid dummy instance generation
+                    let targetInstance = currentModel.instances.find(obj => 
+                        obj.topic_mapping === s.topic || 
+                        (obj.topic_mapping && mqttMatch(obj.topic_mapping, s.topic))
+                    );
                     
                     if (!targetInstance) {
                         // Fallback: create a dummy instance if not found and not created above
@@ -471,17 +471,21 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
 
                     if (!targetType.schema) targetType.schema = { type: "object", properties: {} };
                     if (!targetType.schema.properties) targetType.schema.properties = {};
-                    if (!targetType.schema.properties[s.variable]) {
-                        targetType.schema.properties[s.variable] = { type: "number" };
+                    
+                    // Secure variable insertion against incomplete AI payload
+                    const varName = s.variable || `var_${Date.now()}`;
+                    if (!targetType.schema.properties[varName]) {
+                        targetType.schema.properties[varName] = { type: "number" };
                     }
                     
-                    targetType.schema.properties[s.variable].nominal_value = s.suggestions.nominal_value;
-                    targetType.schema.properties[s.variable].expected_range = s.suggestions.expected_range;
-                    targetType.schema.properties[s.variable].data_frequency_seconds = s.suggestions.data_frequency_seconds;
+                    s.suggestions = s.suggestions || {};
+                    targetType.schema.properties[varName].nominal_value = s.suggestions.nominal_value;
+                    targetType.schema.properties[varName].expected_range = s.suggestions.expected_range;
+                    targetType.schema.properties[varName].data_frequency_seconds = s.suggestions.data_frequency_seconds;
 
-                    if (s.suggestions.description !== undefined) targetType.schema.properties[s.variable].description = s.suggestions.description;
-                    if (s.suggestions.pattern !== undefined) targetType.schema.properties[s.variable].pattern = s.suggestions.pattern;
-                    if (s.suggestions.source !== undefined) targetType.schema.properties[s.variable].source = s.suggestions.source;
+                    if (s.suggestions.description !== undefined) targetType.schema.properties[varName].description = s.suggestions.description;
+                    if (s.suggestions.pattern !== undefined) targetType.schema.properties[varName].pattern = s.suggestions.pattern;
+                    if (s.suggestions.source !== undefined) targetType.schema.properties[varName].source = s.suggestions.source;
                     
                     modelChanged = true;
                 }

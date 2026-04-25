@@ -10,7 +10,8 @@
  * * Semantic Manager (I3X Core)
  * Loads the I3X semantic model, builds the in-memory graph, and 
  * resolves raw MQTT topics to structured I3X Elements.
- * [UPDATED] Implemented Graph Relationship Indexer for custom I3X relationships (forward/reverse).
+ * Features persistent external_instances segregation in uns_model.json.
+ * [UPDATED] Reverted getModel() to return RAW model to prevent corrupting local instances on Save.
  */
 
 const fs = require('fs');
@@ -26,12 +27,17 @@ class SemanticManager {
             objectTypes: [],
             relationshipTypes: [],
             instances: [],
+            external_instances: [], 
             legacy_concepts: []
         };
+        
         this.topicMappings = []; 
         this.elementsMap = new Map();
-        // [NEW] Graph storage: Map<elementId, Map<relationshipType, Set<targetId>>>
         this.relationshipsIndex = new Map();
+        
+        this.externalElements = new Map();
+        this.externalTopicMappings = [];
+        this.externalRelationshipsIndex = new Map();
     }
 
     /**
@@ -59,24 +65,19 @@ class SemanticManager {
                     this.logger.warn("⚠️ Legacy UNS model detected. Auto-migrating to I3X structure...");
                     this.model.legacy_concepts = parsed;
                     this.model.namespaces = [
-                        { uri: "https://cesmii.org/i3x", displayName: "I3X Core" },
-                        { uri: "https://korelate.io/models/custom", displayName: "Custom Models" }
+                        { uri: "https://cesmii.org/i3x", displayName: "I3X Core" }
                     ];
                     this.model.objectTypes = [
                         {
                             elementId: "LegacyConceptType",
                             displayName: "Legacy Concept",
-                            namespaceUri: "https://korelate.io/models/custom",
-                            schema: { type: "object", description: "Auto-generated type for legacy concepts" }
+                            namespaceUri: "https://cesmii.org/i3x",
+                            schema: { type: "object" }
                         }
                     ];
-                    this.model.relationshipTypes = [
-                        { elementId: "HasParent", displayName: "HasParent", namespaceUri: "https://cesmii.org/i3x", reverseOf: "HasChildren" },
-                        { elementId: "HasChildren", displayName: "HasChildren", namespaceUri: "https://cesmii.org/i3x", reverseOf: "HasParent" },
-                        { elementId: "HasComponent", displayName: "HasComponent", namespaceUri: "https://cesmii.org/i3x", reverseOf: "ComponentOf" },
-                        { elementId: "ComponentOf", displayName: "ComponentOf", namespaceUri: "https://cesmii.org/i3x", reverseOf: "HasComponent" }
-                    ];
+                    this.model.relationshipTypes = [];
                     this.model.instances = [];
+                    this.model.external_instances = [];
                     this.saveModel(this.model);
                 } else {
                     this.model = parsed;
@@ -84,6 +85,7 @@ class SemanticManager {
                     this.model.objectTypes = this.model.objectTypes || [];
                     this.model.relationshipTypes = this.model.relationshipTypes || [];
                     this.model.instances = this.model.instances || [];
+                    this.model.external_instances = this.model.external_instances || [];
                     this.model.legacy_concepts = this.model.legacy_concepts || [];
                 }
                 this.buildIndex();
@@ -104,8 +106,12 @@ class SemanticManager {
         this.topicMappings = [];
         this.relationshipsIndex.clear();
 
-        // 1. Index I3X Instances
-        for (const instance of this.model.instances) {
+        const allInstances = [
+            ...(this.model.instances || []),
+            ...(this.model.external_instances || [])
+        ];
+
+        for (const instance of allInstances) {
             this.elementsMap.set(instance.elementId, instance);
             
             // Index standard parent/child hierarchy
@@ -114,12 +120,6 @@ class SemanticManager {
                 this.addRelationship(instance.parentId, "HasChildren", instance.elementId);
             }
 
-            // Index standard composition (if flag is set, though usually defined in relationships)
-            if (instance.isComposition) {
-                // Logic handled by explicit relationship definitions below
-            }
-
-            // [NEW] Index custom Graph Relationships
             if (instance.relationships) {
                 for (const [relType, targets] of Object.entries(instance.relationships)) {
                     const targetList = Array.isArray(targets) ? targets : [targets];
@@ -140,7 +140,8 @@ class SemanticManager {
                     pattern: instance.topic_mapping,
                     elementId: instance.elementId,
                     typeId: instance.typeId,
-                    isComposition: !!instance.isComposition
+                    isComposition: !!instance.isComposition,
+                    sourceId: instance._providerId 
                 });
             }
         }
@@ -160,12 +161,9 @@ class SemanticManager {
                 });
             }
         }
-        this.logger.info(`Semantic Index built: ${this.elementsMap.size} instances, ${this.topicMappings.length} topic maps.`);
+        this.logger.info(`Semantic Index built: ${this.elementsMap.size} total instances, ${this.topicMappings.length} topic maps.`);
     }
 
-    /**
-     * Internal helper to register an edge in the graph.
-     */
     addRelationship(sourceId, type, targetId) {
         if (!this.relationshipsIndex.has(sourceId)) {
             this.relationshipsIndex.set(sourceId, new Map());
@@ -177,55 +175,77 @@ class SemanticManager {
         sourceRels.get(type).add(targetId);
     }
 
-    /**
-     * Returns a list of element IDs related to a source by a specific type.
-     */
-    getRelatedIds(elementId, relationshipType) {
-        const sourceRels = this.relationshipsIndex.get(elementId);
-        if (!sourceRels) return [];
+    registerExternalElements(providerId, elements) {
+        let hasChanges = false;
+        this.model.external_instances = this.model.external_instances || [];
         
-        if (!relationshipType) {
-            // Return everything
-            const all = new Set();
-            sourceRels.forEach(targets => targets.forEach(t => all.add(t)));
-            return Array.from(all);
-        }
+        const existingExtMap = new Map(this.model.external_instances.map(e => [e.elementId, e]));
 
-        // Exact match or Case-insensitive match
-        for (const [type, targets] of sourceRels.entries()) {
-            if (type.toLowerCase() === relationshipType.toLowerCase()) {
-                return Array.from(targets);
+        elements.forEach(el => {
+            if (!el.elementId) return;
+
+            const enrichedElement = {
+                ...el,
+                _isExternal: true,
+                _providerId: providerId,
+                topic_mapping: el.topic_mapping || el.elementId 
+            };
+
+            const existing = existingExtMap.get(el.elementId);
+            
+            if (!existing || JSON.stringify(existing) !== JSON.stringify(enrichedElement)) {
+                existingExtMap.set(el.elementId, enrichedElement);
+                hasChanges = true;
             }
+        });
+
+        if (hasChanges) {
+            this.model.external_instances = Array.from(existingExtMap.values());
+            this.saveModel(this.model);
+            this.logger.info(`I3X Discovery: Saved updated external elements to uns_model.json for provider '${providerId}'.`);
         }
-        return [];
     }
 
-    /**
-     * Resolves a raw MQTT topic to an I3X element ID.
-     */
+    getRelatedIds(elementId, relationshipType) {
+        const allTargets = new Set();
+        const relsMap = this.relationshipsIndex.get(elementId);
+
+        if (!relsMap) return [];
+
+        if (!relationshipType) {
+            relsMap.forEach(targets => targets.forEach(t => allTargets.add(t)));
+        } else {
+            for (const [type, targets] of relsMap.entries()) {
+                if (type.toLowerCase() === relationshipType.toLowerCase()) {
+                    targets.forEach(t => allTargets.add(t));
+                }
+            }
+        }
+        return Array.from(allTargets);
+    }
+
     resolveTopic(topic) {
         for (const mapping of this.topicMappings) {
-            if (mqttMatch(mapping.pattern, topic)) {
-                return {
-                    elementId: mapping.elementId,
-                    typeId: mapping.typeId,
-                    isComposition: mapping.isComposition
-                };
-            }
+            if (mqttMatch(mapping.pattern, topic)) return mapping;
+        }
+        for (const mapping of this.externalTopicMappings) {
+            if (mqttMatch(mapping.pattern, topic)) return mapping;
         }
         return null;
     }
 
-    /**
-     * Retrieves the full instance definition by its ID.
-     */
-    resolveElement(elementId) {
-        return this.elementsMap.get(elementId) || null;
+    getTopicMapping(elementId) {
+        let mapping = this.topicMappings.find(m => m.elementId === elementId);
+        if (!mapping) {
+            mapping = this.externalTopicMappings.find(m => m.elementId === elementId);
+        }
+        return mapping || null;
     }
 
-    /**
-     * Persists the semantic model to disk.
-     */
+    resolveElement(elementId) {
+        return this.elementsMap.get(elementId) || this.externalElements.get(elementId) || null;
+    }
+
     saveModel(newModel) {
         try {
             this.model = newModel;
@@ -240,10 +260,23 @@ class SemanticManager {
     }
 
     /**
-     * Returns the complete model object.
+     * Returns the RAW model object.
+     * CRITICAL: Used by API saving endpoints (like /apply-learn) so we don't 
+     * inadvertently serialize dynamic external_instances into the static instances array.
      */
     getModel() {
         return this.model;
+    }
+
+    /**
+     * Helper to return all instances (local + external) combined.
+     * Used exclusively by read-only Data APIs (like i3xRouter).
+     */
+    getAllInstances() {
+        return [
+            ...(this.model.instances || []),
+            ...(this.model.external_instances || [])
+        ];
     }
 }
 

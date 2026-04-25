@@ -3,9 +3,9 @@
  * @author Sebastien Lalaurette
  *
  * I3X Router (RFC 001 Compliant)
- * [UPDATED] Refactored POST /objects/related to dynamically use the Graph Relationship Index.
- * [UPDATED] Supports bi-directional navigation for any custom relationship type (e.g. SuppliesTo).
- * [UPDATED] Eradicated silent catches to log JSON parsing/structuring failures correctly.
+ * Supports bi-directional navigation for any custom relationship type.
+ * Eradicated silent catches to log JSON parsing/structuring failures correctly.
+ * Integrated auto-discovery mapping support via getAllInstances().
  */
 
 const express = require('express');
@@ -54,8 +54,8 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         // Initialize node with the data array (RFC: data is the reserved key for own values)
         let result = { data: [] };
 
-        // 1. Fetch data for this specific element
-        const mapping = semanticManager.topicMappings.find(m => m.elementId === elementId);
+        // 1. Fetch data for this specific element (using safe helper method)
+        const mapping = semanticManager.getTopicMapping(elementId);
         if (mapping) {
             const sqlPattern = mapping.pattern.replace(/\+/g, '%').replace(/#/g, '%');
             let query = `SELECT payload, timestamp FROM korelate_events WHERE topic LIKE ?`;
@@ -141,7 +141,7 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
 
     router.get('/objects', (req, res) => {
         const { typeId } = req.query;
-        let instances = semanticManager.getModel().instances || [];
+        let instances = semanticManager.getAllInstances();
         if (typeId) instances = instances.filter(i => i.typeId === typeId);
         res.json(instances.map(i => ({
             elementId: i.elementId,
@@ -149,12 +149,13 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             typeId: i.typeId,
             namespaceUri: i.namespaceUri,
             parentId: i.parentId,
-            isComposition: !!i.isComposition
+            isComposition: !!i.isComposition,
+            sourceId: i._providerId // Expose origin provider for client routing
         })));
     });
 
     router.get('/objects/:elementId', (req, res) => {
-        let instances = semanticManager.getModel().instances || [];
+        let instances = semanticManager.getAllInstances();
         const i = instances.find(inst => inst.elementId === req.params.elementId);
         if (i) {
             res.json({
@@ -163,7 +164,8 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
                 typeId: i.typeId,
                 namespaceUri: i.namespaceUri,
                 parentId: i.parentId,
-                isComposition: !!i.isComposition
+                isComposition: !!i.isComposition,
+                sourceId: i._providerId
             });
         } else {
             res.status(404).json({ error: "Object not found" });
@@ -173,14 +175,15 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
     router.post('/objects/list', (req, res) => {
         const { elementIds } = req.body;
         if (!elementIds || !Array.isArray(elementIds)) return res.status(400).json({ error: "elementIds array required" });
-        const instances = semanticManager.getModel().instances || [];
+        const instances = semanticManager.getAllInstances();
         res.json(instances.filter(i => elementIds.includes(i.elementId)).map(i => ({
             elementId: i.elementId,
             displayName: i.displayName,
             typeId: i.typeId,
             namespaceUri: i.namespaceUri,
             parentId: i.parentId,
-            isComposition: !!i.isComposition
+            isComposition: !!i.isComposition,
+            sourceId: i._providerId
         })));
     });
 
@@ -203,7 +206,8 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
                     typeId: targetObj.typeId,
                     namespaceUri: targetObj.namespaceUri,
                     parentId: targetObj.parentId,
-                    isComposition: !!targetObj.isComposition
+                    isComposition: !!targetObj.isComposition,
+                    sourceId: targetObj._providerId
                 });
             }
         });
@@ -229,7 +233,8 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
                         typeId: targetObj.typeId,
                         namespaceUri: targetObj.namespaceUri,
                         parentId: targetObj.parentId,
-                        isComposition: !!targetObj.isComposition
+                        isComposition: !!targetObj.isComposition,
+                        sourceId: targetObj._providerId
                     });
                 }
             });
@@ -256,13 +261,12 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             val.isComposition = !!instance.isComposition;
             
             // The tests expect the single value directly in `$.value` for maxDepth=1
-            // But fetchValuesRecursive returns `{ data: [VQT] }`. Let's adapt it.
             if (val.data && val.data.length > 0) {
                 val.value = val.data[0];
             } else {
                 val.value = null; // No data yet
             }
-            delete val.data; // Cleanup internal structure if we want, or keep it. Let's keep it clean.
+            delete val.data; 
             
             res.json(val);
         } else {
@@ -294,7 +298,6 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
 
         const val = await fetchValuesRecursive(eid, maxDepth, 1, startTime, endTime, true);
         if (val && val.data) {
-            // Tests expect an array of history values directly
             res.json(val.data);
         } else {
             res.json([]);
@@ -323,13 +326,14 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         const instance = semanticManager.resolveElement(elementId);
         if (!instance) return res.status(404).json({ error: "Element not found" });
         
-        const mapping = semanticManager.topicMappings.find(m => m.elementId === elementId);
+        // Use safe topic mapping accessor
+        const mapping = semanticManager.getTopicMapping(elementId);
         if (!mapping || mapping.pattern.includes('+') || mapping.pattern.includes('#')) {
             return res.status(400).json({ error: "Element is not mapped to a unique writable topic." });
         }
         
         const topic = mapping.pattern;
-        const sourceId = instance.sourceId || 'default_connector';
+        const sourceId = instance._providerId || instance.sourceId || 'default_connector';
         const connection = connectorManager.providers.get(sourceId);
         
         if (!connection || !connection.connected) return res.status(503).json({ error: "Data provider not connected" });
@@ -409,11 +413,8 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
         sub.res = res;
         sub.queue = []; 
 
-        // Send an initial comment to establish the stream
         res.write(':\n\n');
 
-        // WORKAROUND for I3X test_runner.py: It uses 'python-requests' without stream=True, 
-        // causing it to block indefinitely until timeout.
         const ua = req.headers['user-agent'] || '';
         if (ua.includes('python-requests')) {
             setTimeout(() => { if (sub.res) sub.res.end(); }, 200);
@@ -432,7 +433,6 @@ module.exports = (db, semanticManager, logger, i3xEvents, connectorManager) => {
             if (sub.res) sub.res.end();
             subscriptions.delete(subId);
         }
-        // Always return 200 for idempotency
         res.json({ success: true, message: "Unsubscribed." });
     });
 

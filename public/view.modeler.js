@@ -21,11 +21,11 @@ let syncTimeout = null;
 let el = {};
 
 const ICONS = {
-    ns: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
-    type: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
-    inst: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
-    freeze: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
-    unfreeze: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>'
+    ns: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+    type: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+    inst: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
+    freeze: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+    unfreeze: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>'
 };
 
 export async function initModelerView() {
@@ -280,7 +280,7 @@ function selectItem(type, id) {
         el['field-namespace'].value = ref.namespaceUri || '';
     }
 
-    // 3. Toggle Sections Visibility
+    // 3. Toggle Sections Visibility (I3X Specific Fix)
     const schemaSection = el['container-properties'].closest('.editor-section');
     const relSection = el['container-relationships'].closest('.editor-section');
     const isaContainer = el['field-isa-level'].parentNode;
@@ -295,11 +295,10 @@ function selectItem(type, id) {
         isaContainer.style.display = 'none';
         renderSchemaItems();
         renderRelationships();
-    } else {
-        schemaSection.style.display = 'block';
+    } else { // 'instance'
+        schemaSection.style.display = 'none'; // Instances inherit schemas from their Types
         relSection.style.display = 'block';
         isaContainer.style.display = 'block';
-        renderSchemaItems();
         renderRelationships();
     }
     
@@ -437,7 +436,6 @@ function addSchemaRow(data = {}) {
 
             const chatWidget = document.querySelector('ai-chat-widget');
             if (chatWidget && typeof chatWidget.askNewQuestion === 'function') {
-                // Creates a new session to guarantee context and auto-sends the prompt
                 chatWidget.askNewQuestion(promptMsg, true);
             } else {
                 showToast("AI Chat Assistant is not available.", "warning");
@@ -454,8 +452,6 @@ function addSchemaRow(data = {}) {
         fkTargetSelect.style.display = e.target.value === 'FK' ? 'block' : 'none';
         syncStateFromForm();
         
-        // Re-render the form to update all rows in case a PK was just changed,
-        // so other rows can see it in their FK dropdowns immediately
         if (e.target.value === 'PK' || data.keyType === 'PK') {
             renderSchemaItems();
         }
@@ -475,7 +471,7 @@ function addSchemaRow(data = {}) {
         const wasPK = keyTypeSelect.value === 'PK';
         row.remove(); 
         syncStateFromForm(); 
-        if (wasPK) renderSchemaItems(); // Re-render to remove from FK lists
+        if (wasPK) renderSchemaItems(); 
     };
     container.appendChild(row);
 }
@@ -531,7 +527,6 @@ function syncStateFromForm() {
     
     if (currentSelection.type === 'namespace') {
         ref.uri = el['field-namespace'].value;
-        // Namespaces don't have properties or relationships
         renderRegistry();
         el['btn-modeler-save'].classList.add('btn-unsaved');
         return; 
@@ -545,7 +540,6 @@ function syncStateFromForm() {
         const id = row.querySelector('[data-key="id"]')?.value?.trim();
         if (!id) return;
         
-        // Preserve any unknown properties that the AI might have added
         const existingItem = ref.schema?.properties?.[id] || {};
         
         const item = { 
@@ -573,7 +567,6 @@ function syncStateFromForm() {
         const srcEl = row.querySelector('[data-key="source"]');
         if (srcEl && srcEl.value) item.source = srcEl.value; else delete item.source;
 
-        // Profiling Metadata
         const nom = row.querySelector('[data-key="nominal_value"]').value;
         if (nom !== '') item.nominal_value = parseFloat(nom);
         else delete item.nominal_value;
@@ -644,14 +637,14 @@ function setEditMode(mode) {
         el['modeler-edit-displayname'].value = 'uns_model.json';
         el['modeler-edit-displayname'].disabled = true;
         el['modeler-edit-id'].textContent = 'Complete JSON Model (Namespaces, ObjectTypes, Instances)';
-        el['btn-mode-form'].parentElement.style.display = 'none'; // Hide Form/JSON toggle group
-        el['btn-modeler-delete'].style.display = 'none'; // Hide Delete button
+        el['btn-mode-form'].parentElement.style.display = 'none';
+        el['btn-modeler-delete'].style.display = 'none';
         el['modeler-form-view'].style.display = 'none';
         el['modeler-json-view'].style.display = 'block';
     } else {
         el['modeler-edit-displayname'].disabled = false;
-        el['btn-mode-form'].parentElement.style.display = 'flex'; // Show Form/JSON toggle group
-        el['btn-modeler-delete'].style.display = 'flex'; // Show Delete button
+        el['btn-mode-form'].parentElement.style.display = 'flex'; 
+        el['btn-modeler-delete'].style.display = 'flex'; 
         el['btn-mode-form'].classList.toggle('active', mode === 'form');
         el['btn-mode-json'].classList.toggle('active', mode === 'json');
         el['modeler-form-view'].style.display = mode === 'form' ? 'block' : 'none';
@@ -664,7 +657,6 @@ function setEditMode(mode) {
             aceEditor.setTheme(state.isDarkMode ? "ace/theme/tomorrow_night" : "ace/theme/chrome");
             aceEditor.session.setMode("ace/mode/json");
             
-            // Mark model as unsaved on any JSON edit
             aceEditor.on("change", () => {
                 el['btn-modeler-save'].classList.add('btn-unsaved');
             });
@@ -677,9 +669,9 @@ function setEditMode(mode) {
         }
     }
 }
+
 // ============================================================================
 // NATIVE KORELATE GRAPH ENGINE (SVG Force-Directed)
-// 100% Dependency Free, Built for Stability and Performance
 // ============================================================================
 
 class KorelateGraph {
@@ -690,8 +682,7 @@ class KorelateGraph {
         this.isPhysicsEnabled = this.options.physicsEnabled ?? true;
         this.onDoubleClick = this.options.onDoubleClick || (()=>{});
         
-        // Setup SVG
-        this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        this.svg = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "svg");
         this.svg.style.width = '100%';
         this.svg.style.height = '100%';
         this.svg.style.display = 'block';
@@ -747,13 +738,12 @@ class KorelateGraph {
             this.nodes.push(node);
             this.nodeMap.set(node.id, node);
 
-            // Create SVG Elements
-            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            const g = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "g");
             g.setAttribute('class', 'korelate-node');
             g.setAttribute('cursor', 'pointer');
             g.dataset.id = node.id;
             
-            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            const rect = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "rect");
             rect.setAttribute('width', node.width);
             rect.setAttribute('height', node.height);
             rect.setAttribute('x', -node.width/2);
@@ -763,7 +753,7 @@ class KorelateGraph {
             rect.setAttribute('stroke', node.isCenter ? '#0056b3' : '#999');
             rect.setAttribute('stroke-width', node.isCenter ? '2' : '1');
             
-            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            const text = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "text");
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dominant-baseline', 'central');
             text.setAttribute('fill', node.fontColor);
@@ -771,14 +761,7 @@ class KorelateGraph {
             text.setAttribute('font-family', 'sans-serif');
             text.setAttribute('pointer-events', 'none');
             
-            // Need to append SVG content to label inside the text/g node.
-            // Since label contains HTML/SVG string now (`${icon} ${label}`),
-            // We can't use simple textContent. We have to parse or render it.
-            // For SVG compatibility, let's keep it simple: strip SVG if present, or render it.
-            // A simple hack: just strip tags for the SVG rendering to keep it lightweight.
             let rawText = n.label.replace(/<[^>]*>?/gm, '').trim();
-            
-            // Simple truncation
             if (rawText.length > 20) rawText = rawText.substring(0, 18) + '...';
             text.textContent = rawText;
             
@@ -795,16 +778,16 @@ class KorelateGraph {
                 const edge = { source, target, label: e.label || '' };
                 this.edges.push(edge);
                 
-                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                const line = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "line");
                 line.setAttribute('stroke', '#888');
                 line.setAttribute('stroke-width', '2');
                 line.setAttribute('marker-end', 'url(#korelate-arrow)');
                 
-                const labelBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                const labelBg = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "rect");
                 labelBg.setAttribute('fill', state.isDarkMode ? '#1e1e1e' : '#fff');
                 labelBg.setAttribute('rx', '3');
                 
-                const labelText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                const labelText = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "text");
                 labelText.setAttribute('text-anchor', 'middle');
                 labelText.setAttribute('dominant-baseline', 'central');
                 labelText.setAttribute('fill', '#888');
@@ -851,7 +834,7 @@ class KorelateGraph {
                 this.draggedNode.y = pt.y + this.dragOffset.y;
                 this.draggedNode.vx = 0;
                 this.draggedNode.vy = 0;
-                this.render(); // Always render while dragging
+                this.render(); 
             }
         });
 
@@ -986,7 +969,6 @@ class KorelateGraph {
                 e.labelEl.setAttribute('x', mx);
                 e.labelEl.setAttribute('y', my);
                 
-                // Background behind text
                 const bbox = e.labelEl.getBBox ? e.labelEl.getBBox() : { width: e.label.length * 6, height: 12 };
                 const w = Math.max(bbox.width + 8, 20);
                 e.labelBg.setAttribute('x', mx - w/2);
@@ -1113,7 +1095,7 @@ async function saveModelToServer() {
         if (!res.ok) throw new Error();
         showToast("Model saved", "success");
         el['btn-modeler-save'].classList.remove('btn-unsaved');
-        renderRegistry(); // Refresh registry in case raw json modified names/ids
+        renderRegistry(); 
     } catch (e) { showToast("Save error", "error"); }
     finally { el['btn-modeler-save'].disabled = false; }
 }

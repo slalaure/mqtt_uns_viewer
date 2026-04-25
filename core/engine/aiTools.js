@@ -3,12 +3,14 @@
  * @author Sebastien Lalaurette
  * * AI Tools Centralized Implementations
  * Extracted to ensure exact parity in business logic between internal Chat and external MCP.
- * Requires context injection to perform direct database and file operations securely.
+ * [UPDATED] Fixed legacy Array vs Object crash in get_model_definition.
+ * [UPDATED] Secured update_uns_model to protect external_instances from AI wipeouts.
  */
 const fs = require('fs');
 const path = require('path');
 const chrono = require('chrono-node');
 const mqttMatch = require('mqtt-match');
+const semanticManager = require('../semantic/semanticManager');
 
 // --- Helpers ---
 const escapeSQL = (str) => {
@@ -61,7 +63,7 @@ class AiTools {
         this.SESSIONS_DIR = context.SESSIONS_DIR;
         this.MODEL_MANIFEST_PATH = context.MODEL_MANIFEST_PATH;
 
-        this.unsModel = [];
+        this.unsModel = {};
         this.loadUnsModel();
     }
 
@@ -70,11 +72,11 @@ class AiTools {
             if (fs.existsSync(this.MODEL_MANIFEST_PATH)) {
                 this.unsModel = JSON.parse(fs.readFileSync(this.MODEL_MANIFEST_PATH, 'utf8'));
             } else {
-                this.unsModel = [];
+                this.unsModel = { namespaces: [], objectTypes: [], instances: [] };
             }
         } catch (e) {
             this.logger.error({ err: e }, "[AiTools] Error loading UNS model.");
-            this.unsModel = [];
+            this.unsModel = { namespaces: [], objectTypes: [], instances: [] };
         }
     }
 
@@ -135,7 +137,6 @@ class AiTools {
                 }
                 try {
                     const results = await this.dataManager.queryPerennial(query);
-                    // Limit results to prevent context window explosion
                     const limit = 100;
                     const isTruncated = results.length > limit;
                     const safeResults = isTruncated ? results.slice(0, limit) : results;
@@ -315,10 +316,22 @@ class AiTools {
             get_model_definition: async ({ concept }) => {
                 this.loadUnsModel();
                 const lowerConcept = concept.toLowerCase();
-                const results = this.unsModel.filter(model => 
-                    model.concept.toLowerCase().includes(lowerConcept) ||
-                    (model.keywords && model.keywords.some(k => k.toLowerCase().includes(lowerConcept)))
-                );
+                let results = [];
+                
+                // Handle both legacy Array format and modern Object format safely
+                if (Array.isArray(this.unsModel)) {
+                    results = this.unsModel.filter(m => m.concept?.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
+                } else {
+                    if (this.unsModel.objectTypes) {
+                        results.push(...this.unsModel.objectTypes.filter(t => t.displayName?.toLowerCase().includes(lowerConcept) || t.elementId.toLowerCase().includes(lowerConcept)));
+                    }
+                    if (this.unsModel.instances) {
+                        results.push(...this.unsModel.instances.filter(i => i.displayName?.toLowerCase().includes(lowerConcept) || i.elementId.toLowerCase().includes(lowerConcept)));
+                    }
+                    if (this.unsModel.legacy_concepts) {
+                        results.push(...this.unsModel.legacy_concepts.filter(c => c.concept?.toLowerCase().includes(lowerConcept) || (c.keywords && c.keywords.some(k => k.toLowerCase().includes(lowerConcept)))));
+                    }
+                }
                 return { definitions: results };
             },
             update_uns_model: async ({ model_json }, user) => {
@@ -332,24 +345,38 @@ class AiTools {
                             return resolve({ error: "Model must be a JSON Object with 'namespaces', 'objectTypes', and 'instances'." });
                         }
 
+                        // SECURITY: Protect external_instances from being wiped out by the AI
+                        if (this.unsModel && this.unsModel.external_instances) {
+                            newModel.external_instances = this.unsModel.external_instances;
+                        }
+                        if (this.unsModel && this.unsModel.legacy_concepts && !newModel.legacy_concepts) {
+                            newModel.legacy_concepts = this.unsModel.legacy_concepts;
+                        }
+
                         const backupPath = this.aiActionManager.backupFile(this.MODEL_MANIFEST_PATH);
                         fs.writeFileSync(this.MODEL_MANIFEST_PATH, JSON.stringify(newModel, null, 2), 'utf8');
                         this.aiActionManager.logAction(user, 'update_uns_model', {}, { backupPath, originalPath: this.MODEL_MANIFEST_PATH });
 
-                        // Force SemanticManager to reload if present
-                        if (this.appContext && this.appContext.semanticManager) {
-                            this.appContext.semanticManager.loadModel();
-                        }
+                        // Force SemanticManager to reload
+                        if (semanticManager) semanticManager.loadModel();
 
                         resolve({ success: true, message: "UNS Model Manifest updated successfully." });
                     } catch (error) {
                         resolve({ error: `Error updating model: ${error.message}` });
                     }
                 });
-            },            search_uns_concept: async ({ concept, filters, source_id }) => {
+            },            
+            search_uns_concept: async ({ concept, filters, source_id }) => {
                 this.loadUnsModel();
                 const lowerConcept = concept.toLowerCase();
-                const model = this.unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
+                let model = null;
+                
+                if (Array.isArray(this.unsModel)) {
+                    model = this.unsModel.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
+                } else if (this.unsModel.legacy_concepts) {
+                    model = this.unsModel.legacy_concepts.find(m => m.concept.toLowerCase().includes(lowerConcept) || (m.keywords && m.keywords.some(k => k.toLowerCase().includes(lowerConcept))));
+                }
+                
                 if (!model) return { error: `Concept '${concept}' not found in model.` };
 
                 const safeTopic = escapeSQL(model.topic_template).replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/#/g, '%').replace(/\+/g, '%');
@@ -386,6 +413,7 @@ class AiTools {
                     });
                 });
             },
+            // ... (keep the rest of the tools)
             
             // --- Publish Tool ---
             publish_message: async ({ topic, payload, retain = false, source_id }) => {
