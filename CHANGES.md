@@ -313,3 +313,10 @@ This major release marks a significant milestone in Korelate's evolution, introd
 - **Context API Wildcard Fix**: Resolved Missing parameter name at index 15 in interfaces/web/contextApi.js endpoints (/topic/*topic and /history/*topic) for similar Express routing updates.
 
 - **AI Alert Generation Fix**: Fixed an issue where the AI Learning Studio would generate invalid alert conditions referencing undefined variables like `last_seen_seconds`. Updated the LLM prompt to explicitly mandate the use of `msg.payload` and stateless logic. Removed corrupted rules from the database to restore Alert Manager stability.
+
+## 2026-04-26 - v1.6.0 Official Release
+- **Production Readiness**: Official transition from beta to v1.6.0.
+- **UI Versioning**: Synchronized all UI components (`index.html`, `config.html`) to display the stable `v1.6.0` version.
+- **Routing Reliability**: Integrated Express routing fixes for `path-to-regexp` compatibility across all ingestion and context API endpoints.
+- **Documentation**: Updated `README.md` with the latest demonstration video and official release notes.
+- **Docker Integration**: Verified Docker build compatibility for edge deployment.
