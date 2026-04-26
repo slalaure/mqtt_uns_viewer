@@ -1,75 +1,40 @@
-- **Chart View Architectural Refactoring (Lean View Pattern)**: ... (unchanged)
+# Korelate Changelog
 
-## 2026-04-10 - MQTT Hot-Reload & Connectivity Resilience
-- **Hot-Reload Fix**: Resolved an issue where MQTT subscription changes required a full application restart. 
-    - Updated `ConnectorManager` to perform a strictly sequential `async` refresh: it now awaits the full termination of old connectors before instantiating new ones, with an added 500ms safety delay to allow brokers to clear session state.
-    - Improved `MqttProvider.disconnect()` to be fully asynchronous, awaiting the `mqtt` library's `end` callback before resolving.
-    - Added error handling to `MqttProvider.connect()` to ensure the initialization Promise resolves even if the connection fails (e.g., timeout).
-    - Added high-signal logs in `configApi.js` and `MqttProvider` to confirm when a hot-reload is triggered and completed.
+## 1.6.0 - Official Release - 2026-04-26
+This major release marks a significant milestone in Korelate's evolution, introducing full I3X protocol compliance, AI-driven semantic modeling, and a massive expansion of industrial and IT connectors.
+
+### 🚀 Key Features & Highlights
+- **I3X Protocol Support**: Full implementation of the Industrial Information Interface eXchange (RFC 001), enabling standardized contextualized data access.
+- **AI-Powered Semantic Modeling**: New "Learning Studio" in the Chart view leverages DuckDB profiling and LLMs to automatically infer UNS hierarchies, object types, and relationships (ISA-95/Brick Schema).
+- **Expanded Connector Library**:
+    - **Industrial**: Modbus TCP, Siemens S7, EtherNet/IP, BACnet/IP, KNX/IP.
+    - **IT & Data**: SQL (Postgres, MySQL, MSSQL), REST API Poller, SNMP, Apache Kafka.
+- **Architecture & Performance**: 
+    - Offloaded JSON/Sparkplug processing to Worker Threads.
+    - Integrated DuckDB for high-performance edge analytics and profiling.
+    - WebSocket backpressure management to prevent memory leaks in high-throughput environments.
+- **UI/UX Overhaul**: 
+    - Compact, responsive tree views with protocol-specific iconography.
+    - New Admin panels for AI, Alerts, API Keys, and Simulator management.
+    - Harmonized fullscreen and z-index management for a seamless multi-dashboard experience.
+
+### 🛠️ Improvements & Bugfixes (from Beta cycle)
+- **Connectivity Resilience**: Sequential hot-reload for MQTT and data providers; improved graceful shutdown.
+- **AI Chat & Tools**: Fixed tool-loop logic, resolved infinite approval loops, and restored real-time streaming status.
+- **Modeler & Charting**: Added "Advanced Raw JSON" mode, fixed boolean charting, and improved payload parsing for nested I3X arrays.
+- **Profiling API**: New high-performance profiling endpoint using SQL window functions for statistical analysis.
 
 ## 2026-04-11 - Semantic Graph, Responsiveness, & AI Configuration Updates
 - **Multi-Model LLM Support**: 
-    - Users can now select and load multiple LLM models via the Config Wizard using a new checkbox modal.
-    - Added a dropdown selector within the AI Chat Widget (relocated to the input area for better UX) and the Chart AI Learning Studio to switch models on the fly.
-    - `core/engine/llmEngine.js` updated to parse the new comma-separated `LLM_MODEL` list and route requests accordingly.
-- **Dedicated Alerts AI Agent**: 
-    - Added an "Alerts AI Assistance" section in the Admin panel to configure a specific, dedicated model (`LLM_MODEL_ALERTS`) strictly for autonomous alert root-cause analysis.
+    - Users can now select and load multiple LLM models via the Config Wizard.
+    - Added model selector to AI Chat Widget and Learning Studio.
+- **Dedicated Alerts AI Agent**: New Admin section for `LLM_MODEL_ALERTS`.
 - **I3X Semantic Graph Integration Fixes**: 
-    - **Live Payload Sync**: Fixed an issue where I3X semantic nodes did not receive live MQTT data. The `tree-manager` now maps physical topics to semantic nodes and syncs their payloads and animations in real-time.
-    - **Historical State Sync**: I3X nodes are now immediately initialized with historical payload data from the cache upon hierarchy build, removing the need to wait for a new MQTT message.
-    - **Chart & Mapper Linking**: Semantic nodes now act as true physical aliases. Clicking an I3X node in the Chart or Mapper view correctly targets the underlying physical topic for charting or transformation.
-    - **Array Parsing**: Updated the `view.chart.js` payload parser to recursively traverse JSON arrays (like the `{ "data": [...] }` envelope used by the I3X `/objects/value` API), fixing an issue where numeric and boolean metrics nested inside arrays were silently ignored.
-    - **Boolean Charting**: Added support for charting and profiling `boolean` data types (rendering as 0 or 1).
-    - **Metadata Exclusion**: Fixed an issue where internal `_i3x` semantic metadata objects polluted the chart variable selection list.
-- **UI & UX Polish**:
-    - **Compact Trees & Protocol Icons**: Tree views (Main, Chart, Mapper) are now significantly more compact (reduced line height and padding) and automatically inject protocol-specific icons (📡, ⚙️, 🧠) at the root level instead of generic folder icons.
-    - **HMI Import/Export**: Added "Import" and "Export" capabilities directly to the HMI Dashboard view to seamlessly download or upload SVGs alongside their associated JS bindings.
-    - **Fullscreen Harmonization**: Replaced native `requestFullscreen()` with pseudo-fullscreen (`z-index` stacking) in the Alerts Dashboard. Increased the AI Chat widget's `z-index` to 20000+ to ensure it floats above *all* maximized views (Chart, Alerts, HMI).
-    - **Modeler Responsiveness**: Refactored the CDM Modeler layout with CSS media queries. The 3-pane layout now gracefully degrades into a vertically stacked, single-column scrollable interface on mobile and tablet devices (< 992px).
-    - **Chart Scroll Fix**: Fixed a CSS Flexbox bug in `chart-variable-list` that prevented vertical scrolling when payloads contained dozens of properties.
-    - **Modeler Terminology**: Renamed "i3X Relationships" to "Relationships" and "Object Schema Attributes" to "Variables with attributes" for clarity.
-    - **Tree Filter Fix**: Fixed a bug where the left-panel tree filters in Chart and Mapper views stopped working after dynamic template injection due to stale DOM references.
-- **Improved Shutdown**: Ensured `closeAll()` is properly awaited during the server's graceful shutdown sequence to prevent open handle warnings in Jest and clean termination in production.
-- **Observability**: Added diagnostic logging in the configuration API to track `DATA_PROVIDERS` updates and verify the hot-reloading pipeline's success.
-- **DuckDB Profiling API**: Created `/api/context/profile` endpoint in `interfaces/web/contextApi.js`. 
-    - Implemented advanced SQL using CTEs (Common Table Expressions) and Window Functions (`lag()`).
-    - Calculates Min, Max, Mean, StdDev, Null Count, Frequency (Avg sampling interval), and "Chatter" (number of mean crossings) for multiple topics and variables in parallel.
-    - [BUGFIX] Replaced `db.get` with `db.all` to avoid "get() is not implemented because it's evil" fatal error in DuckDB Node.js driver.
-    - [BUGFIX] Casted `COUNT(*)` to `INTEGER` to prevent `JSON.stringify` BigInt serialization crash.
-- **LLM Synthesis Engine**: 
-    - Added `generateDataProfilePrompt(profileData, currentModel)` to `core/engine/llmEngine.js`.
-    - Injects the active `uns_model.json` to allow the LLM to infer missing objects and guess relationships (e.g. `HasParent`, `HasComponent`).
-    - Added strict "Ontology Rules" preventing the LLM from grouping independent telemetry into monolithic "Global" concepts. Forces distinct ObjectTypes and Instances per logical asset based on the topic hierarchy.
-    - Explicitly mandates **ISA-95** conventions (e.g., `EnterpriseType`, `SiteType`, `AreaType`) for OT hierarchies and **Brick Schema** conventions (e.g., `BuildingType`, `FloorType`, `AHUType`) for BMS environments.
-    - Enforces rigorous semantic naming (`snake_case` for instances, `PascalCase` ending in `Type` for object types) to eliminate fallback artifacts like `generated_xxx`.
-    - Instructs the AI to analyze statistical fingerprints and propose strictly formatted JSON updates for `uns_model.json` (nominal values, quality scores) and `alertRules` (including debounce-aware logic).
-- **Frontend Integration**: 
-    - Added "Profile & Learn" button to `public/components/chart-config-bar.js`.
-    - Implemented a rich, interactive approval modal in `public/view.chart.js` allowing operators to individually review, modify, or reject every suggested schema update and alert rule.
-    - Revamped the UI to be responsive and full-width, utilizing a CSS grid layout. Added info-boxes to clarify the role of `Element ID`, `Type ID`, and `Topic`, along with guidance on establishing physical hierarchies through relationships (`HasParent`, `HasComponent`). Colors are now fully dark-mode compatible.
-    - Added editable relationships: AI-inferred relationships can now be manually corrected or added directly within the UI.
-    - Converted `Element ID` and `Type ID` fields into hybrid dropdowns (`<datalist>`) populated with existing instances and types from the current semantic model, ensuring structural consistency.
-    - Renamed "Quality" label to "Standard Quality Level".
-    - [BUGFIX] Fixed `confirmModal` in `public/utils.js` blindly replacing `\n` with `<br>` for HTML strings, which caused extreme layout expansion and broke scrolling. Forced modal containers to `90vh` max-height with Flexbox overflow handling.
-- **Hot-Reloading**: Created `/api/context/apply-learn` which directly integrates approved updates into the `SemanticManager` and `AlertManager` at runtime, triggering an immediate UI refresh.
-    - [BUGFIX] Corrected the payload builder to target `.instances` and `.objectTypes` rather than `.objects` to align with I3X schema formatting in `uns_model.json`. Also correctly maps `HasParent` relations to the native `parentId` property.
-    - Improved the API fallback element generator to construct semantic identifiers based on the physical MQTT topic path rather than blind timestamps if the LLM skips an object definition.
-- **AI Chat Widget**: 
-    - [BUGFIX] Fixed a critical logic flaw in the Agent loop (`chatApi.js`) where tool executions were not triggering a subsequent LLM fetch, causing the AI to abruptly stop after calling a tool without providing an answer.
-    - [BUGFIX] Resolved an "infinite approval loop" where the AI Chat would repeatedly ask for permission to use `update_uns_model`. This was caused by an outdated schema validation rule in `aiTools.js` that rejected valid Object payloads by strictly expecting a legacy Array, forcing the LLM into a perpetual retry cycle.
-    - Restored the v1.5.1 WebSocket streaming capabilities in the UI (`ai-chat-widget.js`). The chat now displays real-time `status` updates (e.g., "⏳ Analyzing results (Turn 2)...") and calculates the exact execution duration for every tool used (e.g., "✅ 🔧 Finished get_alerts 1.25s"), providing complete transparency into the AI's internal reasoning loop.
-    - Implemented a missing `approval_required` handler in the UI. When the AI attempts to use a destructive tool (e.g., `update_uns_model`), the UI now pauses execution, decodes the tool arguments, and presents an interactive Confirmation Modal to the user before resuming the backend agent loop.
-- **CDM Modeler Improvements**:
-    - Added an "Advanced Raw JSON" mode (⚙️ Raw) to view and edit the entire `uns_model.json` (Namespaces, Types, and Instances) globally within the embedded Ace Editor, instead of only editing single selected items.
-    - [UI FIX] The Raw Mode now properly disables the "Display Name" input to prevent accidental renames of the "uns_model.json" label, hides the irrelevant "Form/JSON" toggle and "Delete" button, and dynamically tracks unsaved changes to enable the global "Save" button.
-    - [BUGFIX] Fixed the JSON view desynchronization: switching between tree objects while in "JSON Mode" now instantly updates the editor content without having to toggle back and forth to the "Form Mode".
-    - [BUGFIX] Fixed a lifecycle bug where the `Namespace URI` dropdown would render completely empty because its options were being populated before the DOM element was correctly attached and bound to the state manager.
-    - Prevented data loss during UI saves: The "Form Mode" now preserves all deep/custom AI profiling schema attributes (`nominal_value`, `expected_range`, `data_frequency_seconds`, `quality_score`) when saving properties, rather than blindly overwriting them.
-    - Added a dedicated "Profiling" sub-row in the Object Schema Attributes UI to explicitly display and allow manual editing of Nominal, Min, Max, Freq, and Qual values discovered by the AI Learning Studio. This sub-row now dynamically appears only for `number` or `integer` data types.
-    - Automatically falls back the `Label/Title` to the `ID` if left empty, rather than saving an empty string.
-    - [UI FIX] When a Namespace is selected in the registry, the irrelevant "Object Schema Attributes" and "i3X Relationships" sections are now hidden. Additionally, the "Namespace URI" dropdown dynamically transforms into an editable text input to allow creating and modifying custom URIs.
-- **Testing**: Added a dedicated test scenario to `test_plan.md` (Section 3.11) to cover the full "Learning Studio" flow.
-- **Core Logic Touched**: `interfaces/web/contextApi.js`, `core/engine/llmEngine.js`, `public/view.chart.js`, `public/components/chart-config-bar.js`, `interfaces/web/router.js`.
+    - Live payload sync and historical state sync for semantic nodes.
+    - Semantic nodes now act as true physical aliases for Chart/Mapper.
+    - Improved payload parsing for recursive I3X arrays.
+- **UI Polish**: Compact trees, protocol icons, HMI Import/Export, and Modeler responsiveness.
+- **DuckDB Profiling API**: Created `/api/context/profile` with advanced statistical calculations.
 
 - **Docker Testing Environment**: Completely overhauled `docker-compose.yml.local` to include 14 distinct simulation containers (Mosquitto, OPC UA, Modbus, Postgres, MySQL, MSSQL, Kafka, Zookeeper, SNMP, REST Mock, plus mocks for S7, EIP, BACnet, and KNX).
 - **Docker Profiles**: Implemented Compose Profiles (`core`, `ot`, `bms`, `it`, `all`) to allow developers to spin up specific subsets of simulators without overwhelming their local RAM.

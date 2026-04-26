@@ -102,7 +102,7 @@ class I3xProvider extends BaseProvider {
             }
 
             // 5. Start SSE Stream
-            this.startStream();
+            await this.startStream();
 
             this.connected = true;
             this.updateStatus('connected');

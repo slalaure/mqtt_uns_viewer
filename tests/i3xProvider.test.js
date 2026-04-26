@@ -53,7 +53,8 @@ describe('I3xProvider', () => {
             id: 'test_i3x',
             type: 'i3x',
             baseUrl: 'http://remote-i3x:8080/api/i3x',
-            subscribe: ['Pump-001']
+            subscribe: ['Pump-001'],
+            autoDiscover: false
         };
     });
 
