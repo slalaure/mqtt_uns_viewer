@@ -3,21 +3,24 @@
  * @author Sebastien Lalaurette
  * * Unit tests for the SNMP Poller Provider.
  */
-const SnmpProvider = require('../connectors/snmp/index');
 
 jest.mock('net-snmp', () => {
     return {
         createSession: jest.fn(() => ({
             get: jest.fn((oids, cb) => {
-                cb(null, [
-                    { oid: '1.3.6.1', value: Buffer.from('SNMP_Response') }
-                ]);
+                cb(null, [{ value: Buffer.from("Mock SNMP Response"), oid: oids[0] }]);
             }),
-            close: jest.fn()
+            close: jest.fn(),
+            on: jest.fn()
         })),
-        isVarbindError: jest.fn().mockReturnValue(false)
+        isVarbindError: jest.fn().mockReturnValue(false),
+        Version1: 0,
+        Version2c: 1
     };
-}, { virtual: true });
+});
+
+const SnmpProvider = require('../connectors/snmp/index');
+const snmp = require('net-snmp');
 
 const createMockLogger = () => ({
     info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
@@ -26,6 +29,8 @@ const createMockLogger = () => ({
 
 describe('SnmpProvider', () => {
     let mockContext;
+    let providerConfig;
+    let provider;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -34,33 +39,34 @@ describe('SnmpProvider', () => {
             handleMessage: jest.fn(),
             updateConnectorStatus: jest.fn()
         };
-    });
-
-    test('should connect and poll OIDs successfully', async () => {
-        const config = {
-            id: 'snmp_test',
+        providerConfig = {
+            id: 'test_snmp',
             type: 'snmp',
             options: {
                 target: '127.0.0.1',
-                oids: ['1.3.6.1'],
-                interval: 1000
+                community: 'public',
+                interval: 100,
+                oids: ['1.3.6.1.2.1.1.1.0'],
+                topic: 'system/descr'
             }
         };
+    });
 
-        const provider = new SnmpProvider(config, mockContext);
+    afterEach(async () => {
+        if (provider) await provider.disconnect();
+    });
+
+    test('should connect and poll successfully', async () => {
+        provider = new SnmpProvider(providerConfig, mockContext);
+        const result = await provider.connect();
         
-        const res = await provider.connect();
-        expect(res).toBe(true);
+        expect(result).toBe(true);
+        expect(provider.connected).toBe(true);
         
-        await new Promise(resolve => setImmediate(resolve));
-        
+        await new Promise(resolve => setTimeout(resolve, 250));
+
         expect(mockContext.handleMessage).toHaveBeenCalledWith(
-            'snmp_test',
-            'snmp/snmp_test',
-            { '1.3.6.1': 'SNMP_Response' },
-            expect.objectContaining({ connectorType: 'snmp' })
+            'test_snmp', 'system/descr', expect.objectContaining({ '1.3.6.1.2.1.1.1.0': "Mock SNMP Response" }), expect.anything()
         );
-        
-        await provider.disconnect();
     });
 });

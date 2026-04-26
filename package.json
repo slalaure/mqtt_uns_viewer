@@ -41,7 +41,6 @@
     "dompurify": "^3.3.3",
     "dotenv": "^17.2.2",
     "duckdb": "^1.4.1",
-    "express": "^4.18.2",
     "express-session": "^1.19.0",
     "mqtt": "^5.14.1",
     "mqtt-match": "^3.0.0",
@@ -61,17 +60,24 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "jest": "^30.3.0"
+    "ethernet-ip": "^2.0.0",
+    "express": "^5.2.1",
+    "jest": "^30.3.0",
+    "knx": "^2.5.4",
+    "modbus-serial": "^8.0.25",
+    "net-snmp": "^3.26.3",
+    "node-bacnet": "^0.2.4",
+    "nodes7": "^0.3.18"
   },
   "optionalDependencies": {
-    "modbus-serial": "^8.0.12",
-    "nodes7": "^0.3.12",
     "ethernet-ip": "^2.0.0",
-    "node-bacnet": "^0.2.7",
+    "kafkajs": "^2.2.4",
     "knx": "^2.3.9",
-    "mysql2": "^3.9.0",
+    "modbus-serial": "^8.0.12",
     "mssql": "^10.0.0",
+    "mysql2": "^3.9.0",
     "net-snmp": "^3.12.0",
-    "kafkajs": "^2.2.4"
+    "node-bacnet": "^0.2.7",
+    "nodes7": "^0.3.12"
   }
 }

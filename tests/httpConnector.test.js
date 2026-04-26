@@ -62,18 +62,18 @@ describe('HttpProvider', () => {
     test('connect should mount routes and update status', async () => {
         const result = await provider.connect();
         expect(result).toBe(true);
-        expect(mockApp.post).toHaveBeenCalledWith('/api/ingest/test-http/*', expect.any(Function), expect.any(Function));
+        expect(mockApp.post).toHaveBeenCalledWith('/api/ingest/test-http/*topic', expect.any(Function), expect.any(Function));
         expect(mockApp.post).toHaveBeenCalledWith('/api/subscribe/test-http', expect.any(Function), expect.any(Function));
         expect(mockContext.updateConnectorStatus).toHaveBeenCalledWith('test-http', 'connected', null);
     });
 
     test('ingestion route should respect allowed publish patterns', async () => {
         await provider.connect();
-        const handler = postRoutes['/api/ingest/test-http/*'];
+        const handler = postRoutes['/api/ingest/test-http/*topic'];
 
         // 1. Allowed topic
         const reqAllowed = {
-            params: ['factory/line1/temp'],
+            params: { topic: 'factory/line1/temp' },
             body: '{"val": 25}',
             headers: { 'content-type': 'application/json' }
         };
@@ -85,7 +85,7 @@ describe('HttpProvider', () => {
 
         // 2. Forbidden topic
         const reqForbidden = {
-            params: ['factory/line2/temp'],
+            params: { topic: 'factory/line2/temp' },
             body: '{"val": 25}',
             headers: { 'content-type': 'application/json' }
         };

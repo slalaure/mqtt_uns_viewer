@@ -80,8 +80,9 @@ class LlmEngine {
                Also provide a 'description' of what the data represents, a regex/schema 'pattern' (if applicable), and the actual hardware 'source' that generated it.
             4. Propose smart Alert Rules for the Alert Manager. 
                - Use the 'Frequency' and 'Chatter' metrics to avoid noisy alerts.
-               - Rules must be valid JavaScript conditions.
-               - Incorporate debouncing or hysteresis (e.g., "value > threshold for 30 seconds").
+               - The condition MUST be a valid, synchronous JavaScript expression that evaluates to a boolean.
+               - You MUST use 'msg.payload' to access the data (e.g., 'return msg.payload > 100;' or 'return msg.payload.temperature < 20;'). 
+               - The execution is stateless. DO NOT use undefined global variables like 'last_seen_seconds', 'value', or attempt to track time.
             
             RESPONSE FORMAT:
             You must respond ONLY with a strictly formatted JSON object:

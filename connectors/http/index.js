@@ -57,12 +57,12 @@ class HttpProvider extends BaseProvider {
 
         // --- 1. Ingestion Route (Pseudo-Publish) ---
         // Use a wildcard to capture the topic hierarchy
-        this.app.post(`${this.pathPrefix}/*`, express.text({ type: '*/*' }), (req, res) => {
+        this.app.post(`${this.pathPrefix}/*topic`, express.text({ type: '*/*' }), (req, res) => {
             if (!this.connected) return res.status(503).json({ error: "Provider disconnected" });
 
             try {
                 // Extract and clean topic
-                const fullPath = req.params[0];
+                const fullPath = req.params.topic;
                 if (!fullPath) return res.status(400).json({ error: "Missing topic in path" });
 
                 const topicParts = fullPath.split('/').filter(p => p.length > 0);

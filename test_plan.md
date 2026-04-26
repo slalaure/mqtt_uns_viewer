@@ -134,6 +134,11 @@ Ce document décrit la stratégie et les scénarios de test pour garantir la sta
 * **Scenario C : Suggestion Display** : Verify that the suggestions are displayed in a formatted modal with clear sections for model updates and alert rules.
 * **Scenario D : Robustness** : Attempt profiling with no data in range. Verify that the UI handles the "No data found" or empty results gracefully.
 
+### 3.12. Southbound Connectors (Industrial & IT)
+* **Scenario A : Unit Validation** : Run the dedicated unit tests for all connectors (`tests/*Provider.test.js`). Verify that each connector handles connection, polling, and data mapping to the UNS correctly using mocks.
+* **Scenario B : Mock Handshakes** : Execute `tests/integration_protocols.js` while local mock servers are running (`tests/*-mock-server.js`). Verify that real protocol handshakes (MQTT, Modbus, SNMP, BACnet, REST) succeed with mock data.
+* **Scenario C : Resilience (Optional Deps)** : Attempt to initialize a connector without its required npm library. Verify that the application does not crash and provides a clear "Missing library" log message.
+
 ---
 
 ## 4. Tests de Résilience (Chaos & Load Testing)

@@ -27,6 +27,7 @@ class KnxProvider extends BaseProvider {
         this.mappings = {}; // { '1/1/1': { topic: 'bms/light/1', dpt: 'DPT1.001' } }
         
         this.connection = null;
+        this.connectTimeoutId = null;
     }
 
     async connect() {
@@ -64,6 +65,7 @@ class KnxProvider extends BaseProvider {
                         this.logger.info(`✅ Connected to KNX/IP Gateway.`);
                         this.connected = true;
                         this.updateStatus('connected');
+                        if (this.connectTimeoutId) clearTimeout(this.connectTimeoutId);
                         resolve(true);
                     },
                     event: (evt, src, dest, value) => {
@@ -87,6 +89,7 @@ class KnxProvider extends BaseProvider {
                         this.logger.error(`❌ KNX Connection Error: ${connstatus}`);
                         this.connected = false;
                         this.updateStatus('error', connstatus);
+                        if (this.connectTimeoutId) clearTimeout(this.connectTimeoutId);
                         // If it fails on initial connection
                         if (!this.connected) resolve(false);
                     },
@@ -99,7 +102,7 @@ class KnxProvider extends BaseProvider {
             });
             
             // Connection timeout fallback
-            setTimeout(() => {
+            this.connectTimeoutId = setTimeout(() => {
                 if (!this.connected) {
                     this.logger.error("❌ KNX Connection timed out.");
                     this.updateStatus('error', "Timeout");
@@ -111,6 +114,7 @@ class KnxProvider extends BaseProvider {
 
     async disconnect() {
         this.connected = false;
+        if (this.connectTimeoutId) clearTimeout(this.connectTimeoutId);
         if (this.connection) {
             try {
                 this.connection.Disconnect();

@@ -681,7 +681,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.get('/topic/:topic(*)', (req, res, next) => {
+    router.get('/topic/*topic', (req, res, next) => {
         const topic = req.params.topic;
         const sourceId = req.query.sourceId; 
 
@@ -719,7 +719,7 @@ module.exports = (db, getMainConnection, getSimulatorInterval, getDbStatus, conf
         });
     });
 
-    router.get('/history/:topic(*)', (req, res, next) => {
+    router.get('/history/*topic', (req, res, next) => {
         const topic = req.params.topic;
         const sourceId = req.query.sourceId; 
         const limit = parseInt(req.query.limit, 10) || 20;

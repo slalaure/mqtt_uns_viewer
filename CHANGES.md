@@ -336,3 +336,15 @@
 
 ## 2026-04-05 - Fix AI Chat Widget Initialization
 - **Race Condition Resolved**: Fixed a bug where `ai-chat-widget.js` would fail to load its subcomponents and event listeners because `app.js` called `init()` before the asynchronous HTML template fetch completed. Moved DOM hydration logic into an `async init(basePath)` method.
+
+## 2026-04-26 - Express Router Compatibility Fix (path-to-regexp)
+- **HTTP Ingestion Route Fix**: 
+    - Resolved a critical startup error `Missing parameter name at index 18` caused by an update to Express/`path-to-regexp` which deprecated unnamed wildcard splats (`/*`).
+    - Refactored `connectors/http/index.js` to use a named wildcard `/*topic` and updated the parameter extraction to use `req.params.topic` instead of `req.params[0]`.
+    - Updated `tests/httpConnector.test.js` to align with the new route definition.
+
+- **Context API Wildcard Fix**: Resolved  in `interfaces/web/contextApi.js` endpoints (`/topic/*topic` and `/history/*topic`) for similar Express routing updates.
+
+- **Context API Wildcard Fix**: Resolved Missing parameter name at index 15 in interfaces/web/contextApi.js endpoints (/topic/*topic and /history/*topic) for similar Express routing updates.
+
+- **AI Alert Generation Fix**: Fixed an issue where the AI Learning Studio would generate invalid alert conditions referencing undefined variables like `last_seen_seconds`. Updated the LLM prompt to explicitly mandate the use of `msg.payload` and stateless logic. Removed corrupted rules from the database to restore Alert Manager stability.
