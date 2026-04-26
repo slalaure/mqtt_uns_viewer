@@ -17,7 +17,7 @@
 
 ### 📺 Watch the Demo
 
-[![Korelate Demo](https://img.youtube.com/vi/aOudy4su9F0/0.jpg)](https://youtu.be/aOudy4su9F0)
+[![Korelate Demo](https://img.youtube.com/vi/xFxO1-PixnI/0.jpg)](https://youtu.be/xFxO1-PixnI)
 
 ---
 
