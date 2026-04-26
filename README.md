@@ -84,7 +84,7 @@ graph TD
         Claude["Claude / ChatGPT"] <-->|HTTP/SSE| MCP
     end
 
-    Backend -.-+>|Async Write| Timescale
+    Backend -.->|Async Write| Timescale
 ```
 
 ### Storage & Resilience Strategy
@@ -134,7 +134,7 @@ Korelate acts as a high-performance protocol gateway, bringing data from various
 **For fastest setup with embedded test servers:**
 
 ```bash
-git clone https://github.com/slalaure/korelate.git
+git clone [https://github.com/slalaure/korelate.git](https://github.com/slalaure/korelate.git)
 cd korelate
 
 # Start with embedded MQTT & OPC UA servers (preconfigured)
@@ -151,7 +151,7 @@ docker-compose -f docker-compose.yml.local up -d
 ### 2. Standard Deployment
 
 ```bash
-git clone https://github.com/slalaure/korelate.git
+git clone [https://github.com/slalaure/korelate.git](https://github.com/slalaure/korelate.git)
 cd korelate
 
 # Setup configuration
