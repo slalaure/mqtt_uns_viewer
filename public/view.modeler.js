@@ -21,11 +21,11 @@ let syncTimeout = null;
 let el = {};
 
 const ICONS = {
-    ns: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
-    type: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
-    inst: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
-    freeze: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
-    unfreeze: '<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>'
+    ns: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+    type: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+    inst: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0; width:14px; height:14px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
+    freeze: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+    unfreeze: '<svg xmlns="http://www.w3.org/2000/svg" class="protocol-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 4px 0 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>'
 };
 
 export async function initModelerView() {
@@ -682,7 +682,7 @@ class KorelateGraph {
         this.isPhysicsEnabled = this.options.physicsEnabled ?? true;
         this.onDoubleClick = this.options.onDoubleClick || (()=>{});
         
-        this.svg = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "svg");
+        this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         this.svg.style.width = '100%';
         this.svg.style.height = '100%';
         this.svg.style.display = 'block';
@@ -738,12 +738,12 @@ class KorelateGraph {
             this.nodes.push(node);
             this.nodeMap.set(node.id, node);
 
-            const g = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "g");
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
             g.setAttribute('class', 'korelate-node');
             g.setAttribute('cursor', 'pointer');
             g.dataset.id = node.id;
             
-            const rect = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "rect");
+            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
             rect.setAttribute('width', node.width);
             rect.setAttribute('height', node.height);
             rect.setAttribute('x', -node.width/2);
@@ -753,7 +753,7 @@ class KorelateGraph {
             rect.setAttribute('stroke', node.isCenter ? '#0056b3' : '#999');
             rect.setAttribute('stroke-width', node.isCenter ? '2' : '1');
             
-            const text = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "text");
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dominant-baseline', 'central');
             text.setAttribute('fill', node.fontColor);
@@ -778,16 +778,16 @@ class KorelateGraph {
                 const edge = { source, target, label: e.label || '' };
                 this.edges.push(edge);
                 
-                const line = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "line");
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 line.setAttribute('stroke', '#888');
                 line.setAttribute('stroke-width', '2');
                 line.setAttribute('marker-end', 'url(#korelate-arrow)');
                 
-                const labelBg = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "rect");
+                const labelBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
                 labelBg.setAttribute('fill', state.isDarkMode ? '#1e1e1e' : '#fff');
                 labelBg.setAttribute('rx', '3');
                 
-                const labelText = document.createElementNS("[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)", "text");
+                const labelText = document.createElementNS("http://www.w3.org/2000/svg", "text");
                 labelText.setAttribute('text-anchor', 'middle');
                 labelText.setAttribute('dominant-baseline', 'central');
                 labelText.setAttribute('fill', '#888');

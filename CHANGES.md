@@ -318,5 +318,6 @@ This major release marks a significant milestone in Korelate's evolution, introd
 - **Production Readiness**: Official transition from beta to v1.6.0.
 - **UI Versioning**: Synchronized all UI components (`index.html`, `config.html`) to display the stable `v1.6.0` version.
 - **Routing Reliability**: Integrated Express routing fixes for `path-to-regexp` compatibility across all ingestion and context API endpoints.
+- **CDM Modeler Fix**: Resolved a critical SVG namespace corruption in `view.modeler.js` that prevented the relationship graph from rendering.
 - **Documentation**: Updated `README.md` with the latest demonstration video and official release notes.
 - **Docker Integration**: Verified Docker build compatibility for edge deployment.
